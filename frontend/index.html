@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Backend Builder</title>
+    <script>
+      // Prevent a flash of the wrong theme before React mounts.
+      (function () {
+        var t = localStorage.getItem('theme');
+        if (t) {
+          document.documentElement.style.colorScheme = t;
+          document.documentElement.setAttribute('data-theme', t);
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root" data-sidebar-layout></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
