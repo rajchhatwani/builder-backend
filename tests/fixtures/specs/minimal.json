@@ -1,0 +1,16 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Notes", "slug": "notes", "description": null, "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120}
+      ]
+    }
+  ],
+  "relations": []
+}

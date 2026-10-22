@@ -1,0 +1,46 @@
+"""SQLAlchemy model for {{ e.name }} (generated)."""
+@@ALIAS_IMPORTS@@
+
+from app.models import _base as _models_base
+{% if e.related_modules %}
+
+if _t.TYPE_CHECKING:
+{% for module, cls in e.related_modules %}
+    from app.models.{{ module }} import {{ cls }}
+{% endfor %}
+{% endif %}
+
+
+class {{ e.name }}(_models_base.Base):
+    __tablename__ = "{{ e.table }}"
+
+    id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True, default=_uuid.uuid4)
+{% for f in e.fields %}
+    {{ f.column }}
+{% endfor %}
+{% for fk in e.fks %}
+    {{ fk.column_decl }}
+{% endfor %}
+    created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
+    )
+    updated_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True),
+        nullable=False,
+        default=_models_base.utcnow,
+        onupdate=_models_base.utcnow,
+    )
+{% if e.soft_delete %}
+    deleted_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=True
+    )
+{% endif %}
+{% if e.fks or e.attrs %}
+
+{% for fk in e.fks %}
+    {{ fk.relationship_decl }}
+{% endfor %}
+{% for a in e.attrs %}
+    {{ a.relationship_decl }}
+{% endfor %}
+{% endif %}

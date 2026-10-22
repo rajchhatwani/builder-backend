@@ -31,11 +31,13 @@ class EntityService:
 
     async def create(self, project_id: uuid.UUID, data: EntityCreate) -> Entity:
         await self._get_project_or_404(project_id)
+        # Plural by default: a singular table name like `user` is a reserved word in Postgres.
+        default_plural = pluralize(to_snake_case(data.name))
         entity = Entity(
             project_id=project_id,
             name=data.name,
-            table_name=data.table_name or to_snake_case(data.name),
-            plural_path=data.plural_path or pluralize(to_snake_case(data.name)),
+            table_name=data.table_name or default_plural,
+            plural_path=data.plural_path or default_plural,
             options=data.options.model_dump(),
         )
         self.session.add(entity)

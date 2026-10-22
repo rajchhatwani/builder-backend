@@ -94,3 +94,54 @@ export interface ApiErrorBody {
   message: string
   details: unknown[]
 }
+
+export interface FieldInput {
+  name: string
+  type: FieldType
+  required: boolean
+  unique: boolean
+  indexed: boolean
+  default: unknown
+  max_length: number | null
+  min_value: number | null
+  max_value: number | null
+  enum_values: string[] | null
+}
+
+export interface EntityUpdate {
+  table_name?: string
+  plural_path?: string
+  options?: EntityOptions
+}
+
+export interface ValidationIssue {
+  path: string
+  code: string
+  message: string
+}
+
+export interface ValidationReport {
+  valid: boolean
+  issues: ValidationIssue[]
+}
+
+export interface PreviewFile {
+  path: string
+  size: number
+}
+
+export interface Preview {
+  spec_hash: string
+  total_files: number
+  total_size: number
+  files: PreviewFile[]
+}
+
+export interface GenerationSummary {
+  id: string
+  project_id: string
+  spec_hash: string
+  file_count: number
+  total_size: number
+  created_at: string
+}

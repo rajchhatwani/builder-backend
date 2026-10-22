@@ -1,0 +1,70 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Blog",
+    "slug": "blog",
+    "description": "A small blog: users write posts, readers comment and tag.",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Comment",
+      "table_name": "comments",
+      "plural_path": "comments",
+      "options": {},
+      "fields": [
+        {"name": "body", "type": "text", "required": true}
+      ]
+    },
+    {
+      "name": "Post",
+      "table_name": "posts",
+      "plural_path": "posts",
+      "options": {
+        "filterable": ["published", "title"],
+        "sortable": ["created_at", "title"],
+        "searchable": ["body", "title"]
+      },
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 200},
+        {"name": "body", "type": "text", "required": true},
+        {"name": "published", "type": "boolean", "required": true, "default": false},
+        {"name": "views", "type": "integer", "min_value": 0, "default": 0}
+      ]
+    },
+    {
+      "name": "Tag",
+      "table_name": "tags",
+      "plural_path": "tags",
+      "options": {},
+      "fields": [
+        {"name": "name", "type": "string", "required": true, "unique": true, "max_length": 50}
+      ]
+    },
+    {
+      "name": "User",
+      "table_name": "users",
+      "plural_path": "users",
+      "options": {"filterable": ["email"], "sortable": ["email"]},
+      "fields": [
+        {"name": "email", "type": "string", "required": true, "unique": true, "max_length": 255},
+        {"name": "display_name", "type": "string", "required": true, "max_length": 100},
+        {"name": "role", "type": "enum", "enum_values": ["admin", "member"], "default": "member"}
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many", "from_entity": "Post", "to_entity": "Comment",
+      "from_name": "comments", "to_name": "post", "on_delete": "cascade", "required": true
+    },
+    {
+      "kind": "many_to_many", "from_entity": "Post", "to_entity": "Tag",
+      "from_name": "tags", "to_name": "posts", "on_delete": "restrict", "required": false
+    },
+    {
+      "kind": "one_to_many", "from_entity": "User", "to_entity": "Post",
+      "from_name": "posts", "to_name": "author", "on_delete": "cascade", "required": true
+    }
+  ]
+}

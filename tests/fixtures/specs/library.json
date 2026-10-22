@@ -1,0 +1,102 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Library \"Central\"",
+    "slug": "library",
+    "description": "Authors, books, shelves and members.\nExercises types, options and every relation kind.",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Author",
+      "table_name": "authors",
+      "plural_path": "authors",
+      "options": {"filterable": ["name"], "sortable": ["name", "rating"], "searchable": ["name"]},
+      "fields": [
+        {"name": "name", "type": "string", "required": true, "unique": true, "max_length": 80},
+        {"name": "bio", "type": "text"},
+        {"name": "born_on", "type": "date"},
+        {"name": "rating", "type": "float", "min_value": 0, "max_value": 5}
+      ]
+    },
+    {
+      "name": "Book",
+      "table_name": "books",
+      "plural_path": "books",
+      "options": {
+        "operations": ["list", "get", "head", "create", "replace", "update", "delete"],
+        "filterable": ["in_stock", "pages", "status"],
+        "sortable": ["pages", "published_at", "title"],
+        "searchable": ["isbn", "title"],
+        "default_page_size": 10,
+        "max_page_size": 50,
+        "soft_delete": true
+      },
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 200, "indexed": true},
+        {"name": "isbn", "type": "string", "unique": true, "max_length": 20},
+        {"name": "pages", "type": "integer", "required": true, "min_value": 1, "default": 100},
+        {"name": "price", "type": "decimal", "min_value": 0, "default": 9.99},
+        {
+          "name": "status", "type": "enum", "required": true,
+          "enum_values": ["draft", "published", "archived"], "default": "draft"
+        },
+        {"name": "published_at", "type": "datetime"},
+        {"name": "in_stock", "type": "boolean", "required": true, "default": true},
+        {"name": "extra", "type": "json", "default": {"tags": []}},
+        {"name": "catalog_id", "type": "uuid"}
+      ]
+    },
+    {
+      "name": "Member",
+      "table_name": "members",
+      "plural_path": "members",
+      "options": {"filterable": ["email"]},
+      "fields": [
+        {"name": "name", "type": "string", "required": true, "max_length": 80},
+        {"name": "email", "type": "string", "required": true, "unique": true, "max_length": 120},
+        {"name": "joined_on", "type": "date", "default": "2026-01-01"}
+      ]
+    },
+    {
+      "name": "Profile",
+      "table_name": "profiles",
+      "plural_path": "profiles",
+      "options": {},
+      "fields": [
+        {"name": "bio", "type": "text", "required": true}
+      ]
+    },
+    {
+      "name": "Shelf",
+      "table_name": "shelves",
+      "plural_path": "shelves",
+      "options": {"operations": ["list", "get", "create"], "filterable": ["label"]},
+      "fields": [
+        {"name": "label", "type": "string", "required": true, "unique": true, "max_length": 30}
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many", "from_entity": "Author", "to_entity": "Book",
+      "from_name": "books", "to_name": "author", "on_delete": "restrict", "required": true
+    },
+    {
+      "kind": "many_to_many", "from_entity": "Book", "to_entity": "Member",
+      "from_name": "borrowers", "to_name": "borrowed_books", "on_delete": "cascade", "required": false
+    },
+    {
+      "kind": "one_to_one", "from_entity": "Member", "to_entity": "Profile",
+      "from_name": "profile", "to_name": "member", "on_delete": "cascade", "required": true
+    },
+    {
+      "kind": "one_to_many", "from_entity": "Member", "to_entity": "Member",
+      "from_name": "sponsored", "to_name": "sponsor", "on_delete": "set_null", "required": false
+    },
+    {
+      "kind": "one_to_many", "from_entity": "Shelf", "to_entity": "Book",
+      "from_name": "books_on_shelf", "to_name": "shelf", "on_delete": "set_null", "required": false
+    }
+  ]
+}

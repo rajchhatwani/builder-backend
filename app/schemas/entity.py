@@ -3,7 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
-_ALLOWED_OPERATIONS = {"list", "get", "create", "replace", "update", "delete", "head"}
+from app.core.spec_models import ALLOWED_OPERATIONS as _ALLOWED_OPERATIONS
+
 _NAME_RE = r"^[A-Z][A-Za-z0-9]*$"
 
 

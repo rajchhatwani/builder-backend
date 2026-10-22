@@ -1,0 +1,84 @@
+"""initial schema
+
+Revision ID: 0001
+Revises:
+Create Date: rendered from the spec by Backend Builder
+
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+{% if has_jsonb %}
+from sqlalchemy.dialects import postgresql
+{% endif %}
+
+revision: str = "0001"
+down_revision: str | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+{% for e in entities %}
+    op.create_table(
+        "{{ e.table }}",
+{% for line in e.migration_columns %}
+        {{ line }}
+{% endfor %}
+        sa.PrimaryKeyConstraint("id", name="pk_{{ e.table }}"),
+{% for name, column in e.unique_constraints %}
+        sa.UniqueConstraint("{{ column }}", name="{{ name }}"),
+{% endfor %}
+    )
+{% for name, column in e.indexes %}
+    op.create_index("{{ name }}", "{{ e.table }}", ["{{ column }}"])
+{% endfor %}
+{% endfor %}
+{% for j in joins %}
+    op.create_table(
+        "{{ j.name }}",
+        sa.Column("left_id", sa.Uuid(), nullable=False),
+        sa.Column("right_id", sa.Uuid(), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["left_id"], ["{{ j.left_table }}.id"], name="{{ j.left_constraint }}", ondelete="{{ j.on_delete }}"
+        ),
+        sa.ForeignKeyConstraint(
+            ["right_id"], ["{{ j.right_table }}.id"], name="{{ j.right_constraint }}", ondelete="{{ j.on_delete }}"
+        ),
+        sa.PrimaryKeyConstraint("left_id", "right_id", name="{{ j.pk_name }}"),
+    )
+{% endfor %}
+{% for e in entities %}
+{% for fk in e.fks %}
+    op.create_foreign_key(
+        "{{ fk.constraint_name }}",
+        "{{ e.table }}",
+        "{{ fk.target_table }}",
+        ["{{ fk.column }}"],
+        ["id"],
+        ondelete="{{ fk.on_delete }}",
+    )
+{% endfor %}
+{% endfor %}
+{% if not entities %}
+    pass
+{% endif %}
+
+
+def downgrade() -> None:
+{% for e in entities | reverse %}
+{% for fk in e.fks %}
+    op.drop_constraint("{{ fk.constraint_name }}", "{{ e.table }}", type_="foreignkey")
+{% endfor %}
+{% endfor %}
+{% for j in joins | reverse %}
+    op.drop_table("{{ j.name }}")
+{% endfor %}
+{% for e in entities | reverse %}
+    op.drop_table("{{ e.table }}")
+{% endfor %}
+{% if not entities %}
+    pass
+{% endif %}

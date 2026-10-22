@@ -1,0 +1,89 @@
+"""Smoke test for {{ e.name }} (generated)."""
+@@ALIAS_IMPORTS@@
+
+{% if skip_reason %}
+import pytest
+{% else %}
+from httpx import AsyncClient
+
+from tests import _factories
+{% endif %}
+{% if skip_reason %}
+
+
+def test_{{ e.table }}_crud_flow() -> None:
+    pytest.skip({{ skip_reason | pyrepr }})
+{% else %}
+
+
+async def test_{{ e.table }}_crud_flow(client: AsyncClient) -> None:
+    created = await _factories.make_{{ e.table }}(client)
+    item_id = created["id"]
+{% if "get" in e.ops %}
+
+    response = await client.get(f"/{{ e.path }}/{item_id}")
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == item_id
+
+    missing = await client.get(f"/{{ e.path }}/{_uuid.uuid4()}")
+    assert missing.status_code == 404
+    assert missing.json()["code"] == "not_found"
+{% endif %}
+{% if "head" in e.ops %}
+
+    assert (await client.head(f"/{{ e.path }}/{item_id}")).status_code == 200
+    assert (await client.head(f"/{{ e.path }}/{_uuid.uuid4()}")).status_code == 404
+{% endif %}
+{% if "list" in e.ops %}
+
+    listing = await client.get("/{{ e.path }}")
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["total"] == 1
+    assert [item["id"] for item in listing.json()["items"]] == [item_id]
+
+    bad_sort = await client.get("/{{ e.path }}", params={"sort": "__no_such_field__"})
+    assert bad_sort.status_code == 422
+    assert bad_sort.json()["code"] == "invalid_sort"
+{% if filter_probe %}
+
+    filtered = await client.get("/{{ e.path }}", params={"{{ filter_probe }}": created["{{ filter_probe }}"]})
+    assert filtered.status_code == 200, filtered.text
+    assert [item["id"] for item in filtered.json()["items"]] == [item_id]
+{% endif %}
+{% if search_probe %}
+
+    searched = await client.get("/{{ e.path }}", params={"q": created["{{ search_probe }}"]})
+    assert searched.status_code == 200, searched.text
+    assert [item["id"] for item in searched.json()["items"]] == [item_id]
+{% endif %}
+{% endif %}
+{% if "create" in e.ops and has_required_input %}
+
+    invalid = await client.post("/{{ e.path }}", json={})
+    assert invalid.status_code == 422
+    assert invalid.json()["code"] == "validation_error"
+{% endif %}
+{% if "update" in e.ops and patch_field %}
+
+    new_value = _factories.sample_{{ e.table }}()["{{ patch_field }}"]
+    patched = await client.patch(f"/{{ e.path }}/{item_id}", json={"{{ patch_field }}": new_value})
+    assert patched.status_code == 200, patched.text
+    assert patched.json()["{{ patch_field }}"] == new_value
+{% endif %}
+{% if "replace" in e.ops %}
+
+    replacement = await _factories.payload_{{ e.table }}(client{{ replace_args }})
+    replaced = await client.put(f"/{{ e.path }}/{item_id}", json=replacement)
+    assert replaced.status_code == 200, replaced.text
+    assert replaced.json()["id"] == item_id
+{% endif %}
+{% if "delete" in e.ops %}
+
+    assert (await client.delete(f"/{{ e.path }}/{item_id}")).status_code == 204
+{% if "get" in e.ops %}
+    assert (await client.get(f"/{{ e.path }}/{item_id}")).status_code == 404
+{% elif "head" in e.ops %}
+    assert (await client.head(f"/{{ e.path }}/{item_id}")).status_code == 404
+{% endif %}
+{% endif %}
+{% endif %}

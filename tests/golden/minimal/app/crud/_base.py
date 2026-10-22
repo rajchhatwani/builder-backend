@@ -1,0 +1,202 @@
+"""Generic async repository. Entity repositories only declare what is configurable."""
+
+import uuid
+from datetime import UTC, datetime
+from typing import Any, ClassVar
+
+import sqlalchemy as sa
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.core.errors import AppError, ConflictError, NotFoundError
+from app.core.pagination import PageParams
+from app.models._base import Base
+
+
+class Repository[ModelT: Base]:
+    model: type[ModelT]
+    soft_delete: ClassVar[bool] = False
+    filterable: ClassVar[tuple[str, ...]] = ()
+    sortable: ClassVar[tuple[str, ...]] = ()
+    searchable: ClassVar[tuple[str, ...]] = ()
+    # relationship attributes loaded with every read (the Read schema exposes their ids)
+    eager: ClassVar[tuple[str, ...]] = ()
+    # payload key -> model the foreign key must point at
+    references: ClassVar[dict[str, type[Base]]] = {}
+    # payload key -> model of a many_to_many relationship set from a list of ids
+    many_to_many: ClassVar[dict[str, type[Base]]] = {}
+
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    # --- query building -----------------------------------------------------------
+
+    def _col(self, name: str) -> Any:
+        return self.model.__table__.c[name]
+
+    def _alive(self) -> list[Any]:
+        return [self._col("deleted_at").is_(None)] if self.soft_delete else []
+
+    def _loaders(self) -> list[Any]:
+        return [selectinload(getattr(self.model, name)) for name in self.eager]
+
+    def _order_by(self, sort: str | None) -> list[Any]:
+        if not sort:
+            return [self._col("created_at"), self._col("id")]
+        order: list[Any] = []
+        for term in (t.strip() for t in sort.split(",") if t.strip()):
+            name = term.lstrip("-")
+            if name not in self.sortable:
+                allowed = ", ".join(self.sortable) or "none"
+                raise AppError(
+                    "invalid_sort",
+                    f"cannot sort by {name!r}; sortable fields: {allowed}",
+                    422,
+                    [{"field": "sort"}],
+                )
+            col = self._col(name)
+            order.append(col.desc() if term.startswith("-") else col.asc())
+        order.append(self._col("id"))  # stable pagination
+        return order
+
+    def _conditions(self, filters: dict[str, Any], search: str | None) -> list[Any]:
+        conditions = self._alive()
+        for name, value in filters.items():
+            conditions.append(self._col(name) == value)
+        if search and self.searchable:
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            pattern = f"%{escaped}%"
+            conditions.append(
+                sa.or_(*[self._col(n).ilike(pattern, escape="\\") for n in self.searchable])
+            )
+        return conditions
+
+    # --- reads ---------------------------------------------------------------------
+
+    async def list_items(
+        self,
+        page: PageParams,
+        *,
+        filters: dict[str, Any] | None = None,
+        search: str | None = None,
+        sort: str | None = None,
+    ) -> tuple[list[ModelT], int]:
+        conditions = self._conditions(filters or {}, search)
+        total = (
+            await self.session.execute(
+                sa.select(sa.func.count()).select_from(self.model).where(*conditions)
+            )
+        ).scalar_one()
+        stmt = (
+            sa.select(self.model)
+            .where(*conditions)
+            .order_by(*self._order_by(sort))
+            .limit(page.limit)
+            .offset(page.offset)
+            .options(*self._loaders())
+        )
+        rows = (await self.session.execute(stmt)).scalars().all()
+        return list(rows), total
+
+    async def get(self, item_id: uuid.UUID) -> ModelT:
+        stmt = (
+            sa.select(self.model)
+            .where(self._col("id") == item_id, *self._alive())
+            .options(*self._loaders())
+            .execution_options(populate_existing=True)
+        )
+        item = (await self.session.execute(stmt)).scalars().first()
+        if item is None:
+            raise NotFoundError(f"{self.model.__name__} {item_id} not found")
+        return item
+
+    async def exists(self, item_id: uuid.UUID) -> bool:
+        stmt = sa.select(self._col("id")).where(self._col("id") == item_id, *self._alive())
+        return (await self.session.execute(stmt)).first() is not None
+
+    # --- writes --------------------------------------------------------------------
+
+    async def create(self, data: dict[str, Any]) -> ModelT:
+        values = dict(data)
+        related = await self._pop_related(values)
+        await self._check_references(values)
+        item = self.model(**values, **related)
+        self.session.add(item)
+        await self._commit()
+        return await self.get(item.id)  # type: ignore[attr-defined]
+
+    async def replace(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
+        return await self._apply(item_id, data)
+
+    async def update(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
+        return await self._apply(item_id, data)
+
+    async def delete(self, item_id: uuid.UUID) -> None:
+        # Loaded without eager relationships on purpose: the database enforces the
+        # relation's on_delete rule (cascade / set null / restrict).
+        stmt = sa.select(self.model).where(self._col("id") == item_id, *self._alive())
+        item = (await self.session.execute(stmt)).scalars().first()
+        if item is None:
+            raise NotFoundError(f"{self.model.__name__} {item_id} not found")
+        if self.soft_delete:
+            item.deleted_at = datetime.now(UTC)  # type: ignore[attr-defined]
+        else:
+            await self.session.delete(item)
+        await self._commit()
+
+    async def _apply(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
+        item = await self.get(item_id)
+        values = dict(data)
+        related = await self._pop_related(values)
+        await self._check_references(values)
+        for key, value in {**values, **related}.items():
+            setattr(item, key, value)
+        await self._commit()
+        return await self.get(item_id)
+
+    async def _commit(self) -> None:
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "the request conflicts with existing data (duplicate value or referenced record)"
+            ) from exc
+
+    async def _check_references(self, values: dict[str, Any]) -> None:
+        for key, target in self.references.items():
+            value = values.get(key)
+            if value is None:
+                continue
+            stmt = sa.select(target.id).where(target.id == value)  # type: ignore[attr-defined]
+            if (await self.session.execute(stmt)).first() is None:
+                raise AppError(
+                    "invalid_reference",
+                    f"{key} does not reference an existing record",
+                    422,
+                    [{"field": key}],
+                )
+
+    async def _pop_related(self, values: dict[str, Any]) -> dict[str, list[Any]]:
+        """Remove many_to_many id lists from `values` and load the rows they name."""
+        related: dict[str, list[Any]] = {}
+        for key, target in self.many_to_many.items():
+            if key not in values:
+                continue
+            ids = list(dict.fromkeys(values.pop(key) or []))
+            rows: list[Any] = []
+            if ids:
+                stmt = sa.select(target).where(target.id.in_(ids))  # type: ignore[attr-defined]
+                by_id = {row.id: row for row in (await self.session.execute(stmt)).scalars()}
+                missing = [str(i) for i in ids if i not in by_id]
+                if missing:
+                    raise AppError(
+                        "invalid_reference",
+                        f"{key} references records that do not exist",
+                        422,
+                        [{"field": key, "ids": missing}],
+                    )
+                rows = [by_id[i] for i in ids]
+            related[key] = rows
+        return related

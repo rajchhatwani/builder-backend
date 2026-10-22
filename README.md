@@ -4,10 +4,36 @@ Internal FastAPI service that turns a structured spec (entities, fields, relatio
 endpoint options) into a complete, runnable FastAPI project you download as a zip.
 See `VISION.md` for the long-term product and `PLAN.md` for the Phase 1 build plan.
 
-**Status: M1 (Builder CRUD) complete.** Projects, entities, fields, and relations are
-fully manageable through the API with pagination, optimistic locking, and a
-structured error envelope. Spec assembly/validation and generation land in M2+ (see
-`PLAN.md` section 10).
+**Status: M5 (end-to-end proof) written; Phase 1 feature-complete pending a green e2e run.**
+Define a data model through the API (or the UI in `frontend/`), validate it, and download a
+runnable FastAPI project as a zip:
+
+- Builder CRUD for projects, entities, fields, relations; `GET/PUT /projects/{id}/spec`;
+  `POST /projects/{id}/validate`.
+- `POST /projects/{id}/generate/preview`, `GET /projects/{id}/generate/download` (zip, recorded),
+  `GET /projects/{id}/generations`, `GET /generations/{id}`.
+- Postman collection: `postman/backend-builder.postman_collection.json` (start with the
+  "Blog demo" folder and run it in order).
+- UI: `cd frontend && npm install && npm run dev` (talks to `http://localhost:8000`). Open an
+  entity to edit fields and API options; the project page validates, previews and downloads.
+
+The generator is the pure function `app.core.generator.generate(spec)`. Regenerate golden
+files after a deliberate template change with
+`UPDATE_GOLDEN=1 uv run python -m pytest tests/unit/test_generator.py -k golden`.
+
+### Tests
+
+```bash
+uv run pytest tests/unit            # fast, no Docker
+uv run pytest tests/api             # builder API against a Postgres testcontainer
+uv run pytest tests/e2e             # generated Blog/Library projects booted for real
+```
+
+`tests/e2e` needs Docker. `test_generated_project.py` applies the generated migration to a
+Postgres container, checks it for drift and reversibility, and runs the generated project's
+own smoke tests. `test_compose_stack.py` is the PLAN.md section 1 demo: build Blog through
+the API, download the zip, `docker compose up --build`, drive the generated API over HTTP and
+run `make test`'s command inside the stack (several minutes; skipped without `docker compose`).
 
 ## Stack
 
@@ -85,11 +111,6 @@ tests/
 
 ## Not yet
 
-- Spec assembly, `PUT /projects/{id}/spec` import, and full validation (identifiers,
-  reserved words, injection checks) (M2)
-- Generator engine and feature modules (crud/docker/tests) (M3)
-- Preview/download/generation-history APIs (M4)
-- End-to-end proof: generate a project and boot it (M5)
 - No authentication anywhere yet (by design for Phase 1 — see `PLAN.md` section 2)
 - PATCH endpoints can't explicitly clear a nullable field back to `null` (only
   `exclude_unset` semantics); not needed until the spec/validation layer in M2

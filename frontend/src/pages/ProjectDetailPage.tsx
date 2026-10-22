@@ -3,6 +3,8 @@ import type { ColumnDef } from '@tanstack/react-table'
 import { api } from '../api/client'
 import type { Entity, Project, Relation } from '../api/types'
 import { DataTable } from '../components/DataTable'
+import { EntityDetail } from '../components/EntityDetail'
+import { GeneratePanel } from '../components/GeneratePanel'
 import { NewEntityDialog } from '../components/NewEntityDialog'
 import { NewRelationDialog } from '../components/NewRelationDialog'
 
@@ -17,6 +19,9 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
   const [loading, setLoading] = useState(true)
   const [entityDialogOpen, setEntityDialogOpen] = useState(false)
   const [relationDialogOpen, setRelationDialogOpen] = useState(false)
+  const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
+  // Bumped on every reload so the generate panel drops results for an outdated model.
+  const [modelVersion, setModelVersion] = useState(0)
 
   async function load() {
     setLoading(true)
@@ -26,6 +31,7 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
     ])
     setEntities(entityPage.items)
     setRelations(relationPage.items)
+    setModelVersion((v) => v + 1)
     setLoading(false)
   }
 
@@ -118,6 +124,17 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
     [entityNameById],
   )
 
+  const selectedEntity = entities.find((e) => e.id === selectedEntityId)
+  if (selectedEntity) {
+    return (
+      <EntityDetail
+        entity={selectedEntity}
+        onBack={() => setSelectedEntityId(null)}
+        onChanged={load}
+      />
+    )
+  }
+
   return (
     <>
       <button className="ghost small breadcrumb-back" onClick={onBack}>
@@ -146,6 +163,7 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
       </div>
 
       <h3>Entities</h3>
+      <p style={{ color: 'var(--muted-foreground)' }}>Open an entity to edit its fields and API options.</p>
       <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
         {loading ? (
           <p className="empty-state">Loading…</p>
@@ -153,6 +171,7 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
           <DataTable
             columns={entityColumns}
             data={entities}
+            onRowClick={(entity) => setSelectedEntityId(entity.id)}
             emptyMessage="No entities yet. Add one to start shaping this backend."
           />
         )}
@@ -164,7 +183,7 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
           New relation
         </button>
       </div>
-      <div className="card">
+      <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
         {loading ? (
           <p className="empty-state">Loading…</p>
         ) : (
@@ -175,6 +194,8 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
           />
         )}
       </div>
+
+      <GeneratePanel project={project} modelVersion={modelVersion} />
 
       <NewEntityDialog
         open={entityDialogOpen}

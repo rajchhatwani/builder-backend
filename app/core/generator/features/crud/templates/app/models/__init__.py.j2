@@ -1,0 +1,15 @@
+"""Importing this package registers every table on `Base.metadata` (used by Alembic)."""
+
+from app.models import _associations
+from app.models._base import Base
+{% for e in entities %}
+from app.models.{{ e.table }} import {{ e.name }}
+{% endfor %}
+
+__all__ = [
+    "Base",
+{% for e in entities %}
+    "{{ e.name }}",
+{% endfor %}
+    "_associations",
+]

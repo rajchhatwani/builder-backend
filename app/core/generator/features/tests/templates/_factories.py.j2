@@ -1,0 +1,39 @@
+"""Payload factories for the smoke tests (generated). Creates required parents on demand."""
+@@ALIAS_IMPORTS@@
+{% if entities %}
+
+from httpx import AsyncClient
+{% endif %}
+
+
+def _token(length: int) -> str:
+    return "".join(_random.choices(_string.ascii_lowercase + _string.digits, k=length))
+{% for e in entities %}
+
+
+def sample_{{ e.table }}() -> dict[str, _t.Any]:
+    return {
+{% for f in e.fields %}
+        "{{ f.name }}": {{ f.sample }},
+{% endfor %}
+    }
+
+
+async def payload_{{ e.table }}(client: AsyncClient, **overrides: _t.Any) -> dict[str, _t.Any]:
+    payload = sample_{{ e.table }}()
+{% for fk in e.required_fks %}
+    if "{{ fk.column }}" not in overrides:
+        payload["{{ fk.column }}"] = (await make_{{ fk.target_table }}(client))["id"]
+{% endfor %}
+    payload.update(overrides)
+    return payload
+
+
+async def make_{{ e.table }}(client: AsyncClient, **overrides: _t.Any) -> dict[str, _t.Any]:
+    response = await client.post(
+        "/{{ e.path }}", json=await payload_{{ e.table }}(client, **overrides)
+    )
+    assert response.status_code == 201, response.text
+    created: dict[str, _t.Any] = response.json()
+    return created
+{% endfor %}

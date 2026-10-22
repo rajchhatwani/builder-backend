@@ -4,7 +4,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import entities, fields, health, projects, relations
+from app.api import entities, fields, generate, health, projects, relations, spec
 from app.config import get_settings
 from app.errors import register_exception_handlers
 
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
+        expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash"],
     )
     register_exception_handlers(app)
     app.include_router(health.router)
@@ -40,6 +41,8 @@ def create_app() -> FastAPI:
     app.include_router(entities.router)
     app.include_router(fields.router)
     app.include_router(relations.router)
+    app.include_router(spec.router)
+    app.include_router(generate.router)
     return app
 
 

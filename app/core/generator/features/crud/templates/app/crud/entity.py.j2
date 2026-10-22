@@ -1,0 +1,17 @@
+"""Repository for {{ e.name }} (generated). Add custom queries by subclassing in your own module."""
+
+from app.crud import _base as _crud_base
+{% for module, cls in e.repo_imports %}
+from app.models.{{ module }} import {{ cls }}
+{% endfor %}
+
+
+class {{ e.name }}Repository(_crud_base.Repository[{{ e.name }}]):
+    model = {{ e.name }}
+    soft_delete = {{ e.soft_delete }}
+    filterable = {{ e.filterable_names | tuple_lit }}
+    sortable = {{ e.sortable | tuple_lit }}
+    searchable = {{ e.searchable | tuple_lit }}
+    eager = {{ e.eager | tuple_lit }}
+    references = {{ e.references_literal }}
+    many_to_many = {{ e.many_to_many_literal }}

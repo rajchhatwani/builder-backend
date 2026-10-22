@@ -1,0 +1,113 @@
+"""HTTP routes for {{ e.name }} (generated). Custom routes belong in app/custom_routers/."""
+@@ALIAS_IMPORTS@@
+
+{% if e.ops %}
+from app import db as _db
+{% endif %}
+{% if "head" in e.ops %}
+from app.core import errors as _errors
+{% endif %}
+{% if "list" in e.ops %}
+from app.core import pagination as _pagination
+{% endif %}
+{% if e.ops %}
+from app.crud.{{ e.table }} import {{ e.name }}Repository
+{% endif %}
+{% if e.schema_imports %}
+from app.schemas.{{ e.table }} import {{ e.schema_imports | join(", ") }}
+{% endif %}
+
+router = _fa.APIRouter(prefix="/{{ e.path }}", tags=["{{ e.path }}"])
+{% if "list" in e.ops %}
+
+
+@router.get("", response_model=_pagination.Page[{{ e.name }}Read])
+async def list_{{ e.table }}(
+    session: _db.SessionDep,
+    page: _t.Annotated[
+        _pagination.PageParams,
+        _fa.Depends(_pagination.page_params({{ e.default_page_size }}, {{ e.max_page_size }})),
+    ],
+    sort: _t.Annotated[
+        str | None,
+        _fa.Query(description="Comma-separated fields, '-' prefix for descending. Allowed: {{ e.sortable | join(', ') or 'none' }}"),
+    ] = None,
+{% if e.searchable %}
+    q: _t.Annotated[
+        str | None, _fa.Query(description="Case-insensitive search in: {{ e.searchable | join(', ') }}")
+    ] = None,
+{% endif %}
+{% for name, type in e.filterable %}
+    f_{{ name }}: _t.Annotated[{{ type }} | None, _fa.Query(alias="{{ name }}")] = None,
+{% endfor %}
+) -> _pagination.Page[{{ e.name }}Read]:
+    filters: dict[str, _t.Any] = {
+{% for name, type in e.filterable %}
+        "{{ name }}": f_{{ name }},
+{% endfor %}
+    }
+    items, total = await {{ e.name }}Repository(session).list_items(
+        page,
+        filters={key: value for key, value in filters.items() if value is not None},
+        search={{ "q" if e.searchable else "None" }},
+        sort=sort,
+    )
+    return _pagination.Page[{{ e.name }}Read](
+        items=[{{ e.name }}Read.model_validate(item) for item in items],
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+{% endif %}
+{% if "get" in e.ops %}
+
+
+@router.get("/{item_id}", response_model={{ e.name }}Read)
+async def get_{{ e.table }}(item_id: _uuid.UUID, session: _db.SessionDep) -> {{ e.name }}Read:
+    item = await {{ e.name }}Repository(session).get(item_id)
+    return {{ e.name }}Read.model_validate(item)
+{% endif %}
+{% if "head" in e.ops %}
+
+
+@router.head("/{item_id}")
+async def head_{{ e.table }}(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
+    if not await {{ e.name }}Repository(session).exists(item_id):
+        raise _errors.NotFoundError("{{ e.name }} not found")
+    return _fa.Response(status_code=200)
+{% endif %}
+{% if "create" in e.ops %}
+
+
+@router.post("", response_model={{ e.name }}Read, status_code=201)
+async def create_{{ e.table }}(body: {{ e.name }}Create, session: _db.SessionDep) -> {{ e.name }}Read:
+    item = await {{ e.name }}Repository(session).create(body.model_dump())
+    return {{ e.name }}Read.model_validate(item)
+{% endif %}
+{% if "replace" in e.ops %}
+
+
+@router.put("/{item_id}", response_model={{ e.name }}Read)
+async def replace_{{ e.table }}(
+    item_id: _uuid.UUID, body: {{ e.name }}Create, session: _db.SessionDep
+) -> {{ e.name }}Read:
+    item = await {{ e.name }}Repository(session).replace(item_id, body.model_dump())
+    return {{ e.name }}Read.model_validate(item)
+{% endif %}
+{% if "update" in e.ops %}
+
+
+@router.patch("/{item_id}", response_model={{ e.name }}Read)
+async def update_{{ e.table }}(
+    item_id: _uuid.UUID, body: {{ e.name }}Update, session: _db.SessionDep
+) -> {{ e.name }}Read:
+    item = await {{ e.name }}Repository(session).update(item_id, body.model_dump(exclude_unset=True))
+    return {{ e.name }}Read.model_validate(item)
+{% endif %}
+{% if "delete" in e.ops %}
+
+
+@router.delete("/{item_id}", status_code=204)
+async def delete_{{ e.table }}(item_id: _uuid.UUID, session: _db.SessionDep) -> None:
+    await {{ e.name }}Repository(session).delete(item_id)
+{% endif %}

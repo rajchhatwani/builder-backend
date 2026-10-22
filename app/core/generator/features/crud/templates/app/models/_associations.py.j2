@@ -1,0 +1,25 @@
+"""Join tables for many_to_many relations (generated)."""
+{% if joins %}
+@@ALIAS_IMPORTS@@
+
+from app.models import _base as _models_base
+{% for j in joins %}
+
+_sa.Table(
+    "{{ j.name }}",
+    _models_base.Base.metadata,
+    _sa.Column(
+        "left_id",
+        _sa.Uuid(),
+        _sa.ForeignKey("{{ j.left_table }}.id", ondelete="{{ j.on_delete }}"),
+        primary_key=True,
+    ),
+    _sa.Column(
+        "right_id",
+        _sa.Uuid(),
+        _sa.ForeignKey("{{ j.right_table }}.id", ondelete="{{ j.on_delete }}"),
+        primary_key=True,
+    ),
+)
+{% endfor %}
+{% endif %}

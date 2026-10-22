@@ -14,7 +14,7 @@ async def test_create_entity_derives_table_name_and_plural_path(client: AsyncCli
     response = await client.post(f"/projects/{project_id}/entities", json={"name": "Post"})
     assert response.status_code == 201
     body = response.json()
-    assert body["table_name"] == "post"
+    assert body["table_name"] == "posts"
     assert body["plural_path"] == "posts"
     assert body["options"]["default_page_size"] == 20
 
