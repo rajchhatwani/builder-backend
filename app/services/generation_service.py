@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.generator import InvalidSpecError, generate
 from app.core.generator.archive import build_zip, manifest
 from app.core.generator.base import FileTree
-from app.core.spec_models import Spec, spec_hash
+from app.core.spec_models import Spec, SpecAuthSecrets, spec_hash
 from app.exceptions import AppError
 from app.models.generation import Generation
 from app.schemas.generation import (
@@ -15,6 +15,7 @@ from app.schemas.generation import (
     GenerationSummary,
     PreviewResponse,
 )
+from app.services.auth_secrets_service import AuthSecretsService
 from app.services.spec_service import SpecService
 
 
@@ -35,6 +36,16 @@ class GenerationService:
 
     async def _render(self, project_id: uuid.UUID) -> tuple[Spec, FileTree]:
         spec = await SpecService(self.session).assemble(project_id)
+
+        # Inject decrypted secrets into the spec before generation.
+        # spec.auth.secrets has exclude=True so they never reach the DB
+        # snapshot or any HTTP response body.
+        if spec.auth is not None:
+            raw_secrets = await AuthSecretsService(self.session).get_for_generator(
+                project_id
+            )
+            spec.auth.secrets = SpecAuthSecrets(**raw_secrets)
+
         try:
             return spec, generate(spec)
         except InvalidSpecError as exc:

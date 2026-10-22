@@ -1,27 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ColumnDef } from '@tanstack/react-table'
 import { api } from '../api/client'
-import type { Entity, Project, Relation } from '../api/types'
+import type { Entity, Project, ProjectRole, Relation } from '../api/types'
+import { AuthConfigPanel } from '../components/AuthConfigPanel'
+import { AuthCustomFieldsPanel } from '../components/AuthCustomFieldsPanel'
 import { DataTable } from '../components/DataTable'
 import { EntityDetail } from '../components/EntityDetail'
 import { GeneratePanel } from '../components/GeneratePanel'
 import { NewEntityDialog } from '../components/NewEntityDialog'
 import { NewRelationDialog } from '../components/NewRelationDialog'
+import { PermissionsPanel } from '../components/PermissionsPanel'
+import { RolesPanel } from '../components/RolesPanel'
 
 interface ProjectDetailPageProps {
   project: Project
   onBack: () => void
 }
 
+type TopTab = 'schema' | 'auth'
+type AuthSubTab = 'config' | 'roles' | 'permissions' | 'custom-fields'
+
 export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
   const [entities, setEntities] = useState<Entity[]>([])
   const [relations, setRelations] = useState<Relation[]>([])
+  const [roles, setRoles] = useState<ProjectRole[]>([])
   const [loading, setLoading] = useState(true)
   const [entityDialogOpen, setEntityDialogOpen] = useState(false)
   const [relationDialogOpen, setRelationDialogOpen] = useState(false)
   const [selectedEntityId, setSelectedEntityId] = useState<string | null>(null)
   // Bumped on every reload so the generate panel drops results for an outdated model.
   const [modelVersion, setModelVersion] = useState(0)
+
+  const [topTab, setTopTab] = useState<TopTab>('schema')
+  const [authSubTab, setAuthSubTab] = useState<AuthSubTab>('config')
 
   async function load() {
     setLoading(true)
@@ -35,8 +46,14 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
     setLoading(false)
   }
 
+  async function loadRoles() {
+    const page = await api.listRoles(project.id, 200, 0)
+    setRoles(page.items)
+  }
+
   useEffect(() => {
     load()
+    loadRoles()
   }, [project.id])
 
   function handleDeleteEntity(entity: Entity, event: React.MouseEvent) {
@@ -148,75 +165,146 @@ export function ProjectDetailPage({ project, onBack }: ProjectDetailPageProps) {
             <code>{project.slug}</code> &middot; {project.db_engine} &middot; v{project.version}
           </p>
         </div>
-        <button onClick={() => setEntityDialogOpen(true)}>New entity</button>
-      </div>
-
-      <div className="stat-grid">
-        <div className="card stat-card">
-          <div className="stat-value">{entities.length}</div>
-          <div className="stat-label">Entities</div>
-        </div>
-        <div className="card stat-card">
-          <div className="stat-value">{relations.length}</div>
-          <div className="stat-label">Relations</div>
-        </div>
-      </div>
-
-      <h3>Entities</h3>
-      <p style={{ color: 'var(--muted-foreground)' }}>Open an entity to edit its fields and API options.</p>
-      <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
-        {loading ? (
-          <p className="empty-state">Loading…</p>
-        ) : (
-          <DataTable
-            columns={entityColumns}
-            data={entities}
-            onRowClick={(entity) => setSelectedEntityId(entity.id)}
-            emptyMessage="No entities yet. Add one to start shaping this backend."
-          />
+        {topTab === 'schema' && (
+          <button onClick={() => setEntityDialogOpen(true)}>New entity</button>
         )}
       </div>
 
-      <div className="table-toolbar">
-        <h3>Relations</h3>
-        <button className="outline small" onClick={() => setRelationDialogOpen(true)}>
-          New relation
+      {/* ── Top-level tabs ──────────────────────────────────────────────── */}
+      <div className="tab-bar">
+        <button
+          className="tab-btn"
+          aria-selected={topTab === 'schema'}
+          onClick={() => setTopTab('schema')}
+        >
+          Schema
+        </button>
+        <button
+          className="tab-btn"
+          aria-selected={topTab === 'auth'}
+          onClick={() => setTopTab('auth')}
+        >
+          Auth
         </button>
       </div>
-      <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
-        {loading ? (
-          <p className="empty-state">Loading…</p>
-        ) : (
-          <DataTable
-            columns={relationColumns}
-            data={relations}
-            emptyMessage="No relations yet. Link two entities above."
+
+      {topTab === 'schema' && (
+        <>
+          <div className="stat-grid">
+            <div className="card stat-card">
+              <div className="stat-value">{entities.length}</div>
+              <div className="stat-label">Entities</div>
+            </div>
+            <div className="card stat-card">
+              <div className="stat-value">{relations.length}</div>
+              <div className="stat-label">Relations</div>
+            </div>
+          </div>
+
+          <h3>Entities</h3>
+          <p style={{ color: 'var(--muted-foreground)' }}>Open an entity to edit its fields and API options.</p>
+          <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
+            {loading ? (
+              <p className="empty-state">Loading…</p>
+            ) : (
+              <DataTable
+                columns={entityColumns}
+                data={entities}
+                onRowClick={(entity) => setSelectedEntityId(entity.id)}
+                emptyMessage="No entities yet. Add one to start shaping this backend."
+              />
+            )}
+          </div>
+
+          <div className="table-toolbar">
+            <h3>Relations</h3>
+            <button className="outline small" onClick={() => setRelationDialogOpen(true)}>
+              New relation
+            </button>
+          </div>
+          <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
+            {loading ? (
+              <p className="empty-state">Loading…</p>
+            ) : (
+              <DataTable
+                columns={relationColumns}
+                data={relations}
+                emptyMessage="No relations yet. Link two entities above."
+              />
+            )}
+          </div>
+
+          <GeneratePanel project={project} modelVersion={modelVersion} />
+
+          <NewEntityDialog
+            open={entityDialogOpen}
+            projectId={project.id}
+            onClose={() => setEntityDialogOpen(false)}
+            onCreated={() => {
+              setEntityDialogOpen(false)
+              load()
+            }}
           />
-        )}
-      </div>
 
-      <GeneratePanel project={project} modelVersion={modelVersion} />
+          <NewRelationDialog
+            open={relationDialogOpen}
+            projectId={project.id}
+            entities={entities}
+            onClose={() => setRelationDialogOpen(false)}
+            onCreated={() => {
+              setRelationDialogOpen(false)
+              load()
+            }}
+          />
+        </>
+      )}
 
-      <NewEntityDialog
-        open={entityDialogOpen}
-        projectId={project.id}
-        onClose={() => setEntityDialogOpen(false)}
-        onCreated={() => {
-          setEntityDialogOpen(false)
-          load()
-        }}
-      />
+      {topTab === 'auth' && (
+        <>
+          {/* ── Auth sub-tabs ────────────────────────────────────────────── */}
+          <div className="tab-bar auth-subtabs">
+            <button
+              className="tab-btn"
+              aria-selected={authSubTab === 'config'}
+              onClick={() => setAuthSubTab('config')}
+            >
+              Config
+            </button>
+            <button
+              className="tab-btn"
+              aria-selected={authSubTab === 'roles'}
+              onClick={() => setAuthSubTab('roles')}
+            >
+              Roles
+            </button>
+            <button
+              className="tab-btn"
+              aria-selected={authSubTab === 'permissions'}
+              onClick={() => setAuthSubTab('permissions')}
+            >
+              Permissions
+            </button>
+            <button
+              className="tab-btn"
+              aria-selected={authSubTab === 'custom-fields'}
+              onClick={() => setAuthSubTab('custom-fields')}
+            >
+              Custom Fields
+            </button>
+          </div>
 
-      <NewRelationDialog
-        open={relationDialogOpen}
-        projectId={project.id}
-        entities={entities}
-        onClose={() => setRelationDialogOpen(false)}
-        onCreated={() => {
-          setRelationDialogOpen(false)
-          load()
-        }}
-      />
+          {authSubTab === 'config' && <AuthConfigPanel projectId={project.id} />}
+          {authSubTab === 'roles' && <RolesPanel projectId={project.id} />}
+          {authSubTab === 'permissions' && (
+            <PermissionsPanel
+              projectId={project.id}
+              entities={entities}
+              roles={roles}
+            />
+          )}
+          {authSubTab === 'custom-fields' && <AuthCustomFieldsPanel projectId={project.id} />}
+        </>
+      )}
     </>
   )
 }

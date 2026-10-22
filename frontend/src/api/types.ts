@@ -145,3 +145,235 @@ export interface GenerationSummary {
   total_size: number
   created_at: string
 }
+
+// ── Phase 2: Auth enums ──────────────────────────────────────────────────────
+
+export type TokenStore = 'db' | 'redis'
+export type JwtAlgorithm = 'HS256' | 'RS256'
+export type DeletionMode = 'soft' | 'hard'
+export type SmsProvider = 'twilio' | 'aws_sns' | 'vonage'
+export type RowRule = 'owner' | 'role_scoped' | 'tenant' | 'custom_filter'
+export type AuthOperation = 'list' | 'get' | 'create' | 'replace' | 'update' | 'delete' | 'head'
+export type AuthCustomFieldType =
+  | 'string'
+  | 'text'
+  | 'integer'
+  | 'float'
+  | 'boolean'
+  | 'date'
+  | 'datetime'
+  | 'email'
+  | 'phone'
+  | 'url'
+  | 'enum'
+
+// ── Auth Config ──────────────────────────────────────────────────────────────
+
+export interface SmtpConfig {
+  host: string
+  port: number
+  use_tls: boolean
+  from_email: string
+  from_name: string
+}
+
+export interface SmsConfig {
+  from_number: string
+}
+
+export interface AuthConfig {
+  id: string
+  project_id: string
+  enabled: boolean
+  token_store: TokenStore
+  access_token_ttl_minutes: number
+  refresh_token_ttl_days: number
+  jwt_algorithm: JwtAlgorithm
+  email_magic_link_enabled: boolean
+  sms_otp_enabled: boolean
+  otp_ttl_minutes: number
+  email_verification_required: boolean
+  invite_only: boolean
+  multi_tenant: boolean
+  deletion_mode: DeletionMode
+  smtp_config: SmtpConfig | null
+  sms_provider: SmsProvider | null
+  sms_config: SmsConfig | null
+  login_rate_limit: string
+  register_rate_limit: string
+  reset_rate_limit: string
+  security_headers_enabled: boolean
+  app_name: string | null
+  app_url: string | null
+  email_templates: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthConfigCreate {
+  enabled?: boolean
+  token_store?: TokenStore
+  access_token_ttl_minutes?: number
+  refresh_token_ttl_days?: number
+  jwt_algorithm?: JwtAlgorithm
+  email_magic_link_enabled?: boolean
+  sms_otp_enabled?: boolean
+  otp_ttl_minutes?: number
+  email_verification_required?: boolean
+  invite_only?: boolean
+  multi_tenant?: boolean
+  deletion_mode?: DeletionMode
+  smtp_config?: SmtpConfig | null
+  sms_provider?: SmsProvider | null
+  sms_config?: SmsConfig | null
+  login_rate_limit?: string
+  register_rate_limit?: string
+  reset_rate_limit?: string
+  security_headers_enabled?: boolean
+  app_name?: string | null
+  app_url?: string | null
+  email_templates?: Record<string, unknown> | null
+}
+
+export interface AuthConfigUpdate {
+  enabled?: boolean | null
+  token_store?: TokenStore | null
+  access_token_ttl_minutes?: number | null
+  refresh_token_ttl_days?: number | null
+  jwt_algorithm?: JwtAlgorithm | null
+  email_magic_link_enabled?: boolean | null
+  sms_otp_enabled?: boolean | null
+  otp_ttl_minutes?: number | null
+  email_verification_required?: boolean | null
+  invite_only?: boolean | null
+  multi_tenant?: boolean | null
+  deletion_mode?: DeletionMode | null
+  smtp_config?: SmtpConfig | null
+  sms_provider?: SmsProvider | null
+  sms_config?: SmsConfig | null
+  login_rate_limit?: string | null
+  register_rate_limit?: string | null
+  reset_rate_limit?: string | null
+  security_headers_enabled?: boolean | null
+  app_name?: string | null
+  app_url?: string | null
+  email_templates?: Record<string, unknown> | null
+}
+
+// ── Roles ────────────────────────────────────────────────────────────────────
+
+export interface ProjectRole {
+  id: string
+  project_id: string
+  name: string
+  label: string
+  is_default: boolean
+  self_assignable: boolean
+  invite_only: boolean
+  inherits_from: string | null
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export interface ProjectRoleCreate {
+  name: string
+  label: string
+  is_default?: boolean
+  self_assignable?: boolean
+  invite_only?: boolean
+  inherits_from?: string | null
+  position?: number
+}
+
+export interface ProjectRoleUpdate {
+  label?: string | null
+  is_default?: boolean | null
+  self_assignable?: boolean | null
+  invite_only?: boolean | null
+  inherits_from?: string | null
+  position?: number | null
+}
+
+// ── Permissions ──────────────────────────────────────────────────────────────
+
+export interface ProjectPermission {
+  id: string
+  project_id: string
+  entity_id: string
+  operation: AuthOperation
+  roles: string[]
+  row_rule: RowRule | null
+  custom_filter_field: string | null
+  custom_filter_value: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface PermissionEntry {
+  entity_id: string
+  operation: AuthOperation
+  roles?: string[]
+  row_rule?: RowRule | null
+  custom_filter_field?: string | null
+  custom_filter_value?: string | null
+}
+
+export interface ProjectPermissionBulkUpsert {
+  permissions: PermissionEntry[]
+}
+
+// ── Auth Custom Fields ───────────────────────────────────────────────────────
+
+export interface AuthCustomField {
+  id: string
+  project_id: string
+  name: string
+  label: string
+  type: AuthCustomFieldType
+  required: boolean
+  unique: boolean
+  indexed: boolean
+  min_length: number | null
+  max_length: number | null
+  min_value: number | null
+  max_value: number | null
+  default_value: string | null
+  enum_values: string[] | null
+  extra: Record<string, unknown> | null
+  position: number
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthCustomFieldCreate {
+  name: string
+  label: string
+  type: AuthCustomFieldType
+  required?: boolean
+  unique?: boolean
+  indexed?: boolean
+  min_length?: number | null
+  max_length?: number | null
+  min_value?: number | null
+  max_value?: number | null
+  default_value?: string | null
+  enum_values?: string[] | null
+  extra?: Record<string, unknown> | null
+  position?: number
+}
+
+export interface AuthCustomFieldUpdate {
+  label?: string | null
+  required?: boolean | null
+  unique?: boolean | null
+  indexed?: boolean | null
+  min_length?: number | null
+  max_length?: number | null
+  min_value?: number | null
+  max_value?: number | null
+  default_value?: string | null
+  enum_values?: string[] | null
+  extra?: Record<string, unknown> | null
+  position?: number | null
+}

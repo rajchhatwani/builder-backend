@@ -93,7 +93,7 @@ export function Layout({ children }: LayoutProps) {
           </ul>
         </nav>
         <footer>
-          <small className="text-light">Phase 1 &middot; Builder API</small>
+          <small className="text-light">Phase 2 &middot; Builder API</small>
         </footer>
       </aside>
 

@@ -4,20 +4,32 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import DbEngine, FieldType, OnDelete, RelationKind
+from app.core.enums import AuthOperation, DbEngine, FieldType, OnDelete, RelationKind, RowRule
 from app.core.spec_models import (
     Spec,
+    SpecAuth,
+    SpecAuthCustomField,
     SpecEntity,
     SpecEntityOptions,
     SpecField,
+    SpecPasswordReset,
+    SpecPermission,
     SpecProject,
+    SpecRegistration,
     SpecRelation,
+    SpecRole,
+    SpecSmsConfig,
+    SpecSmtpConfig,
 )
 from app.core.validation import ValidationIssue, validate
 from app.exceptions import AppError
+from app.models.auth_config import ProjectAuthConfig
+from app.models.auth_custom_field import AuthCustomField
 from app.models.entity import Entity
 from app.models.field import Field
 from app.models.project import Project
+from app.models.project_permission import ProjectPermission
+from app.models.project_role import ProjectRole
 from app.models.relation import Relation
 
 
@@ -84,6 +96,125 @@ class SpecService:
             ),
             key=lambda r: (r.from_entity, r.from_name, r.to_entity),
         )
+        # ── Auth block (optional) ──────────────────────────────────────────────
+        auth_config_row = (
+            await self.session.execute(
+                select(ProjectAuthConfig).where(
+                    ProjectAuthConfig.project_id == project_id
+                )
+            )
+        ).scalar_one_or_none()
+
+        spec_auth: SpecAuth | None = None
+        if auth_config_row is not None:
+            # Roles
+            role_rows = list(
+                (
+                    await self.session.execute(
+                        select(ProjectRole)
+                        .where(ProjectRole.project_id == project_id)
+                        .order_by(ProjectRole.position, ProjectRole.name)
+                    )
+                ).scalars()
+            )
+            # Permissions
+            perm_rows = list(
+                (
+                    await self.session.execute(
+                        select(ProjectPermission)
+                        .where(ProjectPermission.project_id == project_id)
+                        .order_by(ProjectPermission.entity_id, ProjectPermission.operation)
+                    )
+                ).scalars()
+            )
+            # Custom fields
+            cf_rows = list(
+                (
+                    await self.session.execute(
+                        select(AuthCustomField)
+                        .where(AuthCustomField.project_id == project_id)
+                        .order_by(AuthCustomField.position, AuthCustomField.name)
+                    )
+                ).scalars()
+            )
+
+            ac = auth_config_row
+            spec_auth = SpecAuth(
+                enabled=ac.enabled,
+                token_store=ac.token_store.value,
+                access_token_ttl_minutes=ac.access_token_ttl_minutes,
+                refresh_token_ttl_days=ac.refresh_token_ttl_days,
+                jwt_algorithm=ac.jwt_algorithm.value,
+                deletion_mode=ac.deletion_mode.value,
+                multi_tenant=ac.multi_tenant,
+                security_headers_enabled=ac.security_headers_enabled,
+                app_name=ac.app_name,
+                app_url=ac.app_url,
+                password_reset=SpecPasswordReset(
+                    email_magic_link=ac.email_magic_link_enabled,
+                    sms_otp=ac.sms_otp_enabled,
+                    otp_ttl_minutes=ac.otp_ttl_minutes,
+                ),
+                registration=SpecRegistration(
+                    email_verification_required=ac.email_verification_required,
+                    invite_only=ac.invite_only,
+                    custom_fields=[
+                        SpecAuthCustomField(
+                            name=cf.name,
+                            label=cf.label,
+                            type=cf.type.value,
+                            required=cf.required,
+                            unique=cf.unique,
+                            indexed=cf.indexed,
+                            min_length=cf.min_length,
+                            max_length=cf.max_length,
+                            min_value=cf.min_value,
+                            max_value=cf.max_value,
+                            default_value=cf.default_value,
+                            enum_values=cf.enum_values,
+                        )
+                        for cf in cf_rows
+                    ],
+                ),
+                smtp=(
+                    SpecSmtpConfig.model_validate(ac.smtp_config)
+                    if ac.smtp_config
+                    else None
+                ),
+                sms_provider=ac.sms_provider.value if ac.sms_provider else None,
+                sms=(
+                    SpecSmsConfig.model_validate(ac.sms_config)
+                    if ac.sms_config
+                    else None
+                ),
+                login_rate_limit=ac.login_rate_limit,
+                register_rate_limit=ac.register_rate_limit,
+                reset_rate_limit=ac.reset_rate_limit,
+                roles=[
+                    SpecRole(
+                        name=r.name,
+                        label=r.label,
+                        is_default=r.is_default,
+                        self_assignable=r.self_assignable,
+                        invite_only=r.invite_only,
+                        inherits_from=r.inherits_from,
+                    )
+                    for r in role_rows
+                ],
+                permissions=[
+                    SpecPermission(
+                        entity=names_by_id[p.entity_id],
+                        operation=AuthOperation(p.operation).value,
+                        roles=p.roles,
+                        row_rule=RowRule(p.row_rule).value if p.row_rule else None,
+                        custom_filter_field=p.custom_filter_field,
+                        custom_filter_value=p.custom_filter_value,
+                    )
+                    for p in perm_rows
+                    if p.entity_id in names_by_id  # guard orphaned refs
+                ],
+            )
+
         return Spec(
             project=SpecProject(
                 name=project.name,
@@ -102,6 +233,7 @@ class SpecService:
                 for e in entities
             ],
             relations=spec_relations,
+            auth=spec_auth,
         )
 
     async def validate(self, project_id: uuid.UUID) -> list[ValidationIssue]:

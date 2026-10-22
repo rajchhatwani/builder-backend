@@ -85,7 +85,9 @@ def validate(spec: Spec) -> list[ValidationIssue]:
             "features is reserved for a later phase and must be empty",
         )
     if spec.auth is not None:
-        ctx.add("auth", "unsupported_feature", "auth is reserved for a later phase; use null")
+        # Auth block is accepted; deep validation added in M7 (auth generator module).
+        pass
+
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)

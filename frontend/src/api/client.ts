@@ -1,5 +1,11 @@
 import type {
   ApiErrorBody,
+  AuthConfig,
+  AuthConfigCreate,
+  AuthConfigUpdate,
+  AuthCustomField,
+  AuthCustomFieldCreate,
+  AuthCustomFieldUpdate,
   Entity,
   EntityUpdate,
   Field,
@@ -7,8 +13,13 @@ import type {
   GenerationSummary,
   OnDelete,
   Page,
+  PermissionEntry,
   Preview,
   Project,
+  ProjectPermission,
+  ProjectRole,
+  ProjectRoleCreate,
+  ProjectRoleUpdate,
   Relation,
   RelationKind,
   ValidationReport,
@@ -112,4 +123,67 @@ export const api = {
     const match = /filename="([^"]+)"/.exec(disposition)
     return { blob: await response.blob(), filename: match?.[1] ?? fallbackName }
   },
+
+  // ── Auth Config ──────────────────────────────────────────────────────────
+
+  getAuthConfig: (projectId: string) =>
+    request<AuthConfig>(`/projects/${projectId}/auth`),
+  createAuthConfig: (projectId: string, data: AuthConfigCreate) =>
+    request<AuthConfig>(`/projects/${projectId}/auth`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAuthConfig: (projectId: string, data: AuthConfigUpdate) =>
+    request<AuthConfig>(`/projects/${projectId}/auth`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // ── Roles ────────────────────────────────────────────────────────────────
+
+  listRoles: (projectId: string, limit = 50, offset = 0) =>
+    request<Page<ProjectRole>>(`/projects/${projectId}/roles?limit=${limit}&offset=${offset}`),
+  createRole: (projectId: string, data: ProjectRoleCreate) =>
+    request<ProjectRole>(`/projects/${projectId}/roles`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getRole: (roleId: string) => request<ProjectRole>(`/roles/${roleId}`),
+  updateRole: (roleId: string, data: ProjectRoleUpdate) =>
+    request<ProjectRole>(`/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRole: (roleId: string) => request<void>(`/roles/${roleId}`, { method: 'DELETE' }),
+
+  // ── Permissions ──────────────────────────────────────────────────────────
+
+  listPermissions: (projectId: string, limit = 200, offset = 0) =>
+    request<Page<ProjectPermission>>(
+      `/projects/${projectId}/permissions?limit=${limit}&offset=${offset}`,
+    ),
+  bulkUpsertPermissions: (projectId: string, permissions: PermissionEntry[]) =>
+    request<ProjectPermission[]>(`/projects/${projectId}/permissions`, {
+      method: 'POST',
+      body: JSON.stringify({ permissions }),
+    }),
+  deletePermission: (permissionId: string) =>
+    request<void>(`/permissions/${permissionId}`, { method: 'DELETE' }),
+
+  // ── Auth Custom Fields ───────────────────────────────────────────────────
+
+  listAuthCustomFields: (projectId: string, limit = 50, offset = 0) =>
+    request<Page<AuthCustomField>>(
+      `/projects/${projectId}/auth/custom-fields?limit=${limit}&offset=${offset}`,
+    ),
+  createAuthCustomField: (projectId: string, data: AuthCustomFieldCreate) =>
+    request<AuthCustomField>(`/projects/${projectId}/auth/custom-fields`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAuthCustomField: (fieldId: string, data: AuthCustomFieldUpdate) =>
+    request<AuthCustomField>(`/auth/custom-fields/${fieldId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deleteAuthCustomField: (fieldId: string) =>
+    request<void>(`/auth/custom-fields/${fieldId}`, { method: 'DELETE' }),
 }
+

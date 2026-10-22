@@ -72,6 +72,110 @@ class SpecRelation(_SpecModel):
     required: bool = False
 
 
+class SpecSmtpConfig(_SpecModel):
+    host: str
+    port: int = 587
+    use_tls: bool = True
+    from_email: str
+    from_name: str
+
+
+class SpecSmsConfig(_SpecModel):
+    from_number: str
+
+
+class SpecAuthCustomField(_SpecModel):
+    name: str
+    label: str
+    type: str  # AuthCustomFieldType value; validation module checks legality
+    required: bool = False
+    unique: bool = False
+    indexed: bool = False
+    min_length: int | None = None
+    max_length: int | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    default_value: str | None = None
+    enum_values: list[str] | None = None
+
+
+class SpecRole(_SpecModel):
+    name: str
+    label: str
+    is_default: bool = False
+    self_assignable: bool = False
+    invite_only: bool = False
+    inherits_from: str | None = None
+
+
+class SpecPermission(_SpecModel):
+    entity: str  # entity name (not id) for portability
+    operation: str  # AuthOperation value; validation module checks legality
+    roles: list[str] = Field(default_factory=list)
+    row_rule: str | None = None  # RowRule value or None
+    custom_filter_field: str | None = None
+    custom_filter_value: str | None = None
+
+
+class SpecPasswordReset(_SpecModel):
+    email_magic_link: bool = True
+    sms_otp: bool = False
+    otp_ttl_minutes: int = 10
+
+
+class SpecRegistration(_SpecModel):
+    email_verification_required: bool = True
+    invite_only: bool = False
+    custom_fields: list[SpecAuthCustomField] = Field(default_factory=list)
+
+
+class SpecAuthSecrets(_SpecModel):
+    """Decrypted credentials injected at generation time.
+
+    This model is NEVER serialised in HTTP responses.  It is populated
+    by the generation service after calling AuthSecretsService.get_for_generator()
+    and exists solely so Jinja templates can reference credentials by name.
+    """
+
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+    vonage_api_key: str | None = None
+    vonage_api_secret: str | None = None
+    aws_access_key_id: str | None = None
+    aws_secret_access_key: str | None = None
+    aws_region: str | None = None
+
+
+class SpecAuth(_SpecModel):
+    enabled: bool = True
+    token_store: str = "db"                     # TokenStore value
+    access_token_ttl_minutes: int = 15
+    refresh_token_ttl_days: int = 7
+    jwt_algorithm: str = "HS256"                # JwtAlgorithm value
+    deletion_mode: str = "soft"                 # DeletionMode value
+    multi_tenant: bool = False
+    security_headers_enabled: bool = True
+    app_name: str | None = None
+    app_url: str | None = None
+    password_reset: SpecPasswordReset = Field(default_factory=SpecPasswordReset)
+    registration: SpecRegistration = Field(default_factory=SpecRegistration)
+    smtp: SpecSmtpConfig | None = None
+    sms_provider: str | None = None             # SmsProvider value
+    sms: SpecSmsConfig | None = None
+    login_rate_limit: str = "5/15minutes"
+    register_rate_limit: str = "10/hour"
+    reset_rate_limit: str = "3/hour"
+    roles: list[SpecRole] = Field(default_factory=list)
+    permissions: list[SpecPermission] = Field(default_factory=list)
+    # Populated at generation time only — excluded from JSON output
+    secrets: SpecAuthSecrets = Field(
+        default_factory=SpecAuthSecrets, exclude=True
+    )
+
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -80,7 +184,7 @@ class Spec(_SpecModel):
     # Phase 2 hooks (PLAN.md section 13): accepted by the schema, rejected by validation
     # while non-empty, because nothing stores or generates them yet.
     features: list[str] = Field(default_factory=list)
-    auth: dict[str, Any] | None = None
+    auth: SpecAuth | None = None
 
 
 def spec_hash(spec: Spec) -> str:

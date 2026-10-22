@@ -548,15 +548,41 @@ def test_project_description_length_and_engine() -> None:
 
 
 def test_spec_version_and_reserved_sections() -> None:
+    # spec_version and features are still guarded
     def mutate(d: dict[str, Any]) -> None:
         d["spec_version"] = 2
         d["features"] = ["auth"]
-        d["auth"] = {"provider": "keycloak"}
 
     found = codes(issues_for(mutate))
     assert ("spec_version", "unsupported_spec_version") in found
     assert ("features", "unsupported_feature") in found
-    assert ("auth", "unsupported_feature") in found
+
+
+def test_auth_block_is_accepted_by_validator() -> None:
+    """The auth block is now a typed spec section; the validator must not reject it.
+
+    Deep auth validation (role coherence, permission references, etc.) is added
+    in M7 when the auth generator module is implemented.
+    """
+
+    def mutate(d: dict[str, Any]) -> None:
+        d["auth"] = {
+            "enabled": True,
+            "token_store": "db",
+            "smtp": {
+                "host": "smtp.example.com",
+                "port": 587,
+                "use_tls": True,
+                "from_email": "noreply@example.com",
+                "from_name": "Test App",
+            },
+        }
+
+    found = codes(issues_for(mutate))
+    # No auth-related validation errors expected
+    auth_issues = [f for f in found if f[0].startswith("auth")]
+    assert auth_issues == [], f"unexpected auth issues: {auth_issues}"
+
 
 
 # --- generator-safety rules -------------------------------------------------------------
