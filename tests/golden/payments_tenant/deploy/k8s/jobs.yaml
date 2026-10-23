@@ -1,0 +1,81 @@
+# Run-once work (generated): database migrations, and a safety-net reconcile.
+#
+# Apply the migrate Job and wait for it to finish BEFORE rolling out new API / worker pods:
+#   kubectl apply -f migrate-job.yaml && kubectl wait --for=condition=complete job/tenant-pay-migrate --timeout=300s
+# It uses its own, more privileged database login (sql/roles.sql: the _migrator login), kept in a
+# separate Secret so the running pods never hold it.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tenant-pay-migrate
+  labels: {app: tenant-pay, component: migrate}
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {app: tenant-pay, component: migrate}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: migrate
+          image: tenant-pay
+          command: ["alembic", "upgrade", "head"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef: {name: tenant-pay-migrator, key: DATABASE_URL}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+# The workers already reconcile every minute; this is a second, independent trigger so a stuck
+# worker pool cannot leave payments unreconciled unnoticed.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: tenant-pay-reconcile
+  labels: {app: tenant-pay, component: reconcile}
+spec:
+  schedule: "*/10 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile: {type: RuntimeDefault}
+          containers:
+            - name: reconcile
+              image: tenant-pay
+              command: ["python", "-m", "app.payments.reconcile"]
+              envFrom:
+                - secretRef: {name: tenant-pay-payments}
+              env:
+                - {name: APP_ENV, value: production}
+                - {name: DB_POOL_SIZE, value: "2"}
+                - {name: DB_MAX_OVERFLOW, value: "0"}
+                - {name: DB_PGBOUNCER, value: "true"}
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: {drop: [ALL]}
+              volumeMounts:
+                - {name: tmp, mountPath: /tmp}
+          volumes:
+            - {name: tmp, emptyDir: {}}

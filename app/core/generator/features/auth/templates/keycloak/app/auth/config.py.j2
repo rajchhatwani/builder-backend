@@ -5,6 +5,7 @@ the environment, so the same build runs against any environment. There are no se
 this service only verifies tokens, it never holds a client secret.
 """
 
+import uuid
 from functools import lru_cache
 from urllib.parse import urlsplit
 
@@ -29,6 +30,25 @@ SECURITY_HEADERS_ENABLED = {{ a.security_headers_enabled | pyrepr }}
 DEFAULT_ROLES: tuple[str, ...] = {{ default_roles }}
 SELF_ASSIGNABLE_ROLES: tuple[str, ...] = ()
 ROLE_PARENTS: dict[str, str | None] = {{ role_parents }}
+
+# Each Keycloak organization is a tenant. Its id is derived from the organization's alias under
+# this fixed namespace (not from the Keycloak address), so it never changes between environments.
+MULTI_TENANT = {{ multi_tenant | pyrepr }}
+TENANT_NAMESPACE = uuid.UUID({{ tenant_namespace | pyrepr }})
+
+# Custom registration fields: (name, type, max length, allowed values, default). Keycloak keeps and
+# validates them; each reaches the API as a claim of the same name and is copied to auth_users.
+CUSTOM_FIELDS: tuple[tuple[str, str, int | None, tuple[str, ...], str | None], ...] = (
+{% for f in kc_fields %}
+    (
+        {{ f.name | pyrepr }},
+        {{ f.type | pyrepr }},
+        {{ f.max_length | pyrepr }},
+        {{ f.enum_values | tuple_lit }},
+        {{ f.default_value | pyrepr }},
+    ),
+{% endfor %}
+)
 
 # Signing keys are fetched from Keycloak and cached.
 JWKS_TTL_SECONDS = 600

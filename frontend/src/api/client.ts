@@ -14,6 +14,10 @@ import type {
   KeycloakConfig,
   KeycloakImpact,
   KeycloakWrite,
+  PaymentsConfig,
+  PaymentsImpact,
+  PaymentsSizingResult,
+  PaymentsWrite,
   OnDelete,
   Page,
   PermissionEntry,
@@ -139,6 +143,22 @@ export const api = {
     request<KeycloakImpact>(`/projects/${projectId}/keycloak/impact?action=${action}`),
   switchKeycloak: (projectId: string, action: 'enable' | 'disable') =>
     request<KeycloakConfig>(`/projects/${projectId}/keycloak/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
+
+  getPayments: (projectId: string) => request<PaymentsConfig>(`/projects/${projectId}/payments`),
+  putPayments: (projectId: string, data: PaymentsWrite) =>
+    request<PaymentsConfig>(`/projects/${projectId}/payments`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  paymentsSizing: (projectId: string) =>
+    request<PaymentsSizingResult>(`/projects/${projectId}/payments/sizing`),
+  paymentsImpact: (projectId: string, action: 'enable' | 'disable') =>
+    request<PaymentsImpact>(`/projects/${projectId}/payments/impact?action=${action}`),
+  switchPayments: (projectId: string, action: 'enable' | 'disable') =>
+    request<PaymentsConfig>(`/projects/${projectId}/payments/${action}`, {
       method: 'POST',
       body: JSON.stringify({ confirm: true }),
     }),

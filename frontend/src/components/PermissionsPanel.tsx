@@ -9,7 +9,7 @@ interface PermissionsPanelProps {
   projectId: string
   entities: Entity[] // already loaded by the parent
   roles: ProjectRole[] // already loaded by the parent
-  /** Multi-tenancy does not exist with Keycloak yet, so the tenant row rule is not offered. */
+  /** With Keycloak a tenant is a Keycloak organization. */
   keycloak?: boolean
 }
 
@@ -316,12 +316,10 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
                     role_scoped: like owner, but the &quot;admin&quot; role sees all rows
                   </option>
                   <option value="custom_filter">custom_filter: only rows where a field equals a value</option>
-                  {(!keycloak || formRowRule === 'tenant') && (
-                    <option value="tenant">
-                      tenant: only rows of the caller&apos;s tenant (needs multi-tenant in Auth
-                      config{keycloak ? ', which Keycloak does not offer yet' : ''})
-                    </option>
-                  )}
+                  <option value="tenant">
+                    tenant: only rows of the caller&apos;s tenant (needs multi-tenant in Auth
+                    config{keycloak ? '; a tenant is a Keycloak organization' : ''})
+                  </option>
                 </select>
               </label>
               {formRowRule === 'tenant' && (

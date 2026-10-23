@@ -446,7 +446,9 @@ export function KeycloakPanel({ project, provider, issues, onChanged }: Keycloak
                 </label>
               </div>
               <p className="muted small-text">
-                Always on: lock-out after 5 failed attempts, refresh tokens that cannot be replayed, a record of every
+                Extra sign-up fields from <a href={link(`/p/${project.id}/auth`)}>Authentication</a> become Keycloak user
+                attributes with the same rules. With multi-tenancy on, each Keycloak organization is a tenant: create
+                organizations and add people to them in the Keycloak admin console. Always on: lock-out after 5 failed attempts, refresh tokens that cannot be replayed, a record of every
                 sign-in and admin change. Email verification, self-registration and the access token lifetime come from{' '}
                 <a href={link(`/p/${project.id}/auth`)}>Authentication</a>; roles from{' '}
                 <a href={link(`/p/${project.id}/access`)}>Roles &amp; access</a>.
@@ -528,6 +530,9 @@ export function KeycloakPanel({ project, provider, issues, onChanged }: Keycloak
                       </label>
                     )}
                   </div>
+                  {idp.type === 'oidc' && (
+                    <DiscoveryFill onFound={(found) => updateProvider(index, found)} />
+                  )}
                   {idp.type === 'oidc' && (
                     <div className="field-grid" style={{ marginBlockStart: 'var(--space-3)' }}>
                       <label>
@@ -705,5 +710,62 @@ function SwitchDialog({ projectId, action, onClose, onDone }: SwitchDialogProps)
         </footer>
       </form>
     </Modal>
+  )
+}
+
+interface DiscoveryFillProps {
+  onFound: (endpoints: Partial<IdentityProvider>) => void
+}
+
+/** Reads a provider's .well-known/openid-configuration in the browser and fills the endpoint fields. */
+function DiscoveryFill({ onFound }: DiscoveryFillProps) {
+  const [url, setUrl] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function fill() {
+    setBusy(true)
+    setError(null)
+    try {
+      if (!url.trim().startsWith('https://')) throw new Error('The address must start with https://')
+      const response = await fetch(url.trim(), { headers: { Accept: 'application/json' } })
+      if (!response.ok) throw new Error(`The provider answered ${response.status}.`)
+      const doc = (await response.json()) as Record<string, unknown>
+      const text = (key: string): string | null => (typeof doc[key] === 'string' ? (doc[key] as string) : null)
+      onFound({
+        issuer: text('issuer'),
+        authorization_url: text('authorization_endpoint'),
+        token_url: text('token_endpoint'),
+        jwks_url: text('jwks_uri'),
+        userinfo_url: text('userinfo_endpoint'),
+      })
+    } catch (err) {
+      setError(
+        err instanceof TypeError
+          ? 'Your browser could not read it (the provider may not allow that). Copy the endpoints below by hand.'
+          : errorText(err, 'Could not read it.'),
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ marginBlockStart: 'var(--space-3)' }}>
+      <label>
+        Discovery address (optional): fills the fields below
+        <input
+          value={url}
+          placeholder="https://login.example.com/.well-known/openid-configuration"
+          onChange={(e) => setUrl(e.target.value)}
+        />
+      </label>
+      <div className="hstack" style={{ gap: 'var(--space-2)', marginBlockStart: 'var(--space-2)' }}>
+        <button type="button" className="outline small" disabled={busy || url.trim() === ''} onClick={fill}>
+          {busy ? 'Reading…' : 'Fill from this address'}
+        </button>
+        {error && <span className="muted small-text">{error}</span>}
+      </div>
+    </div>
   )
 }

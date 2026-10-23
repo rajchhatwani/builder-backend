@@ -30,6 +30,7 @@ from app.core.spec_models import (
     SpecIdentityProvider,
     SpecKeycloak,
     SpecPasswordReset,
+    SpecPayments,
     SpecPermission,
     SpecProject,
     SpecRegistration,
@@ -45,10 +46,12 @@ from app.models.auth_custom_field import AuthCustomField
 from app.models.entity import Entity
 from app.models.field import Field
 from app.models.keycloak_config import ProjectKeycloakConfig
+from app.models.payments_config import ProjectPaymentsConfig
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
+from app.services.payments_service import apply_spec, config_to_spec
 
 
 class SpecService:
@@ -252,7 +255,16 @@ class SpecService:
             ],
             relations=spec_relations,
             auth=spec_auth,
+            payments=await self._payments_spec(project_id),
         )
+
+    async def _payments_spec(self, project_id: uuid.UUID) -> SpecPayments | None:
+        row = (
+            await self.session.execute(
+                select(ProjectPaymentsConfig).where(ProjectPaymentsConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return config_to_spec(row) if row is not None else None
 
     async def validate(self, project_id: uuid.UUID) -> list[ValidationIssue]:
         return validate(await self.assemble(project_id))
@@ -340,6 +352,8 @@ class SpecService:
             self._add_permissions(
                 project_id, [p for p in kept_permissions if p.entity in ids_by_name], ids_by_name
             )
+        if spec.payments is not None:
+            await self._replace_payments(project_id, spec.payments)
         project.db_engine = DbEngine(spec.project.db_engine)
         project.version += 1
         try:
@@ -464,6 +478,18 @@ class SpecService:
                 )
             )
         self._add_permissions(project_id, auth.permissions, ids_by_name)
+
+    async def _replace_payments(self, project_id: uuid.UUID, payments: SpecPayments) -> None:
+        # A spec without a payments block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectPaymentsConfig).where(ProjectPaymentsConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectPaymentsConfig(project_id=project_id)
+            self.session.add(row)
+        apply_spec(row, payments)
 
     async def _replace_keycloak(self, project_id: uuid.UUID, kc: SpecKeycloak | None) -> None:
         row = (

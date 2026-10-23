@@ -1,0 +1,96 @@
+# API (generated). Stateless: run as many replicas as the load needs.
+# The numbers come from the expected load you entered ({{ sizing.payments_per_minute }} payments/minute at peak)
+# and are estimates, not measurements; load-test them (see ../DEPLOYMENT.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ slug }}-api
+  labels: {app: {{ slug }}, component: api}
+spec:
+  selector: {app: {{ slug }}, component: api}
+  ports:
+    - {name: http, port: 80, targetPort: 8000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ slug }}-api
+  labels: {app: {{ slug }}, component: api}
+spec:
+  replicas: {{ sizing.api_replicas }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: {{ slug }}, component: api}
+  template:
+    metadata:
+      labels: {app: {{ slug }}, component: api}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: {{ slug }}, component: api}
+      containers:
+        - name: api
+          image: {{ slug }}
+          # Migrations run once, in the migrate Job, never from every replica.
+          command: ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers {{ sizing.server_workers }}"]
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - secretRef: {name: {{ slug }}-payments}
+          env:
+            - {name: APP_ENV, value: production}
+            - {name: PAYMENTS_WEBHOOK_MODE, value: {{ sizing.webhook_mode }}}
+            - {name: DB_POOL_SIZE, value: "{{ sizing.pool_size }}"}
+            - {name: DB_MAX_OVERFLOW, value: "{{ sizing.max_overflow }}"}
+{% if p.scale.pgbouncer %}
+            - {name: DB_PGBOUNCER, value: "true"}
+{% endif %}
+          readinessProbe:
+            httpGet: {path: /ready, port: 8000}
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # Starting points; measure and adjust.
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ slug }}-api
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: {{ slug }}-api}
+  minReplicas: {{ sizing.api_replicas }}
+  maxReplicas: {{ sizing.api_replicas_max }}
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ slug }}-api
+spec:
+  minAvailable: {{ 1 if sizing.api_replicas < 3 else sizing.api_replicas - 1 }}
+  selector:
+    matchLabels: {app: {{ slug }}, component: api}

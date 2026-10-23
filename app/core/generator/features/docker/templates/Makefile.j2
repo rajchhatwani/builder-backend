@@ -1,4 +1,4 @@
-.PHONY: up down test lint
+.PHONY: up down test lint{% if pay %} worker reconcile{% endif %}
 
 up:
 	docker compose up --build
@@ -19,3 +19,13 @@ test:
 
 lint:
 	ruff check .
+{% if pay %}
+
+# Run one more payments worker here (more can run on other machines: deploy/compose.worker.yml).
+worker:
+	docker compose run --rm payments-worker
+
+# Compare our payments with the provider's and repair differences. Safe to run at any time.
+reconcile:
+	docker compose run --rm --no-deps payments-worker python -m app.payments.reconcile
+{% endif %}

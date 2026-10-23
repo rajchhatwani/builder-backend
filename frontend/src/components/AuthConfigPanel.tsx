@@ -529,18 +529,16 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 ? 'Invite only (turns self-registration off; you create users in Keycloak)'
                 : 'Invite only (admins send invitation emails; needs SMTP, an app URL and an "admin" role)'}
             </label>
-            {(!keycloak || multiTenant) && (
-              <label>
-                <input
-                  type="checkbox"
-                  checked={multiTenant}
-                  onChange={(e) => setMultiTenant(e.target.checked)}
-                />{' '}
-                {keycloak
-                  ? 'Multi-tenant (not available with Keycloak yet: turn it off)'
-                  : 'Multi-tenant (sign-up creates a tenant and its admin; invitations join one; cannot be combined with invite-only sign-up)'}
-              </label>
-            )}
+            <label>
+              <input
+                type="checkbox"
+                checked={multiTenant}
+                onChange={(e) => setMultiTenant(e.target.checked)}
+              />{' '}
+              {keycloak
+                ? 'Multi-tenant (each Keycloak organization is a tenant; you create organizations and add people to them in Keycloak)'
+                : 'Multi-tenant (sign-up creates a tenant and its admin; invitations join one; cannot be combined with invite-only sign-up)'}
+            </label>
           </div>
         </div>
       </details>

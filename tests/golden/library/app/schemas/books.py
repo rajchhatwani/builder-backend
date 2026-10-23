@@ -10,8 +10,8 @@ import pydantic as _pd
 class BookCreate(_pd.BaseModel):
     title: str = _pd.Field(max_length=200)
     isbn: str | None = _pd.Field(default=None, max_length=20)
-    pages: int = _pd.Field(default=100, ge=1)
-    price: _decimal.Decimal | None = _pd.Field(default=_decimal.Decimal('9.99'), ge=0)
+    pages: int = _pd.Field(default=100, ge=1, le=2147483647)
+    price: _decimal.Decimal | None = _pd.Field(default=_decimal.Decimal('9.99'), ge=0, max_digits=18, decimal_places=6)
     status: _t.Literal['draft', 'published', 'archived'] = _pd.Field(default='draft')
     published_at: _dt.datetime | None = _pd.Field(default=None)
     in_stock: bool = _pd.Field(default=True)
@@ -25,8 +25,8 @@ class BookCreate(_pd.BaseModel):
 class BookUpdate(_pd.BaseModel):
     title: str | None = _pd.Field(default=None, max_length=200)
     isbn: str | None = _pd.Field(default=None, max_length=20)
-    pages: int | None = _pd.Field(default=None, ge=1)
-    price: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    pages: int | None = _pd.Field(default=None, ge=1, le=2147483647)
+    price: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     status: _t.Literal['draft', 'published', 'archived'] | None = _pd.Field(default=None)
     published_at: _dt.datetime | None = _pd.Field(default=None)
     in_stock: bool | None = _pd.Field(default=None)

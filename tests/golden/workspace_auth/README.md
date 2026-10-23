@@ -38,6 +38,23 @@ uvicorn app.main:app --reload
 | update | `PATCH /announcements/{id}` |
 | delete | `DELETE /announcements/{id}` |
 
+Relations:
+- `tasks`: ids of related Task
+
+### Label: `/labels`
+
+| Operation | Route |
+|---|---|
+| list | `GET /labels?limit=&offset=&sort=` (default page 20, max 100) |
+| get | `GET /labels/{id}` |
+| head | `HEAD /labels/{id}` |
+| create | `POST /labels` |
+| replace | `PUT /labels/{id}` |
+| update | `PATCH /labels/{id}` |
+| delete | `DELETE /labels/{id}` |
+
+Relations:
+- `tasks`: ids of related Task (writable)
 
 ### Task: `/tasks`
 
@@ -51,6 +68,9 @@ uvicorn app.main:app --reload
 | update | `PATCH /tasks/{id}` |
 | delete | `DELETE /tasks/{id}` |
 
+Relations:
+- `announcement_id`: id of the related Announcement
+- `labels`: ids of related Label (writable)
 
 Errors always look like `{"code": "...", "message": "...", "details": []}`.
 

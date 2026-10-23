@@ -1,0 +1,316 @@
+{
+  "api": "http://localhost:18100",
+  "users": [
+    {
+      "store": "Acme Outfitters",
+      "email": "ava@acme.test",
+      "name": "Ava Acme",
+      "roles": [
+        "admin"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "mia.manager@acme.test",
+      "name": "Mia Manager",
+      "roles": [
+        "manager"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "carl.catalog@acme.test",
+      "name": "Carl Catalog",
+      "roles": [
+        "catalog"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "fay.fulfil@acme.test",
+      "name": "Fay Fulfil",
+      "roles": [
+        "fulfillment"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "sam.support@acme.test",
+      "name": "Sam Support",
+      "roles": [
+        "support"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "mo.marketing@acme.test",
+      "name": "Mo Marketing",
+      "roles": [
+        "marketing"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "zara@acme-shopper.test",
+      "name": "Zara",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "yuki@acme-shopper.test",
+      "name": "Yuki",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "noah@acme-shopper.test",
+      "name": "Noah",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Acme Outfitters",
+      "email": "lena@acme-shopper.test",
+      "name": "Lena",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "gus@globex.test",
+      "name": "Gus Globex",
+      "roles": [
+        "admin"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "mia.manager@globex.test",
+      "name": "Mia Manager",
+      "roles": [
+        "manager"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "carl.catalog@globex.test",
+      "name": "Carl Catalog",
+      "roles": [
+        "catalog"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "fay.fulfil@globex.test",
+      "name": "Fay Fulfil",
+      "roles": [
+        "fulfillment"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "sam.support@globex.test",
+      "name": "Sam Support",
+      "roles": [
+        "support"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "mo.marketing@globex.test",
+      "name": "Mo Marketing",
+      "roles": [
+        "marketing"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "zara@globex-shopper.test",
+      "name": "Zara",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "yuki@globex-shopper.test",
+      "name": "Yuki",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "noah@globex-shopper.test",
+      "name": "Noah",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    },
+    {
+      "store": "Globex Goods",
+      "email": "lena@globex-shopper.test",
+      "name": "Lena",
+      "roles": [
+        "customer"
+      ],
+      "password": "Demo-pass-2026!"
+    }
+  ],
+  "ids": {
+    "acme": {
+      "loc_main": "0af34a45-02ab-49d5-bd83-eaf837b35f3d",
+      "loc_shop": "ebc52176-2aac-4342-b4b2-737a3fca0cf8",
+      "rates": {
+        "standard": "300d026b-4da7-43ce-93fe-83cf9a092b76",
+        "free": "aab39730-e8a3-4616-8b5f-0fc70c4615ad",
+        "express": "015c93b1-b296-45cb-ad49-73e1c4634d69",
+        "international": "bbb4b27a-c71b-4d8a-afb7-46add0c10a6a"
+      },
+      "products": [
+        "3b750d99-bce7-465e-905b-b3a38fbf0d5e",
+        "42a5a723-1c22-4b57-8e01-d52aa3ef4007",
+        "7c090f0f-3840-4409-926e-25f3fa2691aa",
+        "6b9d9803-b9ea-4dfb-b05d-d6a29a7b25c8",
+        "2db82348-9049-4e71-834f-91b6cb1907aa",
+        "d21714f1-8b33-4413-8cf9-140d44bcff10",
+        "611584d5-56fd-4099-a962-adcd5664da9a",
+        "930d8c30-bd0c-4c21-8a8c-ba4b43233087",
+        "fd51df4a-8bdf-4977-a0e5-ce22ef8b6de1",
+        "4170a466-efd5-49d5-874b-955863055405"
+      ],
+      "variants": [
+        "0a120330-d20b-40e8-83f9-cc0dfbec8fca",
+        "632565be-ad7c-4ee8-a8cb-f5f10fc21166",
+        "f4f70b52-7030-4a20-b7af-e7621ba9f21a",
+        "3503160c-20f2-434f-b531-d8dbcbc34754",
+        "e4c74abc-4e97-46ba-9d9f-d1796fcaa792",
+        "66e1c504-f3be-4089-bfc0-71231be24c7a",
+        "1c6d6e4c-2ecc-4b77-b2f6-457e01f72f3b",
+        "37d96fe6-9e1c-46fb-b824-7c4c63d2d822",
+        "1d0f0bdb-ebe5-4222-bfb4-c9cbae60d5ae",
+        "37748256-2b52-464d-82ae-de98603facf6",
+        "9784aa3d-a0f1-444d-a14b-c675d64ca386",
+        "083ce8eb-c912-4d3f-b2b5-0df2f8fbc91e",
+        "60311ffb-ac81-4c74-ae0b-0938a30a1578",
+        "37298692-12ea-48e7-8532-f0bd859d4f2e",
+        "c4c83c44-d563-4320-8814-e8ffc85959c1",
+        "161ca88a-6b4c-4cd6-9d3e-d3633c8d6984",
+        "5901aa16-a561-4f65-a778-5395acdc8960",
+        "cb3ea5d5-5255-4975-be82-f12f28f91b88"
+      ],
+      "customers": [
+        "96c05625-d918-42fb-ba4a-562afe968631",
+        "72a7d2b9-9c88-4667-b09c-2dd209a973b5",
+        "e3913680-1db2-4eb6-9a93-34c162466b67",
+        "5d5fbfa7-438e-4ecc-ae5f-86411276b014",
+        "bae4629f-9f8b-4488-9c51-f966e0ff4ed0",
+        "a9e0abb7-eac8-46ec-93d9-cb43f844d8d2",
+        "404b555e-334b-4866-8427-26113f10a0c4",
+        "9d41dcb0-45e0-4e81-a62c-ae9de04d21f0",
+        "58c68451-ab9c-4e82-8bb9-6a3e1a6baf2c",
+        "0082d7d7-51be-4049-9d8b-5b0275db3d7e",
+        "8b81f71b-5915-4741-ab3d-70530fb6a79c",
+        "3d9339e0-aaa3-4c49-aaa2-66cf98b2c925"
+      ],
+      "orders": {
+        "paid_fulfilled": "7e774663-3447-41c9-8db9-debbb89d6ab8",
+        "paid_partially_fulfilled": "8d43f3ca-e4c3-4b0f-a46c-01da22b152e7",
+        "paid_unfulfilled": "7d405c26-c64c-44de-98d7-1c0f12398d45",
+        "pending_payment": "3b9eba65-72fc-4804-8360-efe5d728e7f2",
+        "cancelled_fraud": "ab480359-8d46-48b7-a7a9-d6868c4ae5b9",
+        "fully_refunded": "5c2c2fdc-b4c8-41e7-b854-9509233767c8",
+        "partially_refunded": "1ddf998d-e92c-4b25-9f75-f69e33f6382c",
+        "with_discount": "3a9cbbb6-23a2-4c44-95c7-4a796e74fb3b",
+        "international_express": "c4d60971-3068-4f25-bb9a-cc7c37a03aac",
+        "voided": "921d1738-2ef4-4bf8-a4dd-b209aef28cb0",
+        "big_basket": "f1b1acab-f151-4fa0-b36b-4c79c874fdd5"
+      }
+    },
+    "globex": {
+      "loc_main": "cfa1ae6a-56db-40a0-a837-2d313ce1acf1",
+      "loc_shop": "c798e896-5692-4afb-86b0-35a5b57d2d19",
+      "rates": {
+        "standard": "f72a084e-5df9-46f8-95e5-16d41173f4c2",
+        "free": "bf6b7444-f70c-48d9-9992-ae213b450629",
+        "express": "23fdd6e6-fa2c-4476-bfae-6e6cd83e0fed",
+        "international": "9070303c-5c03-48cc-8073-f6295f71f0e3"
+      },
+      "products": [
+        "bb77b15f-9a64-45d3-929a-9b5d2b3c18bb",
+        "9e75f2d0-6198-4efa-857e-e60310307577",
+        "ee6c5f95-edec-4c27-a5e2-6b1467e5f981",
+        "53a25dea-21f0-45a9-a336-e1d11e3ecf9a",
+        "4ae9b75c-fcf6-460e-881d-53f91a204426",
+        "eed89108-b9b6-40fc-b28c-2c7263e266ed",
+        "cc5ddbd0-50f7-4e8e-9809-d5b136f46f2f",
+        "23cfee0b-af08-41dd-8521-9f995bfb5b35"
+      ],
+      "variants": [
+        "789de72d-334a-47c5-825c-c80cabd468e4",
+        "8d9bca8d-90d4-4e2f-9ceb-347e1129fa7f",
+        "b9b986e8-64ff-471a-8f06-c49f9b328c80",
+        "ab39b392-cc17-46fd-b20e-af292350120b",
+        "548b3126-c491-4018-b2b2-2d1867b71bfb",
+        "6cf9e25c-9b53-49cd-9ef3-149a15730170",
+        "757265e6-221f-4573-b4a8-34d911a75988",
+        "9fce8535-0f9a-44f3-a27d-813f4952c040",
+        "b290c538-5d49-4ef8-889f-2e65478b9248",
+        "f80dfaeb-d6df-40d7-ae69-aac1b60b326c",
+        "fefad95a-3ea6-49a0-9bd9-39076a0e601a"
+      ],
+      "customers": [
+        "a6034d44-52f7-4a36-96ee-3ddd1ee10fe6",
+        "cccf2236-6f89-46dd-9e81-036ea7b9000e",
+        "cef1c5f8-4879-4009-b9c7-60b014bef33d",
+        "6eecf82f-3041-49f4-b4ac-5d95cda6e691",
+        "8f3c219c-2385-4f65-881b-054f3d70e8d0",
+        "ab99a276-60a7-4574-a962-89c09de08ce6",
+        "3ff82f47-2a1e-415e-9de2-bd0beb1000df",
+        "50616ae5-ab56-47e7-841b-0509b8d619db",
+        "bd2f3956-7e44-46e5-885a-cbb770fdf0f8",
+        "94eba69f-2b83-429d-a063-30135d71445e",
+        "10f9d728-2dd9-4929-af65-cff6a5efd355",
+        "c0d7c4b4-e6f8-4b90-8130-30cdb7b8469d"
+      ],
+      "orders": {
+        "paid_fulfilled": "5afb2f4e-83b4-40ca-95ce-63e0aedff8a6",
+        "paid_partially_fulfilled": "33e16064-c83a-4dbc-8154-f3f0d78b2cd2",
+        "paid_unfulfilled": "ae767d68-fb18-4876-86f7-93bf403f8dc8",
+        "pending_payment": "c84781a3-193e-4f39-9a61-fb9bb3a76dc0",
+        "cancelled_fraud": "be28df92-0db5-4992-856b-055cdc781611",
+        "fully_refunded": "4c4d92d1-8581-4a6d-b9fc-b746835503b4",
+        "partially_refunded": "b86fab07-bd5c-4ea0-97d5-91139218e0ff",
+        "with_discount": "826f6eae-2921-416e-89bd-3a0d2f2a1be8",
+        "international_express": "327a6894-a447-4bee-9057-024afa3146f8",
+        "voided": "77edd2db-f46c-4938-9a02-d8aa11d4d2eb",
+        "big_basket": "c6f2c9d6-155c-43fe-aec5-0776cdfe922e"
+      }
+    }
+  }
+}

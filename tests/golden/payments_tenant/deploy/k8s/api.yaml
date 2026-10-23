@@ -1,0 +1,94 @@
+# API (generated). Stateless: run as many replicas as the load needs.
+# The numbers come from the expected load you entered (1200 payments/minute at peak)
+# and are estimates, not measurements; load-test them (see ../DEPLOYMENT.md).
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-pay-api
+  labels: {app: tenant-pay, component: api}
+spec:
+  selector: {app: tenant-pay, component: api}
+  ports:
+    - {name: http, port: 80, targetPort: 8000}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-pay-api
+  labels: {app: tenant-pay, component: api}
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: {maxUnavailable: 0, maxSurge: 1}
+  selector:
+    matchLabels: {app: tenant-pay, component: api}
+  template:
+    metadata:
+      labels: {app: tenant-pay, component: api}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: tenant-pay, component: api}
+      containers:
+        - name: api
+          image: tenant-pay
+          # Migrations run once, in the migrate Job, never from every replica.
+          command: ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 3"]
+          ports: [{containerPort: 8000}]
+          envFrom:
+            - secretRef: {name: tenant-pay-payments}
+          env:
+            - {name: APP_ENV, value: production}
+            - {name: PAYMENTS_WEBHOOK_MODE, value: queued}
+            - {name: DB_POOL_SIZE, value: "5"}
+            - {name: DB_MAX_OVERFLOW, value: "2"}
+            - {name: DB_PGBOUNCER, value: "true"}
+          readinessProbe:
+            httpGet: {path: /ready, port: 8000}
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: {path: /health, port: 8000}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          # Starting points; measure and adjust.
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {memory: 512Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tenant-pay-api
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: tenant-pay-api}
+  minReplicas: 3
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 65}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tenant-pay-api
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: {app: tenant-pay, component: api}

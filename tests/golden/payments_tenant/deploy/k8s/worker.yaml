@@ -1,0 +1,75 @@
+# Payments workers (generated). Run the queue and the periodic jobs; they need only the database
+# and the provider. Add replicas freely: every job runs on exactly one worker at a time.
+#
+# Autoscaling on queue depth needs an external metric (for example KEDA with a Postgres scaler on
+#   SELECT count(*) FROM pay_jobs WHERE status = 'queued' AND run_at <= now() ).
+# GET /payments/ops/status reports the same numbers. Until you add one, scale by hand or on CPU.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-pay-payments-worker
+  labels: {app: tenant-pay, component: payments-worker}
+spec:
+  replicas: 7
+  selector:
+    matchLabels: {app: tenant-pay, component: payments-worker}
+  template:
+    metadata:
+      labels: {app: tenant-pay, component: payments-worker}
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 40
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: {type: RuntimeDefault}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels: {app: tenant-pay, component: payments-worker}
+      containers:
+        - name: worker
+          image: tenant-pay
+          command: ["python", "-m", "app.payments.worker"]
+          envFrom:
+            - secretRef: {name: tenant-pay-payments}
+          env:
+            - {name: APP_ENV, value: production}
+            - {name: PAYMENTS_WORKER_CONCURRENCY, value: "8"}
+            - {name: PAYMENTS_POLL_INTERVAL_SECONDS, value: "0.2"}
+            - {name: DB_POOL_SIZE, value: "10"}
+            - {name: DB_MAX_OVERFLOW, value: "0"}
+            - {name: DB_PGBOUNCER, value: "true"}
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {memory: 384Mi}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          volumeMounts:
+            - {name: tmp, mountPath: /tmp}
+      volumes:
+        - {name: tmp, emptyDir: {}}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: tenant-pay-payments-worker
+spec:
+  scaleTargetRef: {apiVersion: apps/v1, kind: Deployment, name: tenant-pay-payments-worker}
+  minReplicas: 7
+  maxReplicas: 14
+  metrics:
+    - type: Resource
+      resource: {name: cpu, target: {type: Utilization, averageUtilization: 70}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: tenant-pay-payments-worker
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: {app: tenant-pay, component: payments-worker}

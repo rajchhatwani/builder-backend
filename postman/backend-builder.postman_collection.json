@@ -2340,6 +2340,212 @@
           ]
         }
       ]
+    },
+    {
+      "name": "Payments (needs auth, an Order entity with a decimal total and a status enum, and roles admin/staff/customer; see scripts/seed.py pay-shop)",
+      "item": [
+        {
+          "name": "1. Save the payments settings",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/payments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "payments"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"provider\": \"stripe\",\n  \"payable\": {\n    \"entity\": \"Order\",\n    \"amount_field\": \"total\",\n    \"currency\": \"USD\",\n    \"currency_field\": null,\n    \"status_field\": \"status\",\n    \"status_pending\": \"pending\",\n    \"status_paid\": \"paid\",\n    \"status_partially_refunded\": \"partially_refunded\",\n    \"status_refunded\": \"refunded\"\n  },\n  \"currencies\": [\n    \"USD\"\n  ],\n  \"success_urls\": [\n    \"https://shop.example.com/paid\"\n  ],\n  \"cancel_urls\": [\n    \"https://shop.example.com/cart\"\n  ],\n  \"roles\": {\n    \"create\": [\n      \"customer\"\n    ],\n    \"read\": [\n      \"customer\"\n    ],\n    \"read_all\": [\n      \"staff\",\n      \"admin\"\n    ],\n    \"refund\": [\n      \"staff\",\n      \"admin\"\n    ],\n    \"approve_refund\": [\n      \"admin\"\n    ],\n    \"operate\": [\n      \"admin\"\n    ]\n  },\n  \"refund_approval_threshold_minor\": 50000,\n  \"scale\": {\n    \"profile\": \"medium\",\n    \"availability\": \"ha\",\n    \"db_max_connections\": 100,\n    \"pgbouncer\": true,\n    \"kubernetes\": true\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('saved', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. See the sizing for the expected load (an estimate)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/payments/sizing",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "payments",
+                "sizing"
+              ],
+              "query": []
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('sized', () => pm.expect(pm.response.json().sizing.api_replicas).to.be.above(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. What turning payments on changes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/payments/impact?action=enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "payments",
+                "impact"
+              ],
+              "query": [
+                {
+                  "key": "action",
+                  "value": "enable"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('impact', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4. Turn payments on",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/payments/enable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "payments",
+                "enable"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('on', () => pm.expect(pm.response.json().enabled).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Turn payments off (settings are kept)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/projects/{{projectId}}/payments/disable",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "projects",
+                "{{projectId}}",
+                "payments",
+                "disable"
+              ],
+              "query": []
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"confirm\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('off', () => pm.expect(pm.response.json().enabled).to.eql(false));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [

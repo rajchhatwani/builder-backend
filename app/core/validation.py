@@ -46,6 +46,7 @@ from app.core.spec_models import (
     SpecProject,
     SpecRelation,
 )
+from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 
 MAX_ENTITIES = 100
 MAX_FIELDS_PER_ENTITY = 100
@@ -107,6 +108,9 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         # Claim the auth tables first so an entity cannot silently shadow them.
         for table in auth_tables(spec.auth):
             ctx.tables[table] = "auth"
+    if payments_active(spec):
+        for table in PAYMENTS_TABLES:
+            ctx.tables[table] = "payments"
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
@@ -114,6 +118,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     _check_relations(spec, entities_by_name, ctx)
     if spec.auth is not None:
         _check_auth(spec.auth, entities_by_name, ctx)
+    check_payments(spec, entities_by_name, ctx.add, redirect_uri_problem)
     return ctx.issues
 
 
@@ -635,7 +640,7 @@ AUTH_TABLES = (
 )
 # With Keycloak the identity provider owns passwords, tokens and invitations; the project keeps
 # only a profile row per user (auth_users) and the provider lock.
-KEYCLOAK_AUTH_TABLES = ("auth_provider_lock", "auth_users")
+KEYCLOAK_AUTH_TABLES = ("auth_provider_lock", "auth_tenants", "auth_users")
 
 
 def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
@@ -1197,28 +1202,71 @@ def _check_auth_keycloak(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _
     _check_auth_permission_rules(auth, entities, ctx)
 
 
-def _check_keycloak_exclusions(auth: SpecAuth, ctx: _Ctx) -> None:
-    """Features that exist only in built-in auth. Each is rejected rather than ignored, so
-    nothing the user configured silently disappears."""
-    if auth.multi_tenant:
-        ctx.add(
-            "auth.multi_tenant",
-            "unsupported_value",
-            "multi-tenancy is not available with Keycloak yet; turn it off or use built-in auth",
-        )
-    for i, perm in enumerate(auth.permissions):
-        if perm.row_rule == RowRule.tenant:
+# Names a custom field may not take with Keycloak: its own profile attributes and the claims
+# a token already carries (a field is delivered to the API as a claim of the same name).
+KEYCLOAK_RESERVED_FIELD_NAMES = frozenset(
+    {
+        "username",
+        "firstName",
+        "lastName",
+        "name",
+        "sub",
+        "iss",
+        "aud",
+        "exp",
+        "iat",
+        "nbf",
+        "jti",
+        "typ",
+        "azp",
+        "sid",
+        "acr",
+        "scope",
+        "email_verified",
+        "given_name",
+        "family_name",
+        "preferred_username",
+        "resource_access",
+        "realm_access",
+        "organization",
+        "auth_time",
+        "session_state",
+        "allowed_origins",
+    }
+)
+
+
+def _check_keycloak_custom_fields(auth: SpecAuth, ctx: _Ctx) -> None:
+    """Custom registration fields become Keycloak user attributes, delivered as token claims."""
+    _check_auth_custom_fields(auth, ctx)
+    for i, f in enumerate(auth.registration.custom_fields):
+        p = f"auth.registration.custom_fields[{i}]"
+        if f.name in KEYCLOAK_RESERVED_FIELD_NAMES:
             ctx.add(
-                f"auth.permissions[{i}].row_rule",
-                "unsupported_value",
-                "the tenant row rule needs multi-tenancy, which is not available with Keycloak yet",
+                f"{p}.name",
+                "reserved_name",
+                f"{f.name!r} is already a Keycloak user attribute or token claim",
             )
-    if auth.registration.custom_fields:
-        ctx.add(
-            "auth.registration.custom_fields",
-            "unsupported_value",
-            "custom registration fields are not available with Keycloak yet; remove them",
-        )
+        if f.unique:
+            ctx.add(
+                f"{p}.unique",
+                "unsupported_value",
+                "Keycloak cannot keep a custom attribute unique across users; turn unique off",
+            )
+
+
+def _check_keycloak_exclusions(auth: SpecAuth, ctx: _Ctx) -> None:
+    """What does not exist with Keycloak. Each is rejected rather than ignored, so nothing the
+    user configured silently disappears."""
+    if not auth.multi_tenant:
+        for i, perm in enumerate(auth.permissions):
+            if perm.row_rule == RowRule.tenant:
+                ctx.add(
+                    f"auth.permissions[{i}].row_rule",
+                    "invalid_value",
+                    "the tenant row rule needs multi_tenant to be switched on",
+                )
+    _check_keycloak_custom_fields(auth, ctx)
     if auth.password_reset.sms_otp:
         ctx.add(
             "auth.password_reset.sms_otp",

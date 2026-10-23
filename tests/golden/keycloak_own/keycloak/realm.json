@@ -66,7 +66,20 @@
           "clientRole": true
         }
       ]
-    }
+    },
+    "realm": [
+      {
+        "name": "default-roles-hub",
+        "composite": true,
+        "composites": {
+          "client": {
+            "hub-api": [
+              "member"
+            ]
+          }
+        }
+      }
+    ]
   },
   "clients": [
     {
@@ -253,6 +266,9 @@
       }
     }
   ],
+  "defaultRole": {
+    "name": "default-roles-hub"
+  },
   "clientScopeMappings": {
     "hub-api": [
       {

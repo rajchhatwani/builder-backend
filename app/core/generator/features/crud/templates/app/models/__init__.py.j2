@@ -8,6 +8,9 @@ from app.models._base import Base
 {% for e in entities %}
 from app.models.{{ e.table }} import {{ e.name }}
 {% endfor %}
+{% if payments %}
+from app.payments import models as _payments_models
+{% endif %}
 
 __all__ = [
     "Base",
@@ -17,5 +20,8 @@ __all__ = [
     "_associations",
 {% if auth %}
     "_auth_models",
+{% endif %}
+{% if payments %}
+    "_payments_models",
 {% endif %}
 ]

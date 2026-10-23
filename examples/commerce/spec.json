@@ -1,0 +1,6638 @@
+{
+  "auth": {
+    "access_token_ttl_minutes": 30,
+    "app_name": "Commerce",
+    "app_url": "http://localhost:3000",
+    "deletion_mode": "soft",
+    "enabled": true,
+    "jwt_algorithm": "RS256",
+    "keycloak": null,
+    "login_rate_limit": "600/minute",
+    "multi_tenant": true,
+    "password_reset": {
+      "email_magic_link": false,
+      "otp_ttl_minutes": 10,
+      "sms_otp": false
+    },
+    "permissions": [
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CustomerAddress",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "replace",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Webhook",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Transaction",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Transaction",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Transaction",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Transaction",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "DiscountUsage",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "DiscountUsage",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "DiscountUsage",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "DiscountUsage",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Store",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Store",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Store",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Store",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Store",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Review",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Review",
+        "operation": "delete",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Review",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Review",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Review",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "replace",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "TaxRate",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "delete",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "CartLine",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Fulfillment",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ProductImage",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "RefundLine",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "RefundLine",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "RefundLine",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "RefundLine",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "GiftCard",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Variant",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Collection",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "InventoryLevel",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Metafield",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderEvent",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderEvent",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderEvent",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Customer",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "replace",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingRate",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Product",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderLine",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderLine",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderLine",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "OrderLine",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Order",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "FulfillmentLine",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "fulfillment"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Tag",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "delete",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Cart",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "replace",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Location",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Article",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "create",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "replace",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "ShippingZone",
+        "operation": "update",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Refund",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Refund",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Refund",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Refund",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Blog",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "fulfillment",
+          "support",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Discount",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "marketing"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "delete",
+        "roles": [
+          "manager"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "get",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "head",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "list",
+        "roles": [
+          "manager",
+          "catalog",
+          "fulfillment",
+          "support",
+          "marketing",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "custom_filter_field": null,
+        "custom_filter_value": null,
+        "entity": "Page",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "catalog"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "provider": "builtin",
+    "refresh_token_ttl_days": 14,
+    "register_rate_limit": "600/minute",
+    "registration": {
+      "custom_fields": [
+        {
+          "default_value": null,
+          "enum_values": null,
+          "indexed": false,
+          "label": "Display name",
+          "max_length": 80,
+          "max_value": null,
+          "min_length": null,
+          "min_value": null,
+          "name": "display_name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default_value": "en",
+          "enum_values": [
+            "en",
+            "fr",
+            "de",
+            "hi",
+            "ja"
+          ],
+          "indexed": false,
+          "label": "Language",
+          "max_length": null,
+          "max_value": null,
+          "min_length": null,
+          "min_value": null,
+          "name": "locale",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default_value": "false",
+          "enum_values": null,
+          "indexed": false,
+          "label": "Marketing emails",
+          "max_length": null,
+          "max_value": null,
+          "min_length": null,
+          "min_value": null,
+          "name": "marketing_opt_in",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default_value": null,
+          "enum_values": null,
+          "indexed": false,
+          "label": "Job title",
+          "max_length": 80,
+          "max_value": null,
+          "min_length": null,
+          "min_value": null,
+          "name": "job_title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "email_verification_required": true,
+      "invite_only": false
+    },
+    "reset_rate_limit": "600/minute",
+    "roles": [
+      {
+        "inherits_from": null,
+        "invite_only": true,
+        "is_default": false,
+        "label": "Store manager",
+        "name": "manager",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": null,
+        "invite_only": true,
+        "is_default": false,
+        "label": "Catalog editor",
+        "name": "catalog",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": null,
+        "invite_only": true,
+        "is_default": false,
+        "label": "Fulfillment",
+        "name": "fulfillment",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": null,
+        "invite_only": true,
+        "is_default": false,
+        "label": "Customer support",
+        "name": "support",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": null,
+        "invite_only": true,
+        "is_default": false,
+        "label": "Marketing",
+        "name": "marketing",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": "manager",
+        "invite_only": true,
+        "is_default": false,
+        "label": "Store owner",
+        "name": "admin",
+        "self_assignable": false
+      },
+      {
+        "inherits_from": null,
+        "invite_only": false,
+        "is_default": true,
+        "label": "Customer",
+        "name": "customer",
+        "self_assignable": false
+      }
+    ],
+    "security_headers_enabled": true,
+    "sms": null,
+    "sms_provider": null,
+    "smtp": {
+      "from_email": "store@example.com",
+      "from_name": "Commerce",
+      "host": "host.docker.internal",
+      "port": 1025,
+      "use_tls": false
+    },
+    "token_store": "redis"
+  },
+  "entities": [
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "handle",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "author",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "body_html",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "summary_html",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "tags_cache",
+          "required": false,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "Article",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "published",
+          "handle"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "title",
+          "author"
+        ],
+        "soft_delete": true,
+        "sortable": [
+          "published_at",
+          "created_at"
+        ]
+      },
+      "plural_path": "articles",
+      "table_name": "articles"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "handle",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "commentable",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Blog",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "blogs",
+      "table_name": "blogs"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "token",
+          "required": true,
+          "type": "string",
+          "unique": true
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "email",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "USD",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 3,
+          "max_value": null,
+          "min_value": null,
+          "name": "currency",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "open",
+          "enum_values": [
+            "open",
+            "abandoned",
+            "converted"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "discount_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "note",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "attributes",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "expires_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        }
+      ],
+      "name": "Cart",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "status",
+          "token"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": [
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "plural_path": "carts",
+      "table_name": "carts"
+    },
+    {
+      "fields": [
+        {
+          "default": 1,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": 10000.0,
+          "min_value": 1.0,
+          "name": "quantity",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "properties",
+          "required": false,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "CartLine",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "cart_lines",
+      "table_name": "cart_lines"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "handle",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "description_html",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": "manual",
+          "enum_values": [
+            "manual",
+            "smart"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "kind",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "rules",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": "manual",
+          "enum_values": [
+            "manual",
+            "best_selling",
+            "title_asc",
+            "title_desc",
+            "price_asc",
+            "price_desc",
+            "newest"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "sort_order",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 70,
+          "max_value": null,
+          "min_value": null,
+          "name": "seo_title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 320,
+          "max_value": null,
+          "min_value": null,
+          "name": "seo_description",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "Collection",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "kind",
+          "published",
+          "handle"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "title",
+          "handle"
+        ],
+        "soft_delete": true,
+        "sortable": [
+          "title",
+          "created_at"
+        ]
+      },
+      "plural_path": "collections",
+      "table_name": "collections"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "email",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "first_name",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "last_name",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 30,
+          "max_value": null,
+          "min_value": null,
+          "name": "phone",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "enabled",
+          "enum_values": [
+            "enabled",
+            "disabled",
+            "invited",
+            "declined"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "state",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "accepts_marketing",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "accepts_marketing_updated_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "tax_exempt",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "total_spent",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "orders_count",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "tags_cache",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "note",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 10,
+          "max_value": null,
+          "min_value": null,
+          "name": "locale",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "Customer",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "state",
+          "accepts_marketing",
+          "email"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "email",
+          "first_name",
+          "last_name",
+          "phone"
+        ],
+        "soft_delete": true,
+        "sortable": [
+          "created_at",
+          "total_spent",
+          "orders_count"
+        ]
+      },
+      "plural_path": "customers",
+      "table_name": "customers"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "company",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "address1",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "address2",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "city",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "province",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 10,
+          "max_value": null,
+          "min_value": null,
+          "name": "province_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "country",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 2,
+          "max_value": null,
+          "min_value": null,
+          "name": "country_code",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 20,
+          "max_value": null,
+          "min_value": null,
+          "name": "postal_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 30,
+          "max_value": null,
+          "min_value": null,
+          "name": "phone",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "is_default",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "CustomerAddress",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "customer_addresses",
+      "table_name": "customer_addresses"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "code",
+          "required": true,
+          "type": "string",
+          "unique": true
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": [
+            "percentage",
+            "fixed_amount",
+            "free_shipping",
+            "buy_x_get_y"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "kind",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "value",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": "order",
+          "enum_values": [
+            "order",
+            "line_item",
+            "shipping"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "target",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "minimum_subtotal",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "usage_limit",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "once_per_customer",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "used_count",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "combines_with_other",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "applies_to",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "starts_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "ends_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "active",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Discount",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "kind",
+          "active",
+          "code"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "code",
+          "title"
+        ],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "discounts",
+      "table_name": "discounts"
+    },
+    {
+      "fields": [
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "amount",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "email",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "DiscountUsage",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "discount_usages",
+      "table_name": "discount_usages"
+    },
+    {
+      "fields": [
+        {
+          "default": "pending",
+          "enum_values": [
+            "pending",
+            "open",
+            "success",
+            "cancelled",
+            "error"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "tracking_company",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "tracking_number",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 2000,
+          "max_value": null,
+          "min_value": null,
+          "name": "tracking_url",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "notify_customer",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "shipped_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        }
+      ],
+      "name": "Fulfillment",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "fulfillments",
+      "table_name": "fulfillments"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "quantity",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        }
+      ],
+      "name": "FulfillmentLine",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "fulfillment_lines",
+      "table_name": "fulfillment_lines"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 32,
+          "max_value": null,
+          "min_value": null,
+          "name": "code",
+          "required": true,
+          "type": "string",
+          "unique": true
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "initial_value",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "balance",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 3,
+          "max_value": null,
+          "min_value": null,
+          "name": "currency",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "expires_on",
+          "required": false,
+          "type": "date",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "disabled",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "note",
+          "required": false,
+          "type": "text",
+          "unique": false
+        }
+      ],
+      "name": "GiftCard",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "disabled",
+          "code"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "gift_cards",
+      "table_name": "gift_cards"
+    },
+    {
+      "fields": [
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "available",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "on_hand",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "committed",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "incoming",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        }
+      ],
+      "name": "InventoryLevel",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "available"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": [
+          "available",
+          "updated_at"
+        ]
+      },
+      "plural_path": "inventory_levels",
+      "table_name": "inventory_levels"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "active",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "fulfills_online_orders",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "address1",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "address2",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "city",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "province",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 10,
+          "max_value": null,
+          "min_value": null,
+          "name": "province_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "country",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 2,
+          "max_value": null,
+          "min_value": null,
+          "name": "country_code",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 20,
+          "max_value": null,
+          "min_value": null,
+          "name": "postal_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 30,
+          "max_value": null,
+          "min_value": null,
+          "name": "phone",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "Location",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "active"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "name"
+        ],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "locations",
+      "table_name": "locations"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 40,
+          "max_value": null,
+          "min_value": null,
+          "name": "owner_type",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "owner_id",
+          "required": true,
+          "type": "uuid",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "namespace",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "key",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": [
+            "string",
+            "integer",
+            "decimal",
+            "boolean",
+            "json",
+            "date"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "value_type",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "value",
+          "required": true,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "Metafield",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "owner_type",
+          "owner_id",
+          "namespace",
+          "key"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "metafields",
+      "table_name": "metafields"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "number",
+          "required": true,
+          "type": "bigint",
+          "unique": true
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "email",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "open",
+          "enum_values": [
+            "open",
+            "closed",
+            "cancelled"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": "pending",
+          "enum_values": [
+            "pending",
+            "authorized",
+            "partially_paid",
+            "paid",
+            "partially_refunded",
+            "refunded",
+            "voided"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "financial_status",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": "unfulfilled",
+          "enum_values": [
+            "unfulfilled",
+            "partial",
+            "fulfilled",
+            "restocked"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "fulfillment_status",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": "USD",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 3,
+          "max_value": null,
+          "min_value": null,
+          "name": "currency",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "subtotal",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "shipping_total",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "tax_total",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "discount_total",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "total",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "total_refunded",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "billing_address",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "shipping_address",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "shipping_method",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "discount_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "note",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "tags_cache",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": "web",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "source",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "placed_at",
+          "required": true,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "closed_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "cancelled_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": [
+            "customer",
+            "fraud",
+            "inventory",
+            "declined",
+            "other"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "cancel_reason",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        }
+      ],
+      "name": "Order",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "status",
+          "financial_status",
+          "fulfillment_status",
+          "email",
+          "number",
+          "source"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "update"
+        ],
+        "searchable": [
+          "email",
+          "note"
+        ],
+        "soft_delete": false,
+        "sortable": [
+          "placed_at",
+          "total",
+          "number",
+          "created_at"
+        ]
+      },
+      "plural_path": "orders",
+      "table_name": "orders"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": [
+            "placed",
+            "paid",
+            "fulfilled",
+            "refunded",
+            "cancelled",
+            "note",
+            "email_sent",
+            "edited"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "verb",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "message",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "actor",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "data",
+          "required": false,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "OrderEvent",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "plural_path": "order_events",
+      "table_name": "order_events"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "variant_title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "sku",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "quantity",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "unit_price",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "discount_total",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "tax_total",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "fulfilled_quantity",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "refunded_quantity",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "properties",
+          "required": false,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "OrderLine",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create",
+          "update"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "order_lines",
+      "table_name": "order_lines"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "handle",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "body_html",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "template_suffix",
+          "required": false,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "Page",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "published",
+          "handle"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "pages",
+      "table_name": "pages"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "handle",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "description_html",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "vendor",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "product_type",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "draft",
+          "enum_values": [
+            "draft",
+            "active",
+            "archived"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "tags_cache",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "options",
+          "required": false,
+          "type": "json",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "published_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 70,
+          "max_value": null,
+          "min_value": null,
+          "name": "seo_title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 320,
+          "max_value": null,
+          "min_value": null,
+          "name": "seo_description",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "requires_shipping",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "taxable",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Product",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "status",
+          "vendor",
+          "product_type",
+          "handle"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "title",
+          "vendor",
+          "handle"
+        ],
+        "soft_delete": true,
+        "sortable": [
+          "title",
+          "created_at",
+          "updated_at",
+          "published_at"
+        ]
+      },
+      "plural_path": "products",
+      "table_name": "products"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 2000,
+          "max_value": null,
+          "min_value": null,
+          "name": "url",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 512,
+          "max_value": null,
+          "min_value": null,
+          "name": "alt",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": 1,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "position",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "width",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "height",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        }
+      ],
+      "name": "ProductImage",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": [
+          "position"
+        ]
+      },
+      "plural_path": "product_images",
+      "table_name": "product_images"
+    },
+    {
+      "fields": [
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "amount",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "reason",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "restock",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "note",
+          "required": false,
+          "type": "text",
+          "unique": false
+        }
+      ],
+      "name": "Refund",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "refunds",
+      "table_name": "refunds"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "quantity",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "subtotal",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        }
+      ],
+      "name": "RefundLine",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "refund_lines",
+      "table_name": "refund_lines"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": 5.0,
+          "min_value": 1.0,
+          "name": "rating",
+          "required": true,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "body",
+          "required": false,
+          "type": "text",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "author_name",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "pending",
+          "enum_values": [
+            "pending",
+            "published",
+            "rejected"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "verified_purchase",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Review",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "status",
+          "rating"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "title",
+          "body"
+        ],
+        "soft_delete": false,
+        "sortable": [
+          "created_at",
+          "rating"
+        ]
+      },
+      "plural_path": "reviews",
+      "table_name": "reviews"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "price",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "min_order_subtotal",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "min_weight",
+          "required": false,
+          "type": "float",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "max_weight",
+          "required": false,
+          "type": "float",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "active",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "ShippingRate",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "shipping_rates",
+      "table_name": "shipping_rates"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "countries",
+          "required": true,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "ShippingZone",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "shipping_zones",
+      "table_name": "shipping_zones"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 200,
+          "max_value": null,
+          "min_value": null,
+          "name": "legal_name",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 254,
+          "max_value": null,
+          "min_value": null,
+          "name": "email",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 253,
+          "max_value": null,
+          "min_value": null,
+          "name": "domain",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "USD",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 3,
+          "max_value": null,
+          "min_value": null,
+          "name": "currency",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "UTC",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "timezone",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "kg",
+          "enum_values": [
+            "kg",
+            "g",
+            "lb",
+            "oz"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "weight_unit",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": "trial",
+          "enum_values": [
+            "trial",
+            "basic",
+            "grow",
+            "advanced",
+            "plus"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "plan",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "password_protected",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "settings",
+          "required": false,
+          "type": "json",
+          "unique": false
+        }
+      ],
+      "name": "Store",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create",
+          "update"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "stores",
+      "table_name": "stores"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        }
+      ],
+      "name": "Tag",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "name"
+        ],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "tags",
+      "table_name": "tags"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 2,
+          "max_value": null,
+          "min_value": null,
+          "name": "country_code",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 10,
+          "max_value": null,
+          "min_value": null,
+          "name": "province_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "name",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": 1.0,
+          "min_value": 0.0,
+          "name": "rate",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": false,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "includes_shipping",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "TaxRate",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "tax_rates",
+      "table_name": "tax_rates"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": [
+            "authorization",
+            "capture",
+            "sale",
+            "void",
+            "refund"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "kind",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": [
+            "pending",
+            "success",
+            "failure",
+            "error"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "status",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "amount",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 3,
+          "max_value": null,
+          "min_value": null,
+          "name": "currency",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "gateway",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 120,
+          "max_value": null,
+          "min_value": null,
+          "name": "reference",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 60,
+          "max_value": null,
+          "min_value": null,
+          "name": "error_code",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "processed_at",
+          "required": false,
+          "type": "datetime",
+          "unique": false
+        }
+      ],
+      "name": "Transaction",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "transactions",
+      "table_name": "transactions"
+    },
+    {
+      "fields": [
+        {
+          "default": "Default",
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "title",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 100,
+          "max_value": null,
+          "min_value": null,
+          "name": "sku",
+          "required": false,
+          "type": "string",
+          "unique": true
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": true,
+          "max_length": 64,
+          "max_value": null,
+          "min_value": null,
+          "name": "barcode",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": 0,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "price",
+          "required": true,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "compare_at_price",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "cost",
+          "required": false,
+          "type": "decimal",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 0.0,
+          "name": "weight",
+          "required": false,
+          "type": "float",
+          "unique": false
+        },
+        {
+          "default": 1,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": 1.0,
+          "name": "position",
+          "required": false,
+          "type": "integer",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "option1",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "option2",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 255,
+          "max_value": null,
+          "min_value": null,
+          "name": "option3",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "taxable",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "requires_shipping",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        },
+        {
+          "default": "deny",
+          "enum_values": [
+            "deny",
+            "continue"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "inventory_policy",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "inventory_tracked",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Variant",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [
+          "sku",
+          "barcode"
+        ],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [
+          "title",
+          "sku",
+          "barcode"
+        ],
+        "soft_delete": false,
+        "sortable": [
+          "position",
+          "price",
+          "created_at"
+        ]
+      },
+      "plural_path": "variants",
+      "table_name": "variants"
+    },
+    {
+      "fields": [
+        {
+          "default": null,
+          "enum_values": [
+            "orders.create",
+            "orders.paid",
+            "orders.cancelled",
+            "products.create",
+            "products.update",
+            "customers.create",
+            "refunds.create",
+            "fulfillments.create"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "topic",
+          "required": true,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 2000,
+          "max_value": null,
+          "min_value": null,
+          "name": "url",
+          "required": true,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": "json",
+          "enum_values": [
+            "json",
+            "xml"
+          ],
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "body_format",
+          "required": false,
+          "type": "enum",
+          "unique": false
+        },
+        {
+          "default": null,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": 128,
+          "max_value": null,
+          "min_value": null,
+          "name": "secret",
+          "required": false,
+          "type": "string",
+          "unique": false
+        },
+        {
+          "default": true,
+          "enum_values": null,
+          "indexed": false,
+          "max_length": null,
+          "max_value": null,
+          "min_value": null,
+          "name": "active",
+          "required": false,
+          "type": "boolean",
+          "unique": false
+        }
+      ],
+      "name": "Webhook",
+      "options": {
+        "default_page_size": 20,
+        "filterable": [],
+        "max_page_size": 100,
+        "operations": [
+          "list",
+          "get",
+          "head",
+          "create",
+          "replace",
+          "update",
+          "delete"
+        ],
+        "searchable": [],
+        "soft_delete": false,
+        "sortable": []
+      },
+      "plural_path": "webhooks",
+      "table_name": "webhooks"
+    }
+  ],
+  "features": [],
+  "project": {
+    "db_engine": "postgres",
+    "description": "A Shopify-style multi-store commerce backend: catalog, inventory, customers, carts, orders, payments, refunds, fulfilment, discounts, gift cards, shipping, taxes, reviews, content.",
+    "name": "Commerce",
+    "slug": "commerce"
+  },
+  "relations": [
+    {
+      "from_entity": "Blog",
+      "from_name": "articles",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "Article",
+      "to_name": "blog"
+    },
+    {
+      "from_entity": "Cart",
+      "from_name": "lines",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "CartLine",
+      "to_name": "cart"
+    },
+    {
+      "from_entity": "Cart",
+      "from_name": "order",
+      "kind": "one_to_one",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Order",
+      "to_name": "cart"
+    },
+    {
+      "from_entity": "Collection",
+      "from_name": "children",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Collection",
+      "to_name": "parent"
+    },
+    {
+      "from_entity": "Collection",
+      "from_name": "products",
+      "kind": "many_to_many",
+      "on_delete": "cascade",
+      "required": false,
+      "to_entity": "Product",
+      "to_name": "collections"
+    },
+    {
+      "from_entity": "Customer",
+      "from_name": "addresses",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "CustomerAddress",
+      "to_name": "customer"
+    },
+    {
+      "from_entity": "Customer",
+      "from_name": "carts",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Cart",
+      "to_name": "customer"
+    },
+    {
+      "from_entity": "Customer",
+      "from_name": "gift_cards",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "GiftCard",
+      "to_name": "customer"
+    },
+    {
+      "from_entity": "Customer",
+      "from_name": "orders",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Order",
+      "to_name": "customer"
+    },
+    {
+      "from_entity": "Customer",
+      "from_name": "reviews",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Review",
+      "to_name": "customer"
+    },
+    {
+      "from_entity": "Discount",
+      "from_name": "usages",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "DiscountUsage",
+      "to_name": "discount"
+    },
+    {
+      "from_entity": "Fulfillment",
+      "from_name": "lines",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "FulfillmentLine",
+      "to_name": "fulfillment"
+    },
+    {
+      "from_entity": "Location",
+      "from_name": "fulfillments",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Fulfillment",
+      "to_name": "location"
+    },
+    {
+      "from_entity": "Location",
+      "from_name": "inventory_levels",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "InventoryLevel",
+      "to_name": "location"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "discount_usages",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "DiscountUsage",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "events",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "OrderEvent",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "fulfillments",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "Fulfillment",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "lines",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "OrderLine",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "refunds",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "Refund",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "Order",
+      "from_name": "transactions",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "Transaction",
+      "to_name": "order"
+    },
+    {
+      "from_entity": "OrderLine",
+      "from_name": "fulfillment_lines",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "FulfillmentLine",
+      "to_name": "order_line"
+    },
+    {
+      "from_entity": "OrderLine",
+      "from_name": "refund_lines",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "RefundLine",
+      "to_name": "order_line"
+    },
+    {
+      "from_entity": "Product",
+      "from_name": "images",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "ProductImage",
+      "to_name": "product"
+    },
+    {
+      "from_entity": "Product",
+      "from_name": "reviews",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "Review",
+      "to_name": "product"
+    },
+    {
+      "from_entity": "Product",
+      "from_name": "tags",
+      "kind": "many_to_many",
+      "on_delete": "cascade",
+      "required": false,
+      "to_entity": "Tag",
+      "to_name": "products"
+    },
+    {
+      "from_entity": "Product",
+      "from_name": "variants",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "Variant",
+      "to_name": "product"
+    },
+    {
+      "from_entity": "Refund",
+      "from_name": "lines",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "RefundLine",
+      "to_name": "refund"
+    },
+    {
+      "from_entity": "ShippingRate",
+      "from_name": "orders",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "Order",
+      "to_name": "shipping_rate"
+    },
+    {
+      "from_entity": "ShippingZone",
+      "from_name": "rates",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "ShippingRate",
+      "to_name": "zone"
+    },
+    {
+      "from_entity": "Variant",
+      "from_name": "cart_lines",
+      "kind": "one_to_many",
+      "on_delete": "restrict",
+      "required": true,
+      "to_entity": "CartLine",
+      "to_name": "variant"
+    },
+    {
+      "from_entity": "Variant",
+      "from_name": "inventory_levels",
+      "kind": "one_to_many",
+      "on_delete": "cascade",
+      "required": true,
+      "to_entity": "InventoryLevel",
+      "to_name": "variant"
+    },
+    {
+      "from_entity": "Variant",
+      "from_name": "order_lines",
+      "kind": "one_to_many",
+      "on_delete": "set_null",
+      "required": false,
+      "to_entity": "OrderLine",
+      "to_name": "variant"
+    }
+  ],
+  "spec_version": 1
+}

@@ -9,6 +9,7 @@ from app.core.generator.base import FileTree
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
+from app.core.validation_payments import PAYMENTS_TABLES, payments_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -53,12 +54,18 @@ class TestsModule:
             tables |= set(auth_tables(project.auth)) - {"auth_provider_lock"}
             if project.auth.token_store == "redis":
                 tables.discard("auth_refresh_tokens")  # refresh tokens live in Redis
+        payments = payments_active(project.spec) and project.auth is not None
+        if payments:
+            # The audit table is append-only (its trigger refuses TRUNCATE) and the mode lock is
+            # written at start-up, so neither is emptied between tests.
+            tables |= set(PAYMENTS_TABLES) - {"pay_audit_log", "pay_lock"}
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",
             tables=sorted(tables),
             auth=project.auth is not None,
             keycloak=uses_keycloak(project.auth),
+            payments=payments,
         )
         creatable_entities = [e for e in project.entities if creatable(e, project)]
         files["tests/_factories.py"] = render_template(
@@ -89,7 +96,11 @@ class TestsModule:
             None,
         )
         patch_field = next((f.name for f in entity.fields if f.patchable), None)
+        range_probe = next(
+            (f.name for f in entity.fields if f.type in ("integer", "bigint", "decimal")), None
+        )
         return {
+            "range_probe": range_probe,
             "e": entity,
             "skip_reason": _skip_reason(entity, project),
             "gated": bool(entity.access),

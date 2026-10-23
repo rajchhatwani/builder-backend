@@ -62,6 +62,14 @@ async def test_announcements_routes_reject_users_without_the_required_role(
                 assert response.json()["code"] == "forbidden"
 
 
+async def test_labels_routes_need_a_signed_in_user(client: AsyncClient) -> None:
+    for op in ("create", "delete", "get", "head", "list", "replace", "update"):
+        response = await _call(client, op, "labels")
+        assert response.status_code == 401, (op, response.text)
+        if op != "head":  # a HEAD response has no body to read the code from
+            assert response.json()["code"] == "unauthorized"
+
+
 async def test_tasks_routes_need_a_signed_in_user(client: AsyncClient) -> None:
     for op in ("create", "delete", "get", "head", "list", "replace", "update"):
         response = await _call(client, op, "tasks")

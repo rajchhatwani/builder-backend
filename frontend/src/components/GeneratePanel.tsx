@@ -4,6 +4,7 @@ import type {
   AuthConfig,
   GenerationSummary,
   KeycloakConfig,
+  PaymentsConfig,
   Preview,
   Project,
   ValidationIssue,
@@ -65,6 +66,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   const [downloaded, setDownloaded] = useState<{
     auth: AuthConfig | null
     keycloak: KeycloakConfig | null
+    payments: PaymentsConfig | null
   } | null>(null)
 
   async function loadHistory() {
@@ -106,7 +108,8 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         const auth = await api.getAuthConfig(project.id).catch(() => null)
         const keycloak =
           auth?.provider === 'keycloak' ? await api.getKeycloak(project.id).catch(() => null) : null
-        setDownloaded({ auth, keycloak })
+        const payments = await api.getPayments(project.id).catch(() => null)
+        setDownloaded({ auth, keycloak, payments: payments?.enabled ? payments : null })
         await loadHistory()
       }
     } catch (err) {
@@ -188,7 +191,12 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         )}
       </div>
 
-      {downloaded && <NextSteps slug={project.slug} auth={downloaded.auth} keycloak={downloaded.keycloak} />}
+      {downloaded && <NextSteps
+          slug={project.slug}
+          auth={downloaded.auth}
+          keycloak={downloaded.keycloak}
+          payments={downloaded.payments}
+        />}
 
       <h3>Generation history</h3>
       <div className="card">

@@ -25,6 +25,10 @@ from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
+{% if payments %}
+from app.payments.lock import ensure_payments_lock
+from app.payments.router import router as _payments_router
+{% endif %}
 from app.routers._health import router as _health_router
 {% for e in entities %}
 from app.routers.{{ e.table }} import router as {{ e.table }}_router
@@ -36,6 +40,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% if auth %}
     get_auth_settings()  # a missing secret stops the app here, with a clear message
     await ensure_provider_lock()  # refuses to start on a database used by another provider
+{% endif %}
+{% if payments %}
+    await ensure_payments_lock()  # unsafe or missing payment settings stop the app here
 {% endif %}
     yield
     await engine.dispose()
@@ -83,6 +90,9 @@ def create_app() -> FastAPI:
     app.include_router(_health_router)
 {% if auth %}
     app.include_router(_auth_router)
+{% endif %}
+{% if payments %}
+    app.include_router(_payments_router)
 {% endif %}
 {% for e in entities %}
     app.include_router({{ e.table }}_router)

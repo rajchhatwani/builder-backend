@@ -10,7 +10,7 @@ class PostCreate(_pd.BaseModel):
     title: str = _pd.Field(max_length=200)
     body: str
     published: bool = _pd.Field(default=False)
-    views: int | None = _pd.Field(default=0, ge=0)
+    views: int | None = _pd.Field(default=0, ge=0, le=2147483647)
     author_id: _uuid.UUID
     tags: list[_uuid.UUID] = _pd.Field(default_factory=list)
 
@@ -19,7 +19,7 @@ class PostUpdate(_pd.BaseModel):
     title: str | None = _pd.Field(default=None, max_length=200)
     body: str | None = _pd.Field(default=None)
     published: bool | None = _pd.Field(default=None)
-    views: int | None = _pd.Field(default=None, ge=0)
+    views: int | None = _pd.Field(default=None, ge=0, le=2147483647)
     author_id: _uuid.UUID | None = None
     tags: list[_uuid.UUID] | None = None
 

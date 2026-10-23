@@ -7,6 +7,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.core.redact import redact_processor
+
 _REQUEST_ID_RE = re.compile(r"[A-Za-z0-9._-]{1,64}")
 logger = structlog.get_logger()
 
@@ -21,6 +23,7 @@ def configure_logging(log_level: str) -> None:
             structlog.processors.TimeStamper(fmt="iso"),
             structlog.processors.add_log_level,
             structlog.processors.format_exc_info,
+            redact_processor,  # secrets never reach the log, even by mistake
             structlog.processors.JSONRenderer(),
         ],
     )

@@ -571,6 +571,7 @@ def test_access_decisions(desk: Path) -> None:
             "scope": {"created_by_id": customer.id},
             "owner_id": None,
             "tenant_id": None,
+            "caller_tenant_id": None,
         }
         assert build_access(admin, owner=True).scope == {"created_by_id": admin.id}
         # role_scoped: admins see everything, everyone else their own
@@ -801,8 +802,15 @@ def test_tenant_access_decisions(workspace: Path) -> None:
         plain = build_access(ann)
         assert plain.scope == {} and plain.tenant_id is None
         assert plain.repo_kwargs["tenant_id"] is None
+        # The caller's tenant is known even where the entity itself is not tenant-scoped, so a
+        # reference to a tenant row can be checked; an anonymous caller has none.
+        assert plain.caller_tenant_id == one and plain.repo_kwargs["caller_tenant_id"] == one
+        assert build_access(None).caller_tenant_id is None
         assert access.repo_kwargs == {
-            "scope": {"tenant_id": one}, "owner_id": None, "tenant_id": one
+            "scope": {"tenant_id": one},
+            "owner_id": None,
+            "tenant_id": one,
+            "caller_tenant_id": one,
         }
         """,
         AUTH_JWT_SECRET="j" * 40,

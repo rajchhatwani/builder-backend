@@ -1,0 +1,195 @@
+{
+  "project": {
+    "name": "Tenant Pay",
+    "slug": "tenant-pay",
+    "description": "A multi-tenant shop with several currencies and a scaled-out payment setup",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "fields": [
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true,
+          "min_value": 0.01,
+          "max_value": 100000
+        },
+        {
+          "name": "currency",
+          "type": "string",
+          "required": true,
+          "max_length": 3
+        },
+        {
+          "name": "state",
+          "type": "enum",
+          "required": true,
+          "default": "open",
+          "enum_values": [
+            "open",
+            "settled",
+            "part_refunded",
+            "refunded"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://shop.example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@shop.example.com",
+      "from_name": "Shop"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "manager",
+        "label": "Manager"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "replace",
+        "roles": [
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "head",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "multi_tenant": true
+  },
+  "payments": {
+    "enabled": true,
+    "provider": "stripe",
+    "payable": {
+      "entity": "Order",
+      "amount_field": "total",
+      "currency_field": "currency",
+      "status_field": "state",
+      "status_pending": "open",
+      "status_paid": "settled",
+      "status_partially_refunded": "part_refunded",
+      "status_refunded": "refunded"
+    },
+    "currencies": [
+      "USD",
+      "EUR",
+      "JPY"
+    ],
+    "max_amount_minor": 5000000,
+    "success_urls": [
+      "https://shop.example.com/paid"
+    ],
+    "cancel_urls": [
+      "https://shop.example.com/cart"
+    ],
+    "roles": {
+      "create": [
+        "member"
+      ],
+      "read": [
+        "member"
+      ],
+      "read_all": [
+        "manager",
+        "admin"
+      ],
+      "refund": [
+        "manager"
+      ],
+      "approve_refund": [],
+      "operate": [
+        "admin"
+      ]
+    },
+    "refund_approval_threshold_minor": null,
+    "scale": {
+      "profile": "large",
+      "availability": "ha",
+      "db_max_connections": 200,
+      "pgbouncer": true,
+      "kubernetes": true
+    },
+    "security": {
+      "webhook_ip_allowlist_enabled": true,
+      "webhook_tolerance_seconds": 120
+    }
+  }
+}

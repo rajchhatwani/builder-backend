@@ -9,6 +9,8 @@ interface OverviewPanelProps {
   /** True when Keycloak, not built-in sign-in, manages users. */
   keycloakOn: boolean
   keycloakSaved: boolean
+  paymentsOn: boolean
+  paymentsSaved: boolean
   roleCount: number
   issues: ValidationIssue[] | null
   generationCount: number
@@ -16,6 +18,7 @@ interface OverviewPanelProps {
 
 /** Which section can fix an issue, judged by its path. */
 export function sectionForIssue(issue: ValidationIssue): Section {
+  if (issue.path === 'payments' || issue.path.startsWith('payments.')) return 'payments'
   if (issue.path.startsWith('auth.roles') || issue.path.startsWith('auth.permissions')) return 'access'
   if (issue.path === 'auth.keycloak' || issue.path.startsWith('auth.keycloak.')) return 'keycloak'
   if (issue.path === 'auth' || issue.path.startsWith('auth.')) return 'auth'
@@ -37,6 +40,8 @@ export function OverviewPanel({
   authEnabled,
   keycloakOn,
   keycloakSaved,
+  paymentsOn,
+  paymentsSaved,
   roleCount,
   issues,
   generationCount,
@@ -76,6 +81,16 @@ export function OverviewPanel({
     optional: true,
     section: 'keycloak',
     action: keycloakOn ? 'Edit' : keycloakSaved ? 'Turn on' : 'Set up',
+  })
+  steps.push({
+    title: 'Take payments',
+    detail: paymentsOn
+      ? 'Card payments, refunds and disputes are switched on, with workers sized for your load.'
+      : 'Hosted checkout with Stripe or Razorpay, refunds, an audit trail and deployment files sized for your traffic.',
+    done: paymentsOn,
+    optional: true,
+    section: 'payments',
+    action: paymentsOn ? 'Edit' : paymentsSaved ? 'Turn on' : 'Set up',
   })
   if (authEnabled) {
     steps.push({

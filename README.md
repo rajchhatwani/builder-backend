@@ -91,10 +91,46 @@ design, decisions and verification notes are in `KEYCLOAK_PLAN.md`.
   another project still uses this project's realm, and keeps the settings so it can be turned back
   on. The generated app records the provider it first started with and refuses to boot on a database
   used by another one unless `AUTH_ALLOW_PROVIDER_SWITCH=true` (this lock exists for built-in auth too).
-- Not available with Keycloak yet (rejected by validation, never silently ignored): multi-tenancy,
-  custom registration fields, SMS codes, self-assignable and invite-only roles.
+- **Multi-tenancy** works through Keycloak Organizations: each organization is a tenant (ids derived from
+  the alias), a user must be in exactly one, and the `tenant` row rule behaves as with built-in auth.
+  **Custom registration fields** become Keycloak user-profile attributes (with validators per type) delivered
+  as token claims and copied to `auth_users`. Keycloak cannot keep a value unique, so `unique` is rejected.
+- Not available with Keycloak (rejected by validation, never silently ignored): SMS codes, self-assignable
+  and invite-only roles.
 - Verified against a real Keycloak: `uv run pytest tests/e2e/test_keycloak_stack.py` (needs Docker,
   pulls the pinned Keycloak image, a few minutes).
+
+### Payments
+
+A project can take **card payments** through a provider's hosted checkout (Stripe Checkout or Razorpay Payment
+Links). The generated backend gets a payment module, a **separately deployable worker**, and deployment files
+sized for the traffic you expect. Design, decisions, phases and the verified / unverified list are in
+`PAYMENTS_PLAN.md`.
+
+- Configure over the API: `PUT/GET /projects/{id}/payments` (provider, the entity that is paid for and its amount /
+  currency / status fields, currencies, return addresses, roles, refund-approval limit, expected load, security
+  knobs), `GET .../payments/sizing` (replicas, workers and database connections for the load: an estimate),
+  `GET .../payments/impact?action=` and `POST .../payments/enable|disable` with `{"confirm": true}`. The settings are
+  part of `GET/PUT .../spec` (`payments`). **No provider key or webhook secret is stored anywhere in the builder or put
+  in the zip**: they are environment variables of the generated project (`STRIPE_*` / `RAZORPAY_*`, or `*_FILE`).
+- Generated routes: `POST /payments` (needs an `Idempotency-Key`; the amount is read from your own row on the
+  server, never from the request), `GET /payments`, cancel, refunds (with an optional second approver above a limit),
+  disputes, `/payments/ops/*` (queue health, failed jobs, audit-chain check) and the signature-checked webhook.
+- Safe by construction: card data never reaches the code; a webhook is only a hint (the object is fetched from the
+  provider before anything changes); every state change is a guarded atomic update; one live payment per item (a
+  database index); refunds cannot exceed the payment; an append-only, hash-chained audit log protected by database
+  triggers; a live key refuses to run outside `APP_ENV=production`; test and live data never share a database;
+  secrets are redacted from logs; redirects from the provider are refused. Validation refuses a setup where the
+  people who pay can also create or edit the item they pay for (they could set their own price) unless you accept
+  that risk explicitly.
+- Scale: a Postgres job queue (`SKIP LOCKED` + leases), so any number of workers on any number of machines; the
+  generated `docker-compose.yml`, `deploy/compose.worker.yml` (workers on another server), optional `deploy/k8s/`,
+  `deploy/sql/roles.sql` (least-privilege logins) and `deploy/DEPLOYMENT.md` all come from one sizing calculation.
+- Verified: each generated payments project passes its own tests (about 120) against a real PostgreSQL and a faithful
+  stand-in for the provider's API; `uv run pytest tests/e2e/test_payments_stack.py` runs a Docker stack (PgBouncer,
+  two workers, duplicate webhooks across replicas, a worker killed mid-job, a provider outage, the roles script,
+  container hardening). 18 deliberately broken controls are all caught by those tests. **Not verified against the
+  real Stripe or Razorpay**; supply your own test keys for that (see the generated `deploy/DEPLOYMENT.md`).
 
 ### Tests
 
@@ -116,7 +152,7 @@ run `make test`'s command inside the stack (several minutes; skipped without `do
 
 ```bash
 docker compose up -d          # builder API :8000, Postgres, and the dashboard on :5173
-docker compose exec api python /app/scripts/seed.py   # loads six demo projects
+docker compose exec api python /app/scripts/seed.py   # loads eight demo projects (`pay-shop` with Stripe and `rupee-shop` with Razorpay take payments)
 ```
 
 `scripts/seed.py` (standard library only; `--reset` recreates, `--base-url` points elsewhere)
@@ -124,7 +160,7 @@ creates **Helpdesk** (roles, invitations, email + SMS sign-in, custom registrati
 every permission kind), **Vault** (RS256 + Redis), **Workspace** (multi-tenant), **Bookshop**
 (plain CRUD, no auth), **SSO Hub** (Keycloak with Google and Entra ID logins) and **SSO Portal**
 (a second platform on the same Keycloak realm). Open http://localhost:5173: each project has a
-sidebar (Overview, Data model, Authentication, Keycloak, Roles & access, Generate). The Overview lists
+sidebar (Overview, Data model, Authentication, Keycloak, Payments, Roles & access, Generate). The Overview lists
 what is left to do and links to the fix for every validation problem; after a download, the
 Generate page lists the environment variables to set before running it.
 

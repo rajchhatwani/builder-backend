@@ -10,6 +10,13 @@ from app.core.generator.features.keycloak.module import (
     KEYCLOAK_IMAGE_TAG,
     idp_secret_env,
 )
+from app.core.generator.features.payments.module import (
+    MAX_UVICORN_WORKERS_ONE_HOST,
+    PGBOUNCER_IMAGE,
+    PROVIDERS,
+    active,
+    sizing_for,
+)
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import invitations_enabled, uses_keycloak
 
@@ -43,7 +50,18 @@ class DockerModule:
         kc_own = kc is not None and kc.mode == "own"
         builtin = auth if auth is not None and not keycloak else None
         sms_provider = builtin.sms_provider if builtin is not None and builtin.sms else None
+        pay = active(project)
+        sizing = sizing_for(pay) if pay is not None else None
         context = {
+            "pay": pay,
+            "prov": PROVIDERS[pay.provider] if pay is not None else None,
+            "sizing": sizing,
+            "pgbouncer_image": PGBOUNCER_IMAGE,
+            "single_host_workers": (
+                min(sizing.api_replicas * sizing.server_workers, MAX_UVICORN_WORKERS_ONE_HOST)
+                if sizing is not None
+                else 1
+            ),
             "auth": auth,
             "sms_provider": sms_provider,
             "sns": sms_provider == "aws_sns",

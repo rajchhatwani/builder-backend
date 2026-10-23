@@ -28,6 +28,9 @@ class Access:
     owner_id: uuid.UUID | None = None
     # recorded as tenant_id on new rows (tenant-scoped entities)
     tenant_id: uuid.UUID | None = None
+    # the signed-in caller's tenant, even for entities that are not tenant-scoped themselves:
+    # a reference to a tenant-scoped row must stay inside it
+    caller_tenant_id: uuid.UUID | None = None
 
     @property
     def repo_kwargs(self) -> dict[str, Any]:
@@ -35,6 +38,7 @@ class Access:
             "scope": self.scope,
             "owner_id": self.owner_id,
             "tenant_id": self.tenant_id,
+            "caller_tenant_id": self.caller_tenant_id,
         }
 
 
@@ -61,7 +65,14 @@ def build_access(
         # Every query of a tenant-scoped entity is confined to the caller's own tenant.
         tenant_id = user.tenant_id  # type: ignore[attr-defined]
         scope["tenant_id"] = tenant_id
-    return Access(user, scope, user.id if stamp and user is not None else None, tenant_id)
+    caller_tenant_id = getattr(user, "tenant_id", None) if user is not None else None
+    return Access(
+        user,
+        scope,
+        user.id if stamp and user is not None else None,
+        tenant_id,
+        caller_tenant_id,
+    )
 
 
 def access_dependency(

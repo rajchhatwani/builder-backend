@@ -1,0 +1,326 @@
+[
+  {
+    "verdict": "OK",
+    "id": "isolation.lists",
+    "title": "Each store only sees its own rows",
+    "evidence": "acme sees 10 products, globex 8, no overlap: True"
+  },
+  {
+    "verdict": "OK",
+    "id": "isolation.get",
+    "title": "Reading another store's row by id",
+    "evidence": "HTTP 404"
+  },
+  {
+    "verdict": "RISK",
+    "id": "isolation.fk_create",
+    "title": "Create a child under ANOTHER store's parent (variant -> foreign product)",
+    "evidence": "HTTP 201: {\"id\": \"962f8003-4a99-43cc-93d1-255437e75f9b\", \"title\": \"probe injected\", \"sku\": null, \"barcode\": null, \"price\": \"1.000000\", \"compare_at_price\": null, \"cost\": n"
+  },
+  {
+    "verdict": "RISK",
+    "id": "isolation.fk_read",
+    "title": "The foreign parent id is now stored on this store's row",
+    "evidence": "HTTP 200; product_id=3b750d99-bce7-465e-905b-b3a38fbf0d5e"
+  },
+  {
+    "verdict": "RISK",
+    "id": "isolation.fk_order_line",
+    "title": "Order line pointing at another store's variant",
+    "evidence": "HTTP 201"
+  },
+  {
+    "verdict": "RISK",
+    "id": "isolation.m2m",
+    "title": "Many-to-many link to another store's product",
+    "evidence": "HTTP 200"
+  },
+  {
+    "verdict": "RISK",
+    "id": "isolation.fk_move",
+    "title": "Re-parent an existing row under another store's parent",
+    "evidence": "HTTP 200"
+  },
+  {
+    "verdict": "OK",
+    "id": "isolation.forge",
+    "title": "tenant_id / created_by_id in a request body",
+    "evidence": "HTTP 201: extra fields ignored"
+  },
+  {
+    "verdict": "RISK",
+    "id": "unique.sku_global",
+    "title": "SKU uniqueness spans ALL stores",
+    "evidence": "a third store creating sku GLOBEX-HEADPHONES-1 (a globex SKU) -> HTTP 409: it fails, and that also reveals another store uses it"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "unique.discount_code",
+    "title": "Discount codes, order numbers, cart tokens are unique across all stores",
+    "evidence": "a store reusing globex's code -> HTTP 409. Stores cannot both have order #1001 or code WELCOME10; the seed prefixes everything with a store key"
+  },
+  {
+    "verdict": "OK",
+    "id": "unique.same_store",
+    "title": "Duplicate SKU inside one store is refused",
+    "evidence": "HTTP 409: {\"code\": \"conflict\", \"message\": \"the request conflicts with existing data (duplicate value or referenced record)\", \"details\": []}"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "storefront.anonymous",
+    "title": "No public (logged-out) storefront read of tenant data",
+    "evidence": "GET /products without a token -> HTTP 401. A tenant is resolved from the signed-in user, never from a domain or header"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "storefront.signup",
+    "title": "Customers cannot sign up to an existing store",
+    "evidence": "register without an invitation -> HTTP 422 (tenant_required): a sign-up must either create a NEW store or carry an invitation. Only invitations add people to a store"
+  },
+  {
+    "verdict": "OK",
+    "id": "customer.orders_blocked",
+    "title": "A customer cannot read orders",
+    "evidence": "HTTP 403"
+  },
+  {
+    "verdict": "OK",
+    "id": "customer.catalog_read",
+    "title": "A customer can read the catalog, drafts and archived included",
+    "evidence": "HTTP 200; statuses seen ['active', 'archived', 'draft']"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "customer.own_orders",
+    "title": "Customers cannot be shown ONLY their own orders while staff see all",
+    "evidence": "a row rule applies to every role listed on an operation: 'tenant' for staff would show a customer the whole store, 'owner' would hide orders from staff. Orders are staff-only in this model"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "customer.draft_hidden",
+    "title": "Customers cannot be shown only active products",
+    "evidence": "no per-role filter: a custom_filter on status would hide drafts from the staff who need them too"
+  },
+  {
+    "verdict": "OK",
+    "id": "roles.invite_admin_only",
+    "title": "Only the store admin can invite",
+    "evidence": "manager inviting -> HTTP 403"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "roles.no_user_admin",
+    "title": "No endpoints to list staff, change a role, deactivate or remove a user",
+    "evidence": "GET /auth/users, /users, /auth/members -> HTTP 404. After inviting someone the store admin cannot demote them or cut their access (only the person can delete their own account)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "auth.no_password_reset",
+    "title": "Password reset exists only with email magic link or SMS enabled",
+    "evidence": "HTTP 404 with magic links off; this model would need magic links on so people can reset passwords"
+  },
+  {
+    "verdict": "RISK",
+    "id": "roles.default_role",
+    "title": "Every account also holds the default role",
+    "evidence": "the support user's roles are ['customer', 'support']: the default role is added to everyone, so it must stay harmless"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "auth.one_store_per_email",
+    "title": "A person cannot belong to two stores with one login (by design, read from the generated model)",
+    "evidence": "emails are globally unique across tenants, so an agency worker needs one account per store"
+  },
+  {
+    "verdict": "RISK",
+    "id": "permissions.unlisted_public",
+    "title": "An operation with no permission is open to every signed-in user (documented behaviour)",
+    "evidence": "the builder does not warn; build_commerce.py audits for this and refuses to build if any enabled operation is unlisted. The first draft of this model had 6 such holes"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "integrity.totals",
+    "title": "No computed fields or cross-field rules: total is never checked against its parts",
+    "evidence": "order with subtotal 10 and total 1 -> HTTP 201"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "integrity.state_machine",
+    "title": "No state machines or immutable fields",
+    "evidence": "cancelled->open, changing the order number and placed_at -> HTTP 200. Rules like 'a paid order cannot be edited' need a service in front"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "integrity.stock",
+    "title": "No stock check, no inventory decrement, no reservation",
+    "evidence": "order line for 1,000,000 units -> HTTP 201; stock changes are a separate PATCH the client must make (and can race)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "integrity.no_atomic_update",
+    "title": "No atomic increment/decrement and no optimistic locking",
+    "evidence": "8 parallel 'take 1' read-modify-writes from stock 1 left available=0 (a correct system ends at 1-8=-7 or refuses): every worker saw stock [1]. A checkout needs UPDATE ... SET available = available - n"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "integrity.negative_stock",
+    "title": "No CHECK constraints beyond min/max on a field",
+    "evidence": "available = -50 -> HTTP 200: the field has no minimum, so overselling is representable (declare min_value to prevent it)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "money.precision",
+    "title": "Money is a fixed NUMERIC(18,6) with no currency, rounding or per-field scale",
+    "evidence": "price 19.99999999 -> HTTP 201: stored as 20.000000"
+  },
+  {
+    "verdict": "RISK",
+    "id": "money.overflow",
+    "title": "A number too large for the column",
+    "evidence": "price 99999999999999 -> HTTP 500: {\"code\": \"internal_error\", \"message\": \"An unexpected error occurred\", \"details\": []} (a client error becomes a server error: BUG)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "content.no_sanitising",
+    "title": "HTML fields are stored and returned verbatim",
+    "evidence": "<script> accepted -> HTTP 201; the storefront must sanitise"
+  },
+  {
+    "verdict": "RISK",
+    "id": "content.secrets_readable",
+    "title": "Secrets stored in an entity are returned by reads",
+    "evidence": "webhook secret in GET /webhooks: 'whsec_probe_secret' (no write-only fields; any role allowed to read webhooks sees it)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "softdelete.cascade",
+    "title": "Soft deleting a parent does not hide or delete its children",
+    "evidence": "product soft-deleted; its variant is still returned (HTTP 200)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "softdelete.unique",
+    "title": "A soft-deleted row still holds its unique values",
+    "evidence": "a deleted product's variant keeps its SKU reserved; re-using it -> HTTP 409"
+  },
+  {
+    "verdict": "OK",
+    "id": "delete.orders",
+    "title": "Orders cannot be deleted (operation not enabled)",
+    "evidence": "HTTP 405"
+  },
+  {
+    "verdict": "OK",
+    "id": "delete.role",
+    "title": "A catalog editor cannot delete products",
+    "evidence": "HTTP 403"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "model.composite_unique",
+    "title": "Composite unique/indexes",
+    "evidence": "a second inventory level for the same (variant, location) was just accepted; 'one per pair' cannot be declared"
+  },
+  {
+    "verdict": "OK",
+    "id": "delete.restrict",
+    "title": "Deleting a location that stock points to is refused",
+    "evidence": "HTTP 409: {\"code\": \"conflict\", \"message\": \"the request conflicts with existing data (duplicate value or referenced record)\", \"details\": []}"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "query.fk_filter",
+    "title": "Cannot filter by a relation (orders of one customer)",
+    "evidence": "?customer_id=... -> HTTP 200; total 12: the filter is ignored. Only declared exact-match fields filter"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "query.ranges",
+    "title": "No range, 'in', or date filters (price between, orders since a date)",
+    "evidence": "?total__gte=100 -> HTTP 200: ignored"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "query.multi_sort",
+    "title": "One sort field at a time",
+    "evidence": "?sort=-placed_at,total -> HTTP 200"
+  },
+  {
+    "verdict": "OK",
+    "id": "query.page_cap",
+    "title": "Page size is capped",
+    "evidence": "limit=1000 -> HTTP 422: {\"code\": \"validation_error\", \"message\": \"Request validation failed\", \"details\": [{\"loc\": [\"query\", \"limit\"], \"msg\": \"Input should be less than or equal to 100\","
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "query.no_expand",
+    "title": "A parent returns child ids, not child rows; no aggregates or reports",
+    "evidence": "order has 4 line ids and 1 transaction ids: rendering one order page takes 1 + N requests. There is no sum/count/group-by (sales per day, top products)"
+  },
+  {
+    "verdict": "OK",
+    "id": "query.search",
+    "title": "Text search over declared fields",
+    "evidence": "?q=Tee -> 2 products (substring match, no ranking or full-text index)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.logic",
+    "title": "Checkout, payments, taxes, shipping quotes, discount validation, email notifications",
+    "evidence": "the backend stores rows; every rule above is a service the application must add (populate_commerce.py plays that role)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.files",
+    "title": "File and image upload",
+    "evidence": "images are URL strings; there is no upload or storage"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.events",
+    "title": "Webhooks, events, background jobs, scheduled work",
+    "evidence": "the Webhook entity only stores configuration; nothing is ever delivered"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.idempotency",
+    "title": "Idempotency keys for retried requests",
+    "evidence": "a retried POST /transactions creates a second transaction (only unique fields protect you)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.audit",
+    "title": "Change history",
+    "evidence": "only created_by_id exists; no updated_by, no history of who changed a price or a status"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.tenant_admin",
+    "title": "Tenant management",
+    "evidence": "no endpoint to rename or close a store, to move a user between stores, or for a platform operator to see all stores"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "missing.bulk",
+    "title": "Bulk import / batch writes",
+    "evidence": "one row per request: the seed needs ~800 calls; there is no CSV import or batch endpoint"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "model.polymorphic",
+    "title": "Polymorphic relations",
+    "evidence": "Metafield.owner_type/owner_id is just two columns: no foreign key, no referential integrity"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "model.names",
+    "title": "Reserved words",
+    "evidence": "field names such as zip and format, and enum values with '/' or spaces, are refused (renamed in this model)"
+  },
+  {
+    "verdict": "LIMIT",
+    "id": "model.single_inheritance",
+    "title": "A role inherits from one parent only",
+    "evidence": "manager cannot inherit from catalog + fulfilment + support; permissions list roles explicitly instead"
+  }
+]

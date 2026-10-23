@@ -1,6 +1,11 @@
 {
   "spec_version": 1,
-  "project": {"name": "Workspace", "slug": "workspace", "description": "Multi-tenant task tracker", "db_engine": "postgres"},
+  "project": {
+    "name": "Workspace",
+    "slug": "workspace",
+    "description": "Multi-tenant task tracker",
+    "db_engine": "postgres"
+  },
   "entities": [
     {
       "name": "Announcement",
@@ -8,7 +13,12 @@
       "plural_path": "announcements",
       "options": {},
       "fields": [
-        {"name": "title", "type": "string", "required": true, "max_length": 120}
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
       ]
     },
     {
@@ -17,29 +27,134 @@
       "plural_path": "tasks",
       "options": {},
       "fields": [
-        {"name": "title", "type": "string", "required": true, "max_length": 120},
-        {"name": "done", "type": "boolean", "required": false, "default": false}
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "done",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        }
+      ]
+    },
+    {
+      "name": "Label",
+      "table_name": "labels",
+      "plural_path": "labels",
+      "options": {},
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 60
+        }
       ]
     }
   ],
-  "relations": [],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Announcement",
+      "to_entity": "Task",
+      "from_name": "tasks",
+      "to_name": "announcement",
+      "on_delete": "set_null",
+      "required": false
+    },
+    {
+      "kind": "many_to_many",
+      "from_entity": "Task",
+      "to_entity": "Label",
+      "from_name": "labels",
+      "to_name": "tasks",
+      "on_delete": "restrict",
+      "required": false
+    }
+  ],
   "auth": {
     "enabled": true,
     "multi_tenant": true,
     "app_url": "https://workspace.example.com",
-    "password_reset": {"email_magic_link": true, "sms_otp": false},
-    "registration": {"email_verification_required": true},
-    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@workspace.example.com", "from_name": "Workspace"},
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@workspace.example.com",
+      "from_name": "Workspace"
+    },
     "roles": [
-      {"name": "admin", "label": "Admin"},
-      {"name": "member", "label": "Member", "is_default": true}
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
     ],
     "permissions": [
-      {"entity": "Announcement", "operation": "list", "roles": [], "row_rule": "tenant"},
-      {"entity": "Announcement", "operation": "create", "roles": ["admin"]},
-      {"entity": "Task", "operation": "create", "roles": ["member", "admin"], "row_rule": "tenant"},
-      {"entity": "Task", "operation": "list", "roles": ["member", "admin"], "row_rule": "role_scoped"},
-      {"entity": "Task", "operation": "delete", "roles": ["member", "admin"], "row_rule": "owner"}
+      {
+        "entity": "Announcement",
+        "operation": "list",
+        "roles": [],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Announcement",
+        "operation": "create",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Task",
+        "operation": "create",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Task",
+        "operation": "list",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Task",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Label",
+        "operation": "create",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
     ]
   }
 }

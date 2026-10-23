@@ -151,6 +151,16 @@ def upgrade() -> None:
         ondelete="RESTRICT",
     )
     op.create_index("ix_announcements_tenant_id", "announcements", ["tenant_id"])
+    op.add_column("labels", sa.Column("tenant_id", sa.Uuid(), nullable=True))
+    op.create_foreign_key(
+        "fk_labels_tenant_id_auth_tenants",
+        "labels",
+        "auth_tenants",
+        ["tenant_id"],
+        ["id"],
+        ondelete="RESTRICT",
+    )
+    op.create_index("ix_labels_tenant_id", "labels", ["tenant_id"])
     op.add_column("tasks", sa.Column("tenant_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
         "fk_tasks_tenant_id_auth_tenants",
@@ -167,6 +177,9 @@ def downgrade() -> None:
     op.drop_index("ix_announcements_tenant_id", table_name="announcements")
     op.drop_constraint("fk_announcements_tenant_id_auth_tenants", "announcements", type_="foreignkey")
     op.drop_column("announcements", "tenant_id")
+    op.drop_index("ix_labels_tenant_id", table_name="labels")
+    op.drop_constraint("fk_labels_tenant_id_auth_tenants", "labels", type_="foreignkey")
+    op.drop_column("labels", "tenant_id")
     op.drop_index("ix_tasks_tenant_id", table_name="tasks")
     op.drop_constraint("fk_tasks_tenant_id_auth_tenants", "tasks", type_="foreignkey")
     op.drop_column("tasks", "tenant_id")

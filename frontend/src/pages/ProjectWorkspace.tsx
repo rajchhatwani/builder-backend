@@ -4,6 +4,7 @@ import type {
   AuthConfig,
   Entity,
   KeycloakConfig,
+  PaymentsConfig,
   Project,
   ProjectRole,
   Relation,
@@ -15,6 +16,7 @@ import { AuthCustomFieldsPanel } from '../components/AuthCustomFieldsPanel'
 import { DataModelPanel } from '../components/DataModelPanel'
 import { GeneratePanel } from '../components/GeneratePanel'
 import { KeycloakPanel } from '../components/KeycloakPanel'
+import { PaymentsPanel } from '../components/PaymentsPanel'
 import { Layout } from '../components/Layout'
 import { OverviewPanel, sectionForIssue } from '../components/OverviewPanel'
 import { PermissionsPanel } from '../components/PermissionsPanel'
@@ -65,6 +67,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [roles, setRoles] = useState<ProjectRole[]>([])
   const [auth, setAuth] = useState<AuthConfig | null>(null)
   const [keycloak, setKeycloak] = useState<KeycloakConfig | null>(null)
+  const [payments, setPayments] = useState<PaymentsConfig | null>(null)
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null)
   const [generationCount, setGenerationCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -76,13 +79,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const load = useCallback(async () => {
     try {
-      const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, report, generations] = await Promise.all([
+      const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, paymentsConfig, report, generations] = await Promise.all([
         api.getProject(projectId),
         api.listEntities(projectId, 200, 0),
         api.listRelations(projectId, 200, 0),
         api.listRoles(projectId, 200, 0),
         api.getAuthConfig(projectId).catch(() => null),
         api.getKeycloak(projectId).catch(() => null),
+        api.getPayments(projectId).catch(() => null),
         api.validateProject(projectId).catch(() => null),
         api.listGenerations(projectId, 1, 0),
       ])
@@ -92,6 +96,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       setRoles(rolePage.items)
       setAuth(authConfig)
       setKeycloak(keycloakConfig)
+      setPayments(paymentsConfig)
       setIssues(report ? report.issues : null)
       setGenerationCount(generations.total)
       setModelVersion((v) => v + 1)
@@ -143,6 +148,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   }
 
   const keycloakOn = auth?.provider === 'keycloak' && auth.enabled
+  const paymentsOn = payments?.enabled === true
 
   return (
     <Layout
@@ -151,7 +157,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           project={project}
           section={section}
           problems={problems}
-          on={{ keycloak: keycloakOn }}
+          on={{ keycloak: keycloakOn, payments: paymentsOn }}
         />
       }
     >
@@ -162,6 +168,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           authEnabled={auth?.enabled ?? false}
           keycloakOn={keycloakOn}
           keycloakSaved={keycloak !== null}
+          paymentsOn={paymentsOn}
+          paymentsSaved={payments !== null}
           roleCount={roles.length}
           issues={issues}
           generationCount={generationCount}
@@ -181,19 +189,19 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       {section === 'auth' && (
         <>
           <PageTitle title="Authentication">How people sign up and sign in to the backend you generate.</PageTitle>
-          {!keycloakOn && (
-            <SubTabs
-              tabs={[
-                { id: 'settings', label: 'Settings' },
-                { id: 'fields', label: 'Extra sign-up fields' },
-              ]}
-              value={authTab}
-              onChange={setAuthTab}
-            />
-          )}
+          <SubTabs
+            tabs={[
+              { id: 'settings', label: 'Settings' },
+              { id: 'fields', label: 'Extra sign-up fields' },
+            ]}
+            value={authTab}
+            onChange={setAuthTab}
+          />
           <AuthChecks projectId={project.id} checkKey={authTab} />
-          {(authTab === 'settings' || keycloakOn) && <AuthConfigPanel projectId={project.id} />}
-          {authTab === 'fields' && !keycloakOn && <AuthCustomFieldsPanel projectId={project.id} />}
+          {authTab === 'settings' && <AuthConfigPanel projectId={project.id} />}
+          {authTab === 'fields' && (
+            <AuthCustomFieldsPanel projectId={project.id} keycloak={keycloakOn} />
+          )}
         </>
       )}
 
@@ -205,6 +213,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <KeycloakPanel
             project={project}
             provider={auth?.provider ?? 'builtin'}
+            issues={issues}
+            onChanged={load}
+          />
+        </>
+      )}
+
+      {section === 'payments' && (
+        <>
+          <PageTitle title="Payments">
+            Take card payments through a hosted checkout, with refunds, an audit trail and servers sized for your traffic.
+          </PageTitle>
+          <PaymentsPanel
+            project={project}
+            entities={entities}
+            roles={roles}
+            authEnabled={auth?.enabled ?? false}
             issues={issues}
             onChanged={load}
           />

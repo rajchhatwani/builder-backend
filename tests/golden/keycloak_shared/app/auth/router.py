@@ -2,28 +2,27 @@
 
 Signing in, registering, password reset and token refresh all happen in Keycloak, so this
 project only offers the caller's own profile."""
+import datetime as _dt
+import uuid as _uuid
 
-import datetime as dt
-import uuid
-
-from fastapi import APIRouter
-from pydantic import BaseModel, ConfigDict
+import fastapi as _fa
+import pydantic as _pd
 
 from app.auth import service
 from app.auth.deps import CurrentUser
 from app.db import SessionDep
 
-router = APIRouter(prefix="/auth", tags=["auth"])
+router = _fa.APIRouter(prefix="/auth", tags=["auth"])
 
 
-class UserRead(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class UserRead(_pd.BaseModel):
+    model_config = _pd.ConfigDict(from_attributes=True)
 
-    id: uuid.UUID
+    id: _uuid.UUID
     email: str | None
     name: str | None
     roles: list[str]
-    created_at: dt.datetime
+    created_at: _dt.datetime
 
 
 @router.get("/me", response_model=UserRead)

@@ -311,28 +311,70 @@ def test_too_many_providers() -> None:
 # --- features that do not exist with Keycloak --------------------------------------------
 
 
-def test_multi_tenancy_is_rejected() -> None:
-    assert ("auth.multi_tenant", "unsupported_value") in codes(
-        issues_for(with_auth(multi_tenant=True))
-    )
+def test_multi_tenancy_is_allowed_and_needs_nothing_else() -> None:
+    # Each Keycloak organization is a tenant; admins make them in Keycloak, so no invitations,
+    # no admin role and no app_url are needed.
+    def mutate(d: dict[str, Any]) -> None:
+        d["auth"]["multi_tenant"] = True
+        d["auth"]["roles"] = [{"name": "member", "label": "Member"}]
+        d["auth"]["permissions"] = [
+            {"entity": "Item", "operation": "list", "roles": ["member"], "row_rule": "tenant"}
+        ]
+
+    assert issues_for(mutate) == []
 
 
-def test_tenant_row_rule_is_rejected() -> None:
+def test_tenant_row_rule_needs_multi_tenancy() -> None:
     def mutate(d: dict[str, Any]) -> None:
         d["auth"]["permissions"] = [
             {"entity": "Item", "operation": "list", "roles": ["member"], "row_rule": "tenant"}
         ]
 
-    assert ("auth.permissions[0].row_rule", "unsupported_value") in codes(issues_for(mutate))
+    assert ("auth.permissions[0].row_rule", "invalid_value") in codes(issues_for(mutate))
 
 
-def test_custom_registration_fields_are_rejected() -> None:
+def custom(**overrides: Any) -> dict[str, Any]:
+    return {"name": "company", "label": "Company", "type": "string", **overrides}
+
+
+def test_custom_registration_fields_are_allowed() -> None:
     def mutate(d: dict[str, Any]) -> None:
         d["auth"]["registration"]["custom_fields"] = [
-            {"name": "company", "label": "Company", "type": "string"}
+            custom(required=True, max_length=80),
+            custom(name="age", label="Age", type="integer", min_value=13, max_value=120),
+            custom(name="plan", label="Plan", type="enum", enum_values=["free", "pro"]),
         ]
 
-    assert ("auth.registration.custom_fields", "unsupported_value") in codes(issues_for(mutate))
+    assert issues_for(mutate) == []
+
+
+@pytest.mark.parametrize(
+    "name", ["name", "sub", "email_verified", "organization", "resource_access", "scope", "email"]
+)
+def test_custom_fields_cannot_take_a_name_keycloak_already_uses(name: str) -> None:
+    def mutate(d: dict[str, Any]) -> None:
+        d["auth"]["registration"]["custom_fields"] = [custom(name=name)]
+
+    found = codes(issues_for(mutate))
+    assert any(path == "auth.registration.custom_fields[0].name" for path, _ in found)
+
+
+def test_custom_fields_cannot_be_unique() -> None:
+    def mutate(d: dict[str, Any]) -> None:
+        d["auth"]["registration"]["custom_fields"] = [custom(unique=True)]
+
+    assert ("auth.registration.custom_fields[0].unique", "unsupported_value") in codes(
+        issues_for(mutate)
+    )
+
+
+def test_custom_field_shape_rules_still_apply() -> None:
+    def mutate(d: dict[str, Any]) -> None:
+        d["auth"]["registration"]["custom_fields"] = [custom(type="enum")]
+
+    assert ("auth.registration.custom_fields[0].enum_values", "required") in codes(
+        issues_for(mutate)
+    )
 
 
 def test_sms_otp_is_rejected() -> None:
@@ -406,8 +448,7 @@ def test_entities_cannot_shadow_the_keycloak_tables() -> None:
 
     assert any(i.code == "duplicate_name" for i in issues_for(mutate))
 
-    # auth_tenants is free here: tenancy does not exist with Keycloak.
-    def free(d: dict[str, Any]) -> None:
+    def tenants(d: dict[str, Any]) -> None:
         d["entities"][0]["table_name"] = "auth_tenants"
 
-    assert issues_for(free) == []
+    assert any(i.code == "duplicate_name" for i in issues_for(tenants))

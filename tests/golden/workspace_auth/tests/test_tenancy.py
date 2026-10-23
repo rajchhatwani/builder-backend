@@ -10,6 +10,7 @@ from sqlalchemy import select
 from app.auth import config
 from app.db import session_factory
 from app.models.announcements import Announcement
+from app.models.labels import Label
 from app.models.tasks import Task
 from tests import _factories
 from tests._auth_support import (
@@ -93,6 +94,74 @@ async def test_invitations_are_private_to_their_tenant(
         assert (await tenant_a.delete(f"/auth/invitations/{invitation_id}")).status_code == 204
 
 
+async def test_tasks_cannot_point_at_another_tenants_announcements(
+    client: AsyncClient,
+) -> None:
+    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
+    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
+    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
+        foreign = await _factories.make_announcements(tenant_b)
+        own = await _factories.make_announcements(tenant_a)
+        payload = await _factories.payload_tasks(tenant_a, announcement_id=own["id"])
+
+        foreign_ref = {"announcement_id": foreign["id"]}
+
+        refused = await tenant_a.post("/tasks", json={**payload, **foreign_ref})
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["code"] == "invalid_reference"
+
+        created = await tenant_a.post("/tasks", json=payload)
+        assert created.status_code == 201, created.text
+        item_id = created.json()["id"]
+
+        moved = await tenant_a.patch(f"/tasks/{item_id}", json=foreign_ref)
+        assert moved.status_code == 422, moved.text
+        assert moved.json()["code"] == "invalid_reference"
+
+        replaced = await tenant_a.put(f"/tasks/{item_id}", json={**payload, **foreign_ref})
+        assert replaced.status_code == 422, replaced.text
+
+
+async def test_labels_cannot_link_another_tenants_tasks(
+    client: AsyncClient,
+) -> None:
+    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
+    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
+    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
+        foreign = await _factories.make_tasks(tenant_b)
+        own = await _factories.make_tasks(tenant_a)
+        payload = await _factories.payload_labels(tenant_a)
+
+        refused = await tenant_a.post(
+            "/labels", json={**payload, "tasks": [own["id"], foreign["id"]]}
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["code"] == "invalid_reference"
+
+        linked = await tenant_a.post("/labels", json={**payload, "tasks": [own["id"]]})
+        assert linked.status_code == 201, linked.text
+
+
+async def test_tasks_cannot_link_another_tenants_labels(
+    client: AsyncClient,
+) -> None:
+    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
+    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
+    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
+        foreign = await _factories.make_labels(tenant_b)
+        own = await _factories.make_labels(tenant_a)
+        payload = await _factories.payload_tasks(tenant_a)
+
+        refused = await tenant_a.post(
+            "/tasks", json={**payload, "labels": [own["id"], foreign["id"]]}
+        )
+        assert refused.status_code == 422, refused.text
+        assert refused.json()["code"] == "invalid_reference"
+
+        linked = await tenant_a.post("/tasks", json={**payload, "labels": [own["id"]]})
+        assert linked.status_code == 201, linked.text
+
+
 async def test_announcements_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
     a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
     b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
@@ -125,6 +194,40 @@ async def test_announcements_rows_stay_inside_their_tenant(client: AsyncClient) 
 
         assert (await tenant_b.delete(f"/announcements/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/announcements/{item_id}")).status_code == 204
+
+
+async def test_labels_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
+    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
+    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
+    colleague_headers = await sign_in(
+        client, "colleague@example.com", roles=list(ALL_ROLES), n=2, join="a@example.com"
+    )
+    async with (
+        client_for(a_headers) as tenant_a,
+        client_for(b_headers) as tenant_b,
+        client_for(colleague_headers) as colleague,
+    ):
+        created = await _factories.make_labels(tenant_a)
+        item_id = created["id"]
+
+        me = (await tenant_a.get("/auth/me")).json()
+        async with session_factory() as session:
+            stamped = (
+                await session.execute(
+                    select(Label.tenant_id).where(Label.id == uuid.UUID(item_id))
+                )
+            ).scalar_one()
+        assert str(stamped) == me["tenant_id"], "new rows are stamped with the creator's tenant"
+
+        assert (await tenant_b.get("/labels")).json()["total"] == 0
+        assert (await colleague.get("/labels")).json()["total"] == 1
+
+        assert (await tenant_b.get(f"/labels/{item_id}")).status_code == 404
+        assert (await colleague.get(f"/labels/{item_id}")).status_code == 200
+        assert (await tenant_b.head(f"/labels/{item_id}")).status_code == 404
+
+        assert (await tenant_b.delete(f"/labels/{item_id}")).status_code == 404
+        assert (await tenant_a.delete(f"/labels/{item_id}")).status_code == 204
 
 
 async def test_tasks_rows_stay_inside_their_tenant(client: AsyncClient) -> None:

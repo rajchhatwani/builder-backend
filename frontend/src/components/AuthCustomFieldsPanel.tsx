@@ -24,6 +24,8 @@ const FIELD_TYPES: AuthCustomFieldType[] = [
 
 export interface AuthCustomFieldsPanelProps {
   projectId: string
+  /** With Keycloak the fields live in Keycloak, which cannot keep a value unique across users. */
+  keycloak?: boolean
 }
 
 function toNumberOrNull(text: string): number | null {
@@ -33,7 +35,7 @@ function toNumberOrNull(text: string): number | null {
   return Number.isNaN(num) ? null : num
 }
 
-export function AuthCustomFieldsPanel({ projectId }: AuthCustomFieldsPanelProps) {
+export function AuthCustomFieldsPanel({ projectId, keycloak = false }: AuthCustomFieldsPanelProps) {
   const { confirm } = useUi()
   const [fields, setFields] = useState<AuthCustomField[]>([])
   const [loading, setLoading] = useState(true)
@@ -339,14 +341,16 @@ export function AuthCustomFieldsPanel({ projectId }: AuthCustomFieldsPanelProps)
                 />{' '}
                 Required
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={unique}
-                  onChange={(e) => setUnique(e.target.checked)}
-                />{' '}
-                Unique
-              </label>
+              {(!keycloak || unique) && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={unique}
+                    onChange={(e) => setUnique(e.target.checked)}
+                  />{' '}
+                  Unique{keycloak ? ' (not available with Keycloak: turn it off)' : ''}
+                </label>
+              )}
               <label>
                 <input
                   type="checkbox"

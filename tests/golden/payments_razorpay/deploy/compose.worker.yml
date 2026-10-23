@@ -1,0 +1,39 @@
+# Payments workers on a machine of their own (generated).
+#
+# A worker needs only the database and the payment provider: it does not talk to the API or to
+# other workers, so you can run as many of these as the load needs, on as many machines as you
+# like. Build the image once, push it to a registry your servers can pull from, then on each server:
+#
+#   export APP_IMAGE=registry.example.com/rupee-shop:1.0.0
+#   docker compose -f compose.worker.yml up -d
+#
+# Put the settings below in a .env file next to this one (see ../.env.example). Never put real
+# secrets in this file, and never commit the .env file.
+services:
+  payments-worker:
+    image: ${APP_IMAGE:?set APP_IMAGE to the image you built and pushed}
+    command: ["python", "-m", "app.payments.worker"]
+    restart: unless-stopped
+    environment:
+      # The worker's own database login (see sql/roles.sql). Use TLS to reach a database on
+      # another machine: add ?ssl=require (asyncpg) to the URL, and prefer verify-full.
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      APP_ENV: ${APP_ENV:-production}
+      RAZORPAY_KEY_ID: ${RAZORPAY_KEY_ID:?set RAZORPAY_KEY_ID}
+      RAZORPAY_KEY_SECRET: ${RAZORPAY_KEY_SECRET:?set RAZORPAY_KEY_SECRET}
+      RAZORPAY_WEBHOOK_SECRETS: ${RAZORPAY_WEBHOOK_SECRETS:?set RAZORPAY_WEBHOOK_SECRETS}
+      PAYMENTS_WORKER_CONCURRENCY: ${PAYMENTS_WORKER_CONCURRENCY:-8}
+      PAYMENTS_POLL_INTERVAL_SECONDS: ${PAYMENTS_POLL_INTERVAL_SECONDS:-1.0}
+      PAYMENTS_SCHEDULER: ${PAYMENTS_SCHEDULER:-true}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-10}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-0}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s

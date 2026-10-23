@@ -74,6 +74,15 @@ async def test_{{ e.table }}_crud_flow(client: AsyncClient) -> None:
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "validation_error"
 {% endif %}
+{% if "create" in e.ops and range_probe %}
+
+    # A number the column cannot store is a 422, never a 500.
+    too_big = await client.post(
+        "/{{ e.path }}", json=await _factories.payload_{{ e.table }}(client, {{ range_probe }}=10**30)
+    )
+    assert too_big.status_code == 422, too_big.text
+    assert too_big.json()["code"] == "validation_error"
+{% endif %}
 {% if "update" in e.ops and patch_field %}
 
     new_value = _factories.sample_{{ e.table }}()["{{ patch_field }}"]

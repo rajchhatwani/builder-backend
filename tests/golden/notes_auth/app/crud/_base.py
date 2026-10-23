@@ -34,6 +34,7 @@ class Repository[ModelT: Base]:
         scope: dict[str, Any] | None = None,
         owner_id: uuid.UUID | None = None,
         tenant_id: uuid.UUID | None = None,
+        caller_tenant_id: uuid.UUID | None = None,
     ) -> None:
         self.session = session
         # column -> value every read and write is restricted to (row-level access rules)
@@ -42,6 +43,8 @@ class Repository[ModelT: Base]:
         self.owner_id = owner_id
         # recorded as tenant_id on new rows
         self.tenant_id = tenant_id
+        # the caller's tenant: a reference may only point at rows of this tenant (see _inside_tenant)
+        self.caller_tenant_id = caller_tenant_id or tenant_id
 
     # --- query building -----------------------------------------------------------
 
@@ -184,12 +187,29 @@ class Repository[ModelT: Base]:
                 "the request conflicts with existing data (duplicate value or referenced record)"
             ) from exc
 
+    def _inside_tenant(self, target: type[Base]) -> list[Any]:
+        """Condition that keeps a referenced row inside the caller's tenant.
+
+        A target with a tenant_id column belongs to a tenant, so a parent from another tenant
+        (or any parent when the caller has no tenant) is treated as not existing: same error,
+        so the response does not reveal that the foreign row exists.
+        """
+        column = target.__table__.c.get("tenant_id")
+        if column is None:
+            return []
+        if self.caller_tenant_id is None:
+            return [sa.false()]
+        return [column == self.caller_tenant_id]
+
     async def _check_references(self, values: dict[str, Any]) -> None:
         for key, target in self.references.items():
             value = values.get(key)
             if value is None:
                 continue
-            stmt = sa.select(target.id).where(target.id == value)  # type: ignore[attr-defined]
+            stmt = sa.select(target.id).where(  # type: ignore[attr-defined]
+                target.id == value,  # type: ignore[attr-defined]
+                *self._inside_tenant(target),
+            )
             if (await self.session.execute(stmt)).first() is None:
                 raise AppError(
                     "invalid_reference",
@@ -207,7 +227,10 @@ class Repository[ModelT: Base]:
             ids = list(dict.fromkeys(values.pop(key) or []))
             rows: list[Any] = []
             if ids:
-                stmt = sa.select(target).where(target.id.in_(ids))  # type: ignore[attr-defined]
+                stmt = sa.select(target).where(
+                    target.id.in_(ids),  # type: ignore[attr-defined]
+                    *self._inside_tenant(target),
+                )
                 by_id = {row.id: row for row in (await self.session.execute(stmt)).scalars()}
                 missing = [str(i) for i in ids if i not in by_id]
                 if missing:

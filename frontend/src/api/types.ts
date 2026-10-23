@@ -436,3 +436,115 @@ export interface KeycloakImpact {
   warnings: string[]
   dependents: { id: string; name: string }[]
 }
+
+// ── Payments ─────────────────────────────────────────────────────────────────
+
+export type PaymentProvider = 'stripe' | 'razorpay'
+export type PaymentsProfile = 'small' | 'medium' | 'large'
+export type PaymentsAvailability = 'single' | 'ha'
+export type WebhookMode = 'inline' | 'queued'
+
+export interface PaymentsPayable {
+  entity: string
+  amount_field: string
+  currency: string | null
+  currency_field: string | null
+  status_field: string
+  status_pending: string
+  status_paid: string
+  status_partially_refunded: string
+  status_refunded: string
+}
+
+export interface PaymentsRoles {
+  create: string[]
+  read: string[]
+  read_all: string[]
+  refund: string[]
+  approve_refund: string[]
+  operate: string[]
+}
+
+export interface PaymentsScale {
+  profile: PaymentsProfile
+  peak_payments_per_minute: number | null
+  peak_webhooks_per_minute: number | null
+  db_max_connections: number
+  availability: PaymentsAvailability
+  pgbouncer: boolean
+  kubernetes: boolean
+  webhook_mode: WebhookMode | null
+  api_replicas: number | null
+  server_workers: number | null
+  worker_replicas: number | null
+  worker_concurrency: number | null
+  pool_size: number | null
+  webhook_events_retention_days: number
+  jobs_retention_days: number
+}
+
+export interface PaymentsSecurity {
+  webhook_tolerance_seconds: number
+  webhook_max_body_bytes: number
+  webhook_ip_allowlist_enabled: boolean
+  idempotency_ttl_hours: number
+  audit_retention_days: number
+  secrets_from_files: boolean
+  allow_payer_edits: boolean
+}
+
+export interface PaymentsConfig {
+  id: string
+  project_id: string
+  enabled: boolean
+  provider: PaymentProvider
+  payable: PaymentsPayable | null
+  currencies: string[]
+  max_amount_minor: number
+  success_urls: string[]
+  cancel_urls: string[]
+  roles: PaymentsRoles
+  refund_approval_threshold_minor: number | null
+  scale: PaymentsScale
+  security: PaymentsSecurity
+  created_at: string
+  updated_at: string
+}
+
+export type PaymentsWrite = Omit<PaymentsConfig, 'id' | 'project_id' | 'enabled' | 'created_at' | 'updated_at'>
+
+export interface PaymentsImpact {
+  action: 'enable' | 'disable'
+  enabled: boolean
+  can_proceed: boolean
+  blockers: string[]
+  warnings: string[]
+}
+
+export interface PaymentsSizing {
+  payments_per_minute: number
+  webhooks_per_minute: number
+  webhook_mode: WebhookMode
+  api_replicas: number
+  server_workers: number
+  pool_size: number
+  max_overflow: number
+  worker_replicas: number
+  worker_concurrency: number
+  worker_pool_size: number
+  poll_interval_seconds: number
+  batch_size: number
+  api_replicas_max: number
+  worker_replicas_max: number
+  total_db_connections: number
+  connection_budget: number
+  needs_pgbouncer: boolean
+  pgbouncer_pool_size: number | null
+  warnings: string[]
+  assumptions: string[]
+}
+
+export interface PaymentsSizingResult {
+  sizing: PaymentsSizing
+  issues: ValidationIssue[]
+}

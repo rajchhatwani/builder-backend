@@ -212,6 +212,83 @@ class SpecAuth(_SpecModel):
 
 
 
+class SpecPaymentsPayable(_SpecModel):
+    """The entity a payment is for (e.g. Order): where the amount, currency and status live."""
+
+    entity: str
+    amount_field: str  # a decimal field: the amount in major units (19.99)
+    currency: str | None = None  # a fixed ISO 4217 code ...
+    currency_field: str | None = None  # ... or a string field on the entity holding one
+    status_field: str  # an enum field the payments module moves between the values below
+    status_pending: str
+    status_paid: str
+    status_partially_refunded: str
+    status_refunded: str
+
+
+class SpecPaymentsRoles(_SpecModel):
+    """Who may do what. An empty list means nobody (fail closed), unlike entity permissions."""
+
+    create: list[str] = Field(default_factory=list)  # start a payment for a payable row
+    read: list[str] = Field(default_factory=list)  # read the payments they started
+    read_all: list[str] = Field(default_factory=list)  # read every payment of the tenant
+    refund: list[str] = Field(default_factory=list)
+    approve_refund: list[str] = Field(default_factory=list)  # second person above the threshold
+    operate: list[str] = Field(default_factory=list)  # dead jobs, reconcile, audit log
+
+
+class SpecPaymentsScale(_SpecModel):
+    """Expected load. `payments_sizing.size()` turns it into replicas, pools and worker counts;
+    any explicit override below wins over the computed number."""
+
+    profile: str = "small"  # PaymentsProfile value: fills the numbers left empty
+    peak_payments_per_minute: int | None = None
+    peak_webhooks_per_minute: int | None = None  # default: 5x payments
+    db_max_connections: int = 100
+    availability: str = "single"  # PaymentsAvailability value
+    pgbouncer: bool = False
+    kubernetes: bool = False  # also emit deploy/k8s/
+    webhook_mode: str | None = None  # WebhookMode value; None = chosen from the load
+    api_replicas: int | None = None
+    server_workers: int | None = None
+    worker_replicas: int | None = None
+    worker_concurrency: int | None = None
+    pool_size: int | None = None
+    webhook_events_retention_days: int = 90
+    jobs_retention_days: int = 30
+
+
+class SpecPaymentsSecurity(_SpecModel):
+    """Security knobs. Every one has a floor or ceiling that validation enforces."""
+
+    webhook_tolerance_seconds: int = 300
+    webhook_max_body_bytes: int = 262144
+    webhook_ip_allowlist_enabled: bool = False  # the CIDRs themselves come from the environment
+    idempotency_ttl_hours: int = 48
+    audit_retention_days: int = 2555
+    secrets_from_files: bool = True  # also read NAME_FILE variables (Docker / Kubernetes secrets)
+    # Accept that the people who pay can also create or edit the item they pay for (and so set
+    # its price). Off by default: validation refuses such a setup.
+    allow_payer_edits: bool = False
+
+
+class SpecPayments(_SpecModel):
+    """Card payments through a hosted checkout. Provider secrets are never part of the spec:
+    the generated project reads them from its environment."""
+
+    enabled: bool = True
+    provider: str = "stripe"  # PaymentProvider value
+    payable: SpecPaymentsPayable | None = None
+    currencies: list[str] = Field(default_factory=list)  # ISO 4217 allowlist
+    max_amount_minor: int = 10_000_000  # largest single payment, in minor units
+    success_urls: list[str] = Field(default_factory=list)
+    cancel_urls: list[str] = Field(default_factory=list)
+    roles: SpecPaymentsRoles = Field(default_factory=SpecPaymentsRoles)
+    refund_approval_threshold_minor: int | None = None  # refunds above this need a 2nd person
+    scale: SpecPaymentsScale = Field(default_factory=SpecPaymentsScale)
+    security: SpecPaymentsSecurity = Field(default_factory=SpecPaymentsSecurity)
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -221,6 +298,7 @@ class Spec(_SpecModel):
     # while non-empty, because nothing stores or generates them yet.
     features: list[str] = Field(default_factory=list)
     auth: SpecAuth | None = None
+    payments: SpecPayments | None = None
 
 
 def spec_hash(spec: Spec) -> str:

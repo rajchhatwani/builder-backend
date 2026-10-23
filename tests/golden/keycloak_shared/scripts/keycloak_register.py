@@ -160,6 +160,37 @@ def map_scopes(admin: str, token: str, api_internal: str, browser_internal: list
         )
 
 
+def enable_organizations(admin: str, token: str) -> None:
+    """Tenants are Keycloak organizations, which a realm must have switched on."""
+    realm, _ = call("GET", admin, token=token)
+    if not realm.get("organizationsEnabled"):
+        call("PUT", admin, token=token, body={**realm, "organizationsEnabled": True})
+        print("  turned organizations on")
+
+
+def ensure_default_scope(admin: str, token: str, client: str, scope_name: str) -> None:
+    scopes, _ = call("GET", f"{admin}/client-scopes", token=token)
+    scope = next((s for s in scopes if s["name"] == scope_name), None)
+    if scope is None:
+        raise RegisterError(f"the realm has no client scope {scope_name!r}")
+    call("PUT", f"{admin}/clients/{client}/default-client-scopes/{scope['id']}", token=token)
+
+
+def ensure_user_profile(admin: str, token: str, attributes: list[dict[str, Any]]) -> None:
+    """Add this project's registration fields to the realm's user profile. An attribute the realm
+    already defines is left as it is (it may be shared with another project)."""
+    if not attributes:
+        return
+    profile, _ = call("GET", f"{admin}/users/profile", token=token)
+    have = {a["name"] for a in profile["attributes"]}
+    added = [a for a in attributes if a["name"] not in have]
+    if added:
+        profile["attributes"].extend(added)
+        call("PUT", f"{admin}/users/profile", token=token, body=profile)
+        for attribute in added:
+            print(f"  added user attribute {attribute['name']}")
+
+
 def main() -> int:
     document = json.loads(DOCUMENT.read_text(encoding="utf-8"))
     base = env("KEYCLOAK_PUBLIC_URL").rstrip("/")
@@ -178,6 +209,11 @@ def main() -> int:
     api_internal = internal[document["api_client_id"]]
     ensure_roles(admin, token, api_internal, document["roles"])
     map_scopes(admin, token, api_internal, [internal[c] for c in document["browser_client_ids"]])
+    ensure_user_profile(admin, token, document.get("user_profile_attributes", []))
+    if document.get("organizations"):
+        enable_organizations(admin, token)
+        for client_id in document["browser_client_ids"]:
+            ensure_default_scope(admin, token, internal[client_id], "organization")
     print("Done.")
     return 0
 

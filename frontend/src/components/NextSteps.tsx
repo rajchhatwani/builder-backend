@@ -1,4 +1,4 @@
-import type { AuthConfig, KeycloakConfig } from '../api/types'
+import type { AuthConfig, KeycloakConfig, PaymentsConfig } from '../api/types'
 import { secretEnvName } from './KeycloakPanel'
 
 interface NextStepsProps {
@@ -7,6 +7,8 @@ interface NextStepsProps {
   auth: AuthConfig | null
   /** The Keycloak settings, when the project uses Keycloak. */
   keycloak?: KeycloakConfig | null
+  /** The payments settings, when payments are switched on. */
+  payments?: PaymentsConfig | null
 }
 
 interface EnvVar {
@@ -128,10 +130,19 @@ export function requiredEnvVars(auth: AuthConfig | null, keycloak: KeycloakConfi
 }
 
 /** Shown after a download: what to do with the zip, and where the secrets come from. */
-export function NextSteps({ slug, auth, keycloak = null }: NextStepsProps) {
+export function NextSteps({ slug, auth, keycloak = null, payments = null }: NextStepsProps) {
+  return (
+    <>
+      <AuthNextSteps slug={slug} auth={auth} keycloak={keycloak} />
+      {payments !== null && <PaymentsNextSteps slug={slug} payments={payments} />}
+    </>
+  )
+}
+
+function AuthNextSteps({ slug, auth, keycloak }: { slug: string; auth: AuthConfig | null; keycloak: KeycloakConfig | null }) {
   const vars = requiredEnvVars(auth, keycloak)
   if (auth !== null && auth.enabled && auth.provider === 'keycloak' && keycloak !== null) {
-    return <KeycloakNextSteps slug={slug} keycloak={keycloak} vars={vars} />
+    return <KeycloakNextSteps slug={slug} keycloak={keycloak} vars={vars} multiTenant={auth.multi_tenant} />
   }
   return (
     <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
@@ -216,7 +227,7 @@ function VarTable({ vars }: { vars: EnvVar[] }) {
 }
 
 /** Shown after a download of a project that signs in through Keycloak. */
-function KeycloakNextSteps({ slug, keycloak, vars }: { slug: string; keycloak: KeycloakConfig; vars: EnvVar[] }) {
+function KeycloakNextSteps({ slug, keycloak, vars, multiTenant }: { slug: string; keycloak: KeycloakConfig; vars: EnvVar[]; multiTenant: boolean }) {
   const own = keycloak.mode === 'own'
   return (
     <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
@@ -237,7 +248,8 @@ function KeycloakNextSteps({ slug, keycloak, vars }: { slug: string; keycloak: K
             </li>
             <li>
               In the <code>{keycloak.realm}</code> realm, create your users and give them roles on the{' '}
-              <code>{keycloak.api_client_id}</code> client. Then open <code>http://localhost:8000/docs</code>, press{' '}
+              <code>{keycloak.api_client_id}</code> client.{' '}
+              {multiTenant && 'Create organizations and add each user to one: each organization is a tenant. '} Then open <code>http://localhost:8000/docs</code>, press{' '}
               <strong>Authorize</strong> and sign in.
             </li>
           </>
@@ -258,6 +270,107 @@ function KeycloakNextSteps({ slug, keycloak, vars }: { slug: string; keycloak: K
         </li>
       </ol>
       <VarTable vars={vars} />
+    </div>
+  )
+}
+
+const PROVIDER_ENV: Record<PaymentsConfig['provider'], { title: string; vars: EnvVar[]; events: string[] }> = {
+  stripe: {
+    title: 'Stripe',
+    vars: [
+      {
+        name: 'STRIPE_SECRET_KEY',
+        why: 'Your Stripe API key. A test key (sk_test_...) until you go live; a live key only works with APP_ENV=production',
+        how: 'Stripe dashboard → Developers → API keys',
+      },
+      {
+        name: 'STRIPE_WEBHOOK_SECRETS',
+        why: 'Signing secret of the webhook endpoint (whsec_...). List two, comma separated, while rotating',
+        how: 'Stripe dashboard → Developers → Webhooks, after adding the endpoint below',
+      },
+    ],
+    events: [
+      'checkout.session.completed',
+      'checkout.session.async_payment_succeeded',
+      'checkout.session.async_payment_failed',
+      'checkout.session.expired',
+      'charge.refunded',
+      'refund.created',
+      'refund.updated',
+      'charge.refund.updated',
+      'charge.dispute.created',
+      'charge.dispute.updated',
+      'charge.dispute.closed',
+    ],
+  },
+  razorpay: {
+    title: 'Razorpay',
+    vars: [
+      { name: 'RAZORPAY_KEY_ID', why: 'Your Razorpay key id (rzp_test_... until you go live)', how: 'Razorpay dashboard → Account & Settings → API keys' },
+      { name: 'RAZORPAY_KEY_SECRET', why: 'The secret that goes with that key id', how: 'Shown once when you create the key' },
+      {
+        name: 'RAZORPAY_WEBHOOK_SECRETS',
+        why: 'The secret you type when creating the webhook (16+ characters). List two, comma separated, while rotating',
+        how: 'You choose it: make it long and random',
+      },
+    ],
+    events: [
+      'payment_link.paid',
+      'payment_link.expired',
+      'payment_link.cancelled',
+      'refund.created',
+      'refund.processed',
+      'refund.failed',
+      'payment.dispute.created',
+      'payment.dispute.won',
+      'payment.dispute.lost',
+      'payment.dispute.closed',
+      'payment.dispute.under_review',
+      'payment.dispute.action_required',
+    ],
+  },
+}
+
+/** Shown after a download of a project with payments switched on. */
+function PaymentsNextSteps({ slug, payments }: { slug: string; payments: PaymentsConfig }) {
+  const info = PROVIDER_ENV[payments.provider]
+  const vars: EnvVar[] = [
+    ...info.vars,
+    ...(payments.security.webhook_ip_allowlist_enabled
+      ? [{ name: 'PAYMENTS_WEBHOOK_IP_ALLOWLIST', why: 'The addresses the provider calls from (comma-separated CIDRs). Required, because you switched the allowlist on', how: `${info.title} documentation` }]
+      : []),
+    { name: 'APP_ENV', why: 'Set to production in production. A live key anywhere else, or a test key in production, stops the app from starting', how: 'You set it' },
+  ]
+  return (
+    <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
+      <h4>Payments: before you run {slug}</h4>
+      <ol>
+        <li>
+          Put the settings below in <code>.env</code>. <strong>No key is ever in the zip</strong> and none is stored in this
+          dashboard.
+        </li>
+        <li>
+          In {info.title}, add a webhook to <code>https://&lt;your-api&gt;/payments/webhooks/{payments.provider}</code> and select
+          exactly these events: {info.events.map((e, i) => (
+            <span key={e}>
+              <code>{e}</code>
+              {i < info.events.length - 1 ? ', ' : '.'}
+            </span>
+          ))}
+        </li>
+        <li>
+          Start it with <code>docker compose up --build</code>: besides the API it starts <code>payments-worker</code>, which has
+          to keep running.
+        </li>
+        <li>
+          Read <code>deploy/DEPLOYMENT.md</code> in the zip: it has the sizing worked out for your load, how to run workers on
+          other servers, the database login script, going from test to live, and what to do when something is stuck.
+        </li>
+      </ol>
+      <VarTable vars={vars} />
+      <p style={{ color: 'var(--muted-foreground)' }}>
+        The sizing numbers are estimates, not measurements: load-test them before relying on them.
+      </p>
     </div>
   )
 }

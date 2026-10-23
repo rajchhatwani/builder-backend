@@ -31,6 +31,27 @@ async def make_announcements(client: AsyncClient, **overrides: _t.Any) -> dict[s
     return created
 
 
+def sample_labels() -> dict[str, _t.Any]:
+    return {
+        "name": _token(12),
+    }
+
+
+async def payload_labels(client: AsyncClient, **overrides: _t.Any) -> dict[str, _t.Any]:
+    payload = sample_labels()
+    payload.update(overrides)
+    return payload
+
+
+async def make_labels(client: AsyncClient, **overrides: _t.Any) -> dict[str, _t.Any]:
+    response = await client.post(
+        "/labels", json=await payload_labels(client, **overrides)
+    )
+    assert response.status_code == 201, response.text
+    created: dict[str, _t.Any] = response.json()
+    return created
+
+
 def sample_tasks() -> dict[str, _t.Any]:
     return {
         "title": _token(12),

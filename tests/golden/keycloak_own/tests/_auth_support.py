@@ -40,6 +40,11 @@ def _json(value: dict[str, Any]) -> str:
     return _b64(json.dumps(value, separators=(",", ":")).encode("utf-8"))
 
 
+def alias_for(email: str) -> str:
+    """The organization a test user belongs to unless told otherwise: one each."""
+    return "org-" + email.replace("@", "-at-")
+
+
 def issuer() -> str:
     return config.get_auth_settings().issuer
 
@@ -157,7 +162,8 @@ async def sign_in(
 ) -> dict[str, str]:
     """The Authorization header of a user who holds `roles` (and the default roles).
     The profile row is created by the first request, exactly as in production."""
-    del http, n, join  # accepted so tests written for built-in auth also run here
+    del http, n  # accepted so tests written for built-in auth also run here
+    del join
     return bearer(token(email=email, roles=list(roles or [])))
 
 

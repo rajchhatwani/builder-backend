@@ -71,6 +71,10 @@ def ok(result: subprocess.CompletedProcess[str]) -> str:
         "workspace_auth",
         "keycloak_own",
         "keycloak_shared",
+        "keycloak_tenant",
+        "payments_stripe",
+        "payments_tenant",
+        "payments_razorpay",
     ],
 )
 def test_generated_project_migrates_and_passes_its_own_tests(

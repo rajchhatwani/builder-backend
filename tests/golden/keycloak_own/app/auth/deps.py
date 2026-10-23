@@ -61,6 +61,20 @@ async def get_current_user(
         raise _unauthorized("invalid or expired access token") from exc
     if config.EMAIL_VERIFICATION_REQUIRED and not token.email_verified:
         raise AppError("email_not_verified", "verify your email address to continue", 403)
+    if config.MULTI_TENANT:
+        if not token.organizations:
+            raise AppError(
+                "no_organization",
+                "your account does not belong to an organization, or belongs to several: "
+                "sign in with the scope organization:<alias> to choose one",
+                403,
+            )
+        if len(token.organizations) > 1:
+            raise AppError(
+                "organization_required",
+                "sign in to one organization at a time (request the scope organization:<alias>)",
+                403,
+            )
     user = await service.sync_user(session, token)
     if user is None:
         raise _unauthorized("invalid or expired access token")

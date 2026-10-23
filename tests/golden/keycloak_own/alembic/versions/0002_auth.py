@@ -20,6 +20,14 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.create_table(
+        "auth_tenants",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_auth_tenants"),
+    )
+    op.create_table(
         "auth_users",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("email", sa.String(320), nullable=True),
@@ -60,3 +68,4 @@ def downgrade() -> None:
     op.drop_table("auth_provider_lock")
     op.drop_index("ix_auth_users_email", table_name="auth_users")
     op.drop_table("auth_users")
+    op.drop_table("auth_tenants")

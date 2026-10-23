@@ -1,0 +1,21 @@
+# Kubernetes entry point (generated):  kubectl apply -k deploy/k8s
+#
+# 1. Build and push the image, then set it below (or: kustomize edit set image tenant-pay=registry/tenant-pay:TAG).
+# 2. Create the two Secrets (their values are never in these files):
+#      kubectl create secret generic tenant-pay-payments \
+#        --from-literal=DATABASE_URL='postgresql+asyncpg://tenant_pay_app:...@db:5432/tenant_pay?ssl=require' \
+#        --from-literal=STRIPE_SECRET_KEY=... --from-literal=STRIPE_WEBHOOK_SECRETS=... \
+#        --from-literal=PAYMENTS_WEBHOOK_IP_ALLOWLIST=<provider CIDRs>#
+#      kubectl create secret generic tenant-pay-migrator --from-literal=DATABASE_URL='postgresql+asyncpg://tenant_pay_migrator:...@db:5432/tenant_pay?ssl=require'
+# 3. Run the migrate Job first (jobs.yaml), then the rest.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - api.yaml
+  - worker.yaml
+  - jobs.yaml
+  - network-policy.yaml
+images:
+  - name: tenant-pay
+    newName: REPLACE_WITH_YOUR_REGISTRY/tenant-pay
+    newTag: "1.0.0"

@@ -26,5 +26,11 @@ class AnnouncementRead(_pd.BaseModel):
 
     id: _uuid.UUID
     title: str
+    tasks: list[_uuid.UUID] = _pd.Field(default_factory=list)
     created_at: _dt.datetime
     updated_at: _dt.datetime
+
+    @_pd.field_validator("tasks", mode="before")
+    @classmethod
+    def coerce_collection_ids(cls, value: _t.Any) -> _t.Any:
+        return [item.id for item in value]

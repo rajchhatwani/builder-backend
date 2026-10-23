@@ -201,12 +201,24 @@ def test_swagger_client_returns_to_the_api(own: dict[str, str]) -> None:
 
 def test_roles_are_client_roles_of_the_api_client(own: dict[str, str]) -> None:
     realm = realm_of(own)
-    assert set(realm["roles"]) == {"client"}
+    assert set(realm["roles"]) == {"client", "realm"}  # realm: the default-roles composite
     assert [r["name"] for r in realm["roles"]["client"]["hub-api"]] == ["admin", "editor", "member"]
     mappings = realm["clientScopeMappings"]["hub-api"]
     assert {m["client"] for m in mappings} == {"hub-web", "hub-web-docs"}
     for m in mappings:
         assert m["roles"] == ["admin", "editor", "member"]
+
+
+def test_default_roles_are_keycloak_default_roles(own: dict[str, str]) -> None:
+    realm = realm_of(own)
+    assert realm["defaultRole"] == {"name": "default-roles-hub"}
+    (default,) = realm["roles"]["realm"]
+    assert default["composites"] == {"client": {"hub-api": ["member"]}}
+
+
+def test_shared_mode_leaves_the_realm_defaults_alone(shared: dict[str, str]) -> None:
+    # Other platforms use the realm; this project's default roles are applied by its API.
+    assert "defaultRole" not in json.loads(shared["keycloak/clients.json"])
 
 
 def test_identity_providers(own: dict[str, str]) -> None:
@@ -367,6 +379,9 @@ class FakeKeycloak(BaseHTTPRequestHandler):
     scope_mappings: list[tuple[str, str, list[str]]] = []
     log: list[tuple[str, str]] = []
     auth_headers: list[str | None] = []
+    realm: dict[str, Any] = {"realm": "hub", "organizationsEnabled": False}
+    profile: dict[str, Any] = {"attributes": [{"name": "email"}], "groups": []}
+    default_scopes: dict[str, list[str]] = {}
 
     def log_message(self, *args: object) -> None:
         pass
@@ -395,6 +410,21 @@ class FakeKeycloak(BaseHTTPRequestHandler):
         assert parts[:3] == ["admin", "realms", "hub"], path
         rest = parts[3:]
         body = self._body() if method in ("POST", "PUT") else None
+        if rest == []:
+            if method == "PUT":
+                FakeKeycloak.realm = body
+                return self._send(204)
+            return self._send(200, FakeKeycloak.realm)
+        if rest == ["users", "profile"]:
+            if method == "PUT":
+                FakeKeycloak.profile = body
+                return self._send(204)
+            return self._send(200, FakeKeycloak.profile)
+        if rest == ["client-scopes"]:
+            return self._send(200, [{"id": "scope-org", "name": "organization"}])
+        if rest[:1] == ["clients"] and rest[2:3] == ["default-client-scopes"] and method == "PUT":
+            self.default_scopes.setdefault(rest[1], []).append(rest[3])
+            return self._send(204)
         if rest == ["clients"] and method == "GET":
             wanted = self.path.split("clientId=")[1]
             return self._send(200, [c for c in self.clients.values() if c["clientId"] == wanted])
@@ -442,6 +472,9 @@ def fake_keycloak() -> Any:
     for attr in ("clients", "roles", "mappers"):
         setattr(FakeKeycloak, attr, {})
     FakeKeycloak.scope_mappings, FakeKeycloak.log, FakeKeycloak.auth_headers = [], [], []
+    FakeKeycloak.realm = {"realm": "hub", "organizationsEnabled": False}
+    FakeKeycloak.profile = {"attributes": [{"name": "email"}], "groups": []}
+    FakeKeycloak.default_scopes = {}
     server = ThreadingHTTPServer(("127.0.0.1", 0), FakeKeycloak)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}"
@@ -566,3 +599,80 @@ def test_register_script_needs_credentials_and_says_so(tmp_path: Path, fake_keyc
 
     assert result.returncode == 1
     assert "KEYCLOAK_ADMIN_PASSWORD" in result.stderr
+
+
+def test_register_script_adds_attributes_organizations_and_scopes(
+    tmp_path: Path, fake_keycloak: str
+) -> None:
+    data = load("keycloak_tenant")
+    data["auth"]["keycloak"].update(mode="shared", realm="hub")
+    data["auth"]["keycloak"].pop("identity_providers", None)
+    root = write_project(tmp_path, files_for(data))
+
+    first = register(root, fake_keycloak)
+
+    assert first.returncode == 0, first.stdout + first.stderr
+    names = [a["name"] for a in FakeKeycloak.profile["attributes"]]
+    assert names[0] == "email"  # what the realm had is kept
+    assert {
+        "company",
+        "age",
+        "plan",
+        "newsletter",
+        "site",
+        "born",
+        "score",
+        "mobile",
+        "notes",
+    } <= set(names)
+    assert FakeKeycloak.realm["organizationsEnabled"] is True
+    web = next(i for i, c in FakeKeycloak.clients.items() if c["clientId"] == "crm-web")
+    assert FakeKeycloak.default_scopes[web] == ["scope-org"]
+    attribute_mappers = [m["name"] for m in FakeKeycloak.mappers[web]]
+    assert "attribute-company" in attribute_mappers and "api-audience" in attribute_mappers
+
+    # Run again: an attribute the realm already defines is not defined twice, nothing else moves.
+    before = list(FakeKeycloak.profile["attributes"])
+    assert register(root, fake_keycloak).returncode == 0
+    assert FakeKeycloak.profile["attributes"] == before
+
+
+def test_custom_fields_become_profile_attributes_with_validators() -> None:
+    realm = realm_of(files_for(load("keycloak_tenant")))
+    component = realm["components"]["org.keycloak.userprofile.UserProfileProvider"][0]
+    profile = json.loads(component["config"]["kc.user.profile.config"][0])
+    by_name = {a["name"]: a for a in profile["attributes"]}
+
+    assert {"username", "email", "firstName", "lastName"} <= set(by_name)  # Keycloak's own
+    assert by_name["company"]["required"] == {"roles": ["user"]}
+    assert by_name["company"]["validations"] == {"length": {"max": 80}}
+    assert by_name["age"]["validations"] == {"integer": {"min": 13, "max": 120}}
+    assert by_name["score"]["validations"] == {"double": {"min": 0, "max": 10}}
+    assert by_name["plan"]["validations"] == {"options": {"options": ["free", "pro"]}}
+    assert by_name["newsletter"]["validations"] == {"options": {"options": ["true", "false"]}}
+    assert by_name["born"]["validations"] == {"iso-date": {}}
+    assert "uri" in by_name["site"]["validations"]
+    assert by_name["mobile"]["validations"]["pattern"]["pattern"].startswith(r"^\+")
+    assert by_name["notes"]["annotations"] == {"inputType": "textarea"}
+    assert "required" not in by_name["age"]
+
+
+def test_custom_fields_are_delivered_as_claims_on_both_browser_clients() -> None:
+    realm = realm_of(files_for(load("keycloak_tenant")))
+    for client_id in ("crm-web", "crm-web-docs"):
+        mappers = {m["name"]: m for m in client(realm, client_id)["protocolMappers"]}
+        assert mappers["attribute-age"]["config"]["jsonType.label"] == "long"
+        assert mappers["attribute-newsletter"]["config"]["jsonType.label"] == "boolean"
+        assert mappers["attribute-company"]["config"]["claim.name"] == "company"
+        assert mappers["attribute-company"]["config"]["access.token.claim"] == "true"
+        assert mappers["attribute-company"]["config"]["id.token.claim"] == "false"
+
+
+def test_multi_tenancy_switches_organizations_on_and_requests_the_scope() -> None:
+    realm = realm_of(files_for(load("keycloak_tenant")))
+    assert realm["organizationsEnabled"] is True
+    for client_id in ("crm-web", "crm-web-docs"):
+        assert "organization" in client(realm, client_id)["defaultClientScopes"]
+    plain = realm_of(files_for(load("keycloak_own")))
+    assert "organizationsEnabled" not in plain and "components" not in plain
+    assert "defaultClientScopes" not in client(plain, "hub-web")

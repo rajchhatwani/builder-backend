@@ -18,6 +18,9 @@ from tests._auth_support import authed_client, key_server, outbox  # noqa: F401
 from tests._auth_support import authed_client, outbox  # noqa: F401
 {% endif %}
 {% endif %}
+{% if payments %}
+from tests.payments_support import fake_provider, payments_env, provider_server  # noqa: F401
+{% endif %}
 
 
 @pytest.fixture(scope="session", autouse=True)

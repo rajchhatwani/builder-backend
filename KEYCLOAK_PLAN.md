@@ -27,9 +27,16 @@ secure defaults, no secrets in the zip, fail closed, auditable.
    (generated as OIDC against a **single tenant**), GitHub, generic OIDC. SAML / LDAP later.
 5. Verification library: `cryptography` only (already approved for RS256), JWKS fetched with stdlib
    `urllib`. No Keycloak SDK, no PyJWT. Do not add other libraries without asking.
-6. **Multi-tenancy** is rejected in Keycloak mode in v1 (Keycloak Organizations later).
-7. **Custom registration fields** are rejected in Keycloak mode in v1 (later: Keycloak user-profile
-   attributes + claim mapping).
+6. **Multi-tenancy** (added after v1) uses Keycloak Organizations: each organization is a tenant. Tenant id =
+   uuid5(namespace of the realm, organization alias), so it is stable across environments. A user must be in
+   exactly one organization (the default `organization` scope puts it in the token; a user in several gets no
+   claim until the app asks for `organization:<alias>`); otherwise 403 `no_organization` /
+   `organization_required`. Organizations are created and filled in Keycloak (no sign-up founder flow).
+7. **Custom registration fields** (added after v1) are Keycloak declarative user-profile attributes (validators per
+   type) delivered as access-token claims of the same name by attribute mappers on the browser clients, copied
+   to nullable `auth_users` columns by the API. `unique` is rejected (Keycloak cannot enforce it); names that
+   collide with Keycloak attributes or standard claims are rejected. Defaults apply only when a user is first
+   seen; a claim that is absent leaves the stored value alone.
 8. **Self-assignable roles are rejected** in Keycloak mode (deviation from the earlier chat, for
    security: mapping them to "default role for everyone" would silently grant the role). Roles are
    assigned in Keycloak. `is_default` roles become Keycloak default roles.
@@ -296,6 +303,30 @@ MFA "required" and the Keycloak container hardening (`cap_drop: ALL`, `no-new-pr
 
 ## 12. Next steps (beyond the checklist)
 - Add the MFA-required check to `tests/e2e/test_keycloak_stack.py` (done by hand only).
-- Keycloak Organizations for multi-tenancy; custom registration fields as user-profile attributes.
-- Default roles inside Keycloak (currently applied by the API: `DEFAULT_ROLES`).
-- Optional resolving of an OIDC discovery URL in the dashboard (browser side) to fill the endpoint fields.
+Everything from the first list is done. Remaining ideas, none required:
+- A tenant founder flow (create an organization at sign-up). Keycloak has no self-service for it; it would
+  need the API to call the admin API with a service account.
+- Per-organization roles (roles are realm-wide per client today).
+- Keycloak Organizations invitations surfaced in the dashboard.
+- Bump the pinned Keycloak tag: re-check `_REQUIRED_ACTIONS` and `_DEFAULT_USER_PROFILE` in
+  `features/keycloak/module.py` against a fresh realm first (both are restated because importing them replaces
+  Keycloak's own list).
+
+## 13. Added after the first release
+
+- **Default roles** are Keycloak realm default roles in own mode (`default-roles-<realm>` composite, merged with
+  Keycloak's own defaults, verified). The API still unions `DEFAULT_ROLES`, and shared mode leaves the realm
+  defaults alone so other platforms are not affected.
+- **MFA required** and the container hardening are now automated (`test_required_mfa_*`,
+  `test_the_keycloak_container_is_locked_down`).
+- **OIDC discovery fill** in the dashboard reads `.well-known/openid-configuration` in the browser (needs the
+  provider to allow cross-origin reads; otherwise it says so and the fields are typed by hand).
+- **Custom fields and tenants**: generator (`auth/templates/keycloak/`, `features/keycloak/module.py`), the
+  register script (merges profile attributes, turns Organizations on, gives the browser clients the
+  `organization` scope), fixture `keycloak_tenant`, tests in `tests/unit/test_keycloak_*`,
+  `tests/e2e/test_keycloak_stack.py` (real realm: attributes validated, registration page, claims typed,
+  organizations as tenants, isolation, no/several organizations), mutation checks (14 of 14 caught; one
+  mutant of the several-organizations check is equivalent because the guard sits in `deps.py`).
+- **Real Keycloak behaviour worth knowing**: with Organizations enabled the login is two steps (user name, then
+  password); the `organization` claim is a list of aliases; a user in several organizations gets no claim by
+  default; custom attribute claims of type double may arrive as strings (the API coerces).

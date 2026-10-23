@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from app.core.generator.base import FileTree
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import read_verbatim
-from app.core.spec_models import SpecAuth, SpecIdentityProvider, SpecKeycloak
+from app.core.spec_models import SpecAuth, SpecAuthCustomField, SpecIdentityProvider, SpecKeycloak
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -56,6 +56,131 @@ _SECOND_FACTOR_ACTIONS = frozenset(
     }
 )
 
+# Keycloak's user profile for KEYCLOAK_IMAGE_TAG. Importing a profile replaces the whole thing, so
+# the built-in attributes are restated here and ours are added after them. Re-check this on every
+# tag bump (GET /admin/realms/<realm>/users/profile on a fresh realm).
+_DEFAULT_USER_PROFILE: dict[str, Any] = json.loads(
+    r"""{
+ "attributes": [
+  {
+   "name": "username",
+   "displayName": "${username}",
+   "validations": {
+    "length": {
+     "min": 3,
+     "max": 255
+    },
+    "username-prohibited-characters": {},
+    "up-username-not-idn-homograph": {}
+   },
+   "permissions": {
+    "view": [
+     "admin",
+     "user"
+    ],
+    "edit": [
+     "admin",
+     "user"
+    ]
+   },
+   "multivalued": false
+  },
+  {
+   "name": "email",
+   "displayName": "${email}",
+   "validations": {
+    "email": {},
+    "length": {
+     "max": 255
+    }
+   },
+   "required": {
+    "roles": [
+     "user"
+    ]
+   },
+   "permissions": {
+    "view": [
+     "admin",
+     "user"
+    ],
+    "edit": [
+     "admin",
+     "user"
+    ]
+   },
+   "multivalued": false
+  },
+  {
+   "name": "firstName",
+   "displayName": "${firstName}",
+   "validations": {
+    "length": {
+     "max": 255
+    },
+    "person-name-prohibited-characters": {}
+   },
+   "required": {
+    "roles": [
+     "user"
+    ]
+   },
+   "permissions": {
+    "view": [
+     "admin",
+     "user"
+    ],
+    "edit": [
+     "admin",
+     "user"
+    ]
+   },
+   "multivalued": false
+  },
+  {
+   "name": "lastName",
+   "displayName": "${lastName}",
+   "validations": {
+    "length": {
+     "max": 255
+    },
+    "person-name-prohibited-characters": {}
+   },
+   "required": {
+    "roles": [
+     "user"
+    ]
+   },
+   "permissions": {
+    "view": [
+     "admin",
+     "user"
+    ],
+    "edit": [
+     "admin",
+     "user"
+    ]
+   },
+   "multivalued": false
+  }
+ ],
+ "groups": [
+  {
+   "name": "user-metadata",
+   "displayHeader": "User metadata",
+   "displayDescription": "Attributes, which refer to user metadata"
+  }
+ ]
+}"""
+)
+_USER_PERMISSIONS = {"view": ["admin", "user"], "edit": ["admin", "user"]}
+_DATETIME_PATTERN = (
+    r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$"
+)
+_PHONE_PATTERN = r"^\+[1-9][0-9]{6,14}$"
+# What a browser client's tokens normally carry, plus the organization (tenant) of the user.
+_DEFAULT_SCOPES = ["web-origins", "acr", "profile", "roles", "basic", "email"]
+
 _FAILURE_FACTOR = 5
 _PASSWORD_HISTORY = 5
 
@@ -80,6 +205,102 @@ def _app_name(project: ProjectCtx, auth: SpecAuth) -> str:
 
 def _role_names(auth: SpecAuth) -> list[str]:
     return sorted(r.name for r in auth.roles)
+
+
+# --- custom registration fields -----------------------------------------------------------
+
+
+def _custom_fields(auth: SpecAuth) -> list[SpecAuthCustomField]:
+    return sorted(auth.registration.custom_fields, key=lambda f: f.name)
+
+
+def _field_validators(f: SpecAuthCustomField) -> dict[str, Any]:
+    match f.type:
+        case "email":
+            return {"email": {}, "length": {"max": 255}}
+        case "phone":
+            return {
+                "pattern": {"pattern": _PHONE_PATTERN, "error-message": "Use +<country><number>"}
+            }
+        case "url":
+            return {"uri": {}, "length": {"max": f.max_length or 2000}}
+        case "integer" | "float":
+            bounds = {}
+            if f.min_value is not None:
+                bounds["min"] = int(f.min_value) if f.type == "integer" else f.min_value
+            if f.max_value is not None:
+                bounds["max"] = int(f.max_value) if f.type == "integer" else f.max_value
+            return {("integer" if f.type == "integer" else "double"): bounds}
+        case "boolean":
+            return {"options": {"options": ["true", "false"]}}
+        case "date":
+            return {"iso-date": {}}
+        case "datetime":
+            return {
+                "pattern": {
+                    "pattern": _DATETIME_PATTERN,
+                    "error-message": "Use an ISO date and time",
+                }
+            }
+        case "enum":
+            return {"options": {"options": list(f.enum_values or [])}}
+        case _:  # string, text
+            length: dict[str, int] = {"max": f.max_length or (10000 if f.type == "text" else 255)}
+            if f.min_length:
+                length["min"] = f.min_length
+            return {"length": length}
+
+
+def user_profile(auth: SpecAuth) -> dict[str, Any]:
+    """Keycloak's built-in attributes plus one per custom registration field."""
+    profile: dict[str, Any] = json.loads(json.dumps(_DEFAULT_USER_PROFILE))
+    for f in _custom_fields(auth):
+        attribute: dict[str, Any] = {
+            "name": f.name,
+            "displayName": f.label,
+            "validations": _field_validators(f),
+            "permissions": _USER_PERMISSIONS,
+            "multivalued": False,
+        }
+        if f.required:
+            attribute["required"] = {"roles": ["user"]}
+        if f.type == "text":
+            attribute["annotations"] = {"inputType": "textarea"}
+        elif f.type in ("enum", "boolean"):
+            attribute["annotations"] = {
+                "inputType": "select-radiobuttons" if f.type == "boolean" else "select"
+            }
+        profile["attributes"].append(attribute)
+    return profile
+
+
+def user_profile_attributes(auth: SpecAuth) -> list[dict[str, Any]]:
+    """Only our attributes (what the register script merges into a shared realm)."""
+    attributes: list[dict[str, Any]] = user_profile(auth)["attributes"]
+    return attributes[len(_DEFAULT_USER_PROFILE["attributes"]) :]
+
+
+_CLAIM_TYPES = {"integer": "long", "float": "double", "boolean": "boolean"}
+
+
+def _attribute_mapper(f: SpecAuthCustomField) -> dict[str, Any]:
+    """Delivers a user attribute to the API as an access-token claim of the same name."""
+    return {
+        "name": f"attribute-{f.name}",
+        "protocol": "openid-connect",
+        "protocolMapper": "oidc-usermodel-attribute-mapper",
+        "consentRequired": False,
+        "config": {
+            "user.attribute": f.name,
+            "claim.name": f.name,
+            "jsonType.label": _CLAIM_TYPES.get(f.type, "String"),
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true",
+            "multivalued": "false",
+        },
+    }
 
 
 # --- clients ----------------------------------------------------------------------------
@@ -109,10 +330,12 @@ def _browser_client(
     name: str,
     redirect_uris: list[str],
     web_origins: list[str],
+    extra_mappers: list[dict[str, Any]],
+    organizations: bool,
 ) -> dict[str, Any]:
     """A public client for the authorization-code flow with PKCE (no secret, no password grant,
     no implicit flow) and only the roles of this project's API in its tokens."""
-    return {
+    client: dict[str, Any] = {
         "clientId": client_id,
         "name": name,
         "enabled": True,
@@ -129,8 +352,11 @@ def _browser_client(
             "pkce.code.challenge.method": "S256",
             "post.logout.redirect.uris": "##".join(redirect_uris),
         },
-        "protocolMappers": [_audience_mapper(kc)],
+        "protocolMappers": [_audience_mapper(kc), *extra_mappers],
     }
+    if organizations:
+        client["defaultClientScopes"] = [*_DEFAULT_SCOPES, "organization"]
+    return client
 
 
 def client_representations(
@@ -138,6 +364,8 @@ def client_representations(
 ) -> list[dict[str, Any]]:
     app = _app_name(project, auth)
     origins = sorted({_origin(u) for u in kc.redirect_uris})
+    mappers = [_attribute_mapper(f) for f in _custom_fields(auth)]
+    organizations = auth.multi_tenant
     api = {
         "clientId": kc.api_client_id,
         "name": f"{app} API",
@@ -158,6 +386,8 @@ def client_representations(
         name=f"{app} web",
         redirect_uris=list(kc.redirect_uris),
         web_origins=origins,
+        extra_mappers=mappers,
+        organizations=organizations,
     )
     docs = _browser_client(
         kc,
@@ -165,6 +395,8 @@ def client_representations(
         name=f"{app} API docs (Swagger UI)",
         redirect_uris=[f"{API_URL_PLACEHOLDER}/docs/oauth2-redirect"],
         web_origins=[API_URL_PLACEHOLDER],
+        extra_mappers=mappers,
+        organizations=organizations,
     )
     return [api, web, docs]
 
@@ -360,6 +592,19 @@ def realm_representation(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) 
             for i in sorted(kc.identity_providers, key=lambda i: i.alias)
         ],
     }
+    defaults = sorted(r.name for r in auth.roles if r.is_default)
+    if defaults:
+        # New users start with the roles marked default. Keycloak merges its own defaults
+        # (offline_access, account roles) into this composite, so only ours are listed.
+        default_role = f"default-roles-{kc.realm}"
+        realm["roles"]["realm"] = [
+            {
+                "name": default_role,
+                "composite": True,
+                "composites": {"client": {kc.api_client_id: defaults}},
+            }
+        ]
+        realm["defaultRole"] = {"name": default_role}
     if names:
         realm["clientScopeMappings"] = {
             kc.api_client_id: [
@@ -370,6 +615,19 @@ def realm_representation(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) 
     smtp = _smtp(auth)
     if smtp is not None:
         realm["smtpServer"] = smtp
+    if auth.multi_tenant:
+        # Each organization is a tenant; the `organization` scope puts it in the token.
+        realm["organizationsEnabled"] = True
+    if auth.registration.custom_fields:
+        realm["components"] = {
+            "org.keycloak.userprofile.UserProfileProvider": [
+                {
+                    "providerId": "declarative-user-profile",
+                    "subComponents": {},
+                    "config": {"kc.user.profile.config": [json.dumps(user_profile(auth))]},
+                }
+            ]
+        }
     required_actions = _required_actions(kc.mfa)
     if required_actions is not None:
         realm["requiredActions"] = required_actions
@@ -384,6 +642,10 @@ def clients_document(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) -> d
         "browser_client_ids": [kc.web_client_id, docs_client_id(kc)],
         "clients": client_representations(project, auth, kc),
         "roles": role_representations(auth),
+        # Merged into the realm's user profile when it is missing there.
+        "user_profile_attributes": user_profile_attributes(auth),
+        # Tenants are Keycloak organizations: the realm must have them switched on.
+        "organizations": auth.multi_tenant,
     }
 
 

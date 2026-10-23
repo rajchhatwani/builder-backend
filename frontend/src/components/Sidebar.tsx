@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Project } from '../api/types'
 
-export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'access' | 'generate'
+export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'payments' | 'access' | 'generate'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
@@ -39,6 +39,17 @@ export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
         <path d="M10.8 12.2L20 3" />
         <path d="M16 7l3 3" />
         <path d="M13.5 9.5l2 2" />
+      </>
+    ),
+  },
+  {
+    id: 'payments',
+    label: 'Payments',
+    icon: (
+      <>
+        <rect x="2" y="5" width="20" height="14" rx="2" />
+        <path d="M2 10h20" />
+        <path d="M6 15h4" />
       </>
     ),
   },

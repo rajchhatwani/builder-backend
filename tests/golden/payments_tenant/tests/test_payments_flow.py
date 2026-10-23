@@ -1,0 +1,581 @@
+"""Payment flow tests (generated): paying, idempotency, webhooks, refunds, disputes.
+
+They run the real Stripe adapter against a stand-in for the Stripe API (tests/fake_stripe.py) and a
+real database. Webhooks are signed the way Stripe signs them. Nothing here talks to the
+internet.
+"""
+
+import uuid
+from datetime import UTC, datetime
+from typing import Any
+
+import pytest
+import sqlalchemy as sa
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.auth.models import AuthUser
+from app.db import session_factory
+from app.models.orders import Order
+from app.payments import audit, config, events, jobs, worker
+from app.payments.models import AuditLog, Dispute, Job, Payment, Refund, WebhookEvent
+from tests import _factories
+from tests._auth_support import client_for, sign_in
+from tests.payments_support import SUPPORTS_SLOW, WEBHOOK_PATH, FakeProvider
+
+pytestmark = pytest.mark.usefixtures("payments_env")
+
+ORDER_FIELDS: dict[str, Any] = {'state': 'open', 'currency': 'USD'}
+MONEY = "19.99"
+MINOR = 1999
+CUSTOMER = "pay@example.com"
+
+
+def role(key: str) -> list[str]:
+    roles = config.ROLES[key]
+    if not roles:
+        pytest.skip(f"no role may {key} in this project")
+    return [roles[0]]
+
+
+CREATOR_ROLES: tuple[str, ...] = ('admin', 'manager')
+
+
+async def order_for(
+    client: AsyncClient, owner_headers: dict[str, str], owner_email: str, total: str = MONEY, n: int = 0
+) -> str:
+    """An item that `owner_email` will pay for, created the way this project's roles allow."""
+    fields = {**ORDER_FIELDS, "total": total}
+    # Payers may not write items (they would set their own price): staff create it ...
+    creator = await sign_in(
+        client, f"creator-{owner_email}", roles=[CREATOR_ROLES[0]], n=5 + n % 5, join=owner_email
+    )
+    async with client_for(creator) as staff:
+        item_id = str((await _factories.make_orders(staff, **fields))["id"])
+    return item_id
+
+
+async def pay(http: AsyncClient, order_id: str, key: str | None = None, **body: Any) -> Any:
+    return await http.post(
+        "/payments",
+        json={"payable_id": order_id, **body},
+        headers={"Idempotency-Key": key or f"key-{uuid.uuid4()}"},
+    )
+
+
+async def deliver(http: AsyncClient, event: tuple[bytes, dict[str, str]] | None) -> Any:
+    assert event is not None
+    body, headers = event
+    return await http.post(WEBHOOK_PATH, content=body, headers=headers)
+
+
+async def customer_and_order(
+    client: AsyncClient, email: str = CUSTOMER, n: int = 0
+) -> tuple[dict[str, str], str]:
+    headers = await sign_in(client, email, roles=role("create"), n=n)
+    return headers, await order_for(client, headers, email, n=n)
+
+
+async def order_status(order_id: str) -> str:
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(Order.state).where(
+                    Order.id == uuid.UUID(order_id)
+                )
+            )
+        ).scalar_one()
+    return str(row)
+
+
+async def set_order_amount(order_id: str, minor: int) -> None:
+    async with session_factory() as session:
+        order = await session.get(Order, uuid.UUID(order_id))
+        assert order is not None
+        order.total = type(order.total)(str(minor / 100))
+        await session.commit()
+
+
+async def finished_payment(
+    client: AsyncClient, fake: FakeProvider, headers: dict[str, str], order_id: str
+) -> str:
+    """Start a payment, let the payer pay, deliver the webhook; returns the payment id."""
+    async with client_for(headers) as customer:
+        created = await pay(customer, order_id)
+        assert created.status_code == 201, created.text
+    session_id = fake.only_session_id()
+    fake.pay(session_id)
+    delivered = await deliver(client, fake.completed_event(session_id))
+    assert delivered.status_code == 200, delivered.text
+    return str(created.json()["id"])
+
+
+# --- paying -------------------------------------------------------------------------------------
+
+
+async def test_a_customer_pays_and_the_order_is_marked_paid(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+
+    async with client_for(headers) as customer:
+        created = await pay(customer, order_id)
+        assert created.status_code == 201, created.text
+        body = created.json()
+        assert body["status"] == "requires_payment"
+        assert body["amount_minor"] == MINOR
+        assert body["checkout_url"].startswith("https://")
+        assert await order_status(order_id) == "open"
+
+        call = payments_env.created_checkouts()[0]
+        assert call.authorized and call.version_ok
+        assert call.amount == MINOR
+        assert call.create_key == payments_env.expected_create_key(body["id"])
+
+        session_id = payments_env.only_session_id()
+        payments_env.pay(session_id)
+        delivered = await deliver(client, payments_env.completed_event(session_id))
+        assert delivered.status_code == 200
+
+        paid = (await customer.get(f"/payments/{body['id']}")).json()
+        assert paid["status"] == "succeeded"
+        assert paid["checkout_url"] is None
+    assert await order_status(order_id) == "settled"
+    async with session_factory() as session:
+        assert await audit.verify_chain(session, uuid.UUID(body["id"])) == (True, None)
+
+
+async def test_the_client_cannot_choose_the_amount(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        response = await pay(customer, order_id, amount_minor=1)
+    assert response.status_code == 422
+    assert payments_env.calls == []
+
+
+async def test_the_amount_comes_from_the_item_even_after_it_is_edited(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        created = await pay(customer, order_id)
+        assert created.status_code == 201
+    await set_order_amount(order_id, 100)  # the item is now worth 1.00
+    session_id = payments_env.only_session_id()
+    assert payments_env.session_amount(session_id) == MINOR  # the checkout keeps its amount
+    payments_env.pay(session_id)
+    await deliver(client, payments_env.completed_event(session_id))
+    async with session_factory() as session:
+        payment = (await session.execute(select(Payment))).scalar_one()
+    assert payment.amount_minor == MINOR and payment.status == "succeeded"
+
+
+async def test_repeating_a_request_with_the_same_key_gives_the_same_payment(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        first = await pay(customer, order_id, key="same-key-1234")
+        second = await pay(customer, order_id, key="same-key-1234")
+        other = await pay(customer, str(uuid.uuid4()), key="same-key-1234")
+    assert first.status_code == second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+    assert len(payments_env.created_checkouts()) == 1
+    assert other.status_code == 422
+    assert other.json()["code"] == "idempotency_key_reuse"
+
+
+async def test_a_missing_or_malformed_key_is_refused(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        missing = await customer.post("/payments", json={"payable_id": order_id})
+        short = await pay(customer, order_id, key="short")
+    assert missing.status_code == short.status_code == 400
+    assert missing.json()["code"] == "idempotency_key_required"
+    assert payments_env.calls == []
+
+
+async def test_an_item_cannot_be_charged_twice(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        first = await pay(customer, order_id)
+        second = await pay(customer, order_id)  # a different key: a different request
+    assert first.status_code == 201
+    assert second.status_code == 409
+    assert second.json()["code"] == "payment_in_progress"
+    assert len(payments_env.sessions) == 1
+
+
+async def test_someone_elses_item_is_not_found(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    _, order_id = await customer_and_order(client, "owner@example.com", 0)
+    other = await sign_in(client, "other@example.com", roles=role("create"), n=1)
+    async with client_for(other) as stranger:
+        response = await pay(stranger, order_id)
+    assert response.status_code == 404
+    assert payments_env.calls == []
+
+
+async def test_a_user_without_the_create_role_is_refused(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    _, order_id = await customer_and_order(client)
+    allowed = set(config.ROLES["create"])
+    outsider_roles = [r for r in ('admin', 'manager', 'member') if r not in allowed]
+    if not outsider_roles:
+        pytest.skip("every role may pay in this project")
+    outsider = await sign_in(client, "nope@example.com", roles=outsider_roles[:1], n=1)
+    async with client_for(outsider) as http:
+        response = await pay(http, order_id)
+    assert response.status_code == 403
+    assert payments_env.calls == []
+
+
+async def test_only_allowed_return_urls_are_accepted(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        evil = await pay(customer, order_id, success_url="https://evil.example.com/steal")
+        good = await pay(customer, order_id, success_url=config.SUCCESS_URLS[-1])
+    assert evil.status_code == 422 and evil.json()["code"] == "invalid_url"
+    assert good.status_code == 201
+    assert payments_env.created_checkouts()[0].success_url == config.SUCCESS_URLS[-1]
+
+
+async def test_a_payment_can_be_cancelled_before_it_is_paid(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        created = (await pay(customer, order_id)).json()
+        cancelled = await customer.post(f"/payments/{created['id']}/cancel")
+        again = await customer.post(f"/payments/{created['id']}/cancel")
+        retry = await pay(customer, order_id)  # the item is free to pay for again
+    assert cancelled.status_code == 200 and cancelled.json()["status"] == "canceled"
+    assert again.status_code == 409
+    assert retry.status_code == 201
+
+
+async def test_a_payer_cannot_be_told_to_pay_for_a_paid_item(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    await finished_payment(client, payments_env, headers, order_id)
+    async with client_for(headers) as customer:
+        again = await pay(customer, order_id)
+    assert again.status_code == 409
+
+
+async def test_staff_who_can_see_a_payment_do_not_get_its_checkout_link(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        created = (await pay(customer, order_id)).json()
+        assert created["checkout_url"]  # the payer gets it
+    reader = await sign_in(client, "reader@example.com", roles=role("read_all"), n=1, join=CUSTOMER)
+    async with client_for(reader) as staff:
+        seen = await staff.get(f"/payments/{created['id']}")
+        listed = await staff.get("/payments")
+    assert seen.status_code == 200 and seen.json()["checkout_url"] is None
+    assert [p["checkout_url"] for p in listed.json()["items"]] == [None]
+
+
+async def test_the_payer_cannot_change_what_they_will_be_charged(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        attempts = [
+            await customer.post("/orders", json={**ORDER_FIELDS, "total": "0.01"}),
+            await customer.patch(f"/orders/{order_id}", json={"total": "0.01"}),
+            await customer.put(
+                f"/orders/{order_id}", json={**ORDER_FIELDS, "total": "0.01"}
+            ),
+            await customer.delete(f"/orders/{order_id}"),
+        ]
+        assert all(a.status_code in (401, 403, 404, 405) for a in attempts), [a.status_code for a in attempts]
+        created = await pay(customer, order_id)
+    assert created.status_code == 201 and created.json()["amount_minor"] == MINOR
+
+
+# --- the provider misbehaving --------------------------------------------------------------------
+
+
+async def test_when_the_provider_is_down_the_payment_is_finished_later(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payments_env.outage(3)
+    async with client_for(headers) as customer:
+        response = await pay(customer, order_id)
+    assert response.status_code == 502
+    assert response.json()["code"] == "provider_unavailable"
+    async with session_factory() as session:
+        payment = (await session.execute(select(Payment))).scalar_one()
+        queued = (
+            await session.execute(
+                select(func.count()).select_from(Job).where(Job.type == jobs.FINISH_PAYMENT)
+            )
+        ).scalar_one()
+    assert payment.status == "creating" and queued == 1
+
+    # The provider is back: the queued job finishes the same payment, with the same reference.
+    async with session_factory() as session:
+        await session.execute(sa.update(Job).values(run_at=datetime.now(UTC)))
+        await session.commit()
+    assert await worker.run_once() >= 1
+    async with session_factory() as session:
+        payment = (await session.execute(select(Payment))).scalar_one()
+    assert payment.status == "requires_payment" and payment.provider_session_id
+    assert len(payments_env.sessions) == 1
+
+
+async def test_a_refused_payment_is_failed_without_leaking_the_providers_words(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payments_env.rejection("amount_too_large", "secret detail")
+    async with client_for(headers) as customer:
+        response = await pay(customer, order_id)
+        assert response.status_code == 422
+        assert response.json()["code"] == "payment_rejected"
+        assert "secret detail" not in response.text
+        again = await pay(customer, order_id)  # the failed attempt does not block a new one
+    assert again.status_code == 201
+    async with session_factory() as session:
+        failed = (await session.execute(select(Payment).where(Payment.status == "failed"))).scalar_one()
+    assert failed.failure_code == "amount_too_large"
+
+
+async def test_a_checkout_with_the_wrong_amount_is_never_used(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payments_env.amount_override = 100
+    async with client_for(headers) as customer:
+        response = await pay(customer, order_id)
+    assert response.status_code == 502
+    async with session_factory() as session:
+        payment = (await session.execute(select(Payment))).scalar_one()
+    assert payment.status == "failed" and payment.failure_code == "provider_mismatch"
+
+
+# --- webhooks ------------------------------------------------------------------------------------
+
+
+async def test_a_duplicate_event_changes_nothing_the_second_time(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        payment_id = (await pay(customer, order_id)).json()["id"]
+    session_id = payments_env.only_session_id()
+    payments_env.pay(session_id)
+    event = payments_env.completed_event(session_id)
+    first = await deliver(client, event)
+    second = await deliver(client, event)
+    assert first.status_code == second.status_code == 200
+    async with session_factory() as session:
+        stored = (await session.execute(select(func.count()).select_from(WebhookEvent))).scalar_one()
+        entries = (
+            await session.execute(
+                select(AuditLog.event).where(
+                    AuditLog.event == "payment_succeeded", AuditLog.chain_key == payment_id
+                )
+            )
+        ).all()
+    assert stored == 1
+    assert len(entries) == 1
+
+
+async def test_an_old_expired_event_cannot_undo_a_payment(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    response = await deliver(client, payments_env.expired_event(payments_env.only_session_id()))
+    assert response.status_code == 200
+    async with session_factory() as session:
+        payment = await session.get(Payment, uuid.UUID(payment_id))
+    assert payment is not None and payment.status == "succeeded"
+    assert await order_status(order_id) == "settled"
+
+
+async def test_a_slow_payment_method_confirms_later(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    if not SUPPORTS_SLOW:
+        pytest.skip("this provider has no slow-confirmation state")
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        created = (await pay(customer, order_id)).json()
+        sid = payments_env.only_session_id()
+        payments_env.pay(sid, slow=True)
+        await deliver(client, payments_env.completed_event(sid))
+        assert (await customer.get(f"/payments/{created['id']}")).json()["status"] == "processing"
+        assert await order_status(order_id) == "open"
+        payments_env.confirm(sid)
+        await deliver(client, payments_env.async_succeeded_event(sid))
+        assert (await customer.get(f"/payments/{created['id']}")).json()["status"] == "succeeded"
+    assert await order_status(order_id) == "settled"
+
+
+async def test_a_failed_slow_payment_frees_the_item(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    if not SUPPORTS_SLOW:
+        pytest.skip("this provider has no slow-confirmation state")
+    headers, order_id = await customer_and_order(client)
+    async with client_for(headers) as customer:
+        created = (await pay(customer, order_id)).json()
+        sid = payments_env.only_session_id()
+        payments_env.pay(sid, slow=True)
+        await deliver(client, payments_env.completed_event(sid))
+        await deliver(client, payments_env.async_failed_event(sid))
+        assert (await customer.get(f"/payments/{created['id']}")).json()["status"] == "failed"
+        retry = await pay(customer, order_id)
+    assert retry.status_code == 201
+    assert await order_status(order_id) == "open"
+
+
+async def test_an_event_for_an_unknown_payment_is_stored_and_set_aside(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    first = await deliver(client, payments_env.ghost_event())
+    assert first.status_code == 503  # may be early: the provider is asked to try again
+    async with session_factory() as session:
+        row = (await session.execute(select(WebhookEvent))).scalar_one()
+        assert row.status == "failed" and row.error_code == "payment_not_found"
+        row_id = row.id
+    for _ in range(4):
+        try:
+            async with session_factory() as session:
+                await events.process_event(session, row_id)
+        except events.EventRetry:
+            continue
+    async with session_factory() as session:
+        stored = await session.get(WebhookEvent, row_id)
+        assert stored is not None and stored.status == "ignored"
+
+
+# --- refunds -------------------------------------------------------------------------------------
+
+
+async def test_a_full_refund_marks_the_item_refunded(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    staff = await sign_in(client, "staff@example.com", roles=role("refund"), n=1, join=CUSTOMER)
+    async with client_for(staff) as http:
+        refund = await http.post(
+            f"/payments/{payment_id}/refunds", json={}, headers={"Idempotency-Key": "refund-key-1"}
+        )
+        assert refund.status_code == 201, refund.text
+        assert refund.json()["status"] == "succeeded"
+        assert refund.json()["amount_minor"] == MINOR
+    assert await order_status(order_id) == "refunded"
+    async with session_factory() as session:
+        payment = await session.get(Payment, uuid.UUID(payment_id))
+    assert payment is not None and payment.refunded_minor == MINOR
+
+
+async def test_a_partial_refund_and_the_limit(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    staff = await sign_in(client, "staff@example.com", roles=role("refund"), n=1, join=CUSTOMER)
+    async with client_for(staff) as http:
+
+        async def refund(amount: int | None, key: str) -> Any:
+            body = {} if amount is None else {"amount_minor": amount}
+            return await http.post(
+                f"/payments/{payment_id}/refunds", json=body, headers={"Idempotency-Key": key}
+            )
+
+        part = await refund(500, "refund-key-1")
+        assert part.status_code == 201 and part.json()["amount_minor"] == 500
+        assert await order_status(order_id) == "part_refunded"
+        too_much = await refund(MINOR, "refund-key-2")
+        assert too_much.status_code == 422
+        assert too_much.json()["code"] == "refund_exceeds_payment"
+        rest = await refund(None, "refund-key-3")
+        assert rest.json()["amount_minor"] == MINOR - 500
+    assert await order_status(order_id) == "refunded"
+
+
+async def test_repeating_a_refund_request_refunds_once(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    staff = await sign_in(client, "staff@example.com", roles=role("refund"), n=1, join=CUSTOMER)
+    async with client_for(staff) as http:
+        responses = [
+            await http.post(
+                f"/payments/{payment_id}/refunds",
+                json={"amount_minor": 700},
+                headers={"Idempotency-Key": "refund-key-1"},
+            )
+            for _ in range(2)
+        ]
+    assert responses[0].json()["id"] == responses[1].json()["id"]
+    assert len(payments_env.refunds) == 1
+
+
+async def test_a_customer_cannot_refund(client: AsyncClient, payments_env: FakeProvider) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    if set(config.ROLES["create"]) & set(config.ROLES["refund"]):
+        pytest.skip("payers may also refund in this project")
+    async with client_for(headers) as customer:
+        response = await customer.post(
+            f"/payments/{payment_id}/refunds", json={}, headers={"Idempotency-Key": "refund-key-1"}
+        )
+    assert response.status_code == 403
+    assert payments_env.refunds == {}
+
+
+async def test_a_refund_made_in_the_providers_dashboard_is_recorded(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    intent = payments_env.intent_of(payments_env.only_session_id())
+    refund_id = payments_env.dashboard_refund(intent, 400)
+    response = await deliver(client, payments_env.refund_event(refund_id))
+    assert response.status_code == 200
+    async with session_factory() as session:
+        refund = (await session.execute(select(Refund))).scalar_one()
+        payment = await session.get(Payment, uuid.UUID(payment_id))
+    assert refund.source == "provider" and refund.amount_minor == 400
+    assert refund.status == "succeeded"
+    assert payment is not None and payment.refunded_minor == 400
+    assert await order_status(order_id) == "part_refunded"
+
+
+async def test_a_dispute_is_recorded_and_updated(
+    client: AsyncClient, payments_env: FakeProvider
+) -> None:
+    headers, order_id = await customer_and_order(client)
+    payment_id = await finished_payment(client, payments_env, headers, order_id)
+    intent = payments_env.intent_of(payments_env.only_session_id())
+    dispute_id = payments_env.open_dispute(intent, MINOR)
+    assert (await deliver(client, payments_env.dispute_event(dispute_id))).status_code == 200
+    payments_env.lose_dispute(dispute_id)
+    closed = await deliver(client, payments_env.dispute_event(dispute_id, closed=True))
+    assert closed.status_code == 200
+    async with session_factory() as session:
+        dispute = (await session.execute(select(Dispute))).scalar_one()
+    assert dispute.status == "lost" and dispute.closed_at is not None
+    assert str(dispute.payment_id) == payment_id

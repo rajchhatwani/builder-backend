@@ -150,6 +150,26 @@ Signature (RS256 only, keys fetched from Keycloak, never from the token), issuer
 Roles come from the token's `resource_access.{{ kc.api_client_id }}.roles` and are re-read on every
 request, so a role removed in Keycloak stops working when the user's access token expires
 ({{ auth.access_token_ttl_minutes }} minutes). Disable a user at once by setting `is_active=false` on their `auth_users` row.
+{% if auth.multi_tenant %}
+
+### Tenants
+
+Every **Keycloak organization is a tenant**. Create organizations in the Keycloak admin console
+(*Organizations*) and add your users to them. A user must belong to exactly one organization: the API
+refuses (`403 no_organization`) a token that carries none, and Keycloak leaves the organization out of the
+token of someone in several until the app asks for one with the scope `organization:<alias>`. Tenant ids are
+derived from the organization's alias, so they are the same in every environment. `GET /auth/tenant` returns
+the current one. Rows of entities with the `tenant` row rule are only ever visible inside their tenant.
+{% endif %}
+{% if auth.registration.custom_fields %}
+
+### Extra sign-up fields
+
+{% for f in auth.registration.custom_fields %}`{{ f.name }}`{{ ", " if not loop.last }}{% endfor %} are Keycloak user attributes: the
+sign-up page asks for them, Keycloak validates them and keeps them, and they reach the API as claims of the same
+name, copied to `auth_users` and returned by `GET /auth/me`. A value the API cannot use (wrong type, too long) is
+stored as empty rather than breaking a request. A field missing from a token leaves the stored value as it is.
+{% endif %}
 {% if kc_own %}
 
 ### First run
@@ -205,7 +225,7 @@ This project does **not** start Keycloak. It trusts the realm **{{ kc.realm }}**
 so people who signed in to your other platforms are signed in here too.
 
 1. Copy `.env.example` to `.env`, set `KEYCLOAK_PUBLIC_URL` (and `KEYCLOAK_INTERNAL_URL` if this API cannot use the public address).
-2. Register this project in the realm once (it adds the `{{ kc.api_client_id }}`, `{{ kc.web_client_id }}` and `{{ kc.web_client_id }}-docs` clients and the roles, and can be run again):
+2. Register this project in the realm once (it adds the `{{ kc.api_client_id }}`, `{{ kc.web_client_id }}` and `{{ kc.web_client_id }}-docs` clients and the roles{% if auth.registration.custom_fields %}, merges the sign-up fields into the realm's user profile{% endif %}{% if auth.multi_tenant %}, turns Organizations on{% endif %}, and can be run again):
 
 ```bash
 KEYCLOAK_PUBLIC_URL=https://id.example.com KEYCLOAK_ADMIN_USERNAME=... KEYCLOAK_ADMIN_PASSWORD=... \
@@ -261,3 +281,28 @@ Authentication and authorization, background jobs, caching, webhooks and rate li
 {% endif %}
 Soft-deleted rows are hidden from the API but still count for unique constraints and their
 relation `on_delete` rules are not applied.
+{% if pay %}
+
+## Payments
+
+Card payments through {{ prov.title }}'s hosted checkout ({{ prov.checkout_name }}), in `app/payments/`. **Card numbers never
+touch this code**: the payer enters them on the provider's page.
+
+| Route | What it does |
+|---|---|
+| `POST /payments` | Start a payment for one {{ pay.payable.entity }} (send `Idempotency-Key`); returns the `checkout_url` to send the payer to. The amount is read from the {{ pay.payable.entity }} on the server |
+| `GET /payments`, `GET /payments/{id}` | Your payments (or everyone's, with the `read_all` roles) |
+| `POST /payments/{id}/cancel` | Abandon a checkout that has not been paid |
+| `POST /payments/{id}/refunds` | Refund all or part of a payment (send `Idempotency-Key`){% if pay.refund_approval_threshold_minor is not none %}; above {{ pay.refund_approval_threshold_minor }} minor units a second person must approve it{% endif %} |
+| `POST /payments/refunds/{id}/approve`, `.../reject` | The second person's decision |
+| `GET /payments/{id}/refunds`, `GET /payments/{id}/disputes` | Refunds and disputes of a payment |
+| `GET /payments/ops/status`, `/ops/dead-jobs`, `/ops/audit/{id}/verify` | Queue health, failed jobs, audit-trail check |
+| `POST /payments/webhooks/{{ pay.provider }}` | The provider calls this; not for you. Signature-checked |
+
+Who may do what is set by the roles you chose when configuring payments; an empty list means
+nobody. `docker compose up --build` starts the API and `payments-worker`, which must be running for
+refunds and for webhook processing in `queued` mode. Set {% for name in prov.key_envs %}`{{ name }}`, {% endfor %}and
+`{{ prov.webhook_secret_env }}` in `.env`, then follow **`deploy/DEPLOYMENT.md`** for registering the
+webhook, sizing, running workers on other machines, going live and operating it.
+`make test` runs the payment tests against a stand-in for the provider's API.
+{% endif %}

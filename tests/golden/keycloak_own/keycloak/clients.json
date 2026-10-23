@@ -114,5 +114,7 @@
       "composite": false,
       "clientRole": true
     }
-  ]
+  ],
+  "user_profile_attributes": [],
+  "organizations": false
 }

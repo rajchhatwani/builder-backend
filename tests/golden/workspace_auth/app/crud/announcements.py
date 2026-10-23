@@ -10,6 +10,6 @@ class AnnouncementRepository(_crud_base.Repository[Announcement]):
     filterable = ()
     sortable = ()
     searchable = ()
-    eager = ()
+    eager = ("tasks",)
     references = {}
     many_to_many = {}

@@ -133,3 +133,32 @@ class IdpType(StrEnum):
     microsoft = "microsoft"
     github = "github"
     oidc = "oidc"
+
+
+class PaymentProvider(StrEnum):
+    """Payment service providers the generated payments module can talk to."""
+
+    stripe = "stripe"
+    razorpay = "razorpay"
+
+
+class PaymentsProfile(StrEnum):
+    """Starting point for the sizing numbers; any number the user sets wins."""
+
+    small = "small"
+    medium = "medium"
+    large = "large"
+
+
+class PaymentsAvailability(StrEnum):
+    """single: one of everything is acceptable. ha: no single process may be a point of failure."""
+
+    single = "single"
+    ha = "ha"
+
+
+class WebhookMode(StrEnum):
+    """inline: a webhook is processed inside the request. queued: stored and handed to workers."""
+
+    inline = "inline"
+    queued = "queued"

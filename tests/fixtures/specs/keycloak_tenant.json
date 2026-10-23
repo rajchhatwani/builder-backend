@@ -1,0 +1,65 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Crm", "slug": "crm", "description": "Keycloak organizations as tenants, plus custom sign-up fields", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "plural_path": "customers",
+      "options": {},
+      "fields": [
+        {"name": "name", "type": "string", "required": true, "max_length": 100}
+      ]
+    },
+    {
+      "name": "Deal",
+      "table_name": "deals",
+      "plural_path": "deals",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 100}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "provider": "keycloak",
+    "multi_tenant": true,
+    "password_reset": {"email_magic_link": false},
+    "registration": {
+      "email_verification_required": false,
+      "custom_fields": [
+        {"name": "company", "label": "Company", "type": "string", "required": true, "max_length": 80},
+        {"name": "age", "label": "Age", "type": "integer", "min_value": 13, "max_value": 120},
+        {"name": "plan", "label": "Plan", "type": "enum", "enum_values": ["free", "pro"], "default_value": "free"},
+        {"name": "newsletter", "label": "Newsletter", "type": "boolean"},
+        {"name": "site", "label": "Website", "type": "url", "indexed": true},
+        {"name": "born", "label": "Born", "type": "date"},
+        {"name": "score", "label": "Score", "type": "float", "min_value": 0, "max_value": 10},
+        {"name": "mobile", "label": "Mobile", "type": "phone"},
+        {"name": "notes", "label": "Notes", "type": "text"}
+      ]
+    },
+    "keycloak": {
+      "mode": "own",
+      "realm": "crm",
+      "api_client_id": "crm-api",
+      "web_client_id": "crm-web",
+      "redirect_uris": ["http://localhost:3000/"]
+    },
+    "roles": [
+      {"name": "admin", "label": "Admin"},
+      {"name": "member", "label": "Member", "is_default": true}
+    ],
+    "permissions": [
+      {"entity": "Customer", "operation": "list", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Customer", "operation": "create", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Customer", "operation": "get", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Customer", "operation": "delete", "roles": ["admin"], "row_rule": "tenant"},
+      {"entity": "Deal", "operation": "list", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Deal", "operation": "create", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Deal", "operation": "get", "roles": ["member", "admin"], "row_rule": "owner"}
+    ]
+  }
+}

@@ -6,6 +6,7 @@ from typing import Any
 from app.core.generator.base import FileTree
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
+from app.core.validation_payments import payments_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -18,6 +19,7 @@ _VERBATIM = (
     "app/core/errors.py.tpl",
     "app/core/logging.py.tpl",
     "app/core/pagination.py.tpl",
+    "app/core/redact.py.tpl",
     "app/crud/__init__.py.tpl",
     "app/crud/_base.py.tpl",
     "app/custom_routers/__init__.py.tpl",
@@ -56,6 +58,7 @@ class CrudModule:
             "entities": project.entities,
             "joins": project.join_tables,
             "auth": project.auth,
+            "payments": payments_active(project.spec) and project.auth is not None,
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

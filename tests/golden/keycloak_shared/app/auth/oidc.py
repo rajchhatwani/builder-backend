@@ -10,6 +10,7 @@ a bounded refetch rate so a stream of forged key ids cannot hammer Keycloak.
 import asyncio
 import base64
 import binascii
+import datetime as dt
 import json
 import math
 import re
@@ -49,6 +50,11 @@ class VerifiedToken:
     name: str | None
     # Roles granted on this project's client, exactly as Keycloak lists them.
     roles: tuple[str, ...] = field(default_factory=tuple)
+    # Aliases of the organizations (tenants) the token was issued for.
+    organizations: tuple[str, ...] = field(default_factory=tuple)
+    # Custom registration fields present in the token, already converted to their types (None
+    # when the value was not valid for the field).
+    attributes: dict[str, Any] = field(default_factory=dict)
 
 
 # --- parsing ----------------------------------------------------------------------------
@@ -225,13 +231,77 @@ def check_claims(payload: dict[str, Any], *, issuer: str, now: float) -> Verifie
             roles = tuple(sorted({r for r in listed if isinstance(r, str)}))
     email = payload.get("email")
     name = payload.get("name") or payload.get("preferred_username")
+    attributes = {
+        field_name: coerce_attribute(kind, payload[field_name], max_length, allowed)
+        for field_name, kind, max_length, allowed, _default in config.CUSTOM_FIELDS
+        if field_name in payload
+    }
     return VerifiedToken(
         sub=sub,
         email=email[:320] if isinstance(email, str) and email else None,
         email_verified=payload.get("email_verified") is True,
         name=name[:255] if isinstance(name, str) and name else None,
         roles=roles,
+        organizations=_organizations(payload.get("organization")),
+        attributes=attributes,
     )
+
+
+_INT_RE = re.compile(r"^-?[0-9]{1,18}$")
+_TEXT_FALLBACK = 255
+_LONG_TEXT = 10_000
+
+
+def coerce_attribute(kind: str, value: Any, max_length: int | None, allowed: tuple[str, ...]) -> Any:
+    """A custom field's claim as the Python value its column holds, or None if it does not fit.
+    Keycloak validates fields when a user is saved; this is the API's own check, so a value that
+    slipped past it (or arrives as the wrong JSON type) can never break or poison a row."""
+    if isinstance(value, list) and len(value) == 1:  # Keycloak may deliver a single value in a list
+        value = value[0]
+    try:
+        match kind:
+            case "string" | "text" | "email" | "phone" | "url":
+                limit = max_length or (_LONG_TEXT if kind == "text" else _TEXT_FALLBACK)
+                if not isinstance(value, str) or len(value) > limit or "\x00" in value:
+                    return None
+                return value
+            case "integer":
+                if isinstance(value, bool):
+                    return None
+                if isinstance(value, int):
+                    return value
+                return int(value) if isinstance(value, str) and _INT_RE.fullmatch(value) else None
+            case "float":
+                if isinstance(value, bool):
+                    return None
+                number = float(value) if isinstance(value, int | float | str) else math.nan
+                return number if math.isfinite(number) else None
+            case "boolean":
+                if isinstance(value, bool):
+                    return value
+                return {"true": True, "false": False}.get(value) if isinstance(value, str) else None
+            case "date":
+                return dt.date.fromisoformat(value) if isinstance(value, str) else None
+            case "datetime":
+                if not isinstance(value, str):
+                    return None
+                moment = dt.datetime.fromisoformat(value)
+                return moment if moment.tzinfo else moment.replace(tzinfo=dt.UTC)
+            case "enum":
+                return value if isinstance(value, str) and value in allowed else None
+    except (ValueError, OverflowError):
+        return None
+    return None
+
+
+def _organizations(value: Any) -> tuple[str, ...]:
+    """Aliases from the `organization` claim, whether Keycloak sends a list or an object."""
+    if isinstance(value, dict):
+        value = list(value)
+    if not isinstance(value, list):
+        return ()
+    aliases = {a for a in value if isinstance(a, str) and 0 < len(a) <= 255}
+    return tuple(sorted(aliases))
 
 
 def _verify_signature(key: rsa.RSAPublicKey, signing_input: bytes, signature: bytes) -> None:

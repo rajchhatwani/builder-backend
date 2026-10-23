@@ -1,11 +1,16 @@
 """SQLAlchemy model for Task (generated)."""
 import datetime as _dt
+import typing as _t
 import uuid as _uuid
 
 import sqlalchemy as _sa
 from sqlalchemy import orm as _orm
 
 from app.models import _base as _models_base
+
+if _t.TYPE_CHECKING:
+    from app.models.announcements import Announcement
+    from app.models.labels import Label
 
 
 class Task(_models_base.Base):
@@ -14,6 +19,7 @@ class Task(_models_base.Base):
     id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True, default=_uuid.uuid4)
     title: _orm.Mapped[str] = _orm.mapped_column(_sa.String(120), nullable=False)
     done: _orm.Mapped[bool | None] = _orm.mapped_column(_sa.Boolean(), nullable=True, default=False)
+    announcement_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.ForeignKey("announcements.id", ondelete="SET NULL"), nullable=True, index=True)
     created_by_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(
         _sa.ForeignKey("auth_users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -29,3 +35,6 @@ class Task(_models_base.Base):
         default=_models_base.utcnow,
         onupdate=_models_base.utcnow,
     )
+
+    announcement: _orm.Mapped["Announcement"] = _orm.relationship('Announcement', back_populates='tasks', foreign_keys="[Task.announcement_id]")
+    labels: _orm.Mapped[list["Label"]] = _orm.relationship('Label', secondary='tasks_labels', primaryjoin="Task.id == tasks_labels.c.left_id", secondaryjoin="Label.id == tasks_labels.c.right_id", back_populates='tasks', passive_deletes=True)

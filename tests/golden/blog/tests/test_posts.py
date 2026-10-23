@@ -42,6 +42,13 @@ async def test_posts_crud_flow(client: AsyncClient) -> None:
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "validation_error"
 
+    # A number the column cannot store is a 422, never a 500.
+    too_big = await client.post(
+        "/posts", json=await _factories.payload_posts(client, views=10**30)
+    )
+    assert too_big.status_code == 422, too_big.text
+    assert too_big.json()["code"] == "validation_error"
+
     new_value = _factories.sample_posts()["title"]
     patched = await client.patch(f"/posts/{item_id}", json={"title": new_value})
     assert patched.status_code == 200, patched.text

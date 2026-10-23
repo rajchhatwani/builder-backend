@@ -4,7 +4,7 @@
     python scripts/seed.py --base-url http://localhost:8000 --reset
     docker compose exec api python /app/scripts/seed.py
 
-It creates six projects, each of which validates and can be downloaded as a zip:
+It creates eight projects, each of which validates and can be downloaded as a zip:
 
   helpdesk  entities + relations + email/SMS sign-in, roles, custom registration fields, invite
             only roles and every kind of permission (roles, owner, role_scoped, custom_filter)
@@ -13,6 +13,9 @@ It creates six projects, each of which validates and can be downloaded as a zip:
   workspace multi-tenant: sign-up creates a tenant, invitations join one, rows are tenant-scoped
   sso-hub   Keycloak that ships with the project: Google + Microsoft Entra ID logins, MFA, roles
   sso-portal a second platform that trusts sso-hub's Keycloak realm (single sign-on across projects)
+  pay-shop  Stripe payments for orders: refunds with a second approver, queued webhooks, two workers,
+            PgBouncer and Kubernetes files sized for 120 payments a minute
+  rupee-shop Razorpay payments in INR on a small single-server setup
 
 Running it again skips projects that already exist (by slug); --reset recreates them. Standard
 library only, so it runs anywhere Python 3.10+ does. Credentials are not seeded: the generated
@@ -156,6 +159,12 @@ class Builder:
         self.api.put(f"/projects/{self.id}/keycloak", settings)
         if enable:
             self.api.post(f"/projects/{self.id}/keycloak/enable", {"confirm": True})
+
+    def payments(self, enable: bool = True, **settings: Any) -> None:
+        """Save the payments settings and, unless told not to, switch payments on."""
+        self.api.put(f"/projects/{self.id}/payments", settings)
+        if enable:
+            self.api.post(f"/projects/{self.id}/payments/enable", {"confirm": True})
 
     def custom_field(self, name: str, label: str, type_: str, **extra: Any) -> None:
         self.api.post(
@@ -487,6 +496,98 @@ def sso_portal(api: Api) -> Builder:
     return b
 
 
+def _shop(api: Api, name: str, slug: str, description: str) -> Builder:
+    """An order that can be paid for. Staff write orders; customers can only read their own, so a
+    payer can never set the price they pay (the payments settings refuse any other setup)."""
+    b = Builder(api, name, slug, description)
+    b.entity(
+        "Order",
+        [
+            field("total", "decimal", min_value=1, max_value=100000),
+            field(
+                "status",
+                "enum",
+                default="pending",
+                enum_values=["pending", "paid", "partially_refunded", "refunded", "cancelled"],
+            ),
+        ],
+        sortable=["created_at"],
+        filterable=["status"],
+    )
+    b.auth(
+        app_name=name,
+        app_url="http://localhost:3000",
+        smtp_config={**SMTP, "from_name": name},
+        email_verification_required=True,
+    )
+    b.role("admin", "Admin", position=0)
+    b.role("staff", "Staff", position=1)
+    b.role("customer", "Customer", is_default=True, position=2)
+    b.permissions(
+        [
+            *[
+                ("Order", op, ["customer", "staff", "admin"], {"row_rule": "role_scoped"})
+                for op in ("list", "get", "head")
+            ],
+            *[("Order", op, ["staff", "admin"], {}) for op in ("create", "replace", "update", "delete")],
+        ]
+    )
+    return b
+
+
+_PAYABLE = {
+    "entity": "Order",
+    "amount_field": "total",
+    "status_field": "status",
+    "status_pending": "pending",
+    "status_paid": "paid",
+    "status_partially_refunded": "partially_refunded",
+    "status_refunded": "refunded",
+}
+_PAYMENT_ROLES = {
+    "create": ["customer"],
+    "read": ["customer"],
+    "read_all": ["staff", "admin"],
+    "refund": ["staff", "admin"],
+    "operate": ["admin"],
+}
+
+
+def pay_shop(api: Api) -> Builder:
+    b = _shop(api, "Pay Shop", "pay-shop", "Orders paid with Stripe: refunds, disputes, workers and an audit trail.")
+    b.payments(
+        provider="stripe",
+        payable={**_PAYABLE, "currency": "USD", "currency_field": None},
+        currencies=["USD", "EUR"],
+        success_urls=["https://shop.example.com/paid"],
+        cancel_urls=["https://shop.example.com/cart"],
+        roles={**_PAYMENT_ROLES, "approve_refund": ["admin"]},
+        refund_approval_threshold_minor=50000,
+        scale={
+            "profile": "medium",
+            "availability": "ha",
+            "db_max_connections": 100,
+            "pgbouncer": True,
+            "kubernetes": True,
+        },
+    )
+    return b
+
+
+def rupee_shop(api: Api) -> Builder:
+    b = _shop(api, "Rupee Shop", "rupee-shop", "Orders paid in rupees with Razorpay, on one small server.")
+    b.payments(
+        provider="razorpay",
+        payable={**_PAYABLE, "currency": "INR", "currency_field": None},
+        currencies=["INR"],
+        success_urls=["https://shop.example.in/paid"],
+        cancel_urls=["https://shop.example.in/cart"],
+        roles=_PAYMENT_ROLES,
+        scale={"profile": "small", "availability": "single"},
+    )
+    return b
+
+
 PROJECTS = {
     "helpdesk": helpdesk,
     "vault": vault,
@@ -494,6 +595,8 @@ PROJECTS = {
     "workspace": workspace,
     "sso-hub": sso_hub,
     "sso-portal": sso_portal,
+    "pay-shop": pay_shop,
+    "rupee-shop": rupee_shop,
 }
 
 

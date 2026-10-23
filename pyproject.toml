@@ -30,10 +30,14 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["alembic/versions", "tests/golden"]
+extend-exclude = ["alembic/versions", "tests/golden", "examples/commerce/backend"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# The examples are readable data and scripts, not library code: long literal lines are fine.
+"examples/**" = ["E501"]
 
 [tool.ruff.lint.flake8-bugbear]
 extend-immutable-calls = ["fastapi.Depends"]

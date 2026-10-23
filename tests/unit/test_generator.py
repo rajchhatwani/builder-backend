@@ -33,6 +33,10 @@ NAMES = [
     "workspace_auth",
     "keycloak_own",
     "keycloak_shared",
+    "keycloak_tenant",
+    "payments_stripe",
+    "payments_tenant",
+    "payments_razorpay",
 ]
 
 

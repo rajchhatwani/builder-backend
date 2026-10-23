@@ -84,11 +84,17 @@ def load(name: str) -> dict[str, Any]:
     return data
 
 
-@pytest.fixture(scope="module")
-def hub(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
-    """The `keycloak_own` project running with its own Keycloak."""
-    root = tmp_path_factory.mktemp("kc_hub")
-    write_project(root, load("keycloak_own"))
+def start_own_stack(
+    tmp_path_factory: pytest.TempPathFactory,
+    fixture: str,
+    *,
+    prefix: str,
+    realm: str,
+    extra_env: list[str],
+) -> Iterator[Stack]:
+    """A fixture project that ships its own Keycloak, running under docker compose."""
+    root = tmp_path_factory.mktemp(prefix)
+    write_project(root, load(fixture))
     api_port, kc_port = free_port(), free_port()
     (root / ".env").write_text(
         "\n".join(
@@ -100,12 +106,7 @@ def hub(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
                 "KEYCLOAK_DB_PASSWORD=" + secrets.token_hex(12),
                 "KC_BOOTSTRAP_ADMIN_USERNAME=admin",
                 f"KC_BOOTSTRAP_ADMIN_PASSWORD={ADMIN_PASSWORD}",
-                "SMTP_USERNAME=user",
-                "SMTP_PASSWORD=pass",
-                "KC_IDP_GOOGLE_CLIENT_SECRET=g",
-                "KC_IDP_WORK_CLIENT_SECRET=w",
-                "KC_IDP_GH_CLIENT_SECRET=h",
-                "KC_IDP_CORP_CLIENT_SECRET=c",
+                *extra_env,
                 "",
             ]
         ),
@@ -113,12 +114,12 @@ def hub(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
     )
     stack = Stack(
         root=root,
-        project=f"kchub{secrets.token_hex(3)}",
+        project=f"{prefix}{secrets.token_hex(3)}",
         api=f"http://localhost:{api_port}",
         keycloak=f"http://localhost:{kc_port}",
-        realm="hub",
-        api_client="hub-api",
-        web_client="hub-web",
+        realm=realm,
+        api_client=f"{realm}-api",
+        web_client=f"{realm}-web",
         redirect="http://localhost:3000/",
     )
     try:
@@ -129,6 +130,33 @@ def hub(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
         yield stack
     finally:
         compose(stack, "down", "-v", "--remove-orphans")
+
+
+@pytest.fixture(scope="module")
+def hub(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
+    """The `keycloak_own` project running with its own Keycloak."""
+    yield from start_own_stack(
+        tmp_path_factory,
+        "keycloak_own",
+        prefix="kchub",
+        realm="hub",
+        extra_env=[
+            "SMTP_USERNAME=user",
+            "SMTP_PASSWORD=pass",
+            "KC_IDP_GOOGLE_CLIENT_SECRET=g",
+            "KC_IDP_WORK_CLIENT_SECRET=w",
+            "KC_IDP_GH_CLIENT_SECRET=h",
+            "KC_IDP_CORP_CLIENT_SECRET=c",
+        ],
+    )
+
+
+@pytest.fixture(scope="module")
+def crm(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
+    """The `keycloak_tenant` project: organizations as tenants and custom sign-up fields."""
+    yield from start_own_stack(
+        tmp_path_factory, "keycloak_tenant", prefix="kccrm", realm="crm", extra_env=[]
+    )
 
 
 @pytest.fixture(scope="module")
@@ -213,10 +241,11 @@ def admin_token(stack: Stack) -> str:
 
 
 def admin_call(stack: Stack, method: str, path: str, token: str, **kwargs: Any) -> httpx.Response:
+    headers = {"Authorization": f"Bearer {token}", **kwargs.pop("headers", {})}
     return httpx.request(
         method,
         f"{stack.keycloak}/admin/realms/{stack.realm}{path}",
-        headers={"Authorization": f"Bearer {token}"},
+        headers=headers,
         timeout=30,
         **kwargs,
     )
@@ -314,9 +343,24 @@ def sign_in(
                 headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())},
             )
         )
+        if done.status_code == 200 and 'id="password"' in done.text and "Invalid" not in done.text:
+            # With organizations the login has two steps: the user name, then the password.
+            second = re.search(r'action="([^"]+)"', done.text)
+            assert second, done.text[:300]
+            done = keep(
+                http.post(
+                    second.group(1).replace("&amp;", "&"),
+                    data={"password": password, "credentialId": ""},
+                    headers={"Cookie": "; ".join(f"{k}={v}" for k, v in cookies.items())},
+                )
+            )
         if done.status_code != 302:
             raise SignInRefused(re.sub(r"\s+", " ", re.sub(r"<[^>]+>", " ", done.text))[-200:])
         location = done.headers["location"]
+        if (
+            "required-action" in location
+        ):  # Keycloak asks for something first, e.g. an authenticator
+            raise SignInInterrupted(location)
         assert location.startswith(redirect), location
         query = urllib.parse.parse_qs(urllib.parse.urlsplit(location).query)
         assert query["state"] == [state]
@@ -336,6 +380,10 @@ def sign_in(
 
 
 class SignInRefused(Exception):
+    pass
+
+
+class SignInInterrupted(Exception):
     pass
 
 
@@ -416,11 +464,14 @@ def test_a_keycloak_user_signs_in_to_the_api_with_the_roles_keycloak_gave(hub: S
 
     me = api(hub, "/auth/me", member)
     assert me.status_code == 200 and me.json()["roles"] == ["member"]  # the default role
+    # The default role is held in Keycloak too (a realm default role), not only added by the API.
+    assert token_claims["resource_access"]["hub-api"]["roles"] == ["member"]
     assert api(hub, "/notes", member).status_code == 200
     assert api(hub, "/reports", member).status_code == 403
 
     boss = sign_in(hub, "boss@example.com")["access_token"]
-    assert claims(boss)["resource_access"] == {"hub-api": {"roles": ["admin"]}}
+    boss_roles = claims(boss)["resource_access"]["hub-api"]["roles"]
+    assert set(boss_roles) == {"admin", "member"}  # granted plus the realm default role
     assert "admin" in api(hub, "/auth/me", boss).json()["roles"]
     assert api(hub, "/reports", boss).status_code == 200
 
@@ -579,3 +630,290 @@ def test_one_login_works_on_both_projects_but_tokens_stay_separate(
     # Roles belong to the client: each token carries only its own project's.
     assert list(claims(portal_token)["resource_access"]) == ["portal-api"]
     assert "portal-api" not in claims(hub_token).get("resource_access", {})
+
+
+def test_the_keycloak_container_is_locked_down(hub: Stack) -> None:
+    container = compose(hub, "ps", "-q", "keycloak").stdout.strip()
+    inspected = subprocess.run(
+        ["docker", "inspect", container, "--format", "{{json .HostConfig}}"],
+        capture_output=True,
+        text=True,
+    )
+    host_config = json.loads(inspected.stdout)
+    assert host_config["CapDrop"] == ["ALL"]
+    assert "no-new-privileges:true" in host_config["SecurityOpt"]
+    # Only the web port is published; the management port (health, metrics) is not.
+    assert set(host_config["PortBindings"]) == {"8080/tcp"}
+
+
+def test_required_mfa_stops_a_new_user_until_they_set_up_an_authenticator(hub: Stack) -> None:
+    """The realm file of a project with mfa=required, imported under another name."""
+    spec = load("keycloak_own")
+    spec["auth"]["keycloak"].update(mfa="required", identity_providers=[])
+    realm_file = generate(Spec.model_validate(spec))["keycloak/realm.json"]
+    realm_file = re.sub(r"\$\{[A-Z_]+\}", "http://localhost:1", realm_file)
+    realm_file = realm_file.replace('"realm": "hub"', '"realm": "hubmfa"', 1)
+    token = admin_token(hub)
+    headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+    imported = httpx.post(
+        f"{hub.keycloak}/admin/realms", headers=headers, content=realm_file, timeout=120
+    )
+    assert imported.status_code == 201, imported.text
+    try:
+        mfa = Stack(**{**hub.__dict__, "realm": "hubmfa"})
+        actions = httpx.get(
+            f"{hub.keycloak}/admin/realms/hubmfa/authentication/required-actions", headers=headers
+        ).json()
+        by_alias = {a["alias"]: a for a in actions}
+        assert by_alias["CONFIGURE_TOTP"]["defaultAction"] is True
+        assert len(actions) == 14  # none of Keycloak's ordinary actions was lost on import
+        make_user(mfa, "newbie@example.com", [])
+        users = httpx.get(
+            f"{hub.keycloak}/admin/realms/hubmfa/users?email=newbie@example.com", headers=headers
+        ).json()
+        httpx.put(
+            f"{hub.keycloak}/admin/realms/hubmfa/users/{users[0]['id']}",
+            headers=headers,
+            json={**users[0], "requiredActions": ["CONFIGURE_TOTP"]},
+        )
+        with pytest.raises(SignInInterrupted, match="CONFIGURE_TOTP"):
+            sign_in(mfa, "newbie@example.com")
+    finally:
+        httpx.delete(f"{hub.keycloak}/admin/realms/hubmfa", headers=headers, timeout=120)
+
+
+# --- organizations as tenants and custom sign-up fields ----------------------------------------
+
+
+def make_org(stack: Stack, alias: str) -> str:
+    token = admin_token(stack)
+    created = admin_call(
+        stack,
+        "POST",
+        "/organizations",
+        token,
+        json={
+            "name": alias.title(),
+            "alias": alias,
+            "domains": [{"name": f"{alias}.example", "verified": True}],
+        },
+    )
+    assert created.status_code == 201, created.text
+    return str(created.headers["Location"].rsplit("/", 1)[1])
+
+
+def make_member(
+    stack: Stack, email: str, orgs: list[str], attributes: dict[str, list[str]] | None = None
+) -> None:
+    token = admin_token(stack)
+    created = admin_call(
+        stack,
+        "POST",
+        "/users",
+        token,
+        json={
+            "username": email,
+            "email": email,
+            "firstName": "Test",
+            "lastName": "User",
+            "enabled": True,
+            "emailVerified": True,
+            "attributes": attributes if attributes is not None else {"company": ["Acme"]},
+            "credentials": [{"type": "password", "value": PASSWORD, "temporary": False}],
+        },
+    )
+    assert created.status_code == 201, created.text
+    user_id = created.headers["Location"].rsplit("/", 1)[1]
+    for org_id in orgs:
+        joined = admin_call(
+            stack,
+            "POST",
+            f"/organizations/{org_id}/members",
+            token,
+            content=json.dumps(user_id),
+            headers={"Content-Type": "application/json"},
+        )
+        assert joined.status_code == 201, joined.text
+
+
+def test_the_tenant_realm_has_organizations_and_the_custom_attributes(crm: Stack) -> None:
+    token = admin_token(crm)
+    assert admin_call(crm, "GET", "", token).json()["organizationsEnabled"] is True
+    profile = admin_call(crm, "GET", "/users/profile", token).json()
+    names = {a["name"] for a in profile["attributes"]}
+    assert {
+        "company",
+        "age",
+        "plan",
+        "newsletter",
+        "site",
+        "born",
+        "score",
+        "mobile",
+        "notes",
+    } <= names
+    assert {"username", "email", "firstName", "lastName"} <= names  # Keycloak's own survived
+    web = admin_call(crm, "GET", f"/clients?clientId={crm.web_client}", token).json()[0]
+    scopes = admin_call(crm, "GET", f"/clients/{web['id']}/default-client-scopes", token).json()
+    assert "organization" in {s["name"] for s in scopes}
+    mappers = {m["name"] for m in web["protocolMappers"]}
+    assert {"attribute-company", "attribute-age", "api-audience"} <= mappers
+
+
+def test_keycloak_validates_the_custom_fields(crm: Stack) -> None:
+    token = admin_token(crm)
+
+    def create(attributes: dict[str, list[str]]) -> httpx.Response:
+        email = f"v{secrets.token_hex(4)}@example.com"
+        return admin_call(
+            crm,
+            "POST",
+            "/users",
+            token,
+            json={
+                "username": email,
+                "email": email,
+                "firstName": "A",
+                "lastName": "B",
+                "enabled": True,
+                "attributes": attributes,
+            },
+        )
+
+    assert create({"company": ["Acme"], "age": ["30"], "plan": ["pro"]}).status_code == 201
+    for bad in (
+        {"company": ["A" * 81]},
+        {"company": ["Acme"], "age": ["5"]},
+        {"company": ["Acme"], "plan": ["gold"]},
+        {"company": ["Acme"], "born": ["yesterday"]},
+        {"company": ["Acme"], "site": ["javascript:alert(1)"]},
+        {"company": ["Acme"], "score": ["11"]},
+        {"company": ["Acme"], "mobile": ["12345"]},
+    ):
+        assert create(bad).status_code == 400, bad
+
+
+def test_the_registration_page_asks_for_the_custom_fields(crm: Stack) -> None:
+    page = httpx.get(
+        f"{crm.keycloak}/realms/crm/protocol/openid-connect/registrations",
+        params={
+            "client_id": crm.web_client,
+            "redirect_uri": crm.redirect,
+            "response_type": "code",
+            "scope": "openid",
+            "code_challenge": "a" * 43,
+            "code_challenge_method": "S256",
+        },
+    )
+    for name in ("company", "age", "plan", "site", "mobile"):
+        assert f'name="{name}"' in page.text, name
+
+
+def test_custom_fields_and_the_organization_reach_the_api(crm: Stack) -> None:
+    acme = make_org(crm, "acme")
+    make_member(
+        crm,
+        "ann@acme.example",
+        [acme],
+        {
+            "company": ["Acme Inc"],
+            "age": ["30"],
+            "plan": ["pro"],
+            "newsletter": ["true"],
+            "site": ["https://acme.example.com"],
+            "born": ["1990-05-01"],
+            "score": ["7.5"],
+            "mobile": ["+14155550100"],
+            "notes": ["likes tea"],
+        },
+    )
+
+    access = sign_in(crm, "ann@acme.example")["access_token"]
+
+    token_claims = claims(access)
+    assert token_claims["organization"] == ["acme"]
+    assert token_claims["age"] == 30 and token_claims["newsletter"] is True
+    me = api(crm, "/auth/me", access).json()
+    assert (me["company"], me["age"], me["plan"], me["newsletter"]) == ("Acme Inc", 30, "pro", True)
+    assert (me["site"], me["born"], me["score"]) == ("https://acme.example.com", "1990-05-01", 7.5)
+    assert (me["mobile"], me["notes"]) == ("+14155550100", "likes tea")
+    tenant = api(crm, "/auth/tenant", access).json()
+    assert tenant["name"] == "acme" and tenant["id"] == me["tenant_id"]
+
+
+def test_tenants_are_isolated_through_the_real_stack(crm: Stack) -> None:
+    globex = make_org(crm, "globex")
+    acme_user = f"a{secrets.token_hex(3)}@acme.example"
+    globex_user = f"g{secrets.token_hex(3)}@globex.example"
+    acme = admin_call(crm, "GET", "/organizations?search=acme", admin_token(crm)).json()[0]["id"]
+    make_member(crm, acme_user, [acme])
+    make_member(crm, globex_user, [globex])
+    acme_token = sign_in(crm, acme_user)["access_token"]
+    globex_token = sign_in(crm, globex_user)["access_token"]
+
+    created = httpx.post(
+        f"{crm.api}/customers",
+        json={"name": "Initech"},
+        headers={"Authorization": f"Bearer {acme_token}"},
+        timeout=30,
+    )
+    assert created.status_code == 201, created.text
+    item = created.json()["id"]
+
+    assert api(crm, "/customers", acme_token).json()["total"] >= 1
+    assert api(crm, "/customers", globex_token).json()["total"] == 0
+    assert api(crm, f"/customers/{item}", globex_token).status_code == 404
+    assert api(crm, f"/customers/{item}", acme_token).status_code == 200
+
+
+def test_a_user_without_an_organization_or_in_several_is_asked_to_choose(crm: Stack) -> None:
+    make_member(crm, "loner@example.com", [])
+    loner = sign_in(crm, "loner@example.com")["access_token"]
+    refused = api(crm, "/auth/me", loner)
+    assert refused.status_code == 403 and refused.json()["code"] == "no_organization"
+
+    first, second = make_org(crm, "initech"), make_org(crm, "umbrella")
+    make_member(crm, "both@example.com", [first, second])
+    both = sign_in(crm, "both@example.com")["access_token"]
+    # Two organizations: Keycloak puts none in the token until the app names one.
+    assert api(crm, "/auth/me", both).status_code == 403
+
+
+def test_registering_a_tenant_project_in_an_existing_realm_adds_what_it_needs(hub: Stack) -> None:
+    """Shared mode with custom fields and tenants: the script merges the attributes into the
+    realm's user profile, switches organizations on and gives the clients the organization scope.
+    Runs last: it turns organizations on in the hub realm."""
+    spec = load("keycloak_tenant")
+    spec["auth"]["keycloak"].update(
+        mode="shared", realm=hub.realm, api_client_id="crm-api", web_client_id="crm-web"
+    )
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as folder:
+        root = Path(folder)
+        write_project(root, spec)
+        registered = subprocess.run(
+            [_python(), "scripts/keycloak_register.py"],
+            cwd=root,
+            env={
+                **_clean_env(),
+                "KEYCLOAK_PUBLIC_URL": hub.keycloak,
+                "KEYCLOAK_ADMIN_USERNAME": "admin",
+                "KEYCLOAK_ADMIN_PASSWORD": ADMIN_PASSWORD,
+                "API_PUBLIC_URL": hub.api,
+            },
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+    assert registered.returncode == 0, registered.stdout + registered.stderr
+    token = admin_token(hub)
+    assert admin_call(hub, "GET", "", token).json()["organizationsEnabled"] is True
+    attributes = {
+        a["name"] for a in admin_call(hub, "GET", "/users/profile", token).json()["attributes"]
+    }
+    assert {"company", "age", "plan", "mobile"} <= attributes
+    web = admin_call(hub, "GET", "/clients?clientId=crm-web", token).json()[0]
+    scopes = admin_call(hub, "GET", f"/clients/{web['id']}/default-client-scopes", token).json()
+    assert "organization" in {s["name"] for s in scopes}
+    assert {m["name"] for m in web["protocolMappers"]} >= {"attribute-company", "api-audience"}

@@ -7,6 +7,7 @@ never rendered into source. Custom registration fields become real `auth_users` 
 """
 
 import ast
+import uuid
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -54,13 +55,13 @@ _KEYCLOAK_VERBATIM = (
     "tests/test_provider_lock.py.tpl",
     "keycloak/app/auth/deps.py.tpl",
     "keycloak/app/auth/oidc.py.tpl",
-    "keycloak/app/auth/router.py.tpl",
     "keycloak/app/auth/service.py.tpl",
 )
 _KEYCLOAK_RENDERED = (
     "keycloak/alembic/versions/0002_auth.py.j2",
     "keycloak/app/auth/config.py.j2",
     "keycloak/app/auth/models.py.j2",
+    "keycloak/app/auth/router.py.j2",
     "keycloak/tests/_auth_support.py.j2",
     "keycloak/tests/test_auth.py.j2",
 )
@@ -76,6 +77,7 @@ _TEXT_LENGTH_FALLBACK = 255
 class CustomFieldCtx:
     name: str
     label: str
+    kind: str  # the field type (string, integer, ...)
     schema_decl: str  # pydantic field line on RegisterRequest
     read_decl: str  # pydantic field line on UserRead
     column_decl: str  # SQLAlchemy mapped column on AuthUser
@@ -211,6 +213,7 @@ def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
     return CustomFieldCtx(
         name=field.name,
         label=field.label,
+        kind=field.type,
         schema_decl=schema_decl,
         read_decl=f"{field.name}: {ann} | None = None",
         column_decl=column_decl,
@@ -280,11 +283,40 @@ def _auth_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
 def _keycloak_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
     kc = auth.keycloak
     assert kc is not None  # validation guarantees the block when the provider is keycloak
+    fields = sorted(auth.registration.custom_fields, key=lambda f: f.name)
+    # Keycloak validates and requires fields; the columns here are always optional so a user
+    # created some other way (an admin, a social login) can never make the profile sync fail.
+    columns = tuple(
+        _custom_field(
+            f.model_copy(update={"required": False, "unique": False, "default_value": None})
+        )
+        for f in fields
+    )
     return {
         **_auth_context(project, auth),
         "kc": kc,
         "docs_client_id": f"{kc.web_client_id}-docs",
+        "custom_fields": columns,
+        "kc_fields": [
+            {
+                "name": f.name,
+                "type": f.type,
+                "max_length": f.max_length,
+                "enum_values": f.enum_values or [],
+                "default_value": f.default_value,
+            }
+            for f in fields
+        ],
+        "tenant_namespace": str(tenant_namespace(kc.realm)),
+        "sample_dict": "{"
+        + ", ".join(f"{pyrepr(c.name)}: {c.sample}" for c in columns)
+        + "}",
     }
+
+
+def tenant_namespace(realm: str) -> uuid.UUID:
+    """Tenant ids are derived from organization aliases under this namespace."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"keycloak-realm:{realm}")
 
 
 def _held(role: str, parents: dict[str, str | None]) -> set[str]:
@@ -331,6 +363,24 @@ def _gated_entities(project: ProjectCtx, auth: SpecAuth) -> list[dict[str, Any]]
                 "tenant_scoped": entity.tenant_scoped,
                 "creatable": creatable(entity, project),
                 "ops": ops,
+                # foreign keys that must refuse a parent from another tenant
+                "tenant_fks": [
+                    {"column": fk.column, "target_table": fk.target_table, "required": fk.required}
+                    for fk in entity.fks
+                    if project.entity_by_name[fk.target_entity].tenant_scoped
+                    and creatable(project.entity_by_name[fk.target_entity], project)
+                ]
+                if entity.tenant_scoped
+                else [],
+                # many-to-many id lists that must refuse rows of another tenant
+                "tenant_m2m": [
+                    {"key": key, "target_table": module}
+                    for key, cls, module in entity.many_to_many_targets
+                    if project.entity_by_name[cls].tenant_scoped
+                    and creatable(project.entity_by_name[cls], project)
+                ]
+                if entity.tenant_scoped
+                else [],
             }
         )
     return gated
@@ -383,5 +433,13 @@ class AuthModule:
         if context["gated"]:
             files["tests/test_access.py"] = render_template(
                 self._env, "tests/test_access.py.j2", **context
+            )
+        if context["multi_tenant"]:
+            files["tests/test_tenancy.py"] = render_template(
+                self._env, "keycloak/tests/test_tenancy.py.j2", **context
+            )
+        if context["custom_fields"]:
+            files["tests/test_custom_fields.py"] = render_template(
+                self._env, "keycloak/tests/test_custom_fields.py.j2", **context
             )
         return files

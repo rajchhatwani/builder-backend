@@ -1,3 +1,21 @@
+{% if pay %}
+# Settings every payments process shares (the API and the workers).
+x-payments-env: &payments-env
+  APP_ENV: ${APP_ENV:-development}
+{% for name in prov.key_envs + (prov.webhook_secret_env,) %}
+  {{ name }}: ${ {{- name }}:?set {{ name }} in .env (see .env.example)}
+{% endfor %}
+  PAYMENTS_WEBHOOK_MODE: ${PAYMENTS_WEBHOOK_MODE:-{{ sizing.webhook_mode }}}
+  {{ prov.env_prefix }}_API_BASE: ${ {{- prov.env_prefix }}_API_BASE:-{{ prov.api_base }}}
+  PAYMENTS_JOB_LEASE_SECONDS: ${PAYMENTS_JOB_LEASE_SECONDS:-120}
+{% if pay.security.webhook_ip_allowlist_enabled %}
+  PAYMENTS_WEBHOOK_IP_ALLOWLIST: ${PAYMENTS_WEBHOOK_IP_ALLOWLIST:?set PAYMENTS_WEBHOOK_IP_ALLOWLIST in .env (see .env.example)}
+{% endif %}
+{% if pay.scale.pgbouncer %}
+  DB_PGBOUNCER: "true"
+{% endif %}
+
+{% endif %}
 services:
   db:
     image: postgres:16-alpine
@@ -13,10 +31,49 @@ services:
       timeout: 3s
       retries: 20
 
+{% if pay and pay.scale.pgbouncer %}
+  # Pools connections to the database: many application connections, few database ones.
+  pgbouncer:
+    image: {{ pgbouncer_image }}
+    environment:
+      DB_HOST: db
+      DB_USER: app
+      DB_PASSWORD: app
+      DB_NAME: app
+      LISTEN_PORT: "6432"
+      POOL_MODE: transaction
+      AUTH_TYPE: scram-sha-256
+      DEFAULT_POOL_SIZE: "{{ sizing.pgbouncer_pool_size }}"
+      MAX_CLIENT_CONN: "1000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -p 6432 -U app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    restart: unless-stopped
+
+{% endif %}
   api:
     build: .
     environment:
+{% if pay %}
+      <<: *payments-env
+      UVICORN_WORKERS: ${UVICORN_WORKERS:-{{ single_host_workers }}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-{{ sizing.pool_size }}}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-{{ sizing.max_overflow }}}
+{% endif %}
+{% if pay and pay.scale.pgbouncer %}
+      DATABASE_URL: postgresql+asyncpg://app:app@pgbouncer:6432/app
+{% else %}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+{% endif %}
 {% if auth and not keycloak %}
       # Copy .env.example to .env and fill these in; compose reads .env automatically.
 {% if rs256 %}
@@ -57,6 +114,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+{% if pay and pay.scale.pgbouncer %}
+      pgbouncer:
+        condition: service_healthy
+{% endif %}
 {% if redis_store %}
       redis:
         condition: service_healthy
@@ -72,6 +133,51 @@ services:
       retries: 30
     ports:
       - "${API_PORT:-8000}:8000"
+{% if pay %}
+
+  # Runs the queue and the periodic jobs. Scale with `docker compose up --scale payments-worker=N`,
+  # or run more of them on other machines with deploy/compose.worker.yml.
+  payments-worker:
+    build: .
+    command: ["python", "-m", "app.payments.worker"]
+    environment:
+      <<: *payments-env
+{% if pay.scale.pgbouncer %}
+      DATABASE_URL: postgresql+asyncpg://app:app@pgbouncer:6432/app
+{% else %}
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+{% endif %}
+      PAYMENTS_WORKER_CONCURRENCY: ${PAYMENTS_WORKER_CONCURRENCY:-{{ sizing.worker_concurrency }}}
+      PAYMENTS_POLL_INTERVAL_SECONDS: ${PAYMENTS_POLL_INTERVAL_SECONDS:-{{ sizing.poll_interval_seconds }}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE_WORKER:-{{ sizing.worker_pool_size }}}
+      DB_MAX_OVERFLOW: "0"
+{% if keycloak %}
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+{% if kc_own %}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+{% else %}
+      KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
+{% endif %}
+{% endif %}
+    depends_on:
+      db:
+        condition: service_healthy
+{% if pay.scale.pgbouncer %}
+      pgbouncer:
+        condition: service_healthy
+{% endif %}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-{{ sizing.worker_replicas }}}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+{% endif %}
 {% if redis_store %}
 
   redis:

@@ -8,23 +8,14 @@ keyed by the user's Keycloak id, so the data people create can point at them.
 from app.models import _base as _models_base
 
 
-class AuthUser(_models_base.Base):
-    """The profile of a Keycloak user, created the first time they call the API.
+class AuthTenant(_models_base.Base):
+    """A tenant: one Keycloak organization. Created the first time one of its members calls the
+    API; its id is derived from the organization's alias, so it is the same in every environment."""
 
-    `id` is the user's Keycloak id (the token's `sub`). Name, email and roles are refreshed
-    from the token whenever they change; none of them is a credential."""
-
-    __tablename__ = "auth_users"
+    __tablename__ = "auth_tenants"
 
     id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True)
-    email: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(320), nullable=True, index=True)
-    name: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(255), nullable=True)
-    roles: _orm.Mapped[list[str]] = _orm.mapped_column(_pg.JSONB(), nullable=False, default=list)
-    # A local switch: set it to false to refuse this user here without touching Keycloak.
-    is_active: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=True)
-    deleted_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(
-        _sa.DateTime(timezone=True), nullable=True
-    )
+    name: _orm.Mapped[str] = _orm.mapped_column(_sa.String(255), nullable=False)
     created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
         _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
     )
@@ -34,6 +25,51 @@ class AuthUser(_models_base.Base):
         default=_models_base.utcnow,
         onupdate=_models_base.utcnow,
     )
+
+
+class AuthUser(_models_base.Base):
+    """The profile of a Keycloak user, created the first time they call the API.
+
+    `id` is the user's Keycloak id (the token's `sub`). Name, email, roles and the custom
+    attributes are refreshed from the token whenever they change; none of them is a credential."""
+
+    __tablename__ = "auth_users"
+
+    id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True)
+    email: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(320), nullable=True, index=True)
+    name: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(255), nullable=True)
+    roles: _orm.Mapped[list[str]] = _orm.mapped_column(_pg.JSONB(), nullable=False, default=list)
+{% if multi_tenant %}
+    # The organization of the token this user last called with.
+    tenant_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+{% endif %}
+    # A local switch: set it to false to refuse this user here without touching Keycloak.
+    is_active: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=True)
+    deleted_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=True
+    )
+{% for f in custom_fields %}
+    {{ f.column_decl }}
+{% endfor %}
+    created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
+    )
+    updated_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True),
+        nullable=False,
+        default=_models_base.utcnow,
+        onupdate=_models_base.utcnow,
+    )
+{% if custom_fields | selectattr("indexed") | list %}
+
+    __table_args__ = (
+{% for f in custom_fields if f.indexed %}
+        _sa.Index("ix_auth_users_{{ f.name }}", "{{ f.name }}"),
+{% endfor %}
+    )
+{% endif %}
 
 
 class AuthProviderLock(_models_base.Base):

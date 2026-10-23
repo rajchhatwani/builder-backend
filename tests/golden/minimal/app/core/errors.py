@@ -4,6 +4,7 @@ import structlog
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import DataError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = structlog.get_logger()
@@ -63,6 +64,15 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_http_exception(request: Request, exc: StarletteHTTPException) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code, content=_body("http_error", str(exc.detail))
+        )
+
+    @app.exception_handler(DataError)
+    async def handle_data_error(request: Request, exc: DataError) -> JSONResponse:
+        # A value the column cannot store (too large, bad characters). Never echo the database text.
+        logger.warning("value_out_of_range", path=request.url.path)
+        return JSONResponse(
+            status_code=422,
+            content=_body("value_out_of_range", "A value is outside the range that can be stored"),
         )
 
     @app.exception_handler(Exception)

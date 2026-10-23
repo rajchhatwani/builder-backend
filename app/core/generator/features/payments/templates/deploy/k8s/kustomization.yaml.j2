@@ -1,0 +1,23 @@
+# Kubernetes entry point (generated):  kubectl apply -k deploy/k8s
+#
+# 1. Build and push the image, then set it below (or: kustomize edit set image {{ slug }}=registry/{{ slug }}:TAG).
+# 2. Create the two Secrets (their values are never in these files):
+#      kubectl create secret generic {{ slug }}-payments \
+#        --from-literal=DATABASE_URL='postgresql+asyncpg://{{ slug_sql }}_app:...@db:5432/{{ slug_sql }}?ssl=require' \
+#        {% for name in prov.key_envs %}--from-literal={{ name }}=... {% endfor %}--from-literal={{ prov.webhook_secret_env }}=...{% if kc %} \
+#        --from-literal=KEYCLOAK_PUBLIC_URL=https://...{% endif %}{% if p.security.webhook_ip_allowlist_enabled %} \
+#        --from-literal=PAYMENTS_WEBHOOK_IP_ALLOWLIST=<provider CIDRs>{% endif %}
+#
+#      kubectl create secret generic {{ slug }}-migrator --from-literal=DATABASE_URL='postgresql+asyncpg://{{ slug_sql }}_migrator:...@db:5432/{{ slug_sql }}?ssl=require'
+# 3. Run the migrate Job first (jobs.yaml), then the rest.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - api.yaml
+  - worker.yaml
+  - jobs.yaml
+  - network-policy.yaml
+images:
+  - name: {{ slug }}
+    newName: REPLACE_WITH_YOUR_REGISTRY/{{ slug }}
+    newTag: "1.0.0"

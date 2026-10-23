@@ -20,18 +20,46 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     op.create_table(
+        "auth_tenants",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(255), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_auth_tenants"),
+    )
+    op.create_table(
         "auth_users",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("email", sa.String(320), nullable=True),
         sa.Column("name", sa.String(255), nullable=True),
         sa.Column("roles", postgresql.JSONB(), nullable=False),
+{% if multi_tenant %}
+        sa.Column("tenant_id", sa.Uuid(), nullable=True),
+{% endif %}
         sa.Column("is_active", sa.Boolean(), nullable=False),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
+{% for f in custom_fields %}
+        {{ f.migration_column }}
+{% endfor %}
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+{% if multi_tenant %}
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["auth_tenants.id"],
+            name="fk_auth_users_tenant_id_auth_tenants",
+            ondelete="SET NULL",
+        ),
+{% endif %}
         sa.PrimaryKeyConstraint("id", name="pk_auth_users"),
     )
     op.create_index("ix_auth_users_email", "auth_users", ["email"])
+{% if multi_tenant %}
+    op.create_index("ix_auth_users_tenant_id", "auth_users", ["tenant_id"])
+{% endif %}
+{% for f in custom_fields if f.indexed %}
+    op.create_index("ix_auth_users_{{ f.name }}", "auth_users", ["{{ f.name }}"])
+{% endfor %}
     op.create_table(
         "auth_provider_lock",
         sa.Column("id", sa.Integer(), autoincrement=False, nullable=False),
@@ -53,9 +81,26 @@ def upgrade() -> None:
     )
     op.create_index("ix_{{ table }}_created_by_id", "{{ table }}", ["created_by_id"])
 {% endfor %}
+{% for table in tenant_tables %}
+    op.add_column("{{ table }}", sa.Column("tenant_id", sa.Uuid(), nullable=True))
+    op.create_foreign_key(
+        "fk_{{ table }}_tenant_id_auth_tenants",
+        "{{ table }}",
+        "auth_tenants",
+        ["tenant_id"],
+        ["id"],
+        ondelete="RESTRICT",
+    )
+    op.create_index("ix_{{ table }}_tenant_id", "{{ table }}", ["tenant_id"])
+{% endfor %}
 
 
 def downgrade() -> None:
+{% for table in tenant_tables %}
+    op.drop_index("ix_{{ table }}_tenant_id", table_name="{{ table }}")
+    op.drop_constraint("fk_{{ table }}_tenant_id_auth_tenants", "{{ table }}", type_="foreignkey")
+    op.drop_column("{{ table }}", "tenant_id")
+{% endfor %}
 {% for table in owned_tables %}
     op.drop_index("ix_{{ table }}_created_by_id", table_name="{{ table }}")
     op.drop_constraint("fk_{{ table }}_created_by_id_auth_users", "{{ table }}", type_="foreignkey")
@@ -64,3 +109,4 @@ def downgrade() -> None:
     op.drop_table("auth_provider_lock")
     op.drop_index("ix_auth_users_email", table_name="auth_users")
     op.drop_table("auth_users")
+    op.drop_table("auth_tenants")

@@ -40,6 +40,11 @@ def _json(value: dict[str, Any]) -> str:
     return _b64(json.dumps(value, separators=(",", ":")).encode("utf-8"))
 
 
+def alias_for(email: str) -> str:
+    """The organization a test user belongs to unless told otherwise: one each."""
+    return "org-" + email.replace("@", "-at-")
+
+
 def issuer() -> str:
     return config.get_auth_settings().issuer
 
@@ -66,6 +71,9 @@ def claims(
         "name": "Test User",
         "resource_access": {config.API_CLIENT_ID: {"roles": list(roles or [])}},
     }
+{% if multi_tenant %}
+    payload["organization"] = [alias_for(email or "nobody")]
+{% endif %}
     payload.update(overrides)
     return {k: v for k, v in payload.items() if v is not None}
 
@@ -157,8 +165,16 @@ async def sign_in(
 ) -> dict[str, str]:
     """The Authorization header of a user who holds `roles` (and the default roles).
     The profile row is created by the first request, exactly as in production."""
-    del http, n, join  # accepted so tests written for built-in auth also run here
+    del http, n  # accepted so tests written for built-in auth also run here
+{% if multi_tenant %}
+    # `join` names a user whose organization this one belongs to as well.
+    return bearer(
+        token(email=email, roles=list(roles or []), organization=[alias_for(join or email)])
+    )
+{% else %}
+    del join
     return bearer(token(email=email, roles=list(roles or [])))
+{% endif %}
 
 
 async def sign_in_plain(http: AsyncClient, email: str, **kwargs: object) -> dict[str, str]:

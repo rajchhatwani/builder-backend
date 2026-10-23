@@ -322,15 +322,31 @@ def default_expr(f: SpecField) -> str | None:
     raise ValueError(f"unknown field type {f.type}")
 
 
+# What the database column can hold. Anything outside is rejected by the schema (422) so a
+# value the column cannot store never reaches the database as a 500.
+_INT_RANGE = {"integer": (-(2**31), 2**31 - 1), "bigint": (-(2**63), 2**63 - 1)}
+_DECIMAL_DIGITS = 18  # Numeric(18, 6)
+_DECIMAL_PLACES = 6
+
+
 def _constraints(f: SpecField) -> list[str]:
     out: list[str] = []
     if f.type == "string":
         out.append(f"max_length={f.max_length or _STRING_FALLBACK_LENGTH}")
-    if f.type in ("integer", "bigint", "float", "decimal"):
+    if f.type in _INT_RANGE:
+        low, high = _INT_RANGE[f.type]
+        ge = f.min_value if f.min_value is not None and f.min_value > low else low
+        le = f.max_value if f.max_value is not None and f.max_value < high else high
+        out.append(f"ge={_number(ge)}")
+        out.append(f"le={_number(le)}")
+    elif f.type in ("float", "decimal"):
         if f.min_value is not None:
             out.append(f"ge={_number(f.min_value)}")
         if f.max_value is not None:
             out.append(f"le={_number(f.max_value)}")
+    if f.type == "decimal":
+        out.append(f"max_digits={_DECIMAL_DIGITS}")
+        out.append(f"decimal_places={_DECIMAL_PLACES}")
     return out
 
 

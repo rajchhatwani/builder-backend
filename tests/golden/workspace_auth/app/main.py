@@ -19,6 +19,7 @@ from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
 from app.routers._health import router as _health_router
 from app.routers.announcements import router as announcements_router
+from app.routers.labels import router as labels_router
 from app.routers.tasks import router as tasks_router
 
 
@@ -56,6 +57,7 @@ def create_app() -> FastAPI:
     app.include_router(_health_router)
     app.include_router(_auth_router)
     app.include_router(announcements_router)
+    app.include_router(labels_router)
     app.include_router(tasks_router)
     include_custom_routers(app)
     return app

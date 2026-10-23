@@ -1,0 +1,181 @@
+{
+  "project": {
+    "name": "Rupee Shop",
+    "slug": "rupee-shop",
+    "description": "Orders paid in rupees through Razorpay",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "fields": [
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true,
+          "min_value": 1,
+          "max_value": 100000
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "default": "pending",
+          "enum_values": [
+            "pending",
+            "paid",
+            "partially_refunded",
+            "refunded",
+            "cancelled"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://shop.example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@shop.example.com",
+      "from_name": "Shop"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "staff",
+        "label": "Staff"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "customer",
+          "staff",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "customer",
+          "staff",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "staff",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Order",
+        "operation": "replace",
+        "roles": [
+          "staff",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "staff",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "staff",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Order",
+        "operation": "head",
+        "roles": [
+          "customer",
+          "staff",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      }
+    ]
+  },
+  "payments": {
+    "enabled": true,
+    "provider": "razorpay",
+    "payable": {
+      "entity": "Order",
+      "amount_field": "total",
+      "currency_field": null,
+      "status_field": "status",
+      "status_pending": "pending",
+      "status_paid": "paid",
+      "status_partially_refunded": "partially_refunded",
+      "status_refunded": "refunded",
+      "currency": "INR"
+    },
+    "currencies": [
+      "INR"
+    ],
+    "max_amount_minor": 5000000,
+    "success_urls": [
+      "https://shop.example.com/paid",
+      "https://shop.example.com/thanks"
+    ],
+    "cancel_urls": [
+      "https://shop.example.com/cart"
+    ],
+    "roles": {
+      "create": [
+        "customer"
+      ],
+      "read": [
+        "customer"
+      ],
+      "read_all": [
+        "staff",
+        "admin"
+      ],
+      "refund": [
+        "staff",
+        "admin"
+      ],
+      "approve_refund": [
+        "admin"
+      ],
+      "operate": [
+        "admin"
+      ]
+    },
+    "refund_approval_threshold_minor": 50000,
+    "scale": {
+      "profile": "small",
+      "availability": "single"
+    }
+  }
+}
