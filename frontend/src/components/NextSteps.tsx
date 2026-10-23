@@ -1,4 +1,4 @@
-import type { AuthConfig, KeycloakConfig, PaymentsConfig } from '../api/types'
+import type { AuthConfig, KeycloakConfig, PaymentsConfig, StorageConfig } from '../api/types'
 import { secretEnvName } from './KeycloakPanel'
 
 interface NextStepsProps {
@@ -9,6 +9,8 @@ interface NextStepsProps {
   keycloak?: KeycloakConfig | null
   /** The payments settings, when payments are switched on. */
   payments?: PaymentsConfig | null
+  /** The storage settings, when file uploads are switched on. */
+  storage?: StorageConfig | null
 }
 
 interface EnvVar {
@@ -130,11 +132,12 @@ export function requiredEnvVars(auth: AuthConfig | null, keycloak: KeycloakConfi
 }
 
 /** Shown after a download: what to do with the zip, and where the secrets come from. */
-export function NextSteps({ slug, auth, keycloak = null, payments = null }: NextStepsProps) {
+export function NextSteps({ slug, auth, keycloak = null, payments = null, storage = null }: NextStepsProps) {
   return (
     <>
       <AuthNextSteps slug={slug} auth={auth} keycloak={keycloak} />
       {payments !== null && <PaymentsNextSteps slug={slug} payments={payments} />}
+      {storage !== null && <StorageNextSteps slug={slug} storage={storage} />}
     </>
   )
 }
@@ -371,6 +374,80 @@ function PaymentsNextSteps({ slug, payments }: { slug: string; payments: Payment
       <p style={{ color: 'var(--muted-foreground)' }}>
         The sizing numbers are estimates, not measurements: load-test them before relying on them.
       </p>
+    </div>
+  )
+}
+
+/** Shown after a download of a project with file uploads switched on. */
+function StorageNextSteps({ slug, storage }: { slug: string; storage: StorageConfig }) {
+  const minio = storage.backend === 'minio'
+  const vars: EnvVar[] = minio
+    ? [
+        {
+          name: 'STORAGE_ACCESS_KEY_ID',
+          why: 'The login of your S3-compatible server. docker compose also uses it as the admin login of the local development store',
+          how: 'You choose it (a long random value)',
+        },
+        {
+          name: 'STORAGE_SECRET_ACCESS_KEY',
+          why: 'The password that goes with it',
+          how: 'You choose it (a long random value)',
+        },
+        {
+          name: 'STORAGE_ENDPOINT_URL',
+          why: 'The S3 address of your server. Must be https:// in production',
+          how: 'Already set for local work (http://objectstore:8333)',
+        },
+      ]
+    : [
+        {
+          name: 'STORAGE_ACCESS_KEY_ID / STORAGE_SECRET_ACCESS_KEY',
+          why: 'Credentials for the bucket. On AWS leave them empty and give the service an IAM role instead',
+          how: 'AWS IAM: use the policy in deploy/storage/iam-policy.json',
+        },
+        { name: 'STORAGE_REGION', why: 'The AWS region of the bucket', how: storage.region ?? 'Your bucket region' },
+      ]
+  vars.push({
+    name: 'APP_ENV',
+    why: 'Set to production in production. It then refuses plain-http storage addresses and development shortcuts',
+    how: 'You set it',
+  })
+  return (
+    <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
+      <h4>File uploads: before you run {slug}</h4>
+      <ol>
+        <li>
+          Put the settings below in <code>.env</code>. <strong>No credential is ever in the zip</strong> and none is stored in this
+          dashboard.
+        </li>
+        {!minio && (
+          <li>
+            Create the bucket <code>{storage.bucket}</code> with the commands in <code>deploy/storage/STORAGE.md</code> (block public
+            access, encryption, versioning, the policy files next to it). The app never creates buckets in production.
+          </li>
+        )}
+        {minio && (
+          <li>
+            <code>docker compose up --build</code> starts a local S3-compatible store for development. For real use point{' '}
+            <code>STORAGE_ENDPOINT_URL</code> at your own server. (MinIO's community edition no longer publishes images, so the local
+            store is SeaweedFS; any S3-compatible server works.)
+          </li>
+        )}
+        <li>
+          Start it with <code>docker compose up --build</code>: it also starts <code>clamav</code>, the malware scanner. It needs
+          about 1.5 GB of memory and a few minutes on first start to download its signatures; until then uploads are refused, never
+          let through unscanned.
+        </li>
+        <li>
+          Run <code>make storage-maintenance</code> every hour (cron) and with <code>--rescan</code> daily: it cleans up after crashes,
+          finishes deletions, rescans old files and logs the audit digest to keep somewhere safe.
+        </li>
+        <li>
+          Read <code>deploy/storage/STORAGE.md</code> (setup, operations, erasure requests) and <code>docs/storage-security.md</code>{' '}
+          (the threat model) in the zip.
+        </li>
+      </ol>
+      <VarTable vars={vars} />
     </div>
   )
 }

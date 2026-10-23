@@ -17,6 +17,12 @@ from app.core.generator.features.payments.module import (
     active,
     sizing_for,
 )
+from app.core.generator.features.storage.module import (
+    CLAMAV_IMAGE,
+    DEV_S3_IMAGE,
+    clamd_limit_mb,
+)
+from app.core.generator.features.storage.module import active as storage_block
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import invitations_enabled, uses_keycloak
 
@@ -52,7 +58,15 @@ class DockerModule:
         sms_provider = builtin.sms_provider if builtin is not None and builtin.sms else None
         pay = active(project)
         sizing = sizing_for(pay) if pay is not None else None
+        stor = storage_block(project)
         context = {
+            "storage": stor is not None,
+            "file_entities": any(e.file_fields for e in project.entities),
+            "s": stor,
+            "minio": stor is not None and stor.backend == "minio",
+            "clamav_image": CLAMAV_IMAGE,
+            "dev_s3_image": DEV_S3_IMAGE,
+            "clamd_limit_mb": clamd_limit_mb(stor) if stor is not None else 0,
             "pay": pay,
             "prov": PROVIDERS[pay.provider] if pay is not None else None,
             "sizing": sizing,

@@ -7,6 +7,7 @@ from app.core.generator.base import FileTree
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_payments import payments_active
+from app.core.validation_storage import storage_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -59,6 +60,7 @@ class CrudModule:
             "joins": project.join_tables,
             "auth": project.auth,
             "payments": payments_active(project.spec) and project.auth is not None,
+            "storage": storage_active(project.spec) and project.auth is not None,
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

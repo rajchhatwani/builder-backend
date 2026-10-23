@@ -132,6 +132,41 @@ sized for the traffic you expect. Design, decisions, phases and the verified / u
   container hardening). 18 deliberately broken controls are all caught by those tests. **Not verified against the
   real Stripe or Razorpay**; supply your own test keys for that (see the generated `deploy/DEPLOYMENT.md`).
 
+### File uploads
+
+A project can accept **file uploads of any type** into an S3 bucket or any S3-compatible server (a MinIO you run,
+Ceph, SeaweedFS, Garage). Every file is checked and **scanned for malware (ClamAV) before it is stored**. Design,
+research, decisions and the verified / unverified list are in `STORAGE_PLAN.md`.
+
+- Configure over the API: `PUT/GET /projects/{id}/storage` (S3 or MinIO-compatible, bucket, allowed types or any, size
+  and quota limits, rate limit, proxy or presigned downloads, roles, audit retention),
+  `GET .../storage/issues`, `GET .../storage/impact?action=` and `POST .../storage/enable|disable` with
+  `{"confirm": true}`. The settings are part of `GET/PUT .../spec` (`storage`), and entities get a new field type,
+  **`file`**, that holds the id of an uploaded file (checked on every write: it must exist, be clean, belong to the
+  caller's tenant and be theirs or shared). **No bucket credential is stored in the builder or put in the zip**
+  (`STORAGE_ACCESS_KEY_ID` / `STORAGE_SECRET_ACCESS_KEY`, or `*_FILE`; on AWS an IAM role).
+- Generated routes: `POST /files` (multipart), `GET /files`, `GET /files/{id}`, `GET /files/{id}/download`,
+  `DELETE /files/{id}`, and for the `operate` roles the audit trail, scanner/bucket health, quarantine and release.
+- Safe by construction: the scan runs before anything is stored and a scanner that is down refuses the upload
+  (never "assume clean"); the type comes from the file's bytes, never from `Content-Type` or the extension; keys are
+  random and the client's file name is only cleaned for display; the size is capped while the body arrives; downloads
+  are attachments with `nosniff` and a sandbox CSP; roles deny by default and a file you may not see answers like one
+  that does not exist; an append-only, hash-chained audit trail (DB triggers, at least 365 days, no file names or
+  contents) with a daily digest to keep elsewhere; erasure removes the bytes and keeps only a tombstone; a maintenance
+  command rescans, retries deletions and cleans up after crashes. The zip contains `deploy/storage/STORAGE.md`
+  (bucket setup, IAM and bucket policies, operations, erasure requests) and `docs/storage-security.md` (threat model).
+- **MinIO note:** the MinIO community edition stopped publishing container images in October 2025 and its repository was
+  archived, so "MinIO" here means any server that speaks the S3 API. The generated `docker-compose.yml` starts SeaweedFS
+  as the local development store; production points `STORAGE_ENDPOINT_URL` at your own server.
+- Libraries (researched): `boto3` (official AWS SDK; run in threads) and `python-multipart>=0.0.22` (earlier versions
+  have two denial-of-service CVEs and a path-traversal CVE). The ClamAV client is about 100 lines of standard library,
+  because the Python wrappers are unmaintained.
+- Verified: each generated storage project passes its own tests (about 130) against a real PostgreSQL, a stand-in
+  scanner over a real socket and an in-memory bucket; `uv run pytest tests/e2e/test_storage_stack.py` runs the real
+  stack (API, PostgreSQL, **real ClamAV** and a **real S3-compatible server**): the EICAR test file is caught (also
+  inside a zip) and never reaches the bucket, multipart upload, presigned links, a scanner outage and its recovery, a
+  tampered object, the rescan command and deletion. **AWS S3 itself and a real MinIO were not available to the tests.**
+
 ### Tests
 
 ```bash

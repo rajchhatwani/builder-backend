@@ -4,6 +4,7 @@ from app.core.enums import (
     AuthProvider,
     DbEngine,
     DeletionMode,
+    DownloadMode,
     FieldType,
     IdpType,
     JwtAlgorithm,
@@ -16,6 +17,7 @@ from app.core.enums import (
     RelationKind,
     RowRule,
     SmsProvider,
+    StorageBackend,
     TokenStore,
     WebhookMode,
 )
@@ -29,6 +31,7 @@ __all__ = [
     "AuthOperation",
     "DbEngine",
     "DeletionMode",
+    "DownloadMode",
     "FieldType",
     "JwtAlgorithm",
     "OnDelete",
@@ -38,6 +41,7 @@ __all__ = [
     "RelationKind",
     "RowRule",
     "SmsProvider",
+    "StorageBackend",
     "TokenStore",
     "WebhookMode",
 ]

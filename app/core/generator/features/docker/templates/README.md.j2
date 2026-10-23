@@ -306,3 +306,27 @@ refunds and for webhook processing in `queued` mode. Set {% for name in prov.key
 webhook, sizing, running workers on other machines, going live and operating it.
 `make test` runs the payment tests against a stand-in for the provider's API.
 {% endif %}
+{% if storage %}
+
+## File uploads
+
+Files of {{ "any type" if not s.allowed_types else "these types: " ~ (s.allowed_types | join(", ")) }}, up to {{ s.max_file_mb }} MB, in `app/storage/`. Every file is checked, **scanned for malware before it is stored**
+(ClamAV) and kept in the bucket `{{ s.bucket }}`; if the scanner is down uploads are refused, never let through.
+
+| Route | What it does |
+|---|---|
+| `POST /files` | Upload one file (multipart form field `file`, optional `shared=true`). Returns its id, detected type, size and SHA-256 |
+| `GET /files`, `GET /files/{id}` | The files you may see (your own and shared ones; everyone's with the `read_all` roles) |
+| `GET /files/{id}/download` | The file as an attachment{% if s.download_mode == "presigned" %} (a redirect to a 60-second link){% endif %}{% if s.allow_inline_images %}; `?inline=1` shows plain images in the browser{% endif %} |
+| `DELETE /files/{id}` | Erase a file for good (refused while a record still uses it) |
+| `GET /files/{id}/audit`, `GET /files/status`, `POST /files/{id}/quarantine`, `POST /files/{id}/release` | For the `operate` roles: audit trail, scanner and bucket health, block / unblock a file |
+{% if file_entities %}
+
+An entity field of type `file` holds the id of an uploaded file: upload first, then send the id. The id is checked on every write.
+{% endif %}
+
+`docker compose up --build` also starts the scanner{% if minio %} and a local S3-compatible server for development{% endif %}.
+{% if minio %}Set `STORAGE_ACCESS_KEY_ID` and `STORAGE_SECRET_ACCESS_KEY` in `.env`. {% endif %}The scanner needs about 1.5 GB of memory and a few minutes on first start to download its signatures.
+Run `make storage-maintenance` hourly. **`deploy/storage/STORAGE.md`** covers setting up the bucket, credentials, scanner limits, operations and erasure requests;
+`docs/storage-security.md` is the threat model. `make test` runs the upload tests against a stand-in scanner and an in-memory bucket.
+{% endif %}

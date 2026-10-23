@@ -1,4 +1,5 @@
-.PHONY: up down test lint{% if pay %} worker reconcile{% endif %}
+{% set test_env = "STORAGE_ACCESS_KEY_ID=unused STORAGE_SECRET_ACCESS_KEY=unused " if storage and minio else "" %}
+.PHONY: up down test lint{% if pay %} worker reconcile{% endif %}{% if storage %} storage-maintenance{% endif %}
 
 up:
 	docker compose up --build
@@ -12,9 +13,9 @@ test:
 	# Only the database is needed: the tests sign their own tokens, so Keycloak is not started.
 	# The placeholders satisfy the required settings of the services this target does not run.
 	docker compose up -d --wait db
-	KEYCLOAK_DB_PASSWORD=unused KC_BOOTSTRAP_ADMIN_USERNAME=unused KC_BOOTSTRAP_ADMIN_PASSWORD=unused{% for env_name in idp_secret_names %} {{ env_name }}=unused{% endfor %} 		docker compose run --rm --no-deps -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/app_test api sh -c "python -m tests._prepare_db && alembic upgrade head && pytest"
+	KEYCLOAK_DB_PASSWORD=unused KC_BOOTSTRAP_ADMIN_USERNAME=unused KC_BOOTSTRAP_ADMIN_PASSWORD=unused{% for env_name in idp_secret_names %} {{ env_name }}=unused{% endfor %}{% if storage and minio %} STORAGE_ACCESS_KEY_ID=unused STORAGE_SECRET_ACCESS_KEY=unused{% endif %} 		docker compose run --rm --no-deps -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/app_test api sh -c "python -m tests._prepare_db && alembic upgrade head && pytest"
 {% else %}
-	docker compose run --rm -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/app_test api sh -c "python -m tests._prepare_db && alembic upgrade head && pytest"
+	{{ test_env }}docker compose run --rm -e DATABASE_URL=postgresql+asyncpg://app:app@db:5432/app_test api sh -c "python -m tests._prepare_db && alembic upgrade head && pytest"
 {% endif %}
 
 lint:
@@ -28,4 +29,11 @@ worker:
 # Compare our payments with the provider's and repair differences. Safe to run at any time.
 reconcile:
 	docker compose run --rm --no-deps payments-worker python -m app.payments.reconcile
+{% endif %}
+{% if storage %}
+
+# Housekeeping for uploaded files: cleans up after crashes, finishes deletes, logs the audit digest.
+# Run it hourly (cron) and with --rescan daily. See deploy/storage/STORAGE.md.
+storage-maintenance:
+	docker compose run --rm api python -m app.storage.maintenance
 {% endif %}

@@ -47,6 +47,7 @@ from app.core.spec_models import (
     SpecRelation,
 )
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
+from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
 
 MAX_ENTITIES = 100
 MAX_FIELDS_PER_ENTITY = 100
@@ -111,6 +112,9 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     if payments_active(spec):
         for table in PAYMENTS_TABLES:
             ctx.tables[table] = "payments"
+    if storage_active(spec):
+        for table in STORAGE_TABLES:
+            ctx.tables[table] = "storage"
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
@@ -119,6 +123,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     if spec.auth is not None:
         _check_auth(spec.auth, entities_by_name, ctx)
     check_payments(spec, entities_by_name, ctx.add, redirect_uri_problem)
+    check_storage(spec, entities_by_name, ctx.add)
     return ctx.issues
 
 
@@ -328,6 +333,10 @@ def _check_field_definition(field: SpecField, p: str, ctx: _Ctx) -> None:
     if ftype is FieldType.json and (field.unique or field.indexed):
         ctx.add(p, "unsupported_option", "json fields cannot be unique or indexed")
 
+    if ftype is FieldType.file:
+        _check_file_definition(field, p, ctx)
+        return
+
     if field.max_length is not None:
         if ftype is not FieldType.string:
             ctx.add(f"{p}.max_length", "unsupported_option", "max_length applies to string only")
@@ -348,6 +357,15 @@ def _check_field_definition(field: SpecField, p: str, ctx: _Ctx) -> None:
         problem = _default_problem(field, ftype, bounds_ok)
         if problem:
             ctx.add(f"{p}.default", "invalid_default", problem)
+
+
+def _check_file_definition(field: SpecField, p: str, ctx: _Ctx) -> None:
+    """A file field holds the id of an uploaded file: nothing else about it is configurable."""
+    if field.unique:
+        ctx.add(p, "unsupported_option", "file fields cannot be unique")
+    for option in ("default", "max_length", "min_value", "max_value", "enum_values"):
+        if getattr(field, option) is not None:
+            ctx.add(f"{p}.{option}", "unsupported_option", f"{option} does not apply to file fields")
 
 
 def _check_enum_values(field: SpecField, p: str, ctx: _Ctx) -> None:
@@ -456,7 +474,9 @@ def _check_options(options: SpecEntityOptions, p: str, types: dict[str, str], ct
     if len(set(options.operations)) != len(options.operations):
         ctx.add(f"{p}.operations", "duplicate_name", "operations must be unique")
 
-    _check_field_refs(options.filterable, f"{p}.filterable", types, ctx, excluded={"json"})
+    _check_field_refs(
+        options.filterable, f"{p}.filterable", types, ctx, excluded={"json", "file"}
+    )
     for k, name in enumerate(options.filterable):
         if name in naming.RESERVED_QUERY_PARAMS:
             ctx.add(
@@ -464,7 +484,7 @@ def _check_options(options: SpecEntityOptions, p: str, types: dict[str, str], ct
                 "reserved_word",
                 f"{name!r} is a query parameter of the list endpoint (limit, offset, sort, q)",
             )
-    _check_field_refs(options.sortable, f"{p}.sortable", types, ctx, excluded={"json"})
+    _check_field_refs(options.sortable, f"{p}.sortable", types, ctx, excluded={"json", "file"})
     _check_field_refs(
         options.searchable,
         f"{p}.searchable",

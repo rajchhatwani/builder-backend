@@ -14,7 +14,6 @@ import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
-from app.auth.models import AuthUser
 from app.db import session_factory
 from app.models.orders import Order
 from app.payments import audit, config, events, jobs, worker

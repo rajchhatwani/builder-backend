@@ -17,15 +17,17 @@ from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 
-from app.core import redact
+{% if not payer_edits and payable.owned %}
 from app.auth.models import AuthUser
+{% endif %}
+from app.core import redact
 from app.db import session_factory
 from app.models.{{ payable.table }} import {{ payable.model }}
 from app.payments import audit, config, jobs, money, reconcile, worker
 from app.payments.lock import ModeMismatchError, ensure_payments_lock
+from app.payments.models import AuditLog, Job, Payment, PaymentsLock, Refund, WebhookEvent
 from app.payments.providers import get_provider
 from app.payments.providers.base import ProviderError
-from app.payments.models import AuditLog, Job, Payment, PaymentsLock, Refund, WebhookEvent
 from app.payments.service import safe_checkout_url
 from tests import _factories
 from tests._auth_support import client_for, sign_in

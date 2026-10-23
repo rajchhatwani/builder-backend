@@ -289,6 +289,47 @@ class SpecPayments(_SpecModel):
     security: SpecPaymentsSecurity = Field(default_factory=SpecPaymentsSecurity)
 
 
+class SpecStorageRoles(_SpecModel):
+    """Who may do what with files. An empty list means nobody (fail closed)."""
+
+    upload: list[str] = Field(default_factory=list)
+    share: list[str] = Field(default_factory=list)  # may mark a file as readable by every reader
+    read: list[str] = Field(default_factory=list)  # download their own files and shared ones
+    read_all: list[str] = Field(default_factory=list)  # download every file of the tenant
+    delete: list[str] = Field(default_factory=list)  # delete their own files
+    delete_all: list[str] = Field(default_factory=list)  # delete any file of the tenant
+    operate: list[str] = Field(default_factory=list)  # audit log, quarantine, scanner status
+
+
+class SpecStorageSecurity(_SpecModel):
+    """Security knobs. Every one has a floor or ceiling that validation enforces."""
+
+    audit_retention_days: int = 2555
+    audit_ip: bool = True  # record the caller's IP address in the audit log (personal data)
+    rescan_after_days: int = 30  # `maintenance --rescan` rescans files scanned longer ago than this
+    scan_timeout_seconds: int = 120
+
+
+class SpecStorage(_SpecModel):
+    """File uploads into an S3-compatible bucket, scanned for malware before they are stored.
+    Bucket credentials are never part of the spec: the generated project reads them from its
+    environment."""
+
+    enabled: bool = True
+    backend: str = "s3"  # StorageBackend value
+    bucket: str = ""
+    region: str | None = None
+    key_prefix: str = "uploads"
+    allowed_types: list[str] = Field(default_factory=list)  # empty = any type
+    max_file_mb: int = 25
+    user_quota_mb: int | None = None
+    uploads_per_hour: int = 60
+    download_mode: str = "proxy"  # DownloadMode value
+    allow_inline_images: bool = False
+    roles: SpecStorageRoles = Field(default_factory=SpecStorageRoles)
+    security: SpecStorageSecurity = Field(default_factory=SpecStorageSecurity)
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -299,6 +340,7 @@ class Spec(_SpecModel):
     features: list[str] = Field(default_factory=list)
     auth: SpecAuth | None = None
     payments: SpecPayments | None = None
+    storage: SpecStorage | None = None
 
 
 def spec_hash(spec: Spec) -> str:

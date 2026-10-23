@@ -5,6 +5,7 @@ import type {
   Entity,
   KeycloakConfig,
   PaymentsConfig,
+  StorageConfig,
   Project,
   ProjectRole,
   Relation,
@@ -17,6 +18,7 @@ import { DataModelPanel } from '../components/DataModelPanel'
 import { GeneratePanel } from '../components/GeneratePanel'
 import { KeycloakPanel } from '../components/KeycloakPanel'
 import { PaymentsPanel } from '../components/PaymentsPanel'
+import { StoragePanel } from '../components/StoragePanel'
 import { Layout } from '../components/Layout'
 import { OverviewPanel, sectionForIssue } from '../components/OverviewPanel'
 import { PermissionsPanel } from '../components/PermissionsPanel'
@@ -68,6 +70,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [auth, setAuth] = useState<AuthConfig | null>(null)
   const [keycloak, setKeycloak] = useState<KeycloakConfig | null>(null)
   const [payments, setPayments] = useState<PaymentsConfig | null>(null)
+  const [storage, setStorage] = useState<StorageConfig | null>(null)
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null)
   const [generationCount, setGenerationCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -79,7 +82,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const load = useCallback(async () => {
     try {
-      const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, paymentsConfig, report, generations] = await Promise.all([
+      const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, paymentsConfig, storageConfig, report, generations] = await Promise.all([
         api.getProject(projectId),
         api.listEntities(projectId, 200, 0),
         api.listRelations(projectId, 200, 0),
@@ -87,6 +90,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         api.getAuthConfig(projectId).catch(() => null),
         api.getKeycloak(projectId).catch(() => null),
         api.getPayments(projectId).catch(() => null),
+        api.getStorage(projectId).catch(() => null),
         api.validateProject(projectId).catch(() => null),
         api.listGenerations(projectId, 1, 0),
       ])
@@ -97,6 +101,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       setAuth(authConfig)
       setKeycloak(keycloakConfig)
       setPayments(paymentsConfig)
+      setStorage(storageConfig)
       setIssues(report ? report.issues : null)
       setGenerationCount(generations.total)
       setModelVersion((v) => v + 1)
@@ -149,6 +154,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const keycloakOn = auth?.provider === 'keycloak' && auth.enabled
   const paymentsOn = payments?.enabled === true
+  const storageOn = storage?.enabled === true
 
   return (
     <Layout
@@ -157,7 +163,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           project={project}
           section={section}
           problems={problems}
-          on={{ keycloak: keycloakOn, payments: paymentsOn }}
+          on={{ keycloak: keycloakOn, payments: paymentsOn, storage: storageOn }}
         />
       }
     >
@@ -170,6 +176,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           keycloakSaved={keycloak !== null}
           paymentsOn={paymentsOn}
           paymentsSaved={payments !== null}
+          storageOn={storageOn}
+          storageSaved={storage !== null}
           roleCount={roles.length}
           issues={issues}
           generationCount={generationCount}
@@ -227,6 +235,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <PaymentsPanel
             project={project}
             entities={entities}
+            roles={roles}
+            authEnabled={auth?.enabled ?? false}
+            issues={issues}
+            onChanged={load}
+          />
+        </>
+      )}
+
+      {section === 'storage' && (
+        <>
+          <PageTitle title="File uploads">
+            Accept files of any type, scanned for malware before they are stored in S3 or a MinIO-compatible bucket, with
+            role-based access and an audit trail.
+          </PageTitle>
+          <StoragePanel
+            project={project}
             roles={roles}
             authEnabled={auth?.enabled ?? false}
             issues={issues}

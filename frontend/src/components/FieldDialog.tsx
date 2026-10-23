@@ -16,6 +16,7 @@ export const FIELD_TYPES: FieldType[] = [
   'uuid',
   'json',
   'enum',
+  'file',
 ]
 
 const NUMERIC: FieldType[] = ['integer', 'bigint', 'float', 'decimal']
@@ -104,9 +105,9 @@ export function FieldDialog({ open, entityId, field, onClose, onSaved }: FieldDi
         name,
         type,
         required,
-        unique,
+        unique: type === 'file' ? false : unique,
         indexed,
-        default: parseDefault(defaultText, type),
+        default: type === 'file' ? null : parseDefault(defaultText, type),
         max_length: type === 'string' ? toNumberOrNull(maxLength) : null,
         min_value: NUMERIC.includes(type) ? toNumberOrNull(minValue) : null,
         max_value: NUMERIC.includes(type) ? toNumberOrNull(maxValue) : null,
@@ -174,10 +175,12 @@ export function FieldDialog({ open, entityId, field, onClose, onSaved }: FieldDi
               <input type="checkbox" checked={required} onChange={(e) => setRequired(e.target.checked)} />{' '}
               Required
             </label>
-            <label>
-              <input type="checkbox" checked={unique} onChange={(e) => setUnique(e.target.checked)} />{' '}
-              Unique
-            </label>
+            {type !== 'file' && (
+              <label>
+                <input type="checkbox" checked={unique} onChange={(e) => setUnique(e.target.checked)} />{' '}
+                Unique
+              </label>
+            )}
             <label>
               <input type="checkbox" checked={indexed} onChange={(e) => setIndexed(e.target.checked)} />{' '}
               Indexed
@@ -213,10 +216,18 @@ export function FieldDialog({ open, entityId, field, onClose, onSaved }: FieldDi
               />
             </label>
           )}
-          <label style={{ marginBlockStart: 'var(--space-4)' }}>
-            Default (optional{type === 'json' ? ', JSON' : type === 'boolean' ? ': true or false' : ''})
-            <input value={defaultText} onChange={(e) => setDefaultText(e.target.value)} />
-          </label>
+          {type === 'file' ? (
+            <p className="muted" style={{ marginBlockStart: 'var(--space-4)' }}>
+              Holds the id of a file uploaded through the file API. The file is checked on every save: it must exist, have
+              passed the malware scan, and belong to the person saving it (or be shared). Needs <strong>File uploads</strong>{' '}
+              to be switched on.
+            </p>
+          ) : (
+            <label style={{ marginBlockStart: 'var(--space-4)' }}>
+              Default (optional{type === 'json' ? ', JSON' : type === 'boolean' ? ': true or false' : ''})
+              <input value={defaultText} onChange={(e) => setDefaultText(e.target.value)} />
+            </label>
+          )}
         </div>
         <footer>
           <button type="button" className="outline" onClick={onClose}>

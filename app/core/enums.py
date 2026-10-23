@@ -18,6 +18,7 @@ class FieldType(StrEnum):
     uuid = "uuid"
     json = "json"
     enum = "enum"
+    file = "file"  # reference to an uploaded file (needs the storage feature)
 
 
 class RelationKind(StrEnum):
@@ -162,3 +163,17 @@ class WebhookMode(StrEnum):
 
     inline = "inline"
     queued = "queued"
+
+
+class StorageBackend(StrEnum):
+    """Where uploaded files live. Both speak the S3 API; minio is any self-hosted compatible server."""
+
+    s3 = "s3"
+    minio = "minio"
+
+
+class DownloadMode(StrEnum):
+    """proxy: the API streams the file. presigned: the API redirects to a short-lived signed URL."""
+
+    proxy = "proxy"
+    presigned = "presigned"

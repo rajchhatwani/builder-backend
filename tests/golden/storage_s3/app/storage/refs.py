@@ -1,0 +1,59 @@
+"""Entity fields that hold the id of an uploaded file (generated).
+
+`check_attachable` runs on every write of such a field; `is_referenced` stops a file that a row still
+uses from being deleted. The table and column names come from the validated spec.
+"""
+
+import uuid
+from typing import Any
+
+import sqlalchemy as sa
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.auth.models import AuthUser
+from app.core.errors import AppError
+from app.storage import access
+from app.storage.models import StorFile
+
+# (table, column) of every entity field of type file
+FILE_REFERENCES: tuple[tuple[str, str], ...] = (
+    ('photos', 'image_id'),
+    ('photos', 'thumbnail_id'),
+)
+
+
+async def check_attachable(
+    session: AsyncSession, file_id: uuid.UUID, caller: AuthUser | None, field: str
+) -> None:
+    """The file must exist, be clean, belong to the caller's tenant and be the caller's own or
+    shared (or the caller may read every file). Anything else is the same 422 as a missing file, so
+    the answer never reveals that someone else's file exists.
+
+    The row is locked against a delete until the caller's transaction ends (FOR SHARE), so a file
+    cannot be erased between this check and the write that references it."""
+    refuse = AppError(
+        "invalid_reference", f"{field} does not reference an available file", 422, [{"field": field}]
+    )
+    if caller is None:
+        raise refuse
+    stmt = (
+        sa.select(StorFile)
+        .where(StorFile.id == file_id, StorFile.status == "clean", *access.in_tenant(caller))
+        .with_for_update(read=True)
+    )
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    allowed = row is not None and (
+        row.created_by_id == caller.id or row.shared or access.has_role(caller, "read_all")
+    )
+    if not allowed:
+        raise refuse
+
+
+async def is_referenced(session: AsyncSession, file_id: uuid.UUID) -> bool:
+    for table, column in FILE_REFERENCES:
+        # Identifiers are validated snake_case names from the spec, never user input.
+        stmt = sa.text(f'SELECT 1 FROM "{table}" WHERE "{column}" = :id LIMIT 1')
+        found: Any = (await session.execute(stmt, {"id": file_id})).first()
+        if found is not None:
+            return True
+    return False

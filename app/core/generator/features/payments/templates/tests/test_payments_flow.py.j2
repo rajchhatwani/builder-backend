@@ -14,7 +14,9 @@ import sqlalchemy as sa
 from httpx import AsyncClient
 from sqlalchemy import func, select
 
+{% if not payer_edits and payable.owned %}
 from app.auth.models import AuthUser
+{% endif %}
 from app.db import session_factory
 from app.models.{{ payable.table }} import {{ payable.model }}
 from app.payments import audit, config, events, jobs, worker

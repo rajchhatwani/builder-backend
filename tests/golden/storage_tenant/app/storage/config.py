@@ -1,0 +1,185 @@
+"""File storage settings (generated).
+
+The constants below come from the project's spec. Secrets never do: the bucket credentials are read
+from the environment (or from files named by NAME_FILE variables, which is how Docker and Kubernetes
+secrets arrive) and are held as SecretStr so they never show in a repr. On AWS, leave them unset and
+give the service an IAM role instead.
+"""
+
+import os
+from functools import lru_cache
+from pathlib import Path
+from urllib.parse import urlsplit
+
+from pydantic import SecretStr, field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.redact import register_secret
+
+BACKEND = 'minio'
+BUCKET = 'team-files'
+SPEC_REGION: str | None = None
+KEY_PREFIX = 'teams/files'
+MULTI_TENANT = True
+# Empty means any type may be uploaded (the content is still checked and scanned).
+ALLOWED_TYPES: tuple[str, ...] = ("image/*", "application/pdf", "text/csv")
+MAX_FILE_BYTES = 10 * 1024 * 1024
+USER_QUOTA_BYTES: int | None = None
+UPLOADS_PER_HOUR = 60
+DOWNLOAD_MODE = 'presigned'
+ALLOW_INLINE_IMAGES = True
+PRESIGN_TTL_SECONDS = 60
+AUDIT_RETENTION_DAYS = 2555
+AUDIT_IP = True
+RESCAN_AFTER_DAYS = 30
+SCAN_TIMEOUT_SECONDS = 120
+
+# Who may do what. An empty tuple means nobody: the routes fail closed.
+ROLES: dict[str, tuple[str, ...]] = {
+    'upload': ("member", "contributor", "admin"),
+    'share': (),
+    'read': ("viewer", "member", "contributor", "admin"),
+    'read_all': ("admin",),
+    'delete': (),
+    'delete_all': ("admin",),
+    'operate': ("admin",),
+}
+
+_SECRET_NAMES = ("STORAGE_ACCESS_KEY_ID", "STORAGE_SECRET_ACCESS_KEY")
+_SSE_VALUES = ("auto", "AES256", "aws:kms", "none")
+_ADDRESSING = ("auto", "path", "virtual")
+
+
+class StorageConfigError(RuntimeError):
+    """The storage settings are missing or unsafe: the app refuses to start."""
+
+
+class StorageSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    app_env: str = "development"
+    # The S3 API address. Empty means AWS itself; a self-hosted server (MinIO and the like) needs it.
+    storage_endpoint_url: str | None = None
+    # The address browsers use in presigned links, when it differs from the one the app uses.
+    storage_public_endpoint_url: str | None = None
+    storage_region: str | None = None
+    storage_access_key_id: str | None = None
+    storage_secret_access_key: SecretStr | None = None
+    # auto: SSE-S3 on AWS, nothing on a custom endpoint. Otherwise AES256, aws:kms or none.
+    storage_sse: str = "auto"
+    storage_kms_key_id: str | None = None
+    # auto: path style on a custom endpoint, virtual-hosted style on AWS.
+    storage_addressing: str = "auto"
+    # Development only: create the bucket at start-up if it is missing.
+    storage_create_bucket: bool = False
+    # Number of reverse proxies in front of the API whose X-Forwarded-For is trusted (0 = none).
+    storage_trusted_proxies: int = 0
+    # The malware scanner (ClamAV's clamd), reachable on a private network only.
+    clamd_host: str = "clamav"
+    clamd_port: int = 3310
+    storage_scan_timeout_seconds: int = SCAN_TIMEOUT_SECONDS
+
+    @field_validator(
+        "storage_endpoint_url",
+        "storage_public_endpoint_url",
+        "storage_region",
+        "storage_access_key_id",
+        "storage_secret_access_key",
+        "storage_kms_key_id",
+        mode="before",
+    )
+    @classmethod
+    def _blank_means_unset(cls, value: object) -> object:
+        """docker compose passes an unset variable as an empty string: that means "not set"."""
+        return None if isinstance(value, str) and not value.strip() else value
+
+    @property
+    def production(self) -> bool:
+        return self.app_env.lower() == "production"
+
+    def region(self) -> str:
+        return self.storage_region or SPEC_REGION or "us-east-1"
+
+    def addressing_style(self) -> str:
+        if self.storage_addressing != "auto":
+            return self.storage_addressing
+        return "path" if self.storage_endpoint_url else "virtual"
+
+    def sse(self) -> str | None:
+        if self.storage_sse == "none":
+            return None
+        if self.storage_sse == "auto":
+            return None if self.storage_endpoint_url else "AES256"
+        return self.storage_sse
+
+    def check(self) -> None:
+        """Refuse unsafe or incomplete settings. Called at start-up (API and maintenance)."""
+        if not BUCKET:
+            raise StorageConfigError("the bucket name is not set in the spec")
+        if BACKEND == "minio" and not self.storage_endpoint_url:
+            raise StorageConfigError("STORAGE_ENDPOINT_URL is not set (the S3 address of your server)")
+        for name, value in (
+            ("STORAGE_ENDPOINT_URL", self.storage_endpoint_url),
+            ("STORAGE_PUBLIC_ENDPOINT_URL", self.storage_public_endpoint_url),
+        ):
+            if value:
+                self._check_url(name, value)
+        if self.production and self.storage_create_bucket:
+            raise StorageConfigError("STORAGE_CREATE_BUCKET is for development only")
+        has_id = bool(self.storage_access_key_id)
+        has_secret = self.storage_secret_access_key is not None
+        if has_id != has_secret:
+            raise StorageConfigError(
+                "set both STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY, or neither"
+            )
+        if BACKEND == "minio" and not has_id:
+            raise StorageConfigError("STORAGE_ACCESS_KEY_ID and STORAGE_SECRET_ACCESS_KEY are not set")
+        if self.storage_sse not in _SSE_VALUES:
+            raise StorageConfigError("STORAGE_SSE must be one of " + ", ".join(_SSE_VALUES))
+        if self.storage_addressing not in _ADDRESSING:
+            raise StorageConfigError("STORAGE_ADDRESSING must be one of " + ", ".join(_ADDRESSING))
+        if self.storage_sse == "aws:kms" and not self.storage_kms_key_id:
+            raise StorageConfigError("STORAGE_KMS_KEY_ID is not set")
+        if not 0 <= self.storage_trusted_proxies <= 10:
+            raise StorageConfigError("STORAGE_TRUSTED_PROXIES must be between 0 and 10")
+        if not 5 <= self.storage_scan_timeout_seconds <= 600:
+            raise StorageConfigError("STORAGE_SCAN_TIMEOUT_SECONDS must be between 5 and 600")
+        if not self.clamd_host or not 1 <= self.clamd_port <= 65535:
+            raise StorageConfigError("CLAMD_HOST / CLAMD_PORT are not valid")
+
+    def _check_url(self, name: str, value: str) -> None:
+        parts = urlsplit(value)
+        if parts.scheme not in ("http", "https") or not parts.hostname:
+            raise StorageConfigError(f"{name} must be an http(s) URL")
+        if parts.username or parts.password:
+            raise StorageConfigError(f"{name} must not contain credentials")
+        if self.production and parts.scheme != "https":
+            raise StorageConfigError(f"{name} must be https when APP_ENV=production")
+
+
+def _secrets_from_files() -> dict[str, str]:
+    """NAME_FILE=/run/secrets/x supplies NAME. Setting both is ambiguous, so it is refused."""
+    found: dict[str, str] = {}
+    for name in _SECRET_NAMES:
+        path = os.environ.get(f"{name}_FILE")
+        if not path:
+            continue
+        if os.environ.get(name):
+            raise StorageConfigError(f"set either {name} or {name}_FILE, not both")
+        try:
+            found[name.lower()] = Path(path).read_text(encoding="utf-8").strip()
+        except OSError as exc:
+            raise StorageConfigError(f"cannot read the file named by {name}_FILE") from exc
+    return found
+
+
+@lru_cache
+def get_storage_settings() -> StorageSettings:
+    # Constructor arguments win over the environment, which is what lets a file-based secret apply.
+    settings = StorageSettings(**_secrets_from_files())  # type: ignore[arg-type]
+    # Whatever the credentials look like, they must never reach a log line or an audit record.
+    if settings.storage_secret_access_key is not None:
+        register_secret(settings.storage_secret_access_key.get_secret_value())
+    if settings.storage_access_key_id:
+        register_secret(settings.storage_access_key_id)
+    return settings

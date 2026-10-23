@@ -1,0 +1,184 @@
+{
+  "project": {
+    "name": "Team Files",
+    "slug": "team-files",
+    "description": "Per-team files in a self-hosted S3 store",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Photo",
+      "table_name": "photos",
+      "plural_path": "photos",
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "image_id",
+          "type": "file",
+          "required": true
+        },
+        {
+          "name": "thumbnail_id",
+          "type": "file",
+          "required": false
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://gallery.example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@gallery.example.com",
+      "from_name": "Gallery"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member"
+      },
+      {
+        "name": "contributor",
+        "label": "Contributor"
+      },
+      {
+        "name": "viewer",
+        "label": "Viewer"
+      },
+      {
+        "name": "guest",
+        "label": "Guest",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Photo",
+        "operation": "list",
+        "roles": [
+          "viewer",
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "get",
+        "roles": [
+          "viewer",
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "head",
+        "roles": [
+          "viewer",
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "create",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "replace",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "update",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Photo",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "multi_tenant": true
+  },
+  "storage": {
+    "enabled": true,
+    "backend": "minio",
+    "bucket": "team-files",
+    "region": null,
+    "key_prefix": "teams/files",
+    "allowed_types": [
+      "image/*",
+      "application/pdf",
+      "text/csv"
+    ],
+    "max_file_mb": 10,
+    "user_quota_mb": null,
+    "uploads_per_hour": 60,
+    "download_mode": "presigned",
+    "allow_inline_images": true,
+    "roles": {
+      "upload": [
+        "member",
+        "contributor",
+        "admin"
+      ],
+      "share": [],
+      "read": [
+        "viewer",
+        "member",
+        "contributor",
+        "admin"
+      ],
+      "read_all": [
+        "admin"
+      ],
+      "delete": [],
+      "delete_all": [
+        "admin"
+      ],
+      "operate": [
+        "admin"
+      ]
+    },
+    "security": {
+      "audit_retention_days": 2555,
+      "audit_ip": true,
+      "rescan_after_days": 30,
+      "scan_timeout_seconds": 120
+    }
+  }
+}

@@ -13,6 +13,7 @@ export type FieldType =
   | 'uuid'
   | 'json'
   | 'enum'
+  | 'file'
 
 export type RelationKind = 'one_to_many' | 'many_to_many' | 'one_to_one'
 
@@ -547,4 +548,56 @@ export interface PaymentsSizing {
 export interface PaymentsSizingResult {
   sizing: PaymentsSizing
   issues: ValidationIssue[]
+}
+
+// ── File storage ─────────────────────────────────────────────────────────────
+
+export type StorageBackend = 's3' | 'minio'
+export type DownloadMode = 'proxy' | 'presigned'
+
+export interface StorageRoles {
+  upload: string[]
+  share: string[]
+  read: string[]
+  read_all: string[]
+  delete: string[]
+  delete_all: string[]
+  operate: string[]
+}
+
+export interface StorageSecurity {
+  audit_retention_days: number
+  audit_ip: boolean
+  rescan_after_days: number
+  scan_timeout_seconds: number
+}
+
+export interface StorageConfig {
+  id: string
+  project_id: string
+  enabled: boolean
+  backend: StorageBackend
+  bucket: string
+  region: string | null
+  key_prefix: string
+  allowed_types: string[]
+  max_file_mb: number
+  user_quota_mb: number | null
+  uploads_per_hour: number
+  download_mode: DownloadMode
+  allow_inline_images: boolean
+  roles: StorageRoles
+  security: StorageSecurity
+  created_at: string
+  updated_at: string
+}
+
+export type StorageWrite = Omit<StorageConfig, 'id' | 'project_id' | 'enabled' | 'created_at' | 'updated_at'>
+
+export interface StorageImpact {
+  action: 'enable' | 'disable'
+  enabled: boolean
+  can_proceed: boolean
+  blockers: string[]
+  warnings: string[]
 }

@@ -1,0 +1,22 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-uploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "receipts/" },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    },
+    {
+      "ID": "expire-old-versions",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "receipts/" },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "remove-expired-delete-markers",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "receipts/" },
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    }
+  ]
+}

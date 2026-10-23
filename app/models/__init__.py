@@ -11,6 +11,7 @@ from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
+from app.models.storage_config import ProjectStorageConfig
 
 __all__ = [
     "AuthCustomField",
@@ -25,6 +26,7 @@ __all__ = [
     "ProjectPaymentsConfig",
     "ProjectPermission",
     "ProjectRole",
+    "ProjectStorageConfig",
     "Relation",
 ]
 

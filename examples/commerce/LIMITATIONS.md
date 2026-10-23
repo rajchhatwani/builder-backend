@@ -71,7 +71,7 @@ backend needs, 10 are risks, 32 are limits.** Every line below comes from a prob
 
 **Not there at all**
 - Checkout, payment capture, taxes, shipping quotes, discount validation, emails; webhooks, events, background jobs,
-  schedules (the `Webhook` entity only stores configuration); file upload (images are URL strings); idempotency keys;
+  schedules (the `Webhook` entity only stores configuration); file upload (images are URL strings here; the platform now has a `file` field type and a file API, see the README); idempotency keys;
   change history (only `created_by_id`); bulk or CSV import (one row per request).
 
 **Naming rules found while building**
@@ -88,7 +88,7 @@ backend needs, 10 are risks, 32 are limits.** Every line below comes from a prob
 5. User administration endpoints and a password reset that does not depend on magic links.
 6. Atomic update (`increment`) and `If-Match` versioning; composite unique; soft-delete cascade with partial unique indexes.
 7. Richer queries: relation filters, ranges, `in`, multi-sort, `include=`, and simple aggregates.
-8. Later: bulk endpoints, idempotency keys, audit log, outbound webhooks/jobs, uploads.
+8. Later: bulk endpoints, idempotency keys, audit log, outbound webhooks/jobs.
 
 ## Reproduce
 
