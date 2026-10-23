@@ -1,13 +1,18 @@
 alembic>=1.20.0
 asyncpg>=0.32.0
-{% if sns %}
-boto3>=1.35.0
+{% if sns or storage %}
+boto3>=1.38.0
 {% endif %}
 {% if rs256 or keycloak %}
 cryptography>=44.0.0
 {% endif %}
 fastapi>=0.156.8
 pydantic-settings>=2.16.1
+{% if storage %}
+# Reads multipart uploads. Older versions have denial-of-service and path-traversal bugs
+# (CVE-2024-24762, CVE-2024-53981, CVE-2026-24486): keep this floor.
+python-multipart>=0.0.22
+{% endif %}
 {% if redis_store %}
 redis>=5.0.0
 {% endif %}

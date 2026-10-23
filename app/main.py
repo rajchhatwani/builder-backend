@@ -15,6 +15,7 @@ from app.api import (
     projects,
     relations,
     spec,
+    storage,
 )
 from app.config import get_settings
 from app.errors import register_exception_handlers
@@ -50,6 +51,7 @@ def create_app() -> FastAPI:
     app.include_router(auth.router)
     app.include_router(keycloak.router)
     app.include_router(payments.router)
+    app.include_router(storage.router)
     app.include_router(health.router)
     app.include_router(projects.router)
     app.include_router(entities.router)

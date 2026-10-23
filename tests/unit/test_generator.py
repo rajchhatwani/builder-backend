@@ -37,6 +37,9 @@ NAMES = [
     "payments_stripe",
     "payments_tenant",
     "payments_razorpay",
+    "storage_s3",
+    "storage_tenant",
+    "storage_payments",
 ]
 
 

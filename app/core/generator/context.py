@@ -160,6 +160,15 @@ class EntityCtx:
     tenant_scoped: bool = False  # rows belong to a tenant (tenant_id)
 
     @property
+    def file_fields(self) -> tuple[FieldCtx, ...]:
+        """Fields that hold the id of an uploaded file (checked on every write)."""
+        return tuple(f for f in self.fields if f.type == "file")
+
+    @property
+    def file_fields_literal(self) -> str:
+        return tuple_literal(f.name for f in self.file_fields)
+
+    @property
     def access_ops(self) -> frozenset[str]:
         return frozenset(a.op for a in self.access)
 
@@ -260,7 +269,7 @@ def py_type(f: SpecField) -> str:
             return "_dt.date"
         case "datetime":
             return "_dt.datetime"
-        case "uuid":
+        case "uuid" | "file":
             return "_uuid.UUID"
         case "json":
             return "_t.Any"
@@ -290,7 +299,7 @@ def sa_type(f: SpecField, sa: str = "_sa.", pg: str = "_pg.") -> str:
             return f"{sa}Date()"
         case "datetime":
             return f"{sa}DateTime(timezone=True)"
-        case "uuid":
+        case "uuid" | "file":
             return f"{sa}Uuid()"
         case "json":
             return f"{pg}JSONB()"
@@ -382,6 +391,8 @@ def _sample(f: SpecField) -> str:
             )
         case "uuid":
             return "str(_uuid.uuid4())"
+        case "file":
+            return "None"  # the factories upload a real file when the field is required
         case "json":
             return '{"key": "value"}'
         case "enum":

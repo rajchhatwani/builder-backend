@@ -75,6 +75,9 @@ def ok(result: subprocess.CompletedProcess[str]) -> str:
         "payments_stripe",
         "payments_tenant",
         "payments_razorpay",
+        "storage_s3",
+        "storage_tenant",
+        "storage_payments",
     ],
 )
 def test_generated_project_migrates_and_passes_its_own_tests(

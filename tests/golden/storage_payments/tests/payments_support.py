@@ -1,0 +1,70 @@
+"""Test support for the payments module (generated).
+
+The tests never talk to a real payment provider. `tests/fake_stripe.py` is a stand-in for the
+Stripe API that runs as a real HTTP server, so the real adapter code is what is tested; this module
+turns it into pytest fixtures. Everything the shared tests need from the provider goes through the
+`Fake` interface (staging a payment, signed webhooks, forged webhooks), so the same tests run
+for every provider.
+"""
+
+from collections.abc import Iterator
+
+import pytest
+
+from app.payments import config
+from app.payments.providers import set_provider
+from tests.fake_stripe import (  # noqa: F401 - re-exported for the tests
+    ENV,
+    ENV_API_BASE,
+    ENV_KEY,
+    ENV_WEBHOOK_SECRETS,
+    HAS_TIMESTAMP,
+    LIVE_ENV,
+    OTHER_WEBHOOK_SECRET,
+    SECRET_VALUES,
+    SUPPORTS_LIVE_EVENT,
+    SUPPORTS_SLOW,
+    WEBHOOK_PATH,
+    WEBHOOK_SECRET,
+    Fake,
+    live_settings_kwargs,
+    settings_kwargs,
+    start_fake,
+    unsafe_settings,
+)
+
+FakeProvider = Fake
+DEFAULT_API_BASE = "https://api.stripe.com"
+
+
+@pytest.fixture(scope="session")
+def provider_server() -> Iterator[Fake]:
+    fake, server = start_fake()
+    yield fake
+    server.shutdown()
+
+
+@pytest.fixture
+def fake_provider(provider_server: Fake) -> Iterator[Fake]:
+    provider_server.reset()
+    yield provider_server
+
+
+@pytest.fixture
+def payments_env(
+    monkeypatch: pytest.MonkeyPatch, fake_provider: Fake, outbox: object
+) -> Iterator[Fake]:
+    """Test keys, the stand-in as the provider's API, and fresh settings for every test."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setenv(ENV_API_BASE, f"http://127.0.0.1:{fake_provider.port}")
+    monkeypatch.setenv("PAYMENTS_WEBHOOK_MODE", "inline")
+    monkeypatch.setenv("PAYMENTS_WEBHOOK_IP_ALLOWLIST", "127.0.0.0/8")  # the test client
+    monkeypatch.setenv("PAYMENTS_PROVIDER_TIMEOUT_SECONDS", "5")
+    for name in (f"{ENV_KEY}_FILE", f"{ENV_WEBHOOK_SECRETS}_FILE", "APP_ENV"):
+        monkeypatch.delenv(name, raising=False)
+    config.get_payments_settings.cache_clear()
+    set_provider(None)
+    yield fake_provider
+    config.get_payments_settings.cache_clear()
+    set_provider(None)

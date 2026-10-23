@@ -21,6 +21,9 @@ from tests._auth_support import authed_client, outbox  # noqa: F401
 {% if payments %}
 from tests.payments_support import fake_provider, payments_env, provider_server  # noqa: F401
 {% endif %}
+{% if storage %}
+from tests.storage_support import fake_clamd, fake_clamd_server, storage_env  # noqa: F401
+{% endif %}
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -44,6 +47,15 @@ async def _clean_database(_require_test_database: None) -> None:
 {% endif %}
 
 
+{% if file_entities %}
+@pytest.fixture(autouse=True)
+def _uploads_work(request: pytest.FixtureRequest) -> None:
+    """Entities here have file fields, so many tests upload a file first: they get the stand-in
+    scanner and an in-memory bucket, like the file tests do."""
+    request.getfixturevalue("storage_env")
+
+
+{% endif %}
 @pytest.fixture
 async def client() -> AsyncIterator[AsyncClient]:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:

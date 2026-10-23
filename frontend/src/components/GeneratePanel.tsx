@@ -5,6 +5,7 @@ import type {
   GenerationSummary,
   KeycloakConfig,
   PaymentsConfig,
+  StorageConfig,
   Preview,
   Project,
   ValidationIssue,
@@ -67,6 +68,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
     auth: AuthConfig | null
     keycloak: KeycloakConfig | null
     payments: PaymentsConfig | null
+    storage: StorageConfig | null
   } | null>(null)
 
   async function loadHistory() {
@@ -109,7 +111,13 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         const keycloak =
           auth?.provider === 'keycloak' ? await api.getKeycloak(project.id).catch(() => null) : null
         const payments = await api.getPayments(project.id).catch(() => null)
-        setDownloaded({ auth, keycloak, payments: payments?.enabled ? payments : null })
+        const storage = await api.getStorage(project.id).catch(() => null)
+        setDownloaded({
+          auth,
+          keycloak,
+          payments: payments?.enabled ? payments : null,
+          storage: storage?.enabled ? storage : null,
+        })
         await loadHistory()
       }
     } catch (err) {
@@ -196,6 +204,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
           auth={downloaded.auth}
           keycloak={downloaded.keycloak}
           payments={downloaded.payments}
+          storage={downloaded.storage}
         />}
 
       <h3>Generation history</h3>

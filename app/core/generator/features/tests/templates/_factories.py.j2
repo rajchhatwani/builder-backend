@@ -4,6 +4,10 @@
 
 from httpx import AsyncClient
 {% endif %}
+{% if uploads %}
+
+from tests.storage_support import upload_ok
+{% endif %}
 
 
 def _token(length: int) -> str:
@@ -24,6 +28,10 @@ async def payload_{{ e.table }}(client: AsyncClient, **overrides: _t.Any) -> dic
 {% for fk in e.required_fks %}
     if "{{ fk.column }}" not in overrides:
         payload["{{ fk.column }}"] = (await make_{{ fk.target_table }}(client))["id"]
+{% endfor %}
+{% for f in e.file_fields if f.required %}
+    if "{{ f.name }}" not in overrides:
+        payload["{{ f.name }}"] = (await upload_ok(client))["id"]  # a real, scanned file
 {% endfor %}
     payload.update(overrides)
     return payload

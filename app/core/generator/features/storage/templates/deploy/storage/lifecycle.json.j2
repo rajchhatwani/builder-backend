@@ -1,0 +1,22 @@
+{
+  "Rules": [
+    {
+      "ID": "abort-incomplete-uploads",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "{{ s.key_prefix }}/" },
+      "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 1 }
+    },
+    {
+      "ID": "expire-old-versions",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "{{ s.key_prefix }}/" },
+      "NoncurrentVersionExpiration": { "NoncurrentDays": 1 }
+    },
+    {
+      "ID": "remove-expired-delete-markers",
+      "Status": "Enabled",
+      "Filter": { "Prefix": "{{ s.key_prefix }}/" },
+      "Expiration": { "ExpiredObjectDeleteMarker": true }
+    }
+  ]
+}

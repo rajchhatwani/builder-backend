@@ -38,6 +38,7 @@ from app.core.spec_models import (
     SpecRole,
     SpecSmsConfig,
     SpecSmtpConfig,
+    SpecStorage,
 )
 from app.core.validation import ValidationIssue, validate
 from app.exceptions import AppError
@@ -51,7 +52,10 @@ from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
+from app.models.storage_config import ProjectStorageConfig
 from app.services.payments_service import apply_spec, config_to_spec
+from app.services.storage_service import apply_spec as apply_storage_spec
+from app.services.storage_service import config_to_spec as storage_config_to_spec
 
 
 class SpecService:
@@ -256,6 +260,7 @@ class SpecService:
             relations=spec_relations,
             auth=spec_auth,
             payments=await self._payments_spec(project_id),
+            storage=await self._storage_spec(project_id),
         )
 
     async def _payments_spec(self, project_id: uuid.UUID) -> SpecPayments | None:
@@ -265,6 +270,14 @@ class SpecService:
             )
         ).scalar_one_or_none()
         return config_to_spec(row) if row is not None else None
+
+    async def _storage_spec(self, project_id: uuid.UUID) -> SpecStorage | None:
+        row = (
+            await self.session.execute(
+                select(ProjectStorageConfig).where(ProjectStorageConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return storage_config_to_spec(row) if row is not None else None
 
     async def validate(self, project_id: uuid.UUID) -> list[ValidationIssue]:
         return validate(await self.assemble(project_id))
@@ -354,6 +367,8 @@ class SpecService:
             )
         if spec.payments is not None:
             await self._replace_payments(project_id, spec.payments)
+        if spec.storage is not None:
+            await self._replace_storage(project_id, spec.storage)
         project.db_engine = DbEngine(spec.project.db_engine)
         project.version += 1
         try:
@@ -490,6 +505,18 @@ class SpecService:
             row = ProjectPaymentsConfig(project_id=project_id)
             self.session.add(row)
         apply_spec(row, payments)
+
+    async def _replace_storage(self, project_id: uuid.UUID, storage: SpecStorage) -> None:
+        # A spec without a storage block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectStorageConfig).where(ProjectStorageConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectStorageConfig(project_id=project_id)
+            self.session.add(row)
+        apply_storage_spec(row, storage)
 
     async def _replace_keycloak(self, project_id: uuid.UUID, kc: SpecKeycloak | None) -> None:
         row = (

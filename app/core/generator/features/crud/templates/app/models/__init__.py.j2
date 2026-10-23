@@ -11,6 +11,9 @@ from app.models.{{ e.table }} import {{ e.name }}
 {% if payments %}
 from app.payments import models as _payments_models
 {% endif %}
+{% if storage %}
+from app.storage import models as _storage_models
+{% endif %}
 
 __all__ = [
     "Base",
@@ -23,5 +26,8 @@ __all__ = [
 {% endif %}
 {% if payments %}
     "_payments_models",
+{% endif %}
+{% if storage %}
+    "_storage_models",
 {% endif %}
 ]

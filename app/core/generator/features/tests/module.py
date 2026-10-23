@@ -10,6 +10,7 @@ from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
 from app.core.validation_payments import PAYMENTS_TABLES, payments_active
+from app.core.validation_storage import STORAGE_TABLES, storage_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -59,6 +60,10 @@ class TestsModule:
             # The audit table is append-only (its trigger refuses TRUNCATE) and the mode lock is
             # written at start-up, so neither is emptied between tests.
             tables |= set(PAYMENTS_TABLES) - {"pay_audit_log", "pay_lock"}
+        storage = storage_active(project.spec) and project.auth is not None
+        if storage:
+            # Same reason as the payments audit table: it is append-only and cannot be truncated.
+            tables |= set(STORAGE_TABLES) - {"stor_audit_log"}
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",
@@ -66,10 +71,15 @@ class TestsModule:
             auth=project.auth is not None,
             keycloak=uses_keycloak(project.auth),
             payments=payments,
+            storage=storage,
+            file_entities=storage and any(e.file_fields for e in project.entities),
         )
         creatable_entities = [e for e in project.entities if creatable(e, project)]
         files["tests/_factories.py"] = render_template(
-            self._env, "_factories.py.j2", entities=creatable_entities
+            self._env,
+            "_factories.py.j2",
+            entities=creatable_entities,
+            uploads=any(e.file_fields for e in creatable_entities),
         )
         for entity in project.entities:
             files[f"tests/test_{entity.table}.py"] = render_template(

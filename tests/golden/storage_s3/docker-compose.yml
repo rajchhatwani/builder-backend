@@ -1,0 +1,68 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      # File storage: the bucket, the malware scanner (see deploy/storage/STORAGE.md).
+      APP_ENV: ${APP_ENV:-development}
+      STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-}
+      STORAGE_PUBLIC_ENDPOINT_URL: ${STORAGE_PUBLIC_ENDPOINT_URL:-}
+      STORAGE_REGION: ${STORAGE_REGION:-}
+      STORAGE_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:-}
+      STORAGE_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:-}
+      STORAGE_SSE: ${STORAGE_SSE:-auto}
+      STORAGE_TRUSTED_PROXIES: ${STORAGE_TRUSTED_PROXIES:-0}
+      CLAMD_HOST: ${CLAMD_HOST:-clamav}
+      CLAMD_PORT: ${CLAMD_PORT:-3310}
+      # Copy .env.example to .env and fill these in; compose reads .env automatically.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env (see .env.example)}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  # Scans every upload before it is stored. It has no authentication, so no port is published:
+  # only containers on this compose network can reach it. Needs about 1.5 GB of memory; the first
+  # start downloads the virus signatures (a few minutes), and the API refuses uploads until it is up.
+  clamav:
+    image: clamav/clamav:1.5.4
+    environment:
+      # Sized from this project's limit of 25 MB per file. Files clamd cannot scan completely
+      # (too large, too deeply nested) are reported as detections, never let through.
+      CLAMD_CONF_StreamMaxLength: "41M"
+      CLAMD_CONF_MaxFileSize: "41M"
+      CLAMD_CONF_MaxScanSize: "164M"
+      CLAMD_CONF_MaxRecursion: "10"
+      CLAMD_CONF_MaxFiles: "10000"
+      CLAMD_CONF_AlertExceedsMax: "yes"
+    volumes:
+      - clamav_db:/var/lib/clamav
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  clamav_db:

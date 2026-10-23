@@ -4,6 +4,9 @@ from app.crud import _base as _crud_base
 {% for module, cls in e.repo_imports %}
 from app.models.{{ module }} import {{ cls }}
 {% endfor %}
+{% if e.file_fields %}
+from app.storage.refs import check_attachable
+{% endif %}
 
 
 class {{ e.name }}Repository(_crud_base.Repository[{{ e.name }}]):
@@ -15,3 +18,7 @@ class {{ e.name }}Repository(_crud_base.Repository[{{ e.name }}]):
     eager = {{ e.eager | tuple_lit }}
     references = {{ e.references_literal }}
     many_to_many = {{ e.many_to_many_literal }}
+{% if e.file_fields %}
+    file_fields = {{ e.file_fields_literal }}
+    file_check = staticmethod(check_attachable)
+{% endif %}

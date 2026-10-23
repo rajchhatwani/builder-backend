@@ -1,6 +1,7 @@
 """Generic async repository. Entity repositories only declare what is configurable."""
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
@@ -26,6 +27,9 @@ class Repository[ModelT: Base]:
     references: ClassVar[dict[str, type[Base]]] = {}
     # payload key -> model of a many_to_many relationship set from a list of ids
     many_to_many: ClassVar[dict[str, type[Base]]] = {}
+    # payload keys that hold the id of an uploaded file, and the check each id must pass
+    file_fields: ClassVar[tuple[str, ...]] = ()
+    file_check: ClassVar[Callable[..., Awaitable[None]] | None] = None
 
     def __init__(
         self,
@@ -35,6 +39,7 @@ class Repository[ModelT: Base]:
         owner_id: uuid.UUID | None = None,
         tenant_id: uuid.UUID | None = None,
         caller_tenant_id: uuid.UUID | None = None,
+        caller: Any = None,
     ) -> None:
         self.session = session
         # column -> value every read and write is restricted to (row-level access rules)
@@ -45,6 +50,8 @@ class Repository[ModelT: Base]:
         self.tenant_id = tenant_id
         # the caller's tenant: a reference may only point at rows of this tenant (see _inside_tenant)
         self.caller_tenant_id = caller_tenant_id or tenant_id
+        # the signed-in user making the request (file fields are checked against them)
+        self.caller = caller
 
     # --- query building -----------------------------------------------------------
 
@@ -201,7 +208,15 @@ class Repository[ModelT: Base]:
             return [sa.false()]
         return [column == self.caller_tenant_id]
 
+    async def _check_files(self, values: dict[str, Any]) -> None:
+        for key in self.file_fields:
+            value = values.get(key)
+            if value is None or self.file_check is None:
+                continue
+            await self.file_check(self.session, value, self.caller, key)
+
     async def _check_references(self, values: dict[str, Any]) -> None:
+        await self._check_files(values)
         for key, target in self.references.items():
             value = values.get(key)
             if value is None:

@@ -11,6 +11,8 @@ interface OverviewPanelProps {
   keycloakSaved: boolean
   paymentsOn: boolean
   paymentsSaved: boolean
+  storageOn: boolean
+  storageSaved: boolean
   roleCount: number
   issues: ValidationIssue[] | null
   generationCount: number
@@ -19,6 +21,7 @@ interface OverviewPanelProps {
 /** Which section can fix an issue, judged by its path. */
 export function sectionForIssue(issue: ValidationIssue): Section {
   if (issue.path === 'payments' || issue.path.startsWith('payments.')) return 'payments'
+  if (issue.path === 'storage' || issue.path.startsWith('storage.') || issue.code === 'storage_required') return 'storage'
   if (issue.path.startsWith('auth.roles') || issue.path.startsWith('auth.permissions')) return 'access'
   if (issue.path === 'auth.keycloak' || issue.path.startsWith('auth.keycloak.')) return 'keycloak'
   if (issue.path === 'auth' || issue.path.startsWith('auth.')) return 'auth'
@@ -42,6 +45,8 @@ export function OverviewPanel({
   keycloakSaved,
   paymentsOn,
   paymentsSaved,
+  storageOn,
+  storageSaved,
   roleCount,
   issues,
   generationCount,
@@ -91,6 +96,16 @@ export function OverviewPanel({
     optional: true,
     section: 'payments',
     action: paymentsOn ? 'Edit' : paymentsSaved ? 'Turn on' : 'Set up',
+  })
+  steps.push({
+    title: 'Accept file uploads',
+    detail: storageOn
+      ? 'Any file type, scanned for malware before it is stored, with an audit trail.'
+      : 'Let people upload files of any type to S3 or a MinIO-compatible store, virus-scanned, with role-based access.',
+    done: storageOn,
+    optional: true,
+    section: 'storage',
+    action: storageOn ? 'Edit' : storageSaved ? 'Turn on' : 'Set up',
   })
   if (authEnabled) {
     steps.push({

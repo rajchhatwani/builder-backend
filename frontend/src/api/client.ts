@@ -18,6 +18,9 @@ import type {
   PaymentsImpact,
   PaymentsSizingResult,
   PaymentsWrite,
+  StorageConfig,
+  StorageImpact,
+  StorageWrite,
   OnDelete,
   Page,
   PermissionEntry,
@@ -159,6 +162,20 @@ export const api = {
     request<PaymentsImpact>(`/projects/${projectId}/payments/impact?action=${action}`),
   switchPayments: (projectId: string, action: 'enable' | 'disable') =>
     request<PaymentsConfig>(`/projects/${projectId}/payments/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
+
+  getStorage: (projectId: string) => request<StorageConfig>(`/projects/${projectId}/storage`),
+  putStorage: (projectId: string, data: StorageWrite) =>
+    request<StorageConfig>(`/projects/${projectId}/storage`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  storageImpact: (projectId: string, action: 'enable' | 'disable') =>
+    request<StorageImpact>(`/projects/${projectId}/storage/impact?action=${action}`),
+  switchStorage: (projectId: string, action: 'enable' | 'disable') =>
+    request<StorageConfig>(`/projects/${projectId}/storage/${action}`, {
       method: 'POST',
       body: JSON.stringify({ confirm: true }),
     }),
