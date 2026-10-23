@@ -250,3 +250,259 @@ details.auth-section > .auth-section-body {
   gap: var(--space-2);
 }
 
+
+/* ── App shell ────────────────────────────────────────────────────────────── */
+
+.muted {
+  color: var(--muted-foreground);
+}
+
+.small-text {
+  font-size: var(--text-7);
+}
+
+.main-sidebar nav ul a {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sidebar-back {
+  display: block;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-7);
+  color: var(--muted-foreground);
+  text-decoration: none;
+}
+
+.sidebar-back:hover {
+  color: var(--foreground);
+}
+
+.sidebar-project {
+  padding: var(--space-1) var(--space-3) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.count-badge {
+  margin-inline-start: auto;
+  min-width: 1.4em;
+  padding: 0 0.4em;
+  border-radius: 999px;
+  background: var(--danger);
+  color: var(--danger-foreground, #fff);
+  font-size: var(--text-8);
+  text-align: center;
+}
+
+.page-header.compact {
+  margin-block-end: var(--space-4);
+}
+
+.page-header.compact h2 {
+  margin: 0;
+}
+
+.toast-stack {
+  position: fixed;
+  inset-block-end: var(--space-4);
+  inset-inline-end: var(--space-4);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-width: min(24rem, calc(100vw - 2rem));
+}
+
+dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* ── Projects ─────────────────────────────────────────────────────────────── */
+
+.project-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr));
+  gap: var(--space-4);
+}
+
+.project-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.project-card:hover {
+  border-color: var(--primary);
+}
+
+.project-card h3 {
+  margin: 0;
+}
+
+.project-card h3 a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.project-card p {
+  margin: 0;
+}
+
+.project-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.project-card-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-block-start: auto;
+  padding-block-start: var(--space-3);
+}
+
+.status-ok {
+  background: var(--success);
+  color: var(--success-foreground, #fff);
+}
+
+.status-warn {
+  background: var(--warning);
+  color: var(--warning-foreground, #000);
+}
+
+.empty-hero {
+  text-align: center;
+  padding: var(--space-10) var(--space-6);
+}
+
+.empty-hero p {
+  color: var(--muted-foreground);
+  max-width: 34rem;
+  margin-inline: auto;
+}
+
+/* ── Overview checklist ───────────────────────────────────────────────────── */
+
+.checklist,
+.issue-list,
+.relation-list,
+.entity-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.checklist li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card);
+}
+
+.checklist .check {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--border);
+  border-radius: 50%;
+  font-size: var(--text-7);
+}
+
+.checklist li.done .check {
+  background: var(--success);
+  border-color: var(--success);
+  color: var(--success-foreground, #fff);
+}
+
+.checklist-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.checklist-text p {
+  margin: var(--space-1) 0 0;
+}
+
+.issue-list li,
+.relation-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-block-end: 1px solid var(--border);
+}
+
+.issue-list li:last-child,
+.relation-list li:last-child {
+  border-block-end: none;
+}
+
+/* ── Data model: entity list + detail ─────────────────────────────────────── */
+
+.master-detail {
+  display: grid;
+  grid-template-columns: 16rem minmax(0, 1fr);
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 800px) {
+  .master-detail {
+    grid-template-columns: 1fr;
+  }
+}
+
+.entity-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  width: 100%;
+  gap: 0;
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--foreground);
+  text-align: start;
+  cursor: pointer;
+}
+
+.entity-item:hover {
+  background: var(--surface-2);
+}
+
+.entity-item[aria-current='true'] {
+  background: var(--surface-2);
+  box-shadow: inset 3px 0 0 var(--primary);
+  font-weight: var(--font-semibold);
+}
+
+.master-list .table-toolbar:not(:first-child) {
+  margin-block-start: var(--space-5);
+}
+
+@media (max-width: 600px) {
+  .checklist li {
+    flex-wrap: wrap;
+  }
+}

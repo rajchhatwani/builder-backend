@@ -1,0 +1,49 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Desk", "slug": "desk", "description": "Help desk with roles and row rules", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Article",
+      "table_name": "articles",
+      "plural_path": "articles",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120},
+        {"name": "status", "type": "enum", "required": true, "enum_values": ["draft", "published"]}
+      ]
+    },
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {},
+      "fields": [
+        {"name": "subject", "type": "string", "required": true, "max_length": 120}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://desk.example.com",
+    "password_reset": {"email_magic_link": true, "sms_otp": false},
+    "registration": {"email_verification_required": true},
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@desk.example.com", "from_name": "Desk"},
+    "roles": [
+      {"name": "admin", "label": "Admin", "inherits_from": "staff"},
+      {"name": "customer", "label": "Customer", "is_default": true},
+      {"name": "staff", "label": "Staff"}
+    ],
+    "permissions": [
+      {"entity": "Article", "operation": "list", "roles": [], "row_rule": "custom_filter", "custom_filter_field": "status", "custom_filter_value": "published"},
+      {"entity": "Article", "operation": "get", "roles": [], "row_rule": "custom_filter", "custom_filter_field": "status", "custom_filter_value": "published"},
+      {"entity": "Article", "operation": "create", "roles": ["staff"]},
+      {"entity": "Article", "operation": "update", "roles": ["staff"]},
+      {"entity": "Article", "operation": "delete", "roles": ["admin"]},
+      {"entity": "Ticket", "operation": "create", "roles": ["customer", "staff"]},
+      {"entity": "Ticket", "operation": "list", "roles": ["admin", "customer"], "row_rule": "role_scoped"},
+      {"entity": "Ticket", "operation": "get", "roles": ["admin", "customer"], "row_rule": "owner"},
+      {"entity": "Ticket", "operation": "delete", "roles": ["admin", "customer"], "row_rule": "owner"}
+    ]
+  }
+}

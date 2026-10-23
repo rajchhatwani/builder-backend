@@ -52,7 +52,7 @@ class SmsConfig(BaseModel):
 
 # ── Rate limit string pattern ─────────────────────────────────────────────────
 
-_RATE_PATTERN = r"^\d+/(second|minute|minutes|hour|day)s?$"
+_RATE_PATTERN = r"^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$"
 
 
 # ── AuthConfig Create / Update ────────────────────────────────────────────────

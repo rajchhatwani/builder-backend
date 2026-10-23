@@ -55,6 +55,7 @@ class CrudModule:
             "name": project.name,
             "entities": project.entities,
             "joins": project.join_tables,
+            "auth": project.auth,
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

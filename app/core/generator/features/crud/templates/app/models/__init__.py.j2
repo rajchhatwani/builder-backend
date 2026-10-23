@@ -1,5 +1,8 @@
 """Importing this package registers every table on `Base.metadata` (used by Alembic)."""
 
+{% if auth %}
+from app.auth import models as _auth_models
+{% endif %}
 from app.models import _associations
 from app.models._base import Base
 {% for e in entities %}
@@ -12,4 +15,7 @@ __all__ = [
     "{{ e.name }}",
 {% endfor %}
     "_associations",
+{% if auth %}
+    "_auth_models",
+{% endif %}
 ]

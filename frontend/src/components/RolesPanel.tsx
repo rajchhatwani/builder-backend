@@ -4,12 +4,14 @@ import { api, ApiError } from '../api/client'
 import type { ProjectRole, ProjectRoleCreate } from '../api/types'
 import { DataTable } from './DataTable'
 import { Modal } from './Modal'
+import { useUi } from './Ui'
 
 interface RolesPanelProps {
   projectId: string
 }
 
 export function RolesPanel({ projectId }: RolesPanelProps) {
+  const { confirm } = useUi()
   const [roles, setRoles] = useState<ProjectRole[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -82,8 +84,8 @@ export function RolesPanel({ projectId }: RolesPanelProps) {
     setFormError(null)
   }
 
-  function handleDelete(role: ProjectRole) {
-    if (!window.confirm(`Delete role "${role.name}"?`)) return
+  async function handleDelete(role: ProjectRole) {
+    if (!(await confirm({ title: `Delete role "${role.name}"?`, confirmLabel: 'Delete', danger: true }))) return
     api
       .deleteRole(role.id)
       .then(load)

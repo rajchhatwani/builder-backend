@@ -21,7 +21,17 @@ from app.core.spec_models import Spec
 TESTS = Path(__file__).resolve().parent.parent
 FIXTURES = TESTS / "fixtures" / "specs"
 GOLDEN = TESTS / "golden"
-NAMES = ["minimal", "blog", "library"]
+NAMES = [
+    "minimal",
+    "blog",
+    "library",
+    "shop_auth",
+    "notes_auth",
+    "desk_auth",
+    "club_auth",
+    "vault_auth",
+    "workspace_auth",
+]
 
 
 def load_spec(name: str) -> Spec:

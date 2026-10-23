@@ -27,8 +27,21 @@ class Repository[ModelT: Base]:
     # payload key -> model of a many_to_many relationship set from a list of ids
     many_to_many: ClassVar[dict[str, type[Base]]] = {}
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        *,
+        scope: dict[str, Any] | None = None,
+        owner_id: uuid.UUID | None = None,
+        tenant_id: uuid.UUID | None = None,
+    ) -> None:
         self.session = session
+        # column -> value every read and write is restricted to (row-level access rules)
+        self.scope = scope or {}
+        # recorded as created_by_id on new rows
+        self.owner_id = owner_id
+        # recorded as tenant_id on new rows
+        self.tenant_id = tenant_id
 
     # --- query building -----------------------------------------------------------
 
@@ -36,7 +49,10 @@ class Repository[ModelT: Base]:
         return self.model.__table__.c[name]
 
     def _alive(self) -> list[Any]:
-        return [self._col("deleted_at").is_(None)] if self.soft_delete else []
+        """Conditions every query starts from: not soft-deleted, and inside the access scope."""
+        conditions = [self._col("deleted_at").is_(None)] if self.soft_delete else []
+        conditions.extend(self._col(name) == value for name, value in self.scope.items())
+        return conditions
 
     def _loaders(self) -> list[Any]:
         return [selectinload(getattr(self.model, name)) for name in self.eager]
@@ -119,6 +135,10 @@ class Repository[ModelT: Base]:
 
     async def create(self, data: dict[str, Any]) -> ModelT:
         values = dict(data)
+        if self.owner_id is not None:
+            values["created_by_id"] = self.owner_id
+        if self.tenant_id is not None:
+            values["tenant_id"] = self.tenant_id
         related = await self._pop_related(values)
         await self._check_references(values)
         item = self.model(**values, **related)

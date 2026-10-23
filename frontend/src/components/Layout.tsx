@@ -19,10 +19,12 @@ function useTheme() {
 }
 
 interface LayoutProps {
+  /** Navigation shown in the sidebar; it changes with the page. */
+  sidebar: ReactNode
   children: ReactNode
 }
 
-export function Layout({ children }: LayoutProps) {
+export function Layout({ sidebar, children }: LayoutProps) {
   const { theme, toggle } = useTheme()
 
   return (
@@ -78,23 +80,7 @@ export function Layout({ children }: LayoutProps) {
       </nav>
 
       <aside data-sidebar className="main-sidebar">
-        <nav>
-          <ul>
-            <li>
-              <a href="#" aria-current="page">
-                Dashboard
-              </a>
-            </li>
-            <li>
-              <a href="https://github.com/knadh/oat" target="_blank" rel="noreferrer">
-                Oat UI (docs)
-              </a>
-            </li>
-          </ul>
-        </nav>
-        <footer>
-          <small className="text-light">Phase 2 &middot; Builder API</small>
-        </footer>
+        {sidebar}
       </aside>
 
       <main>

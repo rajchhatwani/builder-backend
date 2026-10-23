@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
-import type { Entity, ProjectRole, ProjectPermission, AuthOperation, RowRule, PermissionEntry } from '../api/types'
+import type { Entity, ProjectRole, AuthOperation, RowRule, PermissionEntry } from '../api/types'
 import { Modal } from './Modal'
 
 const AUTH_OPERATIONS: AuthOperation[] = ['list', 'get', 'create', 'replace', 'update', 'delete', 'head']
@@ -34,11 +34,11 @@ export function PermissionsPanel({ projectId, entities, roles }: PermissionsPane
     setError(null)
 
     api
-      .listPermissions(projectId, 500, 0)
-      .then((res) => {
+      .listAllPermissions(projectId)
+      .then((items) => {
         if (cancelled) return
         const map: Record<string, PermissionEntry> = {}
-        for (const p of res.items as ProjectPermission[]) {
+        for (const p of items) {
           const key = `${p.entity_id}:${p.operation}`
           map[key] = {
             entity_id: p.entity_id,
@@ -308,13 +308,29 @@ export function PermissionsPanel({ projectId, entities, roles }: PermissionsPane
                     setModalError(null)
                   }}
                 >
-                  <option value="none">none</option>
-                  <option value="owner">owner</option>
-                  <option value="role_scoped">role_scoped</option>
-                  <option value="tenant">tenant</option>
-                  <option value="custom_filter">custom_filter</option>
+                  <option value="none">none: every allowed caller sees every row</option>
+                  <option value="owner">owner: only rows the caller created</option>
+                  <option value="role_scoped">
+                    role_scoped: like owner, but the &quot;admin&quot; role sees all rows
+                  </option>
+                  <option value="custom_filter">custom_filter: only rows where a field equals a value</option>
+                  <option value="tenant">
+                    tenant: only rows of the caller&apos;s tenant (needs multi-tenant in Auth config)
+                  </option>
                 </select>
               </label>
+              {formRowRule === 'tenant' && (
+                <p style={{ color: 'var(--muted-foreground)', marginBlockEnd: 'var(--space-4)' }}>
+                  The whole entity becomes tenant-scoped: every operation is limited to the
+                  caller&apos;s tenant, new rows are stamped with it, and a signed-in user is required.
+                </p>
+              )}
+              {(formRowRule === 'owner' || formRowRule === 'role_scoped') && (
+                <p style={{ color: 'var(--muted-foreground)', marginBlockEnd: 'var(--space-4)' }}>
+                  The entity gets a created_by_id column. Callers always get a signed-in user, and rows
+                  outside their scope are reported as not found.
+                </p>
+              )}
 
               {formRowRule === 'custom_filter' && (
                 <div className="field-grid" style={{ marginBlockEnd: 'var(--space-4)' }}>
@@ -324,7 +340,7 @@ export function PermissionsPanel({ projectId, entities, roles }: PermissionsPane
                       required
                       value={formFilterField}
                       onChange={(e) => setFormFilterField(e.target.value)}
-                      placeholder="e.g. author_id"
+                      placeholder="e.g. status (string, enum, integer or boolean)"
                     />
                   </label>
                   <label>
@@ -333,7 +349,7 @@ export function PermissionsPanel({ projectId, entities, roles }: PermissionsPane
                       required
                       value={formFilterValue}
                       onChange={(e) => setFormFilterValue(e.target.value)}
-                      placeholder="e.g. current_user.id"
+                      placeholder="e.g. published"
                     />
                   </label>
                 </div>

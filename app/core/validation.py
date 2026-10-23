@@ -16,11 +16,24 @@ from typing import Any
 from pydantic import BaseModel
 
 from app.core import naming
-from app.core.enums import DbEngine, FieldType, OnDelete, RelationKind
+from app.core.enums import (
+    AuthCustomFieldType,
+    AuthOperation,
+    DbEngine,
+    FieldType,
+    JwtAlgorithm,
+    OnDelete,
+    RelationKind,
+    RowRule,
+    SmsProvider,
+    TokenStore,
+)
 from app.core.spec_models import (
     ALLOWED_OPERATIONS,
     SPEC_VERSION,
     Spec,
+    SpecAuth,
+    SpecAuthCustomField,
     SpecEntity,
     SpecEntityOptions,
     SpecField,
@@ -84,15 +97,17 @@ def validate(spec: Spec) -> list[ValidationIssue]:
             "unsupported_feature",
             "features is reserved for a later phase and must be empty",
         )
-    if spec.auth is not None:
-        # Auth block is accepted; deep validation added in M7 (auth generator module).
-        pass
-
+    if spec.auth is not None and spec.auth.enabled:
+        # Claim the auth tables first so an entity cannot silently shadow them.
+        for table in AUTH_TABLES:
+            ctx.tables[table] = "auth"
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
     entities_by_name = _check_entities(spec, ctx)
     _check_relations(spec, entities_by_name, ctx)
+    if spec.auth is not None:
+        _check_auth(spec.auth, entities_by_name, ctx)
     return ctx.issues
 
 
@@ -599,3 +614,483 @@ def _claim_name(ctx: _Ctx, entity_name: str, name: str, path: str) -> None:
         )
     else:
         namespace[name] = path
+
+
+# --- auth -------------------------------------------------------------------------------
+
+# Tables the generated auth module creates; entities may not use these names.
+AUTH_TABLES = (
+    "auth_invitations",
+    "auth_refresh_tokens",
+    "auth_tenants",
+    "auth_users",
+    "auth_verification_codes",
+)
+# Columns of auth_users that custom registration fields may not reuse.
+AUTH_USER_COLUMNS = frozenset(
+    {
+        "id",
+        "email",
+        "phone",
+        "password",
+        "password_hash",
+        "roles",
+        "is_active",
+        "email_verified_at",
+        "phone_verified_at",
+        "last_login_at",
+        "created_at",
+        "updated_at",
+        "deleted_at",
+        "tenant_id",
+        "tenant_name",
+        "invite_token",
+    }
+)
+_RATE_LIMIT_RE = re.compile(r"[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?")
+_EMAIL_RE = re.compile(r"[^@\s\"'<>]+@[^@\s\"'<>]+\.[^@\s\"'<>]+")
+_HOST_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?")
+_PHONE_E164_RE = re.compile(r"\+[1-9][0-9]{6,14}")
+_SMS_SENDER_ID_RE = re.compile(r"[A-Za-z0-9]{1,11}")
+_URL_RE = re.compile(r"https?://[^\s\"'<>\\]+")
+_MAX_ROLES = 50
+_MAX_CUSTOM_FIELDS = 30
+_MAX_LABEL_LENGTH = 100
+_MAX_AUTH_ENUM_VALUES = 50
+_TEXT_LIKE = {"string", "text", "email", "phone", "url"}
+
+
+def _single_line(value: str) -> bool:
+    return (
+        bool(value.strip())
+        and len(value) <= _MAX_LABEL_LENGTH
+        and not _CONTROL_CHARS_RE.search(value)
+    )
+
+
+def _check_auth(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> None:
+    # Structural checks run even when auth is switched off: the stored model must always
+    # be importable, so enum values and permission references have to make sense.
+    _check_auth_structure(auth, entities, ctx)
+    if not auth.enabled:
+        return
+    _check_auth_tokens(auth, ctx)
+    _check_auth_tenancy(auth, ctx)
+    _check_auth_email_sms(auth, ctx)
+    _check_auth_branding(auth, ctx)
+    _check_auth_roles(auth, ctx)
+    _check_auth_custom_fields(auth, ctx)
+    _check_auth_permission_rules(auth, entities, ctx)
+    _check_auth_invitations(auth, ctx)
+
+
+def _check_auth_tokens(auth: SpecAuth, ctx: _Ctx) -> None:
+    bounds = (
+        ("access_token_ttl_minutes", auth.access_token_ttl_minutes, 1, 1440),
+        ("refresh_token_ttl_days", auth.refresh_token_ttl_days, 1, 365),
+        ("password_reset.otp_ttl_minutes", auth.password_reset.otp_ttl_minutes, 1, 60),
+    )
+    for name, value, low, high in bounds:
+        if not low <= value <= high:
+            ctx.add(f"auth.{name}", "out_of_range", f"must be between {low} and {high}")
+    for name in ("login_rate_limit", "register_rate_limit", "reset_rate_limit"):
+        if not _RATE_LIMIT_RE.fullmatch(getattr(auth, name)):
+            ctx.add(
+                f"auth.{name}",
+                "invalid_value",
+                "must look like '5/minute', '10/hour' or '5/15minutes'",
+            )
+
+
+def _check_auth_structure(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> None:
+    for path, value, allowed in (
+        ("auth.token_store", auth.token_store, {s.value for s in TokenStore}),
+        ("auth.jwt_algorithm", auth.jwt_algorithm, {a.value for a in JwtAlgorithm}),
+        ("auth.deletion_mode", auth.deletion_mode, {"soft", "hard"}),
+    ):
+        if value not in allowed:
+            ctx.add(path, "invalid_value", f"must be one of {', '.join(sorted(allowed))}")
+    if auth.sms_provider is not None and auth.sms_provider not in {p.value for p in SmsProvider}:
+        ctx.add("auth.sms_provider", "invalid_value", "must be twilio, aws_sns or vonage")
+    valid_types = {t.value for t in AuthCustomFieldType}
+    for i, f in enumerate(auth.registration.custom_fields):
+        if f.type not in valid_types:
+            ctx.add(
+                f"auth.registration.custom_fields[{i}].type",
+                "invalid_value",
+                f"must be one of {', '.join(sorted(valid_types))}",
+            )
+    _check_auth_permissions(auth, entities, ctx)
+
+
+def _check_auth_permissions(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> None:
+    operations = {o.value for o in AuthOperation}
+    row_rules = {r.value for r in RowRule}
+    role_names = {r.name for r in auth.roles}
+    seen: set[tuple[str, str]] = set()
+    for i, perm in enumerate(auth.permissions):
+        p = f"auth.permissions[{i}]"
+        if perm.entity not in entities:
+            ctx.add(f"{p}.entity", "unknown_entity", f"no entity named {perm.entity[:40]!r}")
+        if perm.operation not in operations:
+            ctx.add(
+                f"{p}.operation", "invalid_value", f"must be one of {', '.join(sorted(operations))}"
+            )
+        elif (perm.entity, perm.operation) in seen:
+            ctx.add(p, "duplicate_name", "each entity and operation may appear only once")
+        seen.add((perm.entity, perm.operation))
+        for role in perm.roles:
+            if role not in role_names:
+                ctx.add(f"{p}.roles", "unknown_reference", f"role {role[:40]!r} does not exist")
+        if perm.row_rule is not None and perm.row_rule not in row_rules:
+            ctx.add(
+                f"{p}.row_rule", "invalid_value", f"must be one of {', '.join(sorted(row_rules))}"
+            )
+        custom = perm.row_rule == RowRule.custom_filter
+        has_filter = perm.custom_filter_field is not None or perm.custom_filter_value is not None
+        if custom and (perm.custom_filter_field is None or perm.custom_filter_value is None):
+            ctx.add(
+                p, "required", "custom_filter needs custom_filter_field and custom_filter_value"
+            )
+        elif has_filter and not custom:
+            ctx.add(
+                p,
+                "not_applicable",
+                "custom filter values are only valid for row_rule custom_filter",
+            )
+
+
+def invitations_enabled(auth: SpecAuth) -> bool:
+    """Invitations exist when registration is invite-only, any role is granted by invite, or
+    tenants are in use (a new user joins an existing tenant through an invitation)."""
+    return (
+        auth.registration.invite_only or auth.multi_tenant or any(r.invite_only for r in auth.roles)
+    )
+
+
+def _check_auth_tenancy(auth: SpecAuth, ctx: _Ctx) -> None:
+    if auth.multi_tenant and auth.registration.invite_only:
+        ctx.add(
+            "auth.multi_tenant",
+            "invalid_value",
+            "with multi-tenancy, open sign-up creates a tenant and invitations join one; "
+            "invite-only registration would leave no way to create the first tenant",
+        )
+    if auth.multi_tenant and ADMIN_ROLE not in {r.name for r in auth.roles}:
+        ctx.add(
+            "auth.multi_tenant",
+            "unknown_reference",
+            f"the user who creates a tenant becomes its {ADMIN_ROLE!r}, so a role with that "
+            "name must exist",
+        )
+    if not auth.multi_tenant:
+        for i, perm in enumerate(auth.permissions):
+            if perm.row_rule == RowRule.tenant:
+                ctx.add(
+                    f"auth.permissions[{i}].row_rule",
+                    "invalid_value",
+                    "the tenant row rule needs multi_tenant to be switched on",
+                )
+
+
+def _check_auth_invitations(auth: SpecAuth, ctx: _Ctx) -> None:
+    for i, role in enumerate(auth.roles):
+        if role.invite_only and (role.is_default or role.self_assignable):
+            ctx.add(
+                f"auth.roles[{i}]",
+                "invalid_value",
+                "an invite-only role cannot also be a default or self-assignable role",
+            )
+    if not invitations_enabled(auth):
+        return
+    where = "auth.roles"
+    if auth.multi_tenant:
+        where = "auth.multi_tenant"
+    elif auth.registration.invite_only:
+        where = "auth.registration.invite_only"
+    if auth.smtp is None:
+        ctx.add(where, "required", "invitations are sent by email, so smtp must be configured")
+    if auth.app_url is None:
+        ctx.add(where, "required", "app_url is needed to build the link in invitation emails")
+    if ADMIN_ROLE not in {r.name for r in auth.roles}:
+        ctx.add(
+            where,
+            "unknown_reference",
+            f"only the {ADMIN_ROLE!r} role can send invitations, so a role named "
+            f"{ADMIN_ROLE!r} must exist",
+        )
+
+
+# Entity field types a custom_filter row rule can compare with a plain `==`.
+_FILTERABLE_TYPES = {"string", "enum", "integer", "bigint", "boolean"}
+ADMIN_ROLE = "admin"
+# "fk_" + table + "_created_by_id_auth_users" (and the tenant one) must stay within the
+# 63 characters Postgres allows for a name.
+_MAX_OWNED_TABLE = 35
+
+
+def _check_auth_permission_rules(
+    auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx
+) -> None:
+    role_names = {r.name for r in auth.roles}
+    for i, perm in enumerate(auth.permissions):
+        p = f"auth.permissions[{i}]"
+        if perm.row_rule == RowRule.role_scoped and ADMIN_ROLE not in role_names:
+            ctx.add(
+                f"{p}.row_rule",
+                "unknown_reference",
+                f"role_scoped lets the {ADMIN_ROLE!r} role see every row, so a role "
+                f"named {ADMIN_ROLE!r} must exist",
+            )
+        owner_rule = perm.row_rule in (RowRule.owner, RowRule.role_scoped, RowRule.tenant)
+        owned_entity = entities.get(perm.entity)
+        if (
+            owner_rule
+            and owned_entity is not None
+            and len(owned_entity.table_name) > _MAX_OWNED_TABLE
+        ):
+            ctx.add(
+                f"{p}.entity",
+                "identifier_too_long",
+                f"{owned_entity.table_name!r} gets a created_by_id foreign key whose generated "
+                f"name must fit 63 characters, so the table name can be at most "
+                f"{_MAX_OWNED_TABLE} characters",
+            )
+        injected = {
+            RowRule.owner: "created_by_id",
+            RowRule.role_scoped: "created_by_id",
+            RowRule.tenant: "tenant_id",
+        }.get(perm.row_rule)  # type: ignore[call-overload]
+        if (
+            injected
+            and owned_entity is not None
+            and any(f.name == injected for f in owned_entity.fields)
+        ):
+            ctx.add(
+                f"{p}.entity",
+                "reserved_name",
+                f"the {perm.row_rule} rule adds a {injected!r} column to "
+                f"{owned_entity.name}, which already has a field of that name",
+            )
+        if perm.row_rule != RowRule.custom_filter:
+            continue
+        entity = entities.get(perm.entity)
+        if entity is None or perm.custom_filter_field is None or perm.custom_filter_value is None:
+            continue  # reported by the structural checks
+        field = next((f for f in entity.fields if f.name == perm.custom_filter_field), None)
+        if field is None:
+            ctx.add(
+                f"{p}.custom_filter_field",
+                "unknown_field",
+                f"{entity.name} has no field {perm.custom_filter_field[:40]!r}",
+            )
+        elif field.type not in _FILTERABLE_TYPES:
+            ctx.add(
+                f"{p}.custom_filter_field",
+                "unsupported_value",
+                f"a custom filter can compare string, enum, integer and boolean fields, "
+                f"not {field.type}",
+            )
+        elif not _filter_value_ok(field, perm.custom_filter_value):
+            ctx.add(
+                f"{p}.custom_filter_value",
+                "invalid_value",
+                f"{perm.custom_filter_value[:40]!r} is not a valid {field.type} value",
+            )
+
+
+def _filter_value_ok(field: SpecField, value: str) -> bool:
+    match field.type:
+        case "integer" | "bigint":
+            try:
+                int(value)
+            except ValueError:
+                return False
+            return True
+        case "boolean":
+            return value in ("true", "false")
+        case "enum":
+            return value in (field.enum_values or [])
+        case _:
+            return len(value) <= MAX_STRING_LENGTH and not _CONTROL_CHARS_RE.search(value)
+
+
+def _check_auth_email_sms(auth: SpecAuth, ctx: _Ctx) -> None:
+    reset = auth.password_reset
+    if (reset.email_magic_link or auth.registration.email_verification_required) and not auth.smtp:
+        ctx.add(
+            "auth.smtp",
+            "required",
+            "smtp is required when email magic links or email verification are enabled",
+        )
+    if auth.smtp is not None:
+        smtp = auth.smtp
+        if not _HOST_RE.fullmatch(smtp.host):
+            ctx.add("auth.smtp.host", "invalid_value", "must be a host name or IP address")
+        if not 1 <= smtp.port <= 65535:
+            ctx.add("auth.smtp.port", "out_of_range", "must be between 1 and 65535")
+        if len(smtp.from_email) > 255 or not _EMAIL_RE.fullmatch(smtp.from_email):
+            ctx.add("auth.smtp.from_email", "invalid_value", "must be an email address")
+        if not _single_line(smtp.from_name):
+            ctx.add("auth.smtp.from_name", "invalid_value", "must be a single non-blank line")
+    if reset.sms_otp:
+        if auth.sms_provider is None:
+            ctx.add("auth.sms_provider", "required", "required when sms_otp is enabled")
+        if auth.sms is None:
+            ctx.add("auth.sms", "required", "required when sms_otp is enabled")
+    if auth.sms is not None:
+        sender = auth.sms.from_number
+        if auth.sms_provider == SmsProvider.aws_sns:
+            valid = bool(_SMS_SENDER_ID_RE.fullmatch(sender) or _PHONE_E164_RE.fullmatch(sender))
+            hint = "an E.164 number or an alphanumeric sender id (max 11 characters)"
+        else:
+            valid = bool(_PHONE_E164_RE.fullmatch(sender))
+            hint = "an E.164 number such as +14155550123"
+        if not valid:
+            ctx.add("auth.sms.from_number", "invalid_value", f"must be {hint}")
+
+
+def _check_auth_branding(auth: SpecAuth, ctx: _Ctx) -> None:
+    if auth.app_name is not None and not _single_line(auth.app_name):
+        ctx.add("auth.app_name", "invalid_value", "must be a single non-blank line")
+    if auth.app_url is not None and (
+        len(auth.app_url) > 2000 or not _URL_RE.fullmatch(auth.app_url)
+    ):
+        ctx.add("auth.app_url", "invalid_value", "must be an http(s) URL")
+    needs_links = (
+        auth.password_reset.email_magic_link or auth.registration.email_verification_required
+    )
+    if needs_links and auth.app_url is None:
+        ctx.add(
+            "auth.app_url",
+            "required",
+            "app_url is required to build the links in verification and magic link emails",
+        )
+
+
+def _check_auth_roles(auth: SpecAuth, ctx: _Ctx) -> None:
+    if len(auth.roles) > _MAX_ROLES:
+        ctx.add("auth.roles", "too_many", f"at most {_MAX_ROLES} roles are allowed")
+    names: set[str] = set()
+    for i, role in enumerate(auth.roles):
+        p = f"auth.roles[{i}]"
+        ok = _identifier(ctx, f"{p}.name", role.name, naming.SNAKE_NAME_RE, sql=False, python=False)
+        if ok and role.name in names:
+            ctx.add(f"{p}.name", "duplicate_name", f"role {role.name!r} is already defined")
+        names.add(role.name)
+        if not _single_line(role.label):
+            ctx.add(f"{p}.label", "invalid_value", "must be a single non-blank line")
+    parents = {r.name: r.inherits_from for r in auth.roles}
+    for i, role in enumerate(auth.roles):
+        if role.inherits_from is None:
+            continue
+        p = f"auth.roles[{i}].inherits_from"
+        if role.inherits_from not in names:
+            ctx.add(p, "unknown_reference", f"role {role.inherits_from[:40]!r} does not exist")
+            continue
+        seen = {role.name}
+        cursor: str | None = role.inherits_from
+        while cursor is not None:
+            if cursor in seen:
+                ctx.add(p, "cycle", "role inheritance must not form a cycle")
+                break
+            seen.add(cursor)
+            cursor = parents.get(cursor)
+
+
+def _check_auth_custom_fields(auth: SpecAuth, ctx: _Ctx) -> None:
+    fields = auth.registration.custom_fields
+    if len(fields) > _MAX_CUSTOM_FIELDS:
+        ctx.add(
+            "auth.registration.custom_fields",
+            "too_many",
+            f"at most {_MAX_CUSTOM_FIELDS} custom fields are allowed",
+        )
+    seen: set[str] = set()
+    valid_types = {t.value for t in AuthCustomFieldType}
+    for i, f in enumerate(fields):
+        p = f"auth.registration.custom_fields[{i}]"
+        name_ok = _identifier(
+            ctx, f"{p}.name", f.name, naming.SNAKE_NAME_RE, sql=True, attribute=True
+        )
+        if name_ok and f.name in AUTH_USER_COLUMNS:
+            ctx.add(f"{p}.name", "reserved_name", f"{f.name!r} is a built-in column of auth_users")
+        elif name_ok and f.name in seen:
+            ctx.add(f"{p}.name", "duplicate_name", f"custom field {f.name!r} is already defined")
+        seen.add(f.name)
+        if not _single_line(f.label):
+            ctx.add(f"{p}.label", "invalid_value", "must be a single non-blank line")
+        if f.type not in valid_types:
+            continue  # reported by _check_auth_structure
+        _check_custom_field_constraints(f, p, ctx)
+
+
+def _check_custom_field_constraints(f: SpecAuthCustomField, p: str, ctx: _Ctx) -> None:
+    if f.type == "enum":
+        values = f.enum_values or []
+        if not values:
+            ctx.add(f"{p}.enum_values", "required", "enum fields need at least one value")
+        elif len(values) > _MAX_AUTH_ENUM_VALUES or len(set(values)) != len(values):
+            ctx.add(f"{p}.enum_values", "invalid_value", "values must be unique, at most 50")
+        elif not all(_ENUM_VALUE_RE.fullmatch(v) for v in values):
+            ctx.add(f"{p}.enum_values", "invalid_value", "values must match [A-Za-z0-9_.-]{1,64}")
+    elif f.enum_values:
+        ctx.add(f"{p}.enum_values", "not_applicable", "only valid for enum fields")
+    for attr in ("min_length", "max_length"):
+        length = getattr(f, attr)
+        if length is None:
+            continue
+        if f.type not in _TEXT_LIKE:
+            ctx.add(f"{p}.{attr}", "not_applicable", "only valid for text-like fields")
+        elif not 0 <= length <= MAX_STRING_LENGTH:
+            ctx.add(f"{p}.{attr}", "out_of_range", f"must be between 0 and {MAX_STRING_LENGTH}")
+    if f.min_length is not None and f.max_length is not None and f.min_length > f.max_length:
+        ctx.add(f"{p}.min_length", "invalid_range", "min_length must not exceed max_length")
+    for attr in ("min_value", "max_value"):
+        bound = getattr(f, attr)
+        if bound is None:
+            continue
+        if f.type not in ("integer", "float"):
+            ctx.add(f"{p}.{attr}", "not_applicable", "only valid for integer and float fields")
+        elif not math.isfinite(bound):
+            ctx.add(f"{p}.{attr}", "invalid_value", "must be a finite number")
+    if (
+        f.min_value is not None
+        and f.max_value is not None
+        and math.isfinite(f.min_value)
+        and math.isfinite(f.max_value)
+        and f.min_value > f.max_value
+    ):
+        ctx.add(f"{p}.min_value", "invalid_range", "min_value must not exceed max_value")
+    if f.default_value is not None:
+        _check_custom_default(f, p, ctx)
+
+
+def _check_custom_default(f: SpecAuthCustomField, p: str, ctx: _Ctx) -> None:
+    value = f.default_value or ""
+    try:
+        match f.type:
+            case "integer":
+                int(value)
+            case "float":
+                if not math.isfinite(float(value)):
+                    raise ValueError(value)
+            case "boolean":
+                if value not in ("true", "false"):
+                    raise ValueError(value)
+            case "date":
+                date.fromisoformat(value)
+            case "datetime":
+                datetime.fromisoformat(value)
+            case "enum":
+                if value not in (f.enum_values or []):
+                    raise ValueError(value)
+            case _:
+                if len(value) > MAX_STRING_LENGTH or _CONTROL_CHARS_RE.search(value):
+                    raise ValueError(value)
+    except ValueError:
+        ctx.add(
+            f"{p}.default_value",
+            "invalid_default",
+            f"{value[:40]!r} is not a valid default for type {f.type}",
+        )

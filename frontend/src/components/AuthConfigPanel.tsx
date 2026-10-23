@@ -307,7 +307,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 onChange={(e) => setTokenStore(e.target.value as TokenStore)}
               >
                 <option value="db">db</option>
-                <option value="redis">redis</option>
+                <option value="redis">redis (needs the redis package)</option>
               </select>
             </label>
             <label>
@@ -339,7 +339,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 onChange={(e) => setJwtAlgorithm(e.target.value as JwtAlgorithm)}
               >
                 <option value="HS256">HS256</option>
-                <option value="RS256">RS256</option>
+                <option value="RS256">RS256 (needs the cryptography package)</option>
               </select>
             </label>
           </div>
@@ -501,7 +501,8 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 checked={inviteOnly}
                 onChange={(e) => setInviteOnly(e.target.checked)}
               />{' '}
-              Invite only
+              Invite only (admins send invitation emails; needs SMTP, an app URL and an
+              &quot;admin&quot; role)
             </label>
             <label>
               <input
@@ -509,7 +510,8 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 checked={multiTenant}
                 onChange={(e) => setMultiTenant(e.target.checked)}
               />{' '}
-              Multi-tenant
+              Multi-tenant (sign-up creates a tenant and its admin; invitations join one; cannot be
+              combined with invite-only sign-up)
             </label>
           </div>
         </div>

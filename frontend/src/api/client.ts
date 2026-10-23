@@ -159,6 +159,15 @@ export const api = {
     request<Page<ProjectPermission>>(
       `/projects/${projectId}/permissions?limit=${limit}&offset=${offset}`,
     ),
+  /** Every permission of a project, fetched page by page (the API caps a page at 200). */
+  async listAllPermissions(projectId: string): Promise<ProjectPermission[]> {
+    const all: ProjectPermission[] = []
+    for (let offset = 0; ; offset += 200) {
+      const page = await api.listPermissions(projectId, 200, offset)
+      all.push(...page.items)
+      if (all.length >= page.total || page.items.length === 0) return all
+    }
+  },
   bulkUpsertPermissions: (projectId: string, permissions: PermissionEntry[]) =>
     request<ProjectPermission[]>(`/projects/${projectId}/permissions`, {
       method: 'POST',

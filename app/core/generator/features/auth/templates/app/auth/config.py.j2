@@ -1,0 +1,108 @@
+"""Auth settings (generated).
+
+Constants below were fixed when the project was generated. Secrets are read from the
+environment (or .env) at first use and are never written into source.
+"""
+
+from functools import lru_cache
+
+from pydantic import Field{{ ', field_validator' if rs256 else '' }}
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+APP_NAME = {{ app_name | pyrepr }}
+APP_URL = {{ a.app_url | pyrepr }}
+
+JWT_ALGORITHM = {{ jwt_algorithm | pyrepr }}
+TOKEN_STORE = {{ ('redis' if redis_store else 'db') | pyrepr }}
+ACCESS_TOKEN_TTL_MINUTES = {{ a.access_token_ttl_minutes }}
+REFRESH_TOKEN_TTL_DAYS = {{ a.refresh_token_ttl_days }}
+OTP_TTL_MINUTES = {{ a.password_reset.otp_ttl_minutes }}
+VERIFICATION_TTL_HOURS = 24
+MAX_OTP_ATTEMPTS = 5
+
+EMAIL_VERIFICATION_REQUIRED = {{ verification_required | pyrepr }}
+EMAIL_MAGIC_LINK_ENABLED = {{ magic_link | pyrepr }}
+SMS_OTP_ENABLED = {{ sms_otp | pyrepr }}
+HARD_DELETE = {{ hard_delete | pyrepr }}
+SECURITY_HEADERS_ENABLED = {{ a.security_headers_enabled | pyrepr }}
+INVITE_ONLY = {{ invite_only | pyrepr }}
+MULTI_TENANT = {{ multi_tenant | pyrepr }}
+# The role the user who creates a tenant starts with.
+ADMIN_ROLE = 'admin'
+INVITATIONS_ENABLED = {{ invitations | pyrepr }}
+INVITATION_TTL_DAYS = 7
+
+LOGIN_RATE_LIMIT = {{ a.login_rate_limit | pyrepr }}
+REGISTER_RATE_LIMIT = {{ a.register_rate_limit | pyrepr }}
+RESET_RATE_LIMIT = {{ a.reset_rate_limit | pyrepr }}
+
+# Roles given to every new account, and each role's parent (a role holds its parent's rights).
+DEFAULT_ROLES: tuple[str, ...] = {{ default_roles }}
+# Roles a new user may pick for themselves when registering.
+SELF_ASSIGNABLE_ROLES: tuple[str, ...] = {{ self_assignable }}
+ROLE_PARENTS: dict[str, str | None] = {{ role_parents }}
+
+{% if a.smtp %}
+SMTP_HOST = {{ a.smtp.host | pyrepr }}
+SMTP_PORT = {{ a.smtp.port | pyrepr }}
+SMTP_USE_TLS = {{ a.smtp.use_tls | pyrepr }}
+SMTP_FROM_EMAIL = {{ a.smtp.from_email | pyrepr }}
+SMTP_FROM_NAME = {{ a.smtp.from_name | pyrepr }}
+{% else %}
+SMTP_HOST: str | None = None
+{% endif %}
+{% if sms_provider %}
+SMS_PROVIDER = {{ sms_provider | pyrepr }}
+SMS_FROM = {{ a.sms.from_number | pyrepr }}
+{% else %}
+SMS_PROVIDER: str | None = None
+{% endif %}
+
+
+class AuthSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+{% if rs256 %}
+    # RSA private key (PEM) that signs access tokens. Generate one with: python -m app.auth.keys
+    # In a .env file or compose, write the newlines as \n inside double quotes.
+    auth_jwt_private_key: str = Field(min_length=200)
+
+    @field_validator("auth_jwt_private_key")
+    @classmethod
+    def unescape_newlines(cls, value: str) -> str:
+        return value.replace("\\n", "\n")
+
+    @property
+    def jwt_key(self) -> str:
+        return self.auth_jwt_private_key
+{% else %}
+    # Signs access tokens. Generate one with: python -m app.auth.keys
+    auth_jwt_secret: str = Field(min_length=32)
+
+    @property
+    def jwt_key(self) -> str:
+        return self.auth_jwt_secret
+{% endif %}
+{% if redis_store %}
+    # Where refresh tokens are kept.
+    redis_url: str = "redis://localhost:6379/0"
+{% endif %}
+{% if a.smtp %}
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+{% endif %}
+{% if sms_provider == "twilio" %}
+    twilio_account_sid: str | None = None
+    twilio_auth_token: str | None = None
+{% elif sms_provider == "vonage" %}
+    vonage_api_key: str | None = None
+    vonage_api_secret: str | None = None
+{% elif sms_provider == "aws_sns" %}
+    # Credentials come from the standard AWS chain (environment, profile or instance role).
+    aws_region: str | None = None
+{% endif %}
+
+
+@lru_cache
+def get_auth_settings() -> AuthSettings:
+    return AuthSettings()  # type: ignore[call-arg]

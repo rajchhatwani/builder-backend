@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
-import type { GenerationSummary, Preview, Project, ValidationIssue } from '../api/types'
+import type { AuthConfig, GenerationSummary, Preview, Project, ValidationIssue } from '../api/types'
+import { NextSteps } from './NextSteps'
 
 interface GeneratePanelProps {
   project: Project
@@ -19,7 +20,7 @@ function issuesFrom(err: unknown): ValidationIssue[] | null {
   return null
 }
 
-function IssueList({ issues }: { issues: ValidationIssue[] }) {
+export function IssueList({ issues }: { issues: ValidationIssue[] }) {
   return (
     <div className="table">
       <table>
@@ -53,6 +54,8 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   const [history, setHistory] = useState<GenerationSummary[]>([])
   const [busy, setBusy] = useState<'validate' | 'preview' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Set after a download, so the user sees what to do with the zip.
+  const [downloaded, setDownloaded] = useState<{ auth: AuthConfig | null } | null>(null)
 
   async function loadHistory() {
     const page = await api.listGenerations(project.id, 20, 0)
@@ -64,6 +67,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
     setValid(null)
     setPreview(null)
     setError(null)
+    setDownloaded(null)
     loadHistory()
   }, [project.id, modelVersion])
 
@@ -89,6 +93,8 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         URL.revokeObjectURL(url)
         setValid(true)
         setIssues([])
+        const auth = await api.getAuthConfig(project.id).catch(() => null)
+        setDownloaded({ auth })
         await loadHistory()
       }
     } catch (err) {
@@ -108,16 +114,16 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   return (
     <>
       <div className="table-toolbar">
-        <h3>Generate</h3>
+        <h3>Your backend</h3>
         <div className="row-actions">
           <button className="outline small" disabled={busy !== null} onClick={() => run('validate')}>
-            {busy === 'validate' ? 'Validating…' : 'Validate'}
+            {busy === 'validate' ? 'Checking…' : 'Check'}
           </button>
           <button className="outline small" disabled={busy !== null} onClick={() => run('preview')}>
             {busy === 'preview' ? 'Rendering…' : 'Preview files'}
           </button>
           <button className="small" disabled={busy !== null} onClick={() => run('download')}>
-            {busy === 'download' ? 'Generating…' : 'Download zip'}
+            {busy === 'download' ? 'Generating…' : 'Download'}
           </button>
         </div>
       </div>
@@ -130,7 +136,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         )}
         {valid === true && !preview && (
           <div role="alert" data-variant="success">
-            The model is valid.
+            Everything checks out. You can download your backend.
           </div>
         )}
         {valid === false && issues && (
@@ -165,10 +171,12 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         )}
         {valid === null && !error && !preview && (
           <p className="empty-state">
-            Validate the model, preview the files, or download the generated project as a zip.
+            Check the model, preview the files, or download the finished project as a zip.
           </p>
         )}
       </div>
+
+      {downloaded && <NextSteps slug={project.slug} auth={downloaded.auth} />}
 
       <h3>Generation history</h3>
       <div className="card">

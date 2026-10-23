@@ -4,7 +4,19 @@ from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.enums import AuthOperation, DbEngine, FieldType, OnDelete, RelationKind, RowRule
+from app.core.enums import (
+    AuthCustomFieldType,
+    AuthOperation,
+    DbEngine,
+    DeletionMode,
+    FieldType,
+    JwtAlgorithm,
+    OnDelete,
+    RelationKind,
+    RowRule,
+    SmsProvider,
+    TokenStore,
+)
 from app.core.spec_models import (
     Spec,
     SpecAuth,
@@ -99,9 +111,7 @@ class SpecService:
         # ── Auth block (optional) ──────────────────────────────────────────────
         auth_config_row = (
             await self.session.execute(
-                select(ProjectAuthConfig).where(
-                    ProjectAuthConfig.project_id == project_id
-                )
+                select(ProjectAuthConfig).where(ProjectAuthConfig.project_id == project_id)
             )
         ).scalar_one_or_none()
 
@@ -176,17 +186,9 @@ class SpecService:
                         for cf in cf_rows
                     ],
                 ),
-                smtp=(
-                    SpecSmtpConfig.model_validate(ac.smtp_config)
-                    if ac.smtp_config
-                    else None
-                ),
+                smtp=(SpecSmtpConfig.model_validate(ac.smtp_config) if ac.smtp_config else None),
                 sms_provider=ac.sms_provider.value if ac.sms_provider else None,
-                sms=(
-                    SpecSmsConfig.model_validate(ac.sms_config)
-                    if ac.sms_config
-                    else None
-                ),
+                sms=(SpecSmsConfig.model_validate(ac.sms_config) if ac.sms_config else None),
                 login_rate_limit=ac.login_rate_limit,
                 register_rate_limit=ac.register_rate_limit,
                 reset_rate_limit=ac.reset_rate_limit,
@@ -244,6 +246,9 @@ class SpecService:
 
         The project's own identity (name, slug, description) is left alone: a spec
         exported from one project can be imported into another without a slug clash.
+        The `auth` block is replaced as a whole when the spec has one. A spec without it
+        leaves the project's auth settings as they are (permissions are re-attached to the
+        re-created entities by name). Credentials are never part of a spec.
         All-or-nothing: an invalid spec changes nothing.
         """
         project = await self._get_project_or_404(project_id)
@@ -256,6 +261,10 @@ class SpecService:
                 details=[issue.model_dump() for issue in issues],
             )
 
+        # Deleting entities cascades to their permissions, so remember them first.
+        kept_permissions = (
+            await self._permissions_by_entity_name(project_id) if spec.auth is None else []
+        )
         await self.session.execute(
             delete(Relation).where(Relation.project_id == project_id),
             execution_options={"synchronize_session": False},
@@ -309,6 +318,12 @@ class SpecService:
                     required=r.required,
                 )
             )
+        if spec.auth is not None:
+            await self._replace_auth(project_id, spec.auth, ids_by_name)
+        else:
+            self._add_permissions(
+                project_id, [p for p in kept_permissions if p.entity in ids_by_name], ids_by_name
+            )
         project.db_engine = DbEngine(spec.project.db_engine)
         project.version += 1
         try:
@@ -319,3 +334,115 @@ class SpecService:
                 code="conflict", message="spec conflicts with existing data", status_code=409
             ) from exc
         return await self.assemble(project_id)
+
+    # --- auth import ------------------------------------------------------------------
+
+    async def _permissions_by_entity_name(self, project_id: uuid.UUID) -> list[SpecPermission]:
+        rows = (
+            await self.session.execute(
+                select(ProjectPermission, Entity.name)
+                .join(Entity, Entity.id == ProjectPermission.entity_id)
+                .where(ProjectPermission.project_id == project_id)
+            )
+        ).all()
+        return [
+            SpecPermission(
+                entity=entity_name,
+                operation=AuthOperation(p.operation).value,
+                roles=list(p.roles),
+                row_rule=RowRule(p.row_rule).value if p.row_rule else None,
+                custom_filter_field=p.custom_filter_field,
+                custom_filter_value=p.custom_filter_value,
+            )
+            for p, entity_name in rows
+        ]
+
+    def _add_permissions(
+        self,
+        project_id: uuid.UUID,
+        permissions: list[SpecPermission],
+        ids_by_name: dict[str, uuid.UUID],
+    ) -> None:
+        for p in permissions:
+            self.session.add(
+                ProjectPermission(
+                    project_id=project_id,
+                    entity_id=ids_by_name[p.entity],
+                    operation=AuthOperation(p.operation),
+                    roles=list(p.roles),
+                    row_rule=RowRule(p.row_rule) if p.row_rule else None,
+                    custom_filter_field=p.custom_filter_field,
+                    custom_filter_value=p.custom_filter_value,
+                )
+            )
+
+    async def _replace_auth(
+        self, project_id: uuid.UUID, auth: SpecAuth, ids_by_name: dict[str, uuid.UUID]
+    ) -> None:
+        for model in (ProjectPermission, ProjectRole, AuthCustomField):
+            await self.session.execute(
+                delete(model).where(model.project_id == project_id),
+                execution_options={"synchronize_session": False},
+            )
+        config = (
+            await self.session.execute(
+                select(ProjectAuthConfig).where(ProjectAuthConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if config is None:
+            config = ProjectAuthConfig(project_id=project_id)
+            self.session.add(config)
+        config.enabled = auth.enabled
+        config.token_store = TokenStore(auth.token_store)
+        config.access_token_ttl_minutes = auth.access_token_ttl_minutes
+        config.refresh_token_ttl_days = auth.refresh_token_ttl_days
+        config.jwt_algorithm = JwtAlgorithm(auth.jwt_algorithm)
+        config.email_magic_link_enabled = auth.password_reset.email_magic_link
+        config.sms_otp_enabled = auth.password_reset.sms_otp
+        config.otp_ttl_minutes = auth.password_reset.otp_ttl_minutes
+        config.email_verification_required = auth.registration.email_verification_required
+        config.invite_only = auth.registration.invite_only
+        config.multi_tenant = auth.multi_tenant
+        config.deletion_mode = DeletionMode(auth.deletion_mode)
+        config.smtp_config = auth.smtp.model_dump() if auth.smtp else None
+        config.sms_provider = SmsProvider(auth.sms_provider) if auth.sms_provider else None
+        config.sms_config = auth.sms.model_dump() if auth.sms else None
+        config.login_rate_limit = auth.login_rate_limit
+        config.register_rate_limit = auth.register_rate_limit
+        config.reset_rate_limit = auth.reset_rate_limit
+        config.security_headers_enabled = auth.security_headers_enabled
+        config.app_name = auth.app_name
+        config.app_url = auth.app_url
+        for position, role in enumerate(auth.roles):
+            self.session.add(
+                ProjectRole(
+                    project_id=project_id,
+                    name=role.name,
+                    label=role.label,
+                    is_default=role.is_default,
+                    self_assignable=role.self_assignable,
+                    invite_only=role.invite_only,
+                    inherits_from=role.inherits_from,
+                    position=position,
+                )
+            )
+        for position, f in enumerate(auth.registration.custom_fields):
+            self.session.add(
+                AuthCustomField(
+                    project_id=project_id,
+                    name=f.name,
+                    label=f.label,
+                    type=AuthCustomFieldType(f.type),
+                    required=f.required,
+                    unique=f.unique,
+                    indexed=f.indexed,
+                    min_length=f.min_length,
+                    max_length=f.max_length,
+                    min_value=f.min_value,
+                    max_value=f.max_value,
+                    default_value=f.default_value,
+                    enum_values=f.enum_values,
+                    position=position,
+                )
+            )
+        self._add_permissions(project_id, auth.permissions, ids_by_name)

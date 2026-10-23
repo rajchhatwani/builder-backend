@@ -6,6 +6,7 @@ Pure-Python tests — no DB, no HTTP.
 import pytest
 from pydantic import ValidationError
 
+from app.models.enums import SmsProvider
 from app.schemas.auth_secrets import (
     AuthSecretsWrite,
     AwsSnsSecretsWrite,
@@ -13,8 +14,6 @@ from app.schemas.auth_secrets import (
     TwilioSecretsWrite,
     VonageSecretsWrite,
 )
-from app.models.enums import SmsProvider
-
 
 # ── SmtpSecretsWrite ──────────────────────────────────────────────────────────
 
@@ -113,7 +112,7 @@ def test_full_write_with_all_providers() -> None:
 
 def test_auth_secrets_status_has_no_plaintext_fields() -> None:
     """Ensure AuthSecretsStatus has no field that could hold a raw secret value."""
-    from app.schemas.auth_secrets import SmsSecretsStatus, SmtpSecretsStatus, AuthSecretsStatus
+    from app.schemas.auth_secrets import AuthSecretsStatus, SmsSecretsStatus, SmtpSecretsStatus
 
     # These substrings indicate raw credential storage if present as a field name
     # (excludes _set / _configured boolean suffixes by checking the full name)

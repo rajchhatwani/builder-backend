@@ -1,0 +1,45 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Workspace", "slug": "workspace", "description": "Multi-tenant task tracker", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Announcement",
+      "table_name": "announcements",
+      "plural_path": "announcements",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120}
+      ]
+    },
+    {
+      "name": "Task",
+      "table_name": "tasks",
+      "plural_path": "tasks",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120},
+        {"name": "done", "type": "boolean", "required": false, "default": false}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://workspace.example.com",
+    "password_reset": {"email_magic_link": true, "sms_otp": false},
+    "registration": {"email_verification_required": true},
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@workspace.example.com", "from_name": "Workspace"},
+    "roles": [
+      {"name": "admin", "label": "Admin"},
+      {"name": "member", "label": "Member", "is_default": true}
+    ],
+    "permissions": [
+      {"entity": "Announcement", "operation": "list", "roles": [], "row_rule": "tenant"},
+      {"entity": "Announcement", "operation": "create", "roles": ["admin"]},
+      {"entity": "Task", "operation": "create", "roles": ["member", "admin"], "row_rule": "tenant"},
+      {"entity": "Task", "operation": "list", "roles": ["member", "admin"], "row_rule": "role_scoped"},
+      {"entity": "Task", "operation": "delete", "roles": ["member", "admin"], "row_rule": "owner"}
+    ]
+  }
+}

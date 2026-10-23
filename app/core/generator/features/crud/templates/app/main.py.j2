@@ -9,6 +9,13 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
+{% if auth %}
+from app.auth.config import get_auth_settings
+{% if auth.security_headers_enabled %}
+from app.auth.middleware import SecurityHeadersMiddleware
+{% endif %}
+from app.auth.router import router as _auth_router
+{% endif %}
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
@@ -21,6 +28,9 @@ from app.routers.{{ e.table }} import router as {{ e.table }}_router
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+{% if auth %}
+    get_auth_settings()  # a missing secret stops the app here, with a clear message
+{% endif %}
     yield
     await engine.dispose()
 
@@ -45,9 +55,15 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+{% if auth and auth.security_headers_enabled %}
+    app.add_middleware(SecurityHeadersMiddleware)
+{% endif %}
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(_health_router)
+{% if auth %}
+    app.include_router(_auth_router)
+{% endif %}
 {% for e in entities %}
     app.include_router({{ e.table }}_router)
 {% endfor %}

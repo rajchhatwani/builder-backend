@@ -6,25 +6,16 @@ from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
+from app.core.validation import AUTH_USER_COLUMNS
 from app.models.base import Base
 from app.models.enums import AuthCustomFieldType
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 # Field names that are reserved by the generated User model and must not be
 # used as custom field names. Enforced in validation.
-RESERVED_USER_FIELD_NAMES: frozenset[str] = frozenset(
-    {
-        "id",
-        "email",
-        "password",
-        "password_hash",
-        "is_active",
-        "is_verified",
-        "role",
-        "tenant_id",
-        "created_at",
-        "updated_at",
-    }
+RESERVED_USER_FIELD_NAMES: frozenset[str] = AUTH_USER_COLUMNS | frozenset(
+    # Not columns today, but kept off-limits so a later release can add them.
+    {"is_verified", "role", "tenant_id"}
 )
 
 

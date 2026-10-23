@@ -4,9 +4,20 @@
 {% if skip_reason %}
 import pytest
 {% else %}
+{% if gated %}
+import pytest
+{% endif %}
 from httpx import AsyncClient
 
 from tests import _factories
+{% endif %}
+{% if gated and not skip_reason %}
+
+
+@pytest.fixture
+def client(authed_client: AsyncClient) -> AsyncClient:
+    """This entity has access rules, so its smoke test signs in as a user who holds every role."""
+    return authed_client
 {% endif %}
 {% if skip_reason %}
 

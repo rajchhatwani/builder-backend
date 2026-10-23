@@ -561,14 +561,14 @@ def test_spec_version_and_reserved_sections() -> None:
 def test_auth_block_is_accepted_by_validator() -> None:
     """The auth block is now a typed spec section; the validator must not reject it.
 
-    Deep auth validation (role coherence, permission references, etc.) is added
-    in M7 when the auth generator module is implemented.
+    Deep auth rules live in tests/unit/test_auth_validation.py.
     """
 
     def mutate(d: dict[str, Any]) -> None:
         d["auth"] = {
             "enabled": True,
             "token_store": "db",
+            "app_url": "https://app.example.com",
             "smtp": {
                 "host": "smtp.example.com",
                 "port": 587,

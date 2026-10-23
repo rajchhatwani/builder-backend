@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from testcontainers.community.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
 from app.core.generator import generate
 from app.core.spec_models import Spec
@@ -34,9 +35,19 @@ def project_dir(tmp_path_factory: pytest.TempPathFactory, name: str) -> Path:
     return root
 
 
-def run(args: list[str], cwd: Path, database_url: str) -> subprocess.CompletedProcess[str]:
+@pytest.fixture(scope="module")
+def redis_url() -> Iterator[str]:
+    with RedisContainer("redis:7-alpine") as container:
+        host, port = container.get_container_host_ip(), container.get_exposed_port(6379)
+        yield f"redis://{host}:{port}/0"
+
+
+def run(
+    args: list[str], cwd: Path, database_url: str, **extra_env: str
+) -> subprocess.CompletedProcess[str]:
     env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
     env["DATABASE_URL"] = database_url
+    env.update(extra_env)
     return subprocess.run(
         [sys.executable, *args], cwd=cwd, env=env, capture_output=True, text=True, timeout=600
     )
@@ -47,11 +58,30 @@ def ok(result: subprocess.CompletedProcess[str]) -> str:
     return result.stdout
 
 
-@pytest.mark.parametrize("name", ["blog", "library"])
+@pytest.mark.parametrize(
+    "name",
+    [
+        "blog",
+        "library",
+        "shop_auth",
+        "notes_auth",
+        "desk_auth",
+        "club_auth",
+        "vault_auth",
+        "workspace_auth",
+    ],
+)
 def test_generated_project_migrates_and_passes_its_own_tests(
-    name: str, postgres: PostgresContainer, tmp_path_factory: pytest.TempPathFactory
+    name: str,
+    postgres: PostgresContainer,
+    tmp_path_factory: pytest.TempPathFactory,
+    request: pytest.FixtureRequest,
 ) -> None:
     root = project_dir(tmp_path_factory, name)
+    spec = Spec.model_validate_json((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+    env: dict[str, str] = {}
+    if spec.auth is not None and spec.auth.token_store == "redis":
+        env["REDIS_URL"] = request.getfixturevalue("redis_url")
     url = (
         f"postgresql+asyncpg://{postgres.username}:{postgres.password}"
         f"@{postgres.get_container_host_ip()}:{postgres.get_exposed_port(5432)}/{name}_test"
@@ -65,6 +95,6 @@ def test_generated_project_migrates_and_passes_its_own_tests(
     ok(run(["-m", "alembic", "downgrade", "base"], root, url))
     ok(run(["-m", "alembic", "upgrade", "head"], root, url))
 
-    output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider"], root, url))
+    output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider"], root, url, **env))
     assert "passed" in output
     assert "failed" not in output

@@ -77,9 +77,61 @@ Relations:
 
 Errors always look like `{"code": "...", "message": "...", "details": []}`.
 
+{% if auth %}
+## Authentication
+
+Accounts, JWT sign-in and the email / mobile flows live in `app/auth/` (routes under `/auth`).
+Set the secrets from `.env.example` in `.env` before starting: `AUTH_JWT_SECRET` is required and
+`docker compose up` refuses to start without it. Secrets are read from the environment only.
+
+| Route | What it does |
+|---|---|
+| `POST /auth/register` | Create an account (email, password, optional `phone` in E.164{% if auth.registration.custom_fields %}, plus your custom fields{% endif %}) |
+| `POST /auth/login` | Email + password -> access and refresh token |
+| `POST /auth/refresh` | Rotate the refresh token (a reused token revokes its whole chain) |
+| `POST /auth/logout` | Revoke a refresh token chain |
+| `GET /auth/me` | The signed-in account |
+| `DELETE /auth/me` | {{ "Delete the account and its data" if auth.deletion_mode == "hard" else "Disable the account (soft delete)" }} |
+| `POST /auth/change-password` | Change password and sign out everywhere |
+| `POST /auth/email/verify`, `POST /auth/email/resend-verification` | Confirm an email address{{ " (required before sign-in)" if auth.registration.email_verification_required }} |
+{% if auth.password_reset.email_magic_link %}
+| `POST /auth/magic-link/request`, `POST /auth/magic-link/consume` | Passwordless sign-in by emailed link |
+{% endif %}
+{% if auth.password_reset.sms_otp %}
+| `POST /auth/phone/verify/request`, `POST /auth/phone/verify/confirm` | Verify a phone number by SMS code |
+| `POST /auth/otp/request`, `POST /auth/otp/verify` | Sign in with an SMS code (verified numbers only) |
+{% endif %}
+{% if invitations %}
+| `POST/GET /auth/invitations`, `DELETE /auth/invitations/{id}` | Admins email one-time registration links{{ " (registration is invite-only)" if auth.registration.invite_only }} |
+{% endif %}
+{% if auth.password_reset.email_magic_link or auth.password_reset.sms_otp %}
+| `POST /auth/password-reset/request`, `POST /auth/password-reset/confirm` | Reset a password by {{ "emailed link" if auth.password_reset.email_magic_link }}{{ " or " if auth.password_reset.email_magic_link and auth.password_reset.sms_otp }}{{ "SMS code" if auth.password_reset.sms_otp }} |
+{% endif %}
+
+Send `Authorization: Bearer <access_token>` to authenticated routes. Protect your own routes with
+`CurrentUser` and `require_roles("...")` from `app/auth/deps.py`.
+{% if auth.app_url %}
+
+Emailed links point at `{{ auth.app_url }}` (`/verify-email`, `/magic-link`, `/reset-password`, each with `?token=`);
+your frontend should read the token and call the matching API route.
+{% endif %}
+
+Limits: sign-in {{ auth.login_rate_limit }}, registration {{ auth.register_rate_limit }}, email / SMS requests {{ auth.reset_rate_limit }} per client address.
+They are counted in process memory, so they are per worker.
+
+{% if auth.permissions %}
+Access to the CRUD endpoints follows the permissions in your spec (`app/routers/*.py`, see `_ACCESS`
+at the top of each router): the roles that may call an operation and, for some, a row rule
+(`owner`, `role_scoped` or `custom_filter`). Operations without a permission are public. Rows
+outside a caller's scope are reported as 404. `tests/test_access.py` checks the rules.
+{% else %}
+The CRUD endpoints above are **not** protected; add `Depends(require_roles(...))` where you need it.
+{% endif %}
+
+{% endif %}
 ## Database migrations
 
-`alembic/versions/0001_initial.py` was rendered from your model. For later changes edit
+`alembic/versions/0001_initial.py` {% if auth %}and `0002_auth.py` were{% else %}was{% endif %} rendered from your model. For later changes edit
 the SQLAlchemy models in `app/models/` and run:
 
 ```bash
@@ -108,6 +160,10 @@ that your field names can never shadow them.
 
 ## Not included
 
+{% if auth %}
+Authorization rules on the entity endpoints, background jobs, caching and webhooks.
+{% else %}
 Authentication and authorization, background jobs, caching, webhooks and rate limiting.
+{% endif %}
 Soft-deleted rows are hidden from the API but still count for unique constraints and their
 relation `on_delete` rules are not applied.

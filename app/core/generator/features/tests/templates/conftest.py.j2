@@ -11,6 +11,9 @@ from app.config import get_settings
 from app.db import engine
 {% endif %}
 from app.main import app
+{% if auth %}
+from tests._auth_support import authed_client, outbox  # noqa: F401
+{% endif %}
 
 
 @pytest.fixture(scope="session", autouse=True)

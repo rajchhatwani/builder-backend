@@ -8,6 +8,7 @@ from pathlib import Path
 from app.core.generator.base import FileTree
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
+from app.core.validation import AUTH_TABLES
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -15,18 +16,18 @@ _FILTER_PROBE_TYPES = {"string", "integer", "bigint", "boolean", "enum"}
 _SEARCH_PROBE_TYPES = {"string", "text"}
 
 
-def _creatable(entity: EntityCtx, project: ProjectCtx, seen: frozenset[str] = frozenset()) -> bool:
+def creatable(entity: EntityCtx, project: ProjectCtx, seen: frozenset[str] = frozenset()) -> bool:
     """True if a row can be created through the API, including its required parents."""
     if "create" not in entity.ops or entity.name in seen:
         return False
     return all(
-        _creatable(project.entity_by_name[fk.target_entity], project, seen | {entity.name})
+        creatable(project.entity_by_name[fk.target_entity], project, seen | {entity.name})
         for fk in entity.required_fks
     )
 
 
 def _skip_reason(entity: EntityCtx, project: ProjectCtx) -> str | None:
-    if _creatable(entity, project):
+    if creatable(entity, project):
         return None
     return (
         f"{entity.name} cannot be created through the API (create is disabled for it or for a "
@@ -46,11 +47,17 @@ class TestsModule:
             "tests/_prepare_db.py": read_verbatim(_TEMPLATES, "_prepare_db.py.tpl"),
             "tests/test__health.py": read_verbatim(_TEMPLATES, "test__health.py.tpl"),
         }
-        tables = sorted({e.table for e in project.entities} | {j.name for j in project.join_tables})
-        files["tests/conftest.py"] = render_template(self._env, "conftest.py.j2", tables=tables)
-        creatable = [e for e in project.entities if _creatable(e, project)]
+        tables = {e.table for e in project.entities} | {j.name for j in project.join_tables}
+        if project.auth is not None:
+            tables |= set(AUTH_TABLES)
+            if project.auth.token_store == "redis":
+                tables.discard("auth_refresh_tokens")  # refresh tokens live in Redis
+        files["tests/conftest.py"] = render_template(
+            self._env, "conftest.py.j2", tables=sorted(tables), auth=project.auth is not None
+        )
+        creatable_entities = [e for e in project.entities if creatable(e, project)]
         files["tests/_factories.py"] = render_template(
-            self._env, "_factories.py.j2", entities=creatable
+            self._env, "_factories.py.j2", entities=creatable_entities
         )
         for entity in project.entities:
             files[f"tests/test_{entity.table}.py"] = render_template(
@@ -80,6 +87,7 @@ class TestsModule:
         return {
             "e": entity,
             "skip_reason": _skip_reason(entity, project),
+            "gated": bool(entity.access),
             "filter_probe": filter_probe,
             "search_probe": search_probe,
             "patch_field": patch_field,

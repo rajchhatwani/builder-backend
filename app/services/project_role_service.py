@@ -80,6 +80,21 @@ class ProjectRoleService:
                 status_code=422,
             )
 
+    async def _assert_no_cycle(self, project_id: uuid.UUID, name: str, parent: str) -> None:
+        """Walk up from `parent`; reaching `name` again means the chain loops."""
+        seen = {name}
+        cursor: str | None = parent
+        while cursor is not None:
+            if cursor in seen:
+                raise AppError(
+                    code="validation_error",
+                    message="role inheritance must not form a cycle",
+                    status_code=422,
+                )
+            seen.add(cursor)
+            ancestor = await self._get_role_by_name(project_id, cursor)
+            cursor = ancestor.inherits_from if ancestor is not None else None
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def create(self, project_id: uuid.UUID, data: ProjectRoleCreate) -> ProjectRole:
@@ -174,6 +189,7 @@ class ProjectRoleService:
                     message="a role cannot inherit from itself",
                     status_code=422,
                 )
+            await self._assert_no_cycle(role.project_id, role.name, updates["inherits_from"])
 
         for key, value in updates.items():
             setattr(role, key, value)

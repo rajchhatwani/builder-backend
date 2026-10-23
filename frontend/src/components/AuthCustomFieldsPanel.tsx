@@ -4,6 +4,7 @@ import { api, ApiError } from '../api/client'
 import type { AuthCustomField, AuthCustomFieldCreate, AuthCustomFieldType } from '../api/types'
 import { DataTable } from './DataTable'
 import { Modal } from './Modal'
+import { useUi } from './Ui'
 
 const STRING_LIKE: AuthCustomFieldType[] = ['string', 'text', 'email', 'phone', 'url']
 const NUMERIC: AuthCustomFieldType[] = ['integer', 'float']
@@ -33,6 +34,7 @@ function toNumberOrNull(text: string): number | null {
 }
 
 export function AuthCustomFieldsPanel({ projectId }: AuthCustomFieldsPanelProps) {
+  const { confirm } = useUi()
   const [fields, setFields] = useState<AuthCustomField[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -115,8 +117,8 @@ export function AuthCustomFieldsPanel({ projectId }: AuthCustomFieldsPanelProps)
     setModalOpen(true)
   }
 
-  function handleDelete(field: AuthCustomField) {
-    if (!window.confirm(`Delete field "${field.name}"?`)) return
+  async function handleDelete(field: AuthCustomField) {
+    if (!(await confirm({ title: `Delete field "${field.name}"?`, confirmLabel: 'Delete', danger: true }))) return
     api.deleteAuthCustomField(field.id).then(load)
   }
 

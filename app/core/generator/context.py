@@ -6,12 +6,12 @@ never depends on dict or set ordering.
 """
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core import naming
-from app.core.enums import OnDelete, RelationKind
-from app.core.spec_models import Spec, SpecEntity, SpecField, SpecRelation
+from app.core.enums import OnDelete, RelationKind, RowRule
+from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation
 
 _ON_DELETE_SQL = {
     OnDelete.cascade: "CASCADE",
@@ -90,6 +90,46 @@ class RelationAttrCtx:
 
 
 @dataclass(frozen=True)
+class AccessCtx:
+    """Who may call one operation of an entity, and which rows they get to see.
+
+    Rendered into the router as `access_dependency(...)`; see app/auth/access.py in the
+    generated project. Everything here is a validated identifier or a pyrepr literal."""
+
+    op: str
+    roles: tuple[str, ...] = ()  # any one of these roles; empty = no role needed
+    owner: bool = False  # only rows the user created
+    admin_sees_all: bool = False  # ...unless the user is an admin (role_scoped)
+    match: tuple[str, str] | None = None  # (column, python literal) for custom_filter
+    stamp: bool = False  # record the user as created_by_id on create
+    authenticate: bool = False  # a signed-in user is required even without roles
+    tenant: bool = False  # only rows of the caller's tenant (and stamp it on create)
+
+    @property
+    def needs_user(self) -> bool:
+        return bool(self.roles or self.owner or self.stamp or self.authenticate or self.tenant)
+
+    @property
+    def call(self) -> str:
+        args: list[str] = []
+        if self.roles:
+            args.append(f"roles={tuple_literal(self.roles)}")
+        if self.owner:
+            args.append("owner=True")
+        if self.admin_sees_all:
+            args.append("admin_sees_all=True")
+        if self.match is not None:
+            args.append(f"match=({self.match[0]!r}, {self.match[1]})")
+        if self.stamp:
+            args.append("stamp=True")
+        if self.authenticate:
+            args.append("authenticate=True")
+        if self.tenant:
+            args.append("tenant=True")
+        return f"access_dependency({', '.join(args)})"
+
+
+@dataclass(frozen=True)
 class EntityCtx:
     name: str
     table: str
@@ -115,6 +155,13 @@ class EntityCtx:
     migration_columns: tuple[str, ...] = ()
     unique_constraints: tuple[tuple[str, str], ...] = ()  # (constraint name, column)
     indexes: tuple[tuple[str, str], ...] = ()  # (index name, column)
+    access: tuple[AccessCtx, ...] = ()  # operations that need a signed-in user or row scoping
+    owned: bool = False  # rows record who created them (created_by_id)
+    tenant_scoped: bool = False  # rows belong to a tenant (tenant_id)
+
+    @property
+    def access_ops(self) -> frozenset[str]:
+        return frozenset(a.op for a in self.access)
 
     @property
     def repo_imports(self) -> tuple[tuple[str, str], ...]:
@@ -170,6 +217,12 @@ class ProjectCtx:
     join_tables: tuple[JoinTableCtx, ...]
     tables: tuple[str, ...]  # every table incl. join tables, sorted
     entity_by_name: dict[str, EntityCtx] = field(default_factory=dict)
+
+    @property
+    def auth(self) -> SpecAuth | None:
+        """The auth block when it is switched on, else None."""
+        auth = self.spec.auth
+        return auth if auth is not None and auth.enabled else None
 
 
 def tuple_literal(items: Any) -> str:
@@ -610,6 +663,7 @@ def build_context(spec: Spec) -> ProjectCtx:
             )
         )
     joins.sort(key=lambda j: j.name)
+    entity_ctxs = _attach_access(spec, entity_ctxs)
     all_tables = sorted({e.table for e in entity_ctxs} | {j.name for j in joins})
     return ProjectCtx(
         spec=spec,
@@ -621,3 +675,79 @@ def build_context(spec: Spec) -> ProjectCtx:
         tables=tuple(all_tables),
         entity_by_name={e.name: e for e in entity_ctxs},
     )
+
+
+# --- access control (auth permissions) --------------------------------------------------
+
+
+def _filter_literal(field_type: str, value: str) -> str:
+    """The custom_filter value as a Python literal of the column's type (already validated)."""
+    match field_type:
+        case "integer" | "bigint":
+            return repr(int(value))
+        case "boolean":
+            return "True" if value == "true" else "False"
+        case _:
+            return repr(value)
+
+
+def _attach_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    auth = spec.auth
+    if auth is None or not auth.enabled or not auth.permissions:
+        return entities
+    spec_entities = {e.name: e for e in spec.entities}
+    result: list[EntityCtx] = []
+    for entity in entities:
+        perms = {
+            p.operation: p
+            for p in auth.permissions
+            if p.entity == entity.name and p.operation in entity.ops
+        }
+        owned = any(p.row_rule in (RowRule.owner, RowRule.role_scoped) for p in perms.values())
+        # One tenant rule on any operation puts the whole entity inside the tenant: isolation
+        # must not depend on every single operation remembering to opt in.
+        tenant_scoped = auth.multi_tenant and any(
+            p.row_rule == RowRule.tenant for p in perms.values()
+        )
+        access: list[AccessCtx] = []
+        for op in sorted(entity.ops):
+            perm = perms.get(op)
+            rule = perm.row_rule if perm is not None else None
+            is_create = op == "create"
+            match = None
+            if perm is not None and rule == RowRule.custom_filter:
+                column = next(
+                    f
+                    for f in spec_entities[entity.name].fields
+                    if f.name == perm.custom_filter_field
+                )
+                match = (column.name, _filter_literal(column.type, perm.custom_filter_value or ""))
+            scoped_to_owner = rule in (RowRule.owner, RowRule.role_scoped) and not is_create
+            ctx = AccessCtx(
+                op=op,
+                roles=tuple(sorted(perm.roles)) if perm is not None else (),
+                owner=scoped_to_owner,
+                admin_sees_all=rule == RowRule.role_scoped and not is_create,
+                match=match if not is_create else None,
+                stamp=owned and is_create,
+                authenticate=scoped_to_owner or (owned and is_create) or tenant_scoped,
+                tenant=tenant_scoped,
+            )
+            if ctx.needs_user or ctx.match is not None:
+                access.append(ctx)  # anything else is a public slot: nothing to enforce
+        # The smoke tests create rows from sample data, so a field that a custom_filter looks
+        # at must get the value the filter lets through (or the test would never see its row).
+        wanted = {a.match[0]: a.match[1] for a in reversed(access) if a.match is not None}
+        fields = tuple(
+            replace(f, sample=wanted[f.name]) if f.name in wanted else f for f in entity.fields
+        )
+        result.append(
+            replace(
+                entity,
+                access=tuple(access),
+                owned=owned,
+                tenant_scoped=tenant_scoped,
+                fields=fields,
+            )
+        )
+    return tuple(result)

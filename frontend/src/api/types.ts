@@ -146,7 +146,7 @@ export interface GenerationSummary {
   created_at: string
 }
 
-// ── Phase 2: Auth enums ──────────────────────────────────────────────────────
+// ── Auth enums ──────────────────────────────────────────────────────
 
 export type TokenStore = 'db' | 'redis'
 export type JwtAlgorithm = 'HS256' | 'RS256'

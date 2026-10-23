@@ -21,11 +21,61 @@ The generator is the pure function `app.core.generator.generate(spec)`. Regenera
 files after a deliberate template change with
 `UPDATE_GOLDEN=1 uv run python -m pytest tests/unit/test_generator.py -k golden`.
 
+### Authentication (Phase 2)
+
+Add an `auth` block to a project and the generated backend gains sign-up, sign-in and the
+email / mobile flows, in `app/auth/` with its own migration (`0002_auth.py`) and tests.
+
+- Configure over the API: `POST/GET/PATCH /projects/{id}/auth` (tokens, SMTP, SMS provider,
+  rate limits, branding), `PUT /projects/{id}/auth/secrets` (SMTP / SMS credentials, encrypted
+  at rest with `SECRET_KEY`, never returned), `/projects/{id}/roles`,
+  `/projects/{id}/auth/custom-fields` (become real columns on `auth_users`) and
+  `/projects/{id}/permissions`. The block is part of `GET/PUT /projects/{id}/spec`.
+- Generated routes under `/auth`: register, login, refresh (rotating, reuse-detecting),
+  logout, me, change password, delete account; email verification and magic-link sign-in
+  (SMTP); phone verification, SMS-code sign-in and password reset by email link or SMS code
+  (Twilio, Vonage or AWS SNS). Protect your own routes with `CurrentUser` and
+  `require_roles(...)` from `app/auth/deps.py`.
+- **Permissions are enforced on the generated CRUD routes.** Each `(entity, operation)` slot
+  lists the roles that may call it (empty = public) and an optional row rule: `owner` (only
+  rows the caller created), `role_scoped` (like `owner`, but the `admin` role sees every row)
+  or `custom_filter` (only rows where a string / enum / integer / boolean field equals a
+  value). Owned entities get a `created_by_id` column (added by `0002_auth.py`) and stamp it on
+  create. Slots without a permission stay public, and a permission on a disabled operation has
+  no effect. Unauthorised callers get 401, wrong-role callers 403, and rows outside the
+  caller's scope are reported as 404.
+- **Multi-tenancy** (`multi_tenant`). Rows of different tenants never mix. Signing up without
+  an invitation creates a tenant (`tenant_name` in the register body) and makes the user its
+  `admin`; admins invite people into their own tenant, and an invitation joins exactly that
+  tenant. `GET /auth/tenant` returns the caller's tenant and access tokens carry a `tid` claim.
+  One `tenant` row rule on any operation of an entity puts the whole entity inside the tenant:
+  it gets a `tenant_id` column, every operation is limited to the caller's tenant, new rows are
+  stamped with it, and a signed-in user is required. This uses a shared schema (one set of
+  tables with a `tenant_id` column), which suits most SaaS apps; it cannot be combined with
+  invite-only sign-up, since nobody could then create the first tenant.
+- **Invitations and role flags.** With `registration.invite_only` (or any role marked
+  `invite_only`) admins use `POST/GET/DELETE /auth/invitations` to email a one-time
+  registration link bound to one address (it also verifies that address and can grant roles).
+  Roles marked `self_assignable` can be picked in the register body.
+- Dependencies stay small: password hashing (scrypt), HS256 JWT, SMTP and the Twilio/Vonage
+  calls use the standard library. Options add a package only when selected: `cryptography`
+  for `RS256` (tokens verifiable with the public key at `/auth/jwks.json`), `redis` for
+  `token_store: redis` (refresh tokens in Redis, with a Redis service in the compose file),
+  `boto3` for `aws_sns`.
+- Credentials are **not** written into the generated source or the zip. The project reads them
+  from `AUTH_JWT_SECRET` (or `AUTH_JWT_PRIVATE_KEY`), `SMTP_*`, `TWILIO_*` / `VONAGE_*` / `AWS_*`
+  in its environment (see its `.env.example`); the dashboard lists them after a download.
+  `python3 -m app.auth.keys` inside the generated project prints a fresh signing secret.
+  Credentials stored with `PUT /projects/{id}/auth/secrets` stay on the builder and are not
+  used by generation (see "Not yet").
+
 ### Tests
 
 ```bash
 uv run pytest tests/unit            # fast, no Docker
 uv run pytest tests/api             # builder API against a Postgres testcontainer
+                                    # (or set TEST_DATABASE_URL to a disposable
+                                    #  postgresql+asyncpg:// database to skip Docker)
 uv run pytest tests/e2e             # generated Blog/Library projects booted for real
 ```
 
@@ -34,6 +84,20 @@ Postgres container, checks it for drift and reversibility, and runs the generate
 own smoke tests. `test_compose_stack.py` is the PLAN.md section 1 demo: build Blog through
 the API, download the zip, `docker compose up --build`, drive the generated API over HTTP and
 run `make test`'s command inside the stack (several minutes; skipped without `docker compose`).
+
+### Dashboard and demo data
+
+```bash
+docker compose up -d          # builder API :8000, Postgres, and the dashboard on :5173
+docker compose exec api python /app/scripts/seed.py   # loads three demo projects
+```
+
+`scripts/seed.py` (standard library only; `--reset` recreates, `--base-url` points elsewhere)
+creates **Helpdesk** (roles, invitations, email + SMS sign-in, custom registration fields and
+every permission kind), **Vault** (RS256 + Redis), **Workspace** (multi-tenant) and **Bookshop**
+(plain CRUD, no auth). Open
+http://localhost:5173, then a project's Auth tab: it shows validation problems in place, and
+after "Download zip" the Schema tab lists the environment variables to set before running it.
 
 ## Stack
 
@@ -62,6 +126,7 @@ curl -X POST http://localhost:8000/projects -H "Content-Type: application/json" 
 ```bash
 uv sync                       # install deps (incl. dev group) into .venv
 cp .env.example .env          # adjust BUILDER_DATABASE_URL if not using docker compose
+export SECRET_KEY=...         # only needed to store auth credentials; read from the environment
 
 uv run ruff check .           # lint
 uv run mypy app alembic       # type check
@@ -111,6 +176,14 @@ tests/
 
 ## Not yet
 
-- No authentication anywhere yet (by design for Phase 1 — see `PLAN.md` section 2)
+- The builder API itself has no authentication (by design for Phase 1 — see `PLAN.md`
+  section 2); only the *generated* projects can have it.
+- Multi-tenancy does not add Postgres row-level security as a second line of defence, there is
+  no super-admin who spans tenants, and email addresses are unique across all tenants.
+- Credentials saved with `PUT /projects/{id}/auth/secrets` are encrypted at rest on the builder
+  but nothing in generation uses them (the zip never contains secrets), and the dashboard has no
+  form for them. Treat that endpoint as a vault until a use for it, such as sending a test
+  email or SMS before download, is built.
+- Generated auth rate limits are counted in process memory (per worker).
 - PATCH endpoints can't explicitly clear a nullable field back to `null` (only
   `exclude_unset` semantics); not needed until the spec/validation layer in M2

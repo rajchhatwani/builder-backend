@@ -1,0 +1,46 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Shop", "slug": "shop", "description": "A shop with email and mobile sign-in", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Item",
+      "table_name": "items",
+      "plural_path": "items",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120},
+        {"name": "price", "type": "float", "required": false}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_name": "Shop",
+    "app_url": "https://shop.example.com",
+    "access_token_ttl_minutes": 15,
+    "refresh_token_ttl_days": 7,
+    "deletion_mode": "soft",
+    "password_reset": {"email_magic_link": true, "sms_otp": true, "otp_ttl_minutes": 10},
+    "registration": {
+      "email_verification_required": true,
+      "custom_fields": [
+        {"name": "full_name", "label": "Full name", "type": "string", "required": true, "min_length": 2, "max_length": 80},
+        {"name": "age", "type": "integer", "label": "Age", "min_value": 13, "max_value": 120},
+        {"name": "plan", "type": "enum", "label": "Plan", "enum_values": ["free", "pro"], "default_value": "free"},
+        {"name": "newsletter", "type": "boolean", "label": "Newsletter", "default_value": "false"},
+        {"name": "birthday", "type": "date", "label": "Birthday"},
+        {"name": "handle", "type": "string", "label": "Handle", "unique": true, "max_length": 30},
+        {"name": "company", "type": "string", "label": "Company", "indexed": true, "max_length": 60}
+      ]
+    },
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@shop.example.com", "from_name": "Shop"},
+    "sms_provider": "twilio",
+    "sms": {"from_number": "+14155550100"},
+    "roles": [
+      {"name": "admin", "label": "Admin"},
+      {"name": "staff", "label": "Staff", "inherits_from": "admin"},
+      {"name": "customer", "label": "Customer", "is_default": true}
+    ]
+  }
+}

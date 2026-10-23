@@ -1,0 +1,35 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Club", "slug": "club", "description": "Invite-only club", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Post",
+      "table_name": "posts",
+      "plural_path": "posts",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://club.example.com",
+    "password_reset": {"email_magic_link": true, "sms_otp": false},
+    "registration": {
+      "email_verification_required": true,
+      "invite_only": true,
+      "custom_fields": [
+        {"name": "handle", "label": "Handle", "type": "string", "required": true, "unique": true, "max_length": 20}
+      ]
+    },
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@club.example.com", "from_name": "Club"},
+    "roles": [
+      {"name": "admin", "label": "Admin"},
+      {"name": "member", "label": "Member", "is_default": true},
+      {"name": "moderator", "label": "Moderator", "self_assignable": true},
+      {"name": "vip", "label": "VIP", "invite_only": true}
+    ]
+  }
+}

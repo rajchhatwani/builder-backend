@@ -4,13 +4,13 @@ import { api, ApiError } from '../api/client'
 import type { Entity, EntityOptions, Field } from '../api/types'
 import { DataTable } from './DataTable'
 import { FieldDialog } from './FieldDialog'
+import { useUi } from './Ui'
 
 const OPERATIONS = ['list', 'get', 'head', 'create', 'replace', 'update', 'delete'] as const
 const AUTO_FIELDS = ['id', 'created_at', 'updated_at']
 
 interface EntityDetailProps {
   entity: Entity
-  onBack: () => void
   /** Called after anything changed so the parent can refresh its entity list. */
   onChanged: () => void
 }
@@ -20,7 +20,8 @@ function toggle(list: string[], value: string, on: boolean): string[] {
   return on ? [...without, value] : without
 }
 
-export function EntityDetail({ entity, onBack, onChanged }: EntityDetailProps) {
+export function EntityDetail({ entity, onChanged }: EntityDetailProps) {
+  const { confirm, toast } = useUi()
   const [fields, setFields] = useState<Field[]>([])
   const [loading, setLoading] = useState(true)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -47,10 +48,8 @@ export function EntityDetail({ entity, onBack, onChanged }: EntityDetailProps) {
     setMessage(null)
   }, [entity.id])
 
-  const fieldNames = useMemo(() => [...AUTO_FIELDS, ...fields.map((f) => f.name)], [fields])
-
-  function handleDelete(field: Field) {
-    if (!window.confirm(`Delete field "${field.name}"?`)) return
+  async function handleDelete(field: Field) {
+    if (!(await confirm({ title: `Delete field "${field.name}"?`, confirmLabel: 'Delete', danger: true }))) return
     api.deleteField(field.id).then(() => {
       loadFields()
       onChanged()
@@ -114,7 +113,8 @@ export function EntityDetail({ entity, onBack, onChanged }: EntityDetailProps) {
         plural_path: pluralPath,
         options,
       })
-      setMessage({ ok: true, text: 'Saved.' })
+      setMessage(null)
+      toast('Options saved.')
       onChanged()
     } catch (err) {
       const text =
@@ -152,14 +152,11 @@ export function EntityDetail({ entity, onBack, onChanged }: EntityDetailProps) {
 
   return (
     <>
-      <button className="ghost small breadcrumb-back" onClick={onBack}>
-        ← Back to project
-      </button>
-      <div className="page-header">
+      <div className="page-header compact">
         <div>
-          <h1>{entity.name}</h1>
+          <h2>{entity.name}</h2>
           <p>
-            <code>{entity.table_name}</code> &middot; <code>/{entity.plural_path}</code>
+            Table <code>{entity.table_name}</code> &middot; served at <code>/{entity.plural_path}</code>
           </p>
         </div>
         <button
@@ -247,9 +244,6 @@ export function EntityDetail({ entity, onBack, onChanged }: EntityDetailProps) {
           />{' '}
           Soft delete (DELETE sets <code>deleted_at</code>)
         </label>
-        <p className="empty-state" style={{ padding: 0, textAlign: 'start' }}>
-          Available fields: {fieldNames.join(', ')}
-        </p>
         <button type="submit" disabled={saving}>
           {saving ? 'Saving…' : 'Save options'}
         </button>
