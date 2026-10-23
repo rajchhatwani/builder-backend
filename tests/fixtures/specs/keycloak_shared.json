@@ -1,0 +1,38 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Portal", "slug": "portal", "description": "Trusts a Keycloak realm that other platforms share", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {},
+      "fields": [
+        {"name": "subject", "type": "string", "required": true, "max_length": 120}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "provider": "keycloak",
+    "password_reset": {"email_magic_link": false},
+    "registration": {"email_verification_required": false, "invite_only": true},
+    "keycloak": {
+      "mode": "shared",
+      "realm": "company",
+      "api_client_id": "portal-api",
+      "web_client_id": "portal-web",
+      "redirect_uris": ["https://portal.example.com/callback"]
+    },
+    "roles": [
+      {"name": "admin", "label": "Admin"},
+      {"name": "agent", "label": "Agent", "is_default": true}
+    ],
+    "permissions": [
+      {"entity": "Ticket", "operation": "list", "roles": ["agent", "admin"], "row_rule": "owner"},
+      {"entity": "Ticket", "operation": "create", "roles": ["agent", "admin"]},
+      {"entity": "Ticket", "operation": "delete", "roles": ["admin"]}
+    ]
+  }
+}

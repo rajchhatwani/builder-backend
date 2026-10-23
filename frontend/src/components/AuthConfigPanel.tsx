@@ -3,6 +3,7 @@ import { api, ApiError } from '../api/client'
 import type {
   AuthConfig,
   AuthConfigUpdate,
+  AuthProvider,
   SmtpConfig,
   SmsConfig,
   TokenStore,
@@ -21,6 +22,10 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
   const [settingUp, setSettingUp] = useState(false)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
+
+  // Who manages users: with Keycloak, token, SMS and rate-limit settings do not apply.
+  const [provider, setProvider] = useState<AuthProvider>('builtin')
+  const keycloak = provider === 'keycloak'
 
   // General
   const [enabled, setEnabled] = useState(true)
@@ -62,6 +67,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
   const [appUrl, setAppUrl] = useState('')
 
   const populateForm = useCallback((cfg: AuthConfig) => {
+    setProvider(cfg.provider)
     setEnabled(cfg.enabled)
     setDeletionMode(cfg.deletion_mode)
 
@@ -166,7 +172,8 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
     setSaving(true)
     setMessage(null)
 
-    const smtpConfig: SmtpConfig | null = emailMagicLinkEnabled
+    const smtpNeeded = keycloak ? smtpHost.trim() !== '' : emailMagicLinkEnabled
+    const smtpConfig: SmtpConfig | null = smtpNeeded
       ? {
           host: smtpHost,
           port: Number(smtpPort),
@@ -182,29 +189,37 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
         }
       : null
 
-    const updateData: AuthConfigUpdate = {
+    // What both providers use.
+    const shared: AuthConfigUpdate = {
       enabled,
+      access_token_ttl_minutes: Number(accessTokenTtlMinutes),
+      email_verification_required: emailVerificationRequired,
+      smtp_config: smtpConfig,
+      invite_only: inviteOnly,
+      multi_tenant: multiTenant,
+      security_headers_enabled: securityHeadersEnabled,
+      app_name: appName.trim() || null,
+    }
+    // Only built-in sign-in has these. With Keycloak they are left alone, except that SMS codes
+    // and the magic link, which Keycloak cannot offer, are switched off.
+    const builtinOnly: AuthConfigUpdate = {
       deletion_mode: deletionMode,
       token_store: tokenStore,
-      access_token_ttl_minutes: Number(accessTokenTtlMinutes),
       refresh_token_ttl_days: Number(refreshTokenTtlDays),
       jwt_algorithm: jwtAlgorithm,
       email_magic_link_enabled: emailMagicLinkEnabled,
-      email_verification_required: emailVerificationRequired,
-      smtp_config: smtpConfig,
       sms_otp_enabled: smsOtpEnabled,
       sms_provider: smsOtpEnabled ? smsProvider : null,
       sms_config: smsConfig,
       otp_ttl_minutes: Number(otpTtlMinutes),
-      invite_only: inviteOnly,
-      multi_tenant: multiTenant,
       login_rate_limit: loginRateLimit,
       register_rate_limit: registerRateLimit,
       reset_rate_limit: resetRateLimit,
-      security_headers_enabled: securityHeadersEnabled,
-      app_name: appName.trim() || null,
       app_url: appUrl.trim() || null,
     }
+    const updateData: AuthConfigUpdate = keycloak
+      ? { ...shared, email_magic_link_enabled: false, sms_otp_enabled: false }
+      : { ...shared, ...builtinOnly }
 
     try {
       const updated = await api.updateAuthConfig(projectId, updateData)
@@ -280,7 +295,14 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
               Auth enabled
             </label>
           </div>
-          <div className="field-grid">
+          {keycloak && (
+            <p className="muted">
+              Keycloak handles sign-in, passwords, tokens and sessions. The settings below are the
+              ones this project still uses. Set up logins and security in the{' '}
+              <a href={`#/p/${projectId}/keycloak`}>Keycloak</a> section.
+            </p>
+          )}
+          <div className="field-grid" hidden={keycloak}>
             <label>
               Deletion mode
               <select
@@ -300,7 +322,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
         <summary>Tokens</summary>
         <div className="auth-section-body">
           <div className="field-grid">
-            <label>
+            <label hidden={keycloak}>
               Token store
               <select
                 value={tokenStore}
@@ -311,7 +333,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
               </select>
             </label>
             <label>
-              Access token TTL (minutes)
+              {keycloak ? 'Access token lifetime (minutes)' : 'Access token TTL (minutes)'}
               <input
                 type="number"
                 min={1}
@@ -321,7 +343,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 onChange={(e) => setAccessTokenTtlMinutes(Number(e.target.value))}
               />
             </label>
-            <label>
+            <label hidden={keycloak}>
               Refresh token TTL (days)
               <input
                 type="number"
@@ -332,7 +354,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 onChange={(e) => setRefreshTokenTtlDays(Number(e.target.value))}
               />
             </label>
-            <label>
+            <label hidden={keycloak}>
               JWT algorithm
               <select
                 value={jwtAlgorithm}
@@ -350,15 +372,17 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
       <details open className="auth-section">
         <summary>Email &amp; SMTP</summary>
         <div className="auth-section-body">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBlockEnd: emailMagicLinkEnabled ? 'var(--space-4)' : 0 }}>
-            <label>
-              <input
-                type="checkbox"
-                checked={emailMagicLinkEnabled}
-                onChange={(e) => setEmailMagicLinkEnabled(e.target.checked)}
-              />{' '}
-              Enable email magic link
-            </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBlockEnd: emailMagicLinkEnabled || keycloak ? 'var(--space-4)' : 0 }}>
+            {!keycloak && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={emailMagicLinkEnabled}
+                  onChange={(e) => setEmailMagicLinkEnabled(e.target.checked)}
+                />{' '}
+                Enable email magic link
+              </label>
+            )}
             <label>
               <input
                 type="checkbox"
@@ -369,15 +393,15 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
             </label>
           </div>
 
-          {emailMagicLinkEnabled && (
+          {(emailMagicLinkEnabled || keycloak) && (
             <fieldset style={{ marginBlockStart: 'var(--space-4)' }}>
-              <legend>SMTP Settings</legend>
+              <legend>{keycloak ? 'SMTP settings (Keycloak sends the emails)' : 'SMTP Settings'}</legend>
               <div className="field-grid">
                 <label>
                   SMTP host
                   <input
                     type="text"
-                    required={emailMagicLinkEnabled}
+                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
                     placeholder="smtp.example.com"
                     value={smtpHost}
                     onChange={(e) => setSmtpHost(e.target.value)}
@@ -389,7 +413,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                     type="number"
                     min={1}
                     max={65535}
-                    required={emailMagicLinkEnabled}
+                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
                     value={smtpPort}
                     onChange={(e) => setSmtpPort(Number(e.target.value))}
                   />
@@ -398,7 +422,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                   From email
                   <input
                     type="email"
-                    required={emailMagicLinkEnabled}
+                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
                     placeholder="noreply@example.com"
                     value={smtpFromEmail}
                     onChange={(e) => setSmtpFromEmail(e.target.value)}
@@ -408,7 +432,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                   From name
                   <input
                     type="text"
-                    required={emailMagicLinkEnabled}
+                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
                     placeholder="App Notifications"
                     value={smtpFromName}
                     onChange={(e) => setSmtpFromName(e.target.value)}
@@ -431,7 +455,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
       </details>
 
       {/* SMS */}
-      <details open className="auth-section">
+      <details open className="auth-section" hidden={keycloak && !smsOtpEnabled}>
         <summary>SMS</summary>
         <div className="auth-section-body">
           <div style={{ marginBlockEnd: 'var(--space-4)' }}>
@@ -501,24 +525,28 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 checked={inviteOnly}
                 onChange={(e) => setInviteOnly(e.target.checked)}
               />{' '}
-              Invite only (admins send invitation emails; needs SMTP, an app URL and an
-              &quot;admin&quot; role)
+              {keycloak
+                ? 'Invite only (turns self-registration off; you create users in Keycloak)'
+                : 'Invite only (admins send invitation emails; needs SMTP, an app URL and an "admin" role)'}
             </label>
-            <label>
-              <input
-                type="checkbox"
-                checked={multiTenant}
-                onChange={(e) => setMultiTenant(e.target.checked)}
-              />{' '}
-              Multi-tenant (sign-up creates a tenant and its admin; invitations join one; cannot be
-              combined with invite-only sign-up)
-            </label>
+            {(!keycloak || multiTenant) && (
+              <label>
+                <input
+                  type="checkbox"
+                  checked={multiTenant}
+                  onChange={(e) => setMultiTenant(e.target.checked)}
+                />{' '}
+                {keycloak
+                  ? 'Multi-tenant (not available with Keycloak yet: turn it off)'
+                  : 'Multi-tenant (sign-up creates a tenant and its admin; invitations join one; cannot be combined with invite-only sign-up)'}
+              </label>
+            )}
           </div>
         </div>
       </details>
 
       {/* Rate Limits */}
-      <details open className="auth-section">
+      <details open className="auth-section" hidden={keycloak}>
         <summary>Rate Limits</summary>
         <div className="auth-section-body">
           <div className="field-grid">
@@ -577,7 +605,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                 onChange={(e) => setAppName(e.target.value)}
               />
             </label>
-            <label>
+            <label hidden={keycloak}>
               App URL
               <input
                 type="text"

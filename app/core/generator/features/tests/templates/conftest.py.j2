@@ -12,7 +12,11 @@ from app.db import engine
 {% endif %}
 from app.main import app
 {% if auth %}
+{% if keycloak %}
+from tests._auth_support import authed_client, key_server, outbox  # noqa: F401
+{% else %}
 from tests._auth_support import authed_client, outbox  # noqa: F401
+{% endif %}
 {% endif %}
 
 

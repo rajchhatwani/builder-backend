@@ -1,0 +1,64 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Hub", "slug": "hub", "description": "Keycloak that ships with the project: social logins, MFA, roles", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120}
+      ]
+    },
+    {
+      "name": "Report",
+      "table_name": "reports",
+      "plural_path": "reports",
+      "options": {},
+      "fields": [
+        {"name": "name", "type": "string", "required": true, "max_length": 80}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "provider": "keycloak",
+    "app_name": "Hub",
+    "access_token_ttl_minutes": 15,
+    "password_reset": {"email_magic_link": false},
+    "registration": {"email_verification_required": true},
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@hub.example.com", "from_name": "Hub"},
+    "keycloak": {
+      "mode": "own",
+      "realm": "hub",
+      "api_client_id": "hub-api",
+      "web_client_id": "hub-web",
+      "redirect_uris": ["http://localhost:3000/", "https://app.example.com/auth/callback"],
+      "password_min_length": 12,
+      "mfa": "optional",
+      "session_idle_minutes": 30,
+      "session_max_hours": 10,
+      "audit_retention_days": 90,
+      "identity_providers": [
+        {"alias": "google", "type": "google", "display_name": "Google", "client_id": "1234.apps.googleusercontent.com", "hosted_domain": "example.com"},
+        {"alias": "work", "type": "microsoft", "display_name": "Work account", "client_id": "00000000-aaaa-bbbb-cccc-000000000000", "tenant_id": "11111111-2222-3333-4444-555555555555"},
+        {"alias": "gh", "type": "github", "client_id": "Iv1.abc123"},
+        {"alias": "corp", "type": "oidc", "display_name": "Corporate SSO", "client_id": "hub", "issuer": "https://sso.example.com", "authorization_url": "https://sso.example.com/authorize", "token_url": "https://sso.example.com/token", "jwks_url": "https://sso.example.com/keys", "userinfo_url": "https://sso.example.com/userinfo"}
+      ]
+    },
+    "roles": [
+      {"name": "admin", "label": "Admin", "inherits_from": "editor"},
+      {"name": "editor", "label": "Editor", "inherits_from": "member"},
+      {"name": "member", "label": "Member", "is_default": true}
+    ],
+    "permissions": [
+      {"entity": "Note", "operation": "list", "roles": ["member"], "row_rule": "role_scoped"},
+      {"entity": "Note", "operation": "get", "roles": ["member"], "row_rule": "owner"},
+      {"entity": "Note", "operation": "create", "roles": ["member"]},
+      {"entity": "Report", "operation": "list", "roles": ["admin"]},
+      {"entity": "Report", "operation": "create", "roles": ["admin"]}
+    ]
+  }
+}

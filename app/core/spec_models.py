@@ -148,8 +148,44 @@ class SpecAuthSecrets(_SpecModel):
     aws_region: str | None = None
 
 
+class SpecIdentityProvider(_SpecModel):
+    """One external login offered by the Keycloak realm. The client secret is never part of
+    the spec: the generated project reads it from KC_IDP_<ALIAS>_CLIENT_SECRET."""
+
+    alias: str
+    type: str  # IdpType value; validation module checks legality
+    display_name: str | None = None
+    client_id: str
+    tenant_id: str | None = None  # microsoft only: the Entra tenant (a GUID)
+    hosted_domain: str | None = None  # google only: restrict sign-in to one Workspace domain
+    # oidc only: the provider's endpoints, as listed in its .well-known/openid-configuration
+    issuer: str | None = None
+    authorization_url: str | None = None
+    token_url: str | None = None
+    jwks_url: str | None = None
+    userinfo_url: str | None = None  # optional
+
+
+class SpecKeycloak(_SpecModel):
+    mode: str = "own"  # KeycloakMode value
+    realm: str
+    api_client_id: str
+    web_client_id: str
+    redirect_uris: list[str] = Field(default_factory=list)
+    password_min_length: int = 12
+    mfa: str = "optional"  # MfaMode value
+    session_idle_minutes: int = 30
+    session_max_hours: int = 10
+    audit_retention_days: int = 90
+    identity_providers: list[SpecIdentityProvider] = Field(default_factory=list)
+
+
 class SpecAuth(_SpecModel):
     enabled: bool = True
+    # Who manages users and tokens. The keycloak block is kept while the provider is builtin,
+    # so switching back and forth does not lose the settings.
+    provider: str = "builtin"  # AuthProvider value
+    keycloak: SpecKeycloak | None = None
     token_store: str = "db"                     # TokenStore value
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 7

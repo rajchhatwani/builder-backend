@@ -3,7 +3,7 @@ asyncpg>=0.32.0
 {% if sns %}
 boto3>=1.35.0
 {% endif %}
-{% if rs256 %}
+{% if rs256 or keycloak %}
 cryptography>=44.0.0
 {% endif %}
 fastapi>=0.156.8

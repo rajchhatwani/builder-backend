@@ -1,0 +1,118 @@
+{
+  "realm": "hub",
+  "api_client_id": "hub-api",
+  "browser_client_ids": [
+    "hub-web",
+    "hub-web-docs"
+  ],
+  "clients": [
+    {
+      "clientId": "hub-api",
+      "name": "Hub API",
+      "description": "The audience of this project's API tokens. Nobody signs in with it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false
+    },
+    {
+      "clientId": "hub-web",
+      "name": "Hub web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "http://localhost:3000/",
+        "https://app.example.com/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "https://app.example.com"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/##https://app.example.com/auth/callback"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hub-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "hub-web-docs",
+      "name": "Hub API docs (Swagger UI)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      ],
+      "webOrigins": [
+        "${API_PUBLIC_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hub-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "name": "admin",
+      "description": "Admin",
+      "composite": false,
+      "clientRole": true
+    },
+    {
+      "name": "editor",
+      "description": "Editor",
+      "composite": false,
+      "clientRole": true
+    },
+    {
+      "name": "member",
+      "description": "Member",
+      "composite": false,
+      "clientRole": true
+    }
+  ]
+}

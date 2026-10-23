@@ -8,6 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
 from app.models.enums import (
+    AuthProvider,
     DeletionMode,
     JwtAlgorithm,
     SmsProvider,
@@ -34,6 +35,15 @@ class ProjectAuthConfig(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    # Who manages users and tokens: this builder's generated auth, or Keycloak. Changed only
+    # through the /keycloak/enable and /keycloak/disable endpoints.
+    provider: Mapped[AuthProvider] = mapped_column(
+        SAEnum(AuthProvider, name="auth_provider", native_enum=False, length=10),
+        nullable=False,
+        default=AuthProvider.builtin,
+        server_default=AuthProvider.builtin.value,
+    )
 
     # ── Token settings ────────────────────────────────────────────────────────
     token_store: Mapped[TokenStore] = mapped_column(

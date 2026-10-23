@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Project } from '../api/types'
 
-export type Section = 'overview' | 'model' | 'auth' | 'access' | 'generate'
+export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'access' | 'generate'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
@@ -27,6 +27,18 @@ export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
       <>
         <rect x="4" y="11" width="16" height="10" rx="2" />
         <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+      </>
+    ),
+  },
+  {
+    id: 'keycloak',
+    label: 'Keycloak',
+    icon: (
+      <>
+        <circle cx="8" cy="15" r="4" />
+        <path d="M10.8 12.2L20 3" />
+        <path d="M16 7l3 3" />
+        <path d="M13.5 9.5l2 2" />
       </>
     ),
   },
@@ -101,10 +113,12 @@ interface ProjectSidebarProps {
   section: Section
   /** Number of problems per section, shown as a badge. */
   problems: Partial<Record<Section, number>>
+  /** Sections that are switched on, shown with a dot. */
+  on?: Partial<Record<Section, boolean>>
 }
 
 /** Sidebar inside a project: one entry per step of building the backend. */
-export function ProjectSidebar({ project, section, problems }: ProjectSidebarProps) {
+export function ProjectSidebar({ project, section, problems, on = {} }: ProjectSidebarProps) {
   return (
     <nav>
       <a className="sidebar-back" href={link('/')}>
@@ -123,6 +137,7 @@ export function ProjectSidebar({ project, section, problems }: ProjectSidebarPro
               <Icon>{s.icon}</Icon>
               <span>{s.label}</span>
               {!!problems[s.id] && <span className="count-badge">{problems[s.id]}</span>}
+              {!problems[s.id] && on[s.id] && <span className="on-dot" title="On" />}
             </a>
           </li>
         ))}

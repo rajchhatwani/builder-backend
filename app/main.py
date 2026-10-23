@@ -4,7 +4,7 @@ import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, entities, fields, generate, health, projects, relations, spec
+from app.api import auth, entities, fields, generate, health, keycloak, projects, relations, spec
 from app.config import get_settings
 from app.errors import register_exception_handlers
 
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     )
     register_exception_handlers(app)
     app.include_router(auth.router)
+    app.include_router(keycloak.router)
     app.include_router(health.router)
     app.include_router(projects.router)
     app.include_router(entities.router)

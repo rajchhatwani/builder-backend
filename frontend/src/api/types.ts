@@ -185,6 +185,8 @@ export interface AuthConfig {
   id: string
   project_id: string
   enabled: boolean
+  /** Who manages users and tokens. Changed only by turning Keycloak on or off. */
+  provider: AuthProvider
   token_store: TokenStore
   access_token_ttl_minutes: number
   refresh_token_ttl_days: number
@@ -376,4 +378,61 @@ export interface AuthCustomFieldUpdate {
   enum_values?: string[] | null
   extra?: Record<string, unknown> | null
   position?: number | null
+}
+
+// ── Keycloak ──────────────────────────────────────────────────────────────────
+
+export type AuthProvider = 'builtin' | 'keycloak'
+export type KeycloakMode = 'own' | 'shared'
+export type MfaMode = 'off' | 'optional' | 'required'
+export type IdpType = 'google' | 'microsoft' | 'github' | 'oidc'
+
+export interface IdentityProvider {
+  alias: string
+  type: IdpType
+  display_name: string | null
+  client_id: string
+  tenant_id: string | null
+  hosted_domain: string | null
+  issuer: string | null
+  authorization_url: string | null
+  token_url: string | null
+  jwks_url: string | null
+  userinfo_url: string | null
+}
+
+export interface KeycloakWrite {
+  mode: KeycloakMode
+  realm: string | null
+  api_client_id: string | null
+  web_client_id: string | null
+  redirect_uris: string[]
+  password_min_length: number
+  mfa: MfaMode
+  session_idle_minutes: number
+  session_max_hours: number
+  audit_retention_days: number
+  identity_providers: IdentityProvider[]
+  source_project_id: string | null
+}
+
+export interface KeycloakConfig extends Omit<KeycloakWrite, 'realm' | 'api_client_id' | 'web_client_id'> {
+  id: string
+  project_id: string
+  /** True while this project uses Keycloak. */
+  active: boolean
+  realm: string
+  api_client_id: string
+  web_client_id: string
+  created_at: string
+  updated_at: string
+}
+
+export interface KeycloakImpact {
+  action: 'enable' | 'disable'
+  provider: AuthProvider
+  can_proceed: boolean
+  blockers: string[]
+  warnings: string[]
+  dependents: { id: string; name: string }[]
 }

@@ -7,10 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.enums import (
     AuthCustomFieldType,
     AuthOperation,
+    AuthProvider,
     DbEngine,
     DeletionMode,
     FieldType,
     JwtAlgorithm,
+    KeycloakMode,
+    MfaMode,
     OnDelete,
     RelationKind,
     RowRule,
@@ -24,6 +27,8 @@ from app.core.spec_models import (
     SpecEntity,
     SpecEntityOptions,
     SpecField,
+    SpecIdentityProvider,
+    SpecKeycloak,
     SpecPasswordReset,
     SpecPermission,
     SpecProject,
@@ -39,6 +44,7 @@ from app.models.auth_config import ProjectAuthConfig
 from app.models.auth_custom_field import AuthCustomField
 from app.models.entity import Entity
 from app.models.field import Field
+from app.models.keycloak_config import ProjectKeycloakConfig
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
@@ -148,9 +154,19 @@ class SpecService:
                 ).scalars()
             )
 
+            kc_row = (
+                await self.session.execute(
+                    select(ProjectKeycloakConfig).where(
+                        ProjectKeycloakConfig.project_id == project_id
+                    )
+                )
+            ).scalar_one_or_none()
+
             ac = auth_config_row
             spec_auth = SpecAuth(
                 enabled=ac.enabled,
+                provider=ac.provider.value,
+                keycloak=_keycloak_to_spec(kc_row) if kc_row is not None else None,
                 token_store=ac.token_store.value,
                 access_token_ttl_minutes=ac.access_token_ttl_minutes,
                 refresh_token_ttl_days=ac.refresh_token_ttl_days,
@@ -393,6 +409,8 @@ class SpecService:
             config = ProjectAuthConfig(project_id=project_id)
             self.session.add(config)
         config.enabled = auth.enabled
+        config.provider = AuthProvider(auth.provider)
+        await self._replace_keycloak(project_id, auth.keycloak)
         config.token_store = TokenStore(auth.token_store)
         config.access_token_ttl_minutes = auth.access_token_ttl_minutes
         config.refresh_token_ttl_days = auth.refresh_token_ttl_days
@@ -446,3 +464,45 @@ class SpecService:
                 )
             )
         self._add_permissions(project_id, auth.permissions, ids_by_name)
+
+    async def _replace_keycloak(self, project_id: uuid.UUID, kc: SpecKeycloak | None) -> None:
+        row = (
+            await self.session.execute(
+                select(ProjectKeycloakConfig).where(ProjectKeycloakConfig.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if kc is None:
+            if row is not None:
+                await self.session.delete(row)
+            return
+        if row is None:
+            row = ProjectKeycloakConfig(project_id=project_id)
+            self.session.add(row)
+        # source_project_id is builder bookkeeping, not part of the spec: an import keeps it.
+        row.mode = KeycloakMode(kc.mode)
+        row.realm = kc.realm
+        row.api_client_id = kc.api_client_id
+        row.web_client_id = kc.web_client_id
+        row.redirect_uris = list(kc.redirect_uris)
+        row.password_min_length = kc.password_min_length
+        row.mfa = MfaMode(kc.mfa)
+        row.session_idle_minutes = kc.session_idle_minutes
+        row.session_max_hours = kc.session_max_hours
+        row.audit_retention_days = kc.audit_retention_days
+        row.identity_providers = [p.model_dump() for p in kc.identity_providers]
+
+
+def _keycloak_to_spec(row: ProjectKeycloakConfig) -> SpecKeycloak:
+    return SpecKeycloak(
+        mode=row.mode.value,
+        realm=row.realm,
+        api_client_id=row.api_client_id,
+        web_client_id=row.web_client_id,
+        redirect_uris=list(row.redirect_uris),
+        password_min_length=row.password_min_length,
+        mfa=row.mfa.value,
+        session_idle_minutes=row.session_idle_minutes,
+        session_max_hours=row.session_max_hours,
+        audit_retention_days=row.audit_retention_days,
+        identity_providers=[SpecIdentityProvider.model_validate(p) for p in row.identity_providers],
+    )

@@ -4,13 +4,15 @@
     python scripts/seed.py --base-url http://localhost:8000 --reset
     docker compose exec api python /app/scripts/seed.py
 
-It creates four projects, each of which validates and can be downloaded as a zip:
+It creates six projects, each of which validates and can be downloaded as a zip:
 
   helpdesk  entities + relations + email/SMS sign-in, roles, custom registration fields, invite
             only roles and every kind of permission (roles, owner, role_scoped, custom_filter)
   vault     RS256 tokens and refresh tokens in Redis
   bookshop  a plain CRUD backend with a many-to-many relation and no auth
   workspace multi-tenant: sign-up creates a tenant, invitations join one, rows are tenant-scoped
+  sso-hub   Keycloak that ships with the project: Google + Microsoft Entra ID logins, MFA, roles
+  sso-portal a second platform that trusts sso-hub's Keycloak realm (single sign-on across projects)
 
 Running it again skips projects that already exist (by slug); --reset recreates them. Standard
 library only, so it runs anywhere Python 3.10+ does. Credentials are not seeded: the generated
@@ -64,6 +66,9 @@ class Api:
 
     def patch(self, path: str, body: Any) -> Any:
         return self.call("PATCH", path, body)
+
+    def put(self, path: str, body: Any) -> Any:
+        return self.call("PUT", path, body)
 
     def delete(self, path: str) -> Any:
         return self.call("DELETE", path)
@@ -145,6 +150,12 @@ class Builder:
 
     def role(self, name: str, label: str, **flags: Any) -> None:
         self.api.post(f"/projects/{self.id}/roles", {"name": name, "label": label, **flags})
+
+    def keycloak(self, enable: bool = True, **settings: Any) -> None:
+        """Save the Keycloak settings and, unless told not to, switch the project to Keycloak."""
+        self.api.put(f"/projects/{self.id}/keycloak", settings)
+        if enable:
+            self.api.post(f"/projects/{self.id}/keycloak/enable", {"confirm": True})
 
     def custom_field(self, name: str, label: str, type_: str, **extra: Any) -> None:
         self.api.post(
@@ -399,7 +410,91 @@ def workspace(api: Api) -> Builder:
     return b
 
 
-PROJECTS = {"helpdesk": helpdesk, "vault": vault, "bookshop": bookshop, "workspace": workspace}
+def sso_hub(api: Api) -> Builder:
+    b = Builder(
+        api,
+        "SSO Hub",
+        "sso-hub",
+        "Keycloak ships with the project: Google and Entra ID logins, MFA, roles from Keycloak.",
+    )
+    b.entity(
+        "Note",
+        [field("title", "string", max_length=120), field("body", "text", required=False)],
+        sortable=["created_at"],
+    )
+    b.entity("Report", [field("name", "string", max_length=80)])
+    b.role("admin", "Admin", position=0)
+    b.role("member", "Member", is_default=True, position=1)
+    b.keycloak(
+        mode="own",
+        realm="company",
+        redirect_uris=["http://localhost:3000/"],
+        mfa="optional",
+        identity_providers=[
+            {"alias": "google", "type": "google", "display_name": "Google", "client_id": "demo"},
+            {
+                "alias": "work",
+                "type": "microsoft",
+                "display_name": "Work account",
+                "client_id": "demo",
+                "tenant_id": "11111111-2222-3333-4444-555555555555",
+            },
+        ],
+    )
+    b.api.patch(
+        f"/projects/{b.id}/auth",
+        {"app_name": "SSO Hub", "smtp_config": {**SMTP, "from_name": "SSO Hub"}},
+    )
+    b.api.patch(f"/projects/{b.id}/auth", {"email_verification_required": True})
+    b.permissions(
+        [
+            ("Note", "list", ["member", "admin"], {"row_rule": "role_scoped"}),
+            ("Note", "create", ["member", "admin"], {}),
+            ("Report", "list", ["admin"], {}),
+        ]
+    )
+    return b
+
+
+def sso_portal(api: Api) -> Builder:
+    hub = next(
+        (p for p in api.get("/projects?limit=200&offset=0")["items"] if p["slug"] == "sso-hub"),
+        None,
+    )
+    if hub is None:
+        raise SystemExit("seed sso-hub first: sso-portal trusts its Keycloak realm")
+    b = Builder(
+        api,
+        "SSO Portal",
+        "sso-portal",
+        "A second platform on the same Keycloak realm as SSO Hub: one login for both.",
+    )
+    b.entity("Ticket", [field("subject", "string", max_length=120)], sortable=["created_at"])
+    b.role("admin", "Admin", position=0)
+    b.role("agent", "Agent", is_default=True, position=1)
+    b.keycloak(
+        mode="shared",
+        source_project_id=hub["id"],
+        redirect_uris=["http://localhost:3001/"],
+    )
+    b.permissions(
+        [
+            ("Ticket", "list", ["agent", "admin"], {"row_rule": "owner"}),
+            ("Ticket", "create", ["agent", "admin"], {}),
+            ("Ticket", "delete", ["admin"], {}),
+        ]
+    )
+    return b
+
+
+PROJECTS = {
+    "helpdesk": helpdesk,
+    "vault": vault,
+    "bookshop": bookshop,
+    "workspace": workspace,
+    "sso-hub": sso_hub,
+    "sso-portal": sso_portal,
+}
 
 
 def main() -> int:

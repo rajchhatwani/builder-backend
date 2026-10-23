@@ -7,6 +7,7 @@ from typing import Annotated, Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.enums import (
+    AuthProvider,
     DeletionMode,
     JwtAlgorithm,
     SmsProvider,
@@ -176,6 +177,8 @@ class AuthConfigRead(BaseModel):
     id: uuid.UUID
     project_id: uuid.UUID
     enabled: bool
+    # Read-only here: changed through the /keycloak/enable and /keycloak/disable endpoints.
+    provider: AuthProvider
     token_store: TokenStore
     access_token_ttl_minutes: int
     refresh_token_ttl_days: int

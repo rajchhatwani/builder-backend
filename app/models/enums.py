@@ -1,10 +1,14 @@
 from app.core.enums import (
     AuthCustomFieldType,
     AuthOperation,
+    AuthProvider,
     DbEngine,
     DeletionMode,
     FieldType,
+    IdpType,
     JwtAlgorithm,
+    KeycloakMode,
+    MfaMode,
     OnDelete,
     RelationKind,
     RowRule,
@@ -13,6 +17,10 @@ from app.core.enums import (
 )
 
 __all__ = [
+    "AuthProvider",
+    "IdpType",
+    "KeycloakMode",
+    "MfaMode",
     "AuthCustomFieldType",
     "AuthOperation",
     "DbEngine",

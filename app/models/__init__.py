@@ -5,6 +5,7 @@ from app.models.base import Base
 from app.models.entity import Entity
 from app.models.field import Field
 from app.models.generation import Generation
+from app.models.keycloak_config import ProjectKeycloakConfig
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
@@ -19,6 +20,7 @@ __all__ = [
     "Project",
     "ProjectAuthConfig",
     "ProjectAuthSecrets",
+    "ProjectKeycloakConfig",
     "ProjectPermission",
     "ProjectRole",
     "Relation",

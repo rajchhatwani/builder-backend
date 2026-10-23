@@ -10,10 +10,15 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
 {% if auth %}
+{% if auth.provider == "keycloak" %}
+from app.auth.config import DOCS_CLIENT_ID, get_auth_settings
+{% else %}
 from app.auth.config import get_auth_settings
+{% endif %}
 {% if auth.security_headers_enabled %}
 from app.auth.middleware import SecurityHeadersMiddleware
 {% endif %}
+from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 {% endif %}
 from app.config import get_settings
@@ -30,6 +35,7 @@ from app.routers.{{ e.table }} import router as {{ e.table }}_router
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% if auth %}
     get_auth_settings()  # a missing secret stops the app here, with a clear message
+    await ensure_provider_lock()  # refuses to start on a database used by another provider
 {% endif %}
     yield
     await engine.dispose()
@@ -48,7 +54,21 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
+{% if auth and auth.provider == "keycloak" %}
+    app = FastAPI(
+        title={{ name | pyrepr }},
+        version="0.1.0",
+        lifespan=lifespan,
+        # The "Authorize" button in /docs signs in through Keycloak with PKCE (no secret).
+        swagger_ui_init_oauth={
+            "clientId": DOCS_CLIENT_ID,
+            "usePkceWithAuthorizationCodeGrant": True,
+            "scopes": "openid",
+        },
+    )
+{% else %}
     app = FastAPI(title={{ name | pyrepr }}, version="0.1.0", lifespan=lifespan)
+{% endif %}
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,

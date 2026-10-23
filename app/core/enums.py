@@ -104,3 +104,32 @@ class AuthOperation(StrEnum):
     update = "update"
     delete = "delete"
     head = "head"
+
+
+class AuthProvider(StrEnum):
+    """Where a generated project's users and tokens come from."""
+
+    builtin = "builtin"
+    keycloak = "keycloak"
+
+
+class KeycloakMode(StrEnum):
+    """own: the project ships its own Keycloak. shared: it trusts an existing realm."""
+
+    own = "own"
+    shared = "shared"
+
+
+class MfaMode(StrEnum):
+    off = "off"
+    optional = "optional"
+    required = "required"
+
+
+class IdpType(StrEnum):
+    """Kinds of external login a Keycloak realm can offer."""
+
+    google = "google"
+    microsoft = "microsoft"
+    github = "github"
+    oidc = "oidc"

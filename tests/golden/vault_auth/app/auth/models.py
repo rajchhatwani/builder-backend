@@ -104,3 +104,22 @@ class AuthInvitation(_models_base.Base):
     created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
         _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
     )
+
+
+class AuthProviderLock(_models_base.Base):
+    """One row: which identity provider this database was started with."""
+
+    __tablename__ = "auth_provider_lock"
+
+    id: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), primary_key=True, autoincrement=False)
+    provider: _orm.Mapped[str] = _orm.mapped_column(_sa.String(20), nullable=False)
+    realm: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(63), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
+    )
+    updated_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True),
+        nullable=False,
+        default=_models_base.utcnow,
+        onupdate=_models_base.utcnow,
+    )

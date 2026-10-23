@@ -5,6 +5,7 @@ from app.core.generator.context import build_context
 from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.crud.module import CrudModule
 from app.core.generator.features.docker.module import DockerModule
+from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.tests.module import TestsModule
 from app.core.spec_models import Spec
 from app.core.validation import ValidationIssue, validate
@@ -17,7 +18,7 @@ class InvalidSpecError(Exception):
 
 
 def default_modules() -> list[FeatureModule]:
-    return [CrudModule(), DockerModule(), TestsModule(), AuthModule()]
+    return [CrudModule(), DockerModule(), TestsModule(), AuthModule(), KeycloakModule()]
 
 
 def generate(spec: Spec, modules: list[FeatureModule] | None = None) -> FileTree:

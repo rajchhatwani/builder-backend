@@ -1,0 +1,427 @@
+"""Tests for signing in with Keycloak tokens (generated).
+
+Tokens are signed by a throwaway key that the app is told to trust (see tests/_auth_support.py).
+Each forged or broken token must be refused with the same plain 401, whatever was wrong."""
+
+import asyncio
+import base64
+import hashlib
+import hmac
+import json
+import time
+import uuid
+
+import pytest
+from httpx import AsyncClient, Response
+from sqlalchemy import select
+
+from app.auth import config, oidc
+from app.auth.models import AuthUser
+from app.db import session_factory
+from tests import _auth_support as support
+from tests._auth_support import KeyServer, bearer, claims, sign, token
+
+pytestmark = pytest.mark.usefixtures("key_server")
+
+
+async def me(client: AsyncClient, access_token: str | None) -> Response:
+    headers = bearer(access_token) if access_token is not None else {}
+    return await client.get("/auth/me", headers=headers)
+
+
+async def assert_refused(client: AsyncClient, access_token: str | None) -> None:
+    response = await me(client, access_token)
+    assert response.status_code == 401, response.text
+    body = response.json()
+    assert body["code"] == "unauthorized"
+    # The reason is only ever logged, so a caller cannot learn which check failed.
+    assert body["message"] in ("authentication required", "invalid or expired access token")
+
+
+# --- accepted tokens --------------------------------------------------------------------
+
+
+async def test_a_valid_token_signs_the_user_in(client: AsyncClient) -> None:
+    response = await client.get("/auth/me", headers=bearer(token()))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["email"] == support.EMAIL
+    assert body["name"] == "Test User"
+    assert set(body["roles"]) == set(config.DEFAULT_ROLES)
+
+
+async def test_the_profile_row_is_created_once_from_the_subject(client: AsyncClient) -> None:
+    sub = uuid.uuid4()
+    for _ in range(3):
+        response = await client.get("/auth/me", headers=bearer(token(sub=sub)))
+        assert response.status_code == 200
+        assert response.json()["id"] == str(sub)
+    async with session_factory() as session:
+        rows = (await session.execute(select(AuthUser).where(AuthUser.id == sub))).scalars().all()
+    assert len(rows) == 1
+
+
+async def test_two_first_requests_at_once_create_one_row(client: AsyncClient) -> None:
+    sub = uuid.uuid4()
+    results = await asyncio.gather(
+        *(client.get("/auth/me", headers=bearer(token(sub=sub))) for _ in range(5))
+    )
+    assert {r.status_code for r in results} == {200}
+
+
+async def test_name_and_email_follow_keycloak(client: AsyncClient) -> None:
+    sub = uuid.uuid4()
+    await client.get("/auth/me", headers=bearer(token(email="old@example.com", sub=sub)))
+
+    response = await client.get(
+        "/auth/me", headers=bearer(token(email="new@example.com", sub=sub, name="New Name"))
+    )
+
+    assert response.json()["email"] == "new@example.com"
+    assert response.json()["name"] == "New Name"
+
+
+async def test_a_token_without_an_email_does_not_erase_the_known_one(
+    client: AsyncClient,
+) -> None:
+    sub = uuid.uuid4()
+    await client.get("/auth/me", headers=bearer(token(email="keep@example.com", sub=sub)))
+
+    response = await client.get(
+        "/auth/me", headers=bearer(sign(claims(sub=sub, email=None, email_verified=True)))
+    )
+
+    assert response.status_code == 200
+    assert response.json()["email"] == "keep@example.com"
+
+
+{% if all_roles != "()" %}
+async def test_roles_come_from_the_token_and_can_change(client: AsyncClient) -> None:
+    sub = uuid.uuid4()
+    role = {{ all_roles }}[0]
+    granted = await client.get("/auth/me", headers=bearer(token(sub=sub, roles=[role])))
+    assert role in granted.json()["roles"]
+
+    revoked = await client.get("/auth/me", headers=bearer(token(sub=sub, roles=[])))
+    assert set(revoked.json()["roles"]) == set(config.DEFAULT_ROLES)
+
+
+{% endif %}
+async def test_roles_this_project_does_not_define_are_ignored(client: AsyncClient) -> None:
+    response = await client.get(
+        "/auth/me", headers=bearer(token(roles=["superuser", "realm-admin"]))
+    )
+
+    assert response.status_code == 200
+    assert set(response.json()["roles"]) == set(config.DEFAULT_ROLES)
+
+
+async def test_roles_of_another_client_are_not_trusted(client: AsyncClient) -> None:
+    payload = claims(roles=[])
+    payload["resource_access"] = {"some-other-client": {"roles": list({{ all_roles }})}}
+    payload["realm_access"] = {"roles": list({{ all_roles }})}
+
+    response = await client.get("/auth/me", headers=bearer(sign(payload)))
+
+    assert set(response.json()["roles"]) == set(config.DEFAULT_ROLES)
+
+
+async def test_a_token_a_few_seconds_past_expiry_is_still_inside_the_leeway(
+    client: AsyncClient,
+) -> None:
+    now = int(time.time())
+    expired_just_now = sign(claims(exp=now - 5, iat=now - 300))
+    assert (await me(client, expired_just_now)).status_code == 200
+
+
+async def test_audience_may_be_a_single_string(client: AsyncClient) -> None:
+    access = sign(claims(aud=config.API_CLIENT_ID))
+    assert (await me(client, access)).status_code == 200
+
+
+# --- refused tokens ---------------------------------------------------------------------
+
+
+async def test_no_token(client: AsyncClient) -> None:
+    await assert_refused(client, None)
+
+
+@pytest.mark.parametrize("junk", ["", "x", "a.b", "a.b.c", "...", "e30.e30.", "A" * 20000])
+async def test_malformed_tokens(client: AsyncClient, junk: str) -> None:
+    await assert_refused(client, junk)
+
+
+async def test_other_authorization_schemes_are_ignored(client: AsyncClient) -> None:
+    response = await client.get("/auth/me", headers={"Authorization": f"Basic {token()}"})
+    assert response.status_code == 401
+
+
+async def test_signed_by_someone_else(client: AsyncClient) -> None:
+    await assert_refused(client, sign(claims(), key=support.other_key()))
+
+
+async def test_tampered_payload(client: AsyncClient) -> None:
+    head, _, signature = token(roles=[]).split(".")
+    forged = support._json(claims(roles=list({{ all_roles }}) or ["admin"]))
+    await assert_refused(client, f"{head}.{forged}.{signature}")
+
+
+async def test_algorithm_none(client: AsyncClient) -> None:
+    head = support._json({"alg": "none", "typ": "JWT", "kid": support.KID})
+    await assert_refused(client, f"{head}.{support._json(claims())}.")
+
+
+@pytest.mark.parametrize("alg", ["HS256", "HS384", "RS384", "PS256", "ES256", "none", "", None])
+async def test_only_rs256_is_accepted(client: AsyncClient, alg: str | None) -> None:
+    await assert_refused(client, sign(claims(), header={"alg": alg}))
+
+
+async def test_hmac_signed_with_the_public_key_is_refused(client: AsyncClient) -> None:
+    """The classic algorithm-confusion forgery: HS256 using the public key as the secret."""
+    head = support._json({"alg": "HS256", "typ": "JWT", "kid": support.KID})
+    body = support._json(claims())
+    mac = hmac.new(support.public_pem(), f"{head}.{body}".encode("ascii"), hashlib.sha256)
+    signature = base64.urlsafe_b64encode(mac.digest()).rstrip(b"=").decode("ascii")
+    await assert_refused(client, f"{head}.{body}.{signature}")
+
+
+async def test_keys_named_in_the_token_are_never_used(client: AsyncClient) -> None:
+    """jwk / jku headers point at keys the attacker controls; they must be ignored."""
+    attacker = support.other_key()
+    jwk = {"kty": "RSA", "n": "AQAB", "e": "AQAB"}
+    forged = sign(
+        claims(),
+        key=attacker,
+        header={"jwk": jwk, "jku": "https://evil.example/keys", "kid": "attacker"},
+    )
+    await assert_refused(client, forged)
+
+
+async def test_missing_or_unknown_key_id(client: AsyncClient) -> None:
+    await assert_refused(client, sign(claims(), header={"kid": None}))
+    await assert_refused(client, sign(claims(), header={"kid": "nope"}))
+    await assert_refused(client, sign(claims(), header={"kid": ""}))
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"iss": "https://evil.example/realms/x"},
+        {"iss": None},
+        {"aud": "some-other-client"},
+        {"aud": ["a", "b"]},
+        {"aud": None},
+        {"aud": []},
+        {"typ": "ID"},
+        {"typ": "Refresh"},
+        {"typ": None},
+        {"exp": 1},
+        {"exp": None},
+        {"exp": "tomorrow"},
+        {"exp": True},
+        {"nbf": int(time.time()) + 3600},
+        {"iat": int(time.time()) + 3600},
+        {"sub": "not-a-uuid"},
+    ],
+)
+async def test_claims_that_are_wrong(client: AsyncClient, overrides: dict[str, object]) -> None:
+    await assert_refused(client, sign(claims(**overrides)))
+
+
+async def test_a_token_without_a_subject_is_refused(client: AsyncClient) -> None:
+    payload = claims()
+    del payload["sub"]
+    await assert_refused(client, sign(payload))
+
+
+async def test_a_token_from_another_realm_is_refused(client: AsyncClient) -> None:
+    other = f"{support.issuer().rsplit('/', 1)[0]}/other-realm"
+    await assert_refused(client, sign(claims(iss=other)))
+
+
+async def test_a_token_for_another_platform_on_the_same_realm_is_refused(
+    client: AsyncClient,
+) -> None:
+    """Single sign-on shares the realm; the audience keeps each project's API separate."""
+    await assert_refused(client, sign(claims(aud=["another-project-api"])))
+
+
+async def test_a_deactivated_user_is_refused(client: AsyncClient) -> None:
+    sub = uuid.uuid4()
+    assert (await client.get("/auth/me", headers=bearer(token(sub=sub)))).status_code == 200
+    async with session_factory() as session:
+        user = await session.get(AuthUser, sub)
+        assert user is not None
+        user.is_active = False
+        await session.commit()
+
+    await assert_refused(client, token(sub=sub))
+
+
+{% if verification_required %}
+async def test_an_unverified_email_is_refused(client: AsyncClient) -> None:
+    response = await client.get("/auth/me", headers=bearer(token(email_verified=False)))
+    assert response.status_code == 403
+    assert response.json()["code"] == "email_not_verified"
+
+    missing = await client.get("/auth/me", headers=bearer(sign(claims(email_verified=None))))
+    assert missing.status_code == 403
+{% else %}
+async def test_an_unverified_email_is_allowed_because_verification_is_off(
+    client: AsyncClient,
+) -> None:
+    response = await client.get("/auth/me", headers=bearer(token(email_verified=False)))
+    assert response.status_code == 200
+{% endif %}
+
+
+# --- erasure ----------------------------------------------------------------------------
+
+
+async def test_deleting_the_account_erases_the_profile_and_blocks_the_user(
+    client: AsyncClient,
+) -> None:
+    sub = uuid.uuid4()
+    access = token(sub=sub, email="gone@example.com")
+    assert (await client.get("/auth/me", headers=bearer(access))).status_code == 200
+
+    assert (await client.delete("/auth/me", headers=bearer(access))).status_code == 204
+
+    async with session_factory() as session:
+        user = await session.get(AuthUser, sub)
+    assert user is not None
+    assert user.email is None and user.name is None and user.roles == []
+    assert user.deleted_at is not None and user.is_active is False
+    await assert_refused(client, access)
+
+
+# --- signing keys -----------------------------------------------------------------------
+
+
+async def test_keys_are_fetched_once_and_cached(client: AsyncClient, key_server: KeyServer) -> None:
+    for _ in range(5):
+        assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+    assert key_server.calls == 1
+
+
+async def test_forged_key_ids_cannot_hammer_keycloak(
+    client: AsyncClient, key_server: KeyServer
+) -> None:
+    assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+    key_server.calls = 0
+    for i in range(20):
+        await assert_refused(client, sign(claims(), header={"kid": f"forged-{i}"}))
+    assert key_server.calls <= 1
+
+
+async def test_a_rotated_key_is_picked_up(
+    client: AsyncClient, key_server: KeyServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+    new_key = support.other_key()
+    key_server.keys["rotated"] = new_key.public_key()
+    monkeypatch.setattr(config, "JWKS_MIN_REFETCH_SECONDS", 0)
+
+    rotated = sign(claims(), key=new_key, header={"kid": "rotated"})
+
+    assert (await me(client, rotated)).status_code == 200
+
+
+async def test_cached_keys_survive_a_short_keycloak_outage(
+    client: AsyncClient, key_server: KeyServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+    monkeypatch.setattr(config, "JWKS_TTL_SECONDS", 0)  # expired, so a refresh is attempted
+    monkeypatch.setattr(config, "JWKS_MIN_REFETCH_SECONDS", 0)
+    key_server.down = True
+
+    assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+
+
+async def test_keys_that_are_too_old_fail_closed(
+    client: AsyncClient, key_server: KeyServer, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert (await client.get("/auth/me", headers=bearer(token()))).status_code == 200
+    monkeypatch.setattr(config, "JWKS_TTL_SECONDS", 0)
+    monkeypatch.setattr(config, "JWKS_MAX_STALE_SECONDS", 0)
+    monkeypatch.setattr(config, "JWKS_MIN_REFETCH_SECONDS", 0)
+    key_server.down = True
+
+    response = await client.get("/auth/me", headers=bearer(token()))
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "auth_unavailable"
+
+
+async def test_no_keys_at_all_fails_closed(client: AsyncClient, key_server: KeyServer) -> None:
+    key_server.down = True
+    response = await client.get("/auth/me", headers=bearer(token()))
+    assert response.status_code == 503
+
+
+def test_unusable_keys_in_the_key_set_are_skipped() -> None:
+    good = support._TEST_KEY.public_key().public_numbers()
+
+    def b64(number: int) -> str:
+        raw = number.to_bytes((number.bit_length() + 7) // 8, "big")
+        return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+    rsa_entry = {"kty": "RSA", "kid": "ok", "use": "sig", "n": b64(good.n), "e": b64(good.e)}
+    document = {
+        "keys": [
+            rsa_entry,
+            {**rsa_entry, "kid": "encryption", "use": "enc"},
+            {**rsa_entry, "kid": "wrong-alg", "alg": "HS256"},
+            {**rsa_entry, "kid": "ec", "kty": "EC"},
+            {**rsa_entry, "kid": "tiny", "n": b64(2**512 + 1)},
+            {**rsa_entry, "kid": None},
+            {"kty": "RSA", "kid": "broken", "n": "!!!", "e": "AQAB"},
+            "not an object",
+        ]
+    }
+
+    assert set(oidc.parse_jwks(document)) == {"ok"}
+    with pytest.raises(ValueError):
+        oidc.parse_jwks({"nope": []})
+
+
+# --- settings ---------------------------------------------------------------------------
+
+
+def test_production_refuses_a_plain_http_issuer(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "http://id.example.com")
+    config.get_auth_settings.cache_clear()
+    with pytest.raises(ValueError, match="https"):
+        config.get_auth_settings()
+    config.get_auth_settings.cache_clear()
+
+
+@pytest.mark.parametrize("url", ["", "id.example.com", "ftp://id.example.com", "https://u:p@id.example.com", "https://id.example.com/?q=1"])
+def test_the_keycloak_url_must_be_a_clean_http_url(
+    monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", url)
+    config.get_auth_settings.cache_clear()
+    with pytest.raises(ValueError):
+        config.get_auth_settings()
+    config.get_auth_settings.cache_clear()
+
+
+def test_issuer_and_key_url_are_built_from_the_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "https://id.example.com/")
+    monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
+    config.get_auth_settings.cache_clear()
+    settings = config.get_auth_settings()
+    assert settings.issuer == f"https://id.example.com/realms/{config.REALM}"
+    assert settings.jwks_url == (
+        f"http://keycloak:8080/realms/{config.REALM}/protocol/openid-connect/certs"
+    )
+    config.get_auth_settings.cache_clear()
+
+
+def test_a_token_is_all_ascii_json() -> None:
+    parts = token().split(".")
+    assert len(parts) == 3
+    assert json.loads(base64.urlsafe_b64decode(parts[0] + "==")).get("alg") == "RS256"

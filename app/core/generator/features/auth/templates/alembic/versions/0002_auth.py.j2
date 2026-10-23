@@ -145,6 +145,15 @@ def upgrade() -> None:
 {% if multi_tenant %}
     op.create_index("ix_auth_invitations_tenant_id", "auth_invitations", ["tenant_id"])
 {% endif %}
+    op.create_table(
+        "auth_provider_lock",
+        sa.Column("id", sa.Integer(), autoincrement=False, nullable=False),
+        sa.Column("provider", sa.String(20), nullable=False),
+        sa.Column("realm", sa.String(63), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_auth_provider_lock"),
+    )
 {% for table in owned_tables %}
     op.add_column("{{ table }}", sa.Column("created_by_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
@@ -182,6 +191,7 @@ def downgrade() -> None:
     op.drop_constraint("fk_{{ table }}_created_by_id_auth_users", "{{ table }}", type_="foreignkey")
     op.drop_column("{{ table }}", "created_by_id")
 {% endfor %}
+    op.drop_table("auth_provider_lock")
     op.drop_table("auth_invitations")
     op.drop_table("auth_verification_codes")
 {% if not redis_store %}

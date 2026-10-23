@@ -86,6 +86,15 @@ def upgrade() -> None:
         sa.UniqueConstraint("token_hash", name="uq_auth_invitations_token_hash"),
     )
     op.create_index("ix_auth_invitations_email", "auth_invitations", ["email"])
+    op.create_table(
+        "auth_provider_lock",
+        sa.Column("id", sa.Integer(), autoincrement=False, nullable=False),
+        sa.Column("provider", sa.String(20), nullable=False),
+        sa.Column("realm", sa.String(63), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_auth_provider_lock"),
+    )
     op.add_column("secrets", sa.Column("created_by_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
         "fk_secrets_created_by_id_auth_users",
@@ -102,6 +111,7 @@ def downgrade() -> None:
     op.drop_index("ix_secrets_created_by_id", table_name="secrets")
     op.drop_constraint("fk_secrets_created_by_id_auth_users", "secrets", type_="foreignkey")
     op.drop_column("secrets", "created_by_id")
+    op.drop_table("auth_provider_lock")
     op.drop_table("auth_invitations")
     op.drop_table("auth_verification_codes")
     op.drop_table("auth_users")

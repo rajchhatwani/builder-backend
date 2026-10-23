@@ -12,6 +12,7 @@ import re
 import uuid
 from datetime import date, datetime
 from typing import Any
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel
 
@@ -19,9 +20,13 @@ from app.core import naming
 from app.core.enums import (
     AuthCustomFieldType,
     AuthOperation,
+    AuthProvider,
     DbEngine,
     FieldType,
+    IdpType,
     JwtAlgorithm,
+    KeycloakMode,
+    MfaMode,
     OnDelete,
     RelationKind,
     RowRule,
@@ -37,6 +42,7 @@ from app.core.spec_models import (
     SpecEntity,
     SpecEntityOptions,
     SpecField,
+    SpecKeycloak,
     SpecProject,
     SpecRelation,
 )
@@ -99,7 +105,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         )
     if spec.auth is not None and spec.auth.enabled:
         # Claim the auth tables first so an entity cannot silently shadow them.
-        for table in AUTH_TABLES:
+        for table in auth_tables(spec.auth):
             ctx.tables[table] = "auth"
 
     _check_project(spec.project, ctx)
@@ -621,11 +627,25 @@ def _claim_name(ctx: _Ctx, entity_name: str, name: str, path: str) -> None:
 # Tables the generated auth module creates; entities may not use these names.
 AUTH_TABLES = (
     "auth_invitations",
+    "auth_provider_lock",
     "auth_refresh_tokens",
     "auth_tenants",
     "auth_users",
     "auth_verification_codes",
 )
+# With Keycloak the identity provider owns passwords, tokens and invitations; the project keeps
+# only a profile row per user (auth_users) and the provider lock.
+KEYCLOAK_AUTH_TABLES = ("auth_provider_lock", "auth_users")
+
+
+def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
+    """The tables the generated auth module creates for this spec."""
+    return KEYCLOAK_AUTH_TABLES if auth.provider == AuthProvider.keycloak else AUTH_TABLES
+
+
+def uses_keycloak(auth: SpecAuth | None) -> bool:
+    return auth is not None and auth.enabled and auth.provider == AuthProvider.keycloak
+
 # Columns of auth_users that custom registration fields may not reuse.
 AUTH_USER_COLUMNS = frozenset(
     {
@@ -674,6 +694,9 @@ def _check_auth(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> N
     _check_auth_structure(auth, entities, ctx)
     if not auth.enabled:
         return
+    if auth.provider == AuthProvider.keycloak:
+        _check_auth_keycloak(auth, entities, ctx)
+        return
     _check_auth_tokens(auth, ctx)
     _check_auth_tenancy(auth, ctx)
     _check_auth_email_sms(auth, ctx)
@@ -707,6 +730,7 @@ def _check_auth_structure(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: 
         ("auth.token_store", auth.token_store, {s.value for s in TokenStore}),
         ("auth.jwt_algorithm", auth.jwt_algorithm, {a.value for a in JwtAlgorithm}),
         ("auth.deletion_mode", auth.deletion_mode, {"soft", "hard"}),
+        ("auth.provider", auth.provider, {p.value for p in AuthProvider}),
     ):
         if value not in allowed:
             ctx.add(path, "invalid_value", f"must be one of {', '.join(sorted(allowed))}")
@@ -923,6 +947,11 @@ def _check_auth_email_sms(auth: SpecAuth, ctx: _Ctx) -> None:
             "required",
             "smtp is required when email magic links or email verification are enabled",
         )
+    _check_smtp_shape(auth, ctx)
+    _check_sms(auth, ctx)
+
+
+def _check_smtp_shape(auth: SpecAuth, ctx: _Ctx) -> None:
     if auth.smtp is not None:
         smtp = auth.smtp
         if not _HOST_RE.fullmatch(smtp.host):
@@ -933,6 +962,10 @@ def _check_auth_email_sms(auth: SpecAuth, ctx: _Ctx) -> None:
             ctx.add("auth.smtp.from_email", "invalid_value", "must be an email address")
         if not _single_line(smtp.from_name):
             ctx.add("auth.smtp.from_name", "invalid_value", "must be a single non-blank line")
+
+
+def _check_sms(auth: SpecAuth, ctx: _Ctx) -> None:
+    reset = auth.password_reset
     if reset.sms_otp:
         if auth.sms_provider is None:
             ctx.add("auth.sms_provider", "required", "required when sms_otp is enabled")
@@ -951,12 +984,7 @@ def _check_auth_email_sms(auth: SpecAuth, ctx: _Ctx) -> None:
 
 
 def _check_auth_branding(auth: SpecAuth, ctx: _Ctx) -> None:
-    if auth.app_name is not None and not _single_line(auth.app_name):
-        ctx.add("auth.app_name", "invalid_value", "must be a single non-blank line")
-    if auth.app_url is not None and (
-        len(auth.app_url) > 2000 or not _URL_RE.fullmatch(auth.app_url)
-    ):
-        ctx.add("auth.app_url", "invalid_value", "must be an http(s) URL")
+    _check_branding_shape(auth, ctx)
     needs_links = (
         auth.password_reset.email_magic_link or auth.registration.email_verification_required
     )
@@ -966,6 +994,15 @@ def _check_auth_branding(auth: SpecAuth, ctx: _Ctx) -> None:
             "required",
             "app_url is required to build the links in verification and magic link emails",
         )
+
+
+def _check_branding_shape(auth: SpecAuth, ctx: _Ctx) -> None:
+    if auth.app_name is not None and not _single_line(auth.app_name):
+        ctx.add("auth.app_name", "invalid_value", "must be a single non-blank line")
+    if auth.app_url is not None and (
+        len(auth.app_url) > 2000 or not _URL_RE.fullmatch(auth.app_url)
+    ):
+        ctx.add("auth.app_url", "invalid_value", "must be an http(s) URL")
 
 
 def _check_auth_roles(auth: SpecAuth, ctx: _Ctx) -> None:
@@ -1094,3 +1131,254 @@ def _check_custom_default(f: SpecAuthCustomField, p: str, ctx: _Ctx) -> None:
             "invalid_default",
             f"{value[:40]!r} is not a valid default for type {f.type}",
         )
+
+
+# --- keycloak ---------------------------------------------------------------------------
+
+_REALM_RE = re.compile(r"[a-z0-9][a-z0-9-]{0,62}")
+_CLIENT_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,99}")
+_ALIAS_RE = re.compile(r"[a-z][a-z0-9-]{0,30}")
+_DOMAIN_RE = re.compile(
+    r"[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+"
+)
+_RESERVED_REALMS = frozenset({"master"})
+_MAX_REDIRECT_URIS = 20
+_MAX_IDENTITY_PROVIDERS = 10
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+_OIDC_ENDPOINTS = ("issuer", "authorization_url", "token_url", "jwks_url", "userinfo_url")
+_OIDC_REQUIRED_ENDPOINTS = ("issuer", "authorization_url", "token_url", "jwks_url")
+_URL_FORBIDDEN_RE = re.compile(r"[\s\"'<>\\*`]")
+
+
+def redirect_uri_problem(uri: str) -> str | None:
+    """Why `uri` is unsafe as an OAuth redirect URI, or None. Redirect URIs are exact: no
+    wildcards, no embedded credentials, no fragment, https except for local development."""
+    if len(uri) > 2000 or _URL_FORBIDDEN_RE.search(uri) or _CONTROL_CHARS_RE.search(uri):
+        return "must be a plain URL without spaces, quotes, backslashes or wildcards"
+    try:
+        parts = urlsplit(uri)
+        port = parts.port  # raises for an invalid port
+    except ValueError:
+        return "is not a valid URL"
+    host = (parts.hostname or "").lower()
+    if parts.scheme not in ("http", "https") or not host:
+        return "must be an absolute http(s) URL"
+    if parts.username is not None or parts.password is not None or "@" in parts.netloc:
+        return "must not contain credentials"
+    if parts.fragment or "#" in uri:
+        return "must not contain a fragment"
+    if port is not None and not 1 <= port <= 65535:
+        return "has an invalid port"
+    if parts.scheme == "http" and host not in _LOCAL_HOSTS:
+        return "must use https (http is only allowed for localhost)"
+    return None
+
+
+def _check_auth_keycloak(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> None:
+    """Rules for a project whose users and tokens come from Keycloak."""
+    kc = auth.keycloak
+    if kc is None:
+        ctx.add("auth.keycloak", "required", "Keycloak is selected, so its settings are required")
+    else:
+        _check_keycloak_block(kc, ctx)
+    _check_keycloak_exclusions(auth, ctx)
+
+    if not 1 <= auth.access_token_ttl_minutes <= 1440:
+        ctx.add("auth.access_token_ttl_minutes", "out_of_range", "must be between 1 and 1440")
+    _check_smtp_shape(auth, ctx)
+    if auth.registration.email_verification_required and auth.smtp is None:
+        ctx.add(
+            "auth.smtp",
+            "required",
+            "smtp is required when email verification is enabled (Keycloak sends the mail)",
+        )
+    _check_branding_shape(auth, ctx)
+    _check_auth_roles(auth, ctx)
+    _check_auth_permission_rules(auth, entities, ctx)
+
+
+def _check_keycloak_exclusions(auth: SpecAuth, ctx: _Ctx) -> None:
+    """Features that exist only in built-in auth. Each is rejected rather than ignored, so
+    nothing the user configured silently disappears."""
+    if auth.multi_tenant:
+        ctx.add(
+            "auth.multi_tenant",
+            "unsupported_value",
+            "multi-tenancy is not available with Keycloak yet; turn it off or use built-in auth",
+        )
+    for i, perm in enumerate(auth.permissions):
+        if perm.row_rule == RowRule.tenant:
+            ctx.add(
+                f"auth.permissions[{i}].row_rule",
+                "unsupported_value",
+                "the tenant row rule needs multi-tenancy, which is not available with Keycloak yet",
+            )
+    if auth.registration.custom_fields:
+        ctx.add(
+            "auth.registration.custom_fields",
+            "unsupported_value",
+            "custom registration fields are not available with Keycloak yet; remove them",
+        )
+    if auth.password_reset.sms_otp:
+        ctx.add(
+            "auth.password_reset.sms_otp",
+            "unsupported_value",
+            "SMS one-time codes are not available with Keycloak; turn them off",
+        )
+    for i, role in enumerate(auth.roles):
+        if role.self_assignable:
+            ctx.add(
+                f"auth.roles[{i}].self_assignable",
+                "unsupported_value",
+                "with Keycloak, roles are granted in Keycloak, not chosen at sign-up; "
+                "turn off self-assignable",
+            )
+        if role.invite_only:
+            ctx.add(
+                f"auth.roles[{i}].invite_only",
+                "unsupported_value",
+                "invitations do not exist with Keycloak; create the user in Keycloak instead",
+            )
+
+
+def _check_keycloak_block(kc: SpecKeycloak, ctx: _Ctx) -> None:
+    p = "auth.keycloak"
+    if kc.mode not in {m.value for m in KeycloakMode}:
+        ctx.add(f"{p}.mode", "invalid_value", "must be own or shared")
+    if kc.mfa not in {m.value for m in MfaMode}:
+        ctx.add(f"{p}.mfa", "invalid_value", "must be off, optional or required")
+    if not _REALM_RE.fullmatch(kc.realm):
+        ctx.add(
+            f"{p}.realm",
+            "invalid_identifier",
+            "must be lowercase letters, digits and hyphens, at most 63 characters",
+        )
+    elif kc.realm in _RESERVED_REALMS:
+        ctx.add(f"{p}.realm", "reserved_name", f"{kc.realm!r} is Keycloak's admin realm")
+    for name, value in (("api_client_id", kc.api_client_id), ("web_client_id", kc.web_client_id)):
+        if not _CLIENT_ID_RE.fullmatch(value):
+            ctx.add(
+                f"{p}.{name}",
+                "invalid_identifier",
+                "must start with a letter or digit and use letters, digits, . _ - (at most 100)",
+            )
+    if kc.api_client_id == kc.web_client_id:
+        ctx.add(f"{p}.web_client_id", "duplicate_name", "must differ from api_client_id")
+
+    bounds = (
+        ("password_min_length", kc.password_min_length, 8, 128),
+        ("session_idle_minutes", kc.session_idle_minutes, 5, 43_200),
+        ("session_max_hours", kc.session_max_hours, 1, 720),
+        ("audit_retention_days", kc.audit_retention_days, 7, 3650),
+    )
+    for bound_name, number, low, high in bounds:
+        if not low <= number <= high:
+            ctx.add(f"{p}.{bound_name}", "out_of_range", f"must be between {low} and {high}")
+    if kc.session_idle_minutes > kc.session_max_hours * 60:
+        ctx.add(
+            f"{p}.session_idle_minutes",
+            "invalid_range",
+            "the idle timeout must not exceed the maximum session length",
+        )
+
+    if not kc.redirect_uris:
+        ctx.add(
+            f"{p}.redirect_uris",
+            "required",
+            "add at least one redirect URL, the address people return to after signing in "
+            "(for local work: http://localhost:3000/)",
+        )
+    if len(kc.redirect_uris) > _MAX_REDIRECT_URIS:
+        ctx.add(f"{p}.redirect_uris", "too_many", f"at most {_MAX_REDIRECT_URIS} are allowed")
+    seen_uris: set[str] = set()
+    for i, uri in enumerate(kc.redirect_uris):
+        problem = redirect_uri_problem(uri)
+        if problem:
+            ctx.add(f"{p}.redirect_uris[{i}]", "invalid_value", problem)
+        elif uri in seen_uris:
+            ctx.add(f"{p}.redirect_uris[{i}]", "duplicate_name", "is listed twice")
+        seen_uris.add(uri)
+
+    _check_identity_providers(kc, ctx)
+
+
+def _check_identity_providers(kc: SpecKeycloak, ctx: _Ctx) -> None:
+    p = "auth.keycloak.identity_providers"
+    providers = kc.identity_providers
+    if providers and kc.mode == KeycloakMode.shared:
+        ctx.add(
+            p,
+            "not_applicable",
+            "a shared realm's logins are configured in the project that runs Keycloak; "
+            "set them there",
+        )
+        return
+    if len(providers) > _MAX_IDENTITY_PROVIDERS:
+        ctx.add(p, "too_many", f"at most {_MAX_IDENTITY_PROVIDERS} are allowed")
+    aliases: set[str] = set()
+    types = {t.value for t in IdpType}
+    for i, idp in enumerate(providers):
+        q = f"{p}[{i}]"
+        if not _ALIAS_RE.fullmatch(idp.alias):
+            ctx.add(
+                f"{q}.alias",
+                "invalid_identifier",
+                "must start with a lowercase letter and use lowercase letters, digits, hyphens "
+                "(at most 31)",
+            )
+        elif idp.alias in aliases:
+            ctx.add(f"{q}.alias", "duplicate_name", f"alias {idp.alias!r} is already used")
+        aliases.add(idp.alias)
+        if idp.display_name is not None and not _single_line(idp.display_name):
+            ctx.add(f"{q}.display_name", "invalid_value", "must be a single non-blank line")
+        if (
+            not idp.client_id.strip()
+            or len(idp.client_id) > 255
+            or _CONTROL_CHARS_RE.search(idp.client_id)
+            or any(c.isspace() for c in idp.client_id)
+        ):
+            ctx.add(
+                f"{q}.client_id", "invalid_value", "must be the id from the provider, no spaces"
+            )
+        if idp.type not in types:
+            ctx.add(f"{q}.type", "invalid_value", f"must be one of {', '.join(sorted(types))}")
+            continue
+        _check_identity_provider_extras(idp.type, idp, q, ctx)
+
+
+def _check_identity_provider_extras(kind: str, idp: Any, q: str, ctx: _Ctx) -> None:
+    allowed = {
+        IdpType.google: {"hosted_domain"},
+        IdpType.microsoft: {"tenant_id"},
+        IdpType.github: set(),
+        IdpType.oidc: set(_OIDC_ENDPOINTS),
+    }[IdpType(kind)]
+    for name in ("tenant_id", "hosted_domain", *_OIDC_ENDPOINTS):
+        if name not in allowed and getattr(idp, name) is not None:
+            ctx.add(f"{q}.{name}", "not_applicable", f"does not apply to {kind} logins")
+    if kind == IdpType.microsoft:
+        tenant = idp.tenant_id
+        try:
+            valid = tenant is not None and str(uuid.UUID(tenant)) == tenant.lower()
+        except ValueError:
+            valid = False
+        if not valid:
+            ctx.add(
+                f"{q}.tenant_id",
+                "required",
+                "Microsoft Entra ID needs your directory (tenant) id, a GUID like "
+                "00000000-0000-0000-0000-000000000000; common and organizations tenants are not "
+                "accepted because they let any Microsoft account in",
+            )
+    domain = idp.hosted_domain
+    bad_domain = domain is not None and (len(domain) > 255 or not _DOMAIN_RE.fullmatch(domain))
+    if kind == IdpType.google and bad_domain:
+        ctx.add(f"{q}.hosted_domain", "invalid_value", "must be a domain such as example.com")
+    if kind == IdpType.oidc:
+        for name in _OIDC_ENDPOINTS:
+            url = getattr(idp, name)
+            if url is None:
+                if name in _OIDC_REQUIRED_ENDPOINTS:
+                    ctx.add(f"{q}.{name}", "required", "required for a generic OIDC login")
+            elif not url.startswith("https://") or redirect_uri_problem(url) is not None:
+                ctx.add(f"{q}.{name}", "invalid_value", "must be an https URL")

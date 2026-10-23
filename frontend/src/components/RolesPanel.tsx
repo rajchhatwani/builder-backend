@@ -8,9 +8,11 @@ import { useUi } from './Ui'
 
 interface RolesPanelProps {
   projectId: string
+  /** With Keycloak, roles are given to people in Keycloak, not chosen at sign-up or by invitation. */
+  keycloak?: boolean
 }
 
-export function RolesPanel({ projectId }: RolesPanelProps) {
+export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
   const { confirm } = useUi()
   const [roles, setRoles] = useState<ProjectRole[]>([])
   const [loading, setLoading] = useState(true)
@@ -271,22 +273,26 @@ export function RolesPanel({ projectId }: RolesPanelProps) {
                 />{' '}
                 Default
               </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={selfAssignable}
-                  onChange={(e) => setSelfAssignable(e.target.checked)}
-                />{' '}
-                Self assignable
-              </label>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={inviteOnly}
-                  onChange={(e) => setInviteOnly(e.target.checked)}
-                />{' '}
-                Invite only
-              </label>
+              {(!keycloak || selfAssignable) && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={selfAssignable}
+                    onChange={(e) => setSelfAssignable(e.target.checked)}
+                  />{' '}
+                  Self assignable{keycloak ? ' (not available with Keycloak: turn it off)' : ''}
+                </label>
+              )}
+              {(!keycloak || inviteOnly) && (
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={inviteOnly}
+                    onChange={(e) => setInviteOnly(e.target.checked)}
+                  />{' '}
+                  Invite only{keycloak ? ' (not available with Keycloak: turn it off)' : ''}
+                </label>
+              )}
             </div>
 
             <div className="field-grid" style={{ marginBlockStart: 'var(--space-4)' }}>

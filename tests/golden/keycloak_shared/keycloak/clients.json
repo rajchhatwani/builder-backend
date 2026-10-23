@@ -1,0 +1,110 @@
+{
+  "realm": "company",
+  "api_client_id": "portal-api",
+  "browser_client_ids": [
+    "portal-web",
+    "portal-web-docs"
+  ],
+  "clients": [
+    {
+      "clientId": "portal-api",
+      "name": "Portal API",
+      "description": "The audience of this project's API tokens. Nobody signs in with it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false
+    },
+    {
+      "clientId": "portal-web",
+      "name": "Portal web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://portal.example.com/callback"
+      ],
+      "webOrigins": [
+        "https://portal.example.com"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://portal.example.com/callback"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "portal-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "portal-web-docs",
+      "name": "Portal API docs (Swagger UI)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      ],
+      "webOrigins": [
+        "${API_PUBLIC_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "portal-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "name": "admin",
+      "description": "Admin",
+      "composite": false,
+      "clientRole": true
+    },
+    {
+      "name": "agent",
+      "description": "Agent",
+      "composite": false,
+      "clientRole": true
+    }
+  ]
+}

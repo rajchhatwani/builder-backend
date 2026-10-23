@@ -69,6 +69,8 @@ def ok(result: subprocess.CompletedProcess[str]) -> str:
         "club_auth",
         "vault_auth",
         "workspace_auth",
+        "keycloak_own",
+        "keycloak_shared",
     ],
 )
 def test_generated_project_migrates_and_passes_its_own_tests(

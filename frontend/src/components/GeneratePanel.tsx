@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
-import type { AuthConfig, GenerationSummary, Preview, Project, ValidationIssue } from '../api/types'
+import type {
+  AuthConfig,
+  GenerationSummary,
+  KeycloakConfig,
+  Preview,
+  Project,
+  ValidationIssue,
+} from '../api/types'
 import { NextSteps } from './NextSteps'
 
 interface GeneratePanelProps {
@@ -55,7 +62,10 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   const [busy, setBusy] = useState<'validate' | 'preview' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Set after a download, so the user sees what to do with the zip.
-  const [downloaded, setDownloaded] = useState<{ auth: AuthConfig | null } | null>(null)
+  const [downloaded, setDownloaded] = useState<{
+    auth: AuthConfig | null
+    keycloak: KeycloakConfig | null
+  } | null>(null)
 
   async function loadHistory() {
     const page = await api.listGenerations(project.id, 20, 0)
@@ -94,7 +104,9 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         setValid(true)
         setIssues([])
         const auth = await api.getAuthConfig(project.id).catch(() => null)
-        setDownloaded({ auth })
+        const keycloak =
+          auth?.provider === 'keycloak' ? await api.getKeycloak(project.id).catch(() => null) : null
+        setDownloaded({ auth, keycloak })
         await loadHistory()
       }
     } catch (err) {
@@ -176,7 +188,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         )}
       </div>
 
-      {downloaded && <NextSteps slug={project.slug} auth={downloaded.auth} />}
+      {downloaded && <NextSteps slug={project.slug} auth={downloaded.auth} keycloak={downloaded.keycloak} />}
 
       <h3>Generation history</h3>
       <div className="card">

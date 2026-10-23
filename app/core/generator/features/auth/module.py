@@ -27,6 +27,8 @@ _VERBATIM = (
     "app/auth/middleware.py.tpl",
     "app/auth/ratelimit.py.tpl",
     "app/auth/service.py.tpl",
+    "app/auth/provider_lock.py.tpl",
+    "tests/test_provider_lock.py.tpl",
 )
 _RENDERED = (
     "app/auth/config.py.j2",
@@ -41,6 +43,28 @@ _RENDERED = (
     "tests/_auth_support.py.j2",
     "tests/test_auth.py.j2",
 )
+
+# With Keycloak the identity provider owns passwords, tokens and sign-in, so the auth module
+# is much smaller: verify tokens, keep a profile row per user, enforce the same permissions.
+_KEYCLOAK_VERBATIM = (
+    "app/auth/__init__.py.tpl",
+    "app/auth/access.py.tpl",
+    "app/auth/middleware.py.tpl",
+    "app/auth/provider_lock.py.tpl",
+    "tests/test_provider_lock.py.tpl",
+    "keycloak/app/auth/deps.py.tpl",
+    "keycloak/app/auth/oidc.py.tpl",
+    "keycloak/app/auth/router.py.tpl",
+    "keycloak/app/auth/service.py.tpl",
+)
+_KEYCLOAK_RENDERED = (
+    "keycloak/alembic/versions/0002_auth.py.j2",
+    "keycloak/app/auth/config.py.j2",
+    "keycloak/app/auth/models.py.j2",
+    "keycloak/tests/_auth_support.py.j2",
+    "keycloak/tests/test_auth.py.j2",
+)
+_KEYCLOAK_DIR = "keycloak/"
 
 _EMAIL_PATTERN = r"^[^@\s\"'<>]+@[^@\s\"'<>]+\.[^@\s\"'<>]+$"
 _PHONE_PATTERN = r"^\+[1-9][0-9]{6,14}$"
@@ -253,6 +277,16 @@ def _auth_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
     }
 
 
+def _keycloak_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
+    kc = auth.keycloak
+    assert kc is not None  # validation guarantees the block when the provider is keycloak
+    return {
+        **_auth_context(project, auth),
+        "kc": kc,
+        "docs_client_id": f"{kc.web_client_id}-docs",
+    }
+
+
 def _held(role: str, parents: dict[str, str | None]) -> set[str]:
     held: set[str] = set()
     cursor: str | None = role
@@ -312,6 +346,8 @@ class AuthModule:
         auth = project.auth
         if auth is None:
             return {}
+        if auth.provider == "keycloak":
+            return self._render_keycloak(project, auth)
         files: FileTree = {
             template.rsplit(".", 1)[0]: read_verbatim(_TEMPLATES, template)
             for template in _VERBATIM
@@ -327,6 +363,23 @@ class AuthModule:
             files["tests/test_tenancy.py"] = render_template(
                 self._env, "tests/test_tenancy.py.j2", **context
             )
+        if context["gated"]:
+            files["tests/test_access.py"] = render_template(
+                self._env, "tests/test_access.py.j2", **context
+            )
+        return files
+
+    def _render_keycloak(self, project: ProjectCtx, auth: SpecAuth) -> FileTree:
+        files: FileTree = {
+            template.removeprefix(_KEYCLOAK_DIR).rsplit(".", 1)[0]: read_verbatim(
+                _TEMPLATES, template
+            )
+            for template in _KEYCLOAK_VERBATIM
+        }
+        context = _keycloak_context(project, auth)
+        for template in _KEYCLOAK_RENDERED:
+            target = template.removeprefix(_KEYCLOAK_DIR).rsplit(".", 1)[0]
+            files[target] = render_template(self._env, template, **context)
         if context["gated"]:
             files["tests/test_access.py"] = render_template(
                 self._env, "tests/test_access.py.j2", **context

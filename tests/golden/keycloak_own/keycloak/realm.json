@@ -1,0 +1,287 @@
+{
+  "realm": "hub",
+  "displayName": "Hub",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "editUsernameAllowed": false,
+  "rememberMe": false,
+  "verifyEmail": true,
+  "resetPasswordAllowed": true,
+  "passwordPolicy": "length(12) and notUsername and notEmail and passwordHistory(5)",
+  "bruteForceProtected": true,
+  "permanentLockout": false,
+  "failureFactor": 5,
+  "waitIncrementSeconds": 60,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "quickLoginCheckMilliSeconds": 1000,
+  "maxDeltaTimeSeconds": 43200,
+  "accessTokenLifespan": 900,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "accessCodeLifespan": 60,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "defaultSignatureAlgorithm": "RS256",
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "eventsListeners": [
+    "jboss-logging"
+  ],
+  "adminEventsEnabled": true,
+  "adminEventsDetailsEnabled": true,
+  "browserSecurityHeaders": {
+    "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+    "contentSecurityPolicyReportOnly": "",
+    "xContentTypeOptions": "nosniff",
+    "xRobotsTag": "none",
+    "xFrameOptions": "SAMEORIGIN",
+    "xXSSProtection": "1; mode=block",
+    "strictTransportSecurity": "max-age=31536000; includeSubDomains",
+    "referrerPolicy": "no-referrer"
+  },
+  "roles": {
+    "client": {
+      "hub-api": [
+        {
+          "name": "admin",
+          "description": "Admin",
+          "composite": false,
+          "clientRole": true
+        },
+        {
+          "name": "editor",
+          "description": "Editor",
+          "composite": false,
+          "clientRole": true
+        },
+        {
+          "name": "member",
+          "description": "Member",
+          "composite": false,
+          "clientRole": true
+        }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "hub-api",
+      "name": "Hub API",
+      "description": "The audience of this project's API tokens. Nobody signs in with it.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "bearerOnly": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false
+    },
+    {
+      "clientId": "hub-web",
+      "name": "Hub web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "http://localhost:3000/",
+        "https://app.example.com/auth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:3000",
+        "https://app.example.com"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3000/##https://app.example.com/auth/callback"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hub-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "hub-web-docs",
+      "name": "Hub API docs (Swagger UI)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      ],
+      "webOrigins": [
+        "${API_PUBLIC_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hub-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "identityProviders": [
+    {
+      "alias": "corp",
+      "displayName": "Corporate SSO",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "hub",
+        "clientSecret": "${KC_IDP_CORP_CLIENT_SECRET}",
+        "syncMode": "IMPORT",
+        "issuer": "https://sso.example.com",
+        "authorizationUrl": "https://sso.example.com/authorize",
+        "tokenUrl": "https://sso.example.com/token",
+        "jwksUrl": "https://sso.example.com/keys",
+        "userInfoUrl": "https://sso.example.com/userinfo",
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid profile email",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256"
+      }
+    },
+    {
+      "alias": "gh",
+      "displayName": "gh",
+      "providerId": "github",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "Iv1.abc123",
+        "clientSecret": "${KC_IDP_GH_CLIENT_SECRET}",
+        "syncMode": "IMPORT",
+        "defaultScope": "user:email"
+      }
+    },
+    {
+      "alias": "google",
+      "displayName": "Google",
+      "providerId": "google",
+      "enabled": true,
+      "trustEmail": true,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "1234.apps.googleusercontent.com",
+        "clientSecret": "${KC_IDP_GOOGLE_CLIENT_SECRET}",
+        "syncMode": "IMPORT",
+        "defaultScope": "openid profile email",
+        "hostedDomain": "example.com"
+      }
+    },
+    {
+      "alias": "work",
+      "displayName": "Work account",
+      "providerId": "oidc",
+      "enabled": true,
+      "trustEmail": false,
+      "storeToken": false,
+      "addReadTokenRoleOnCreate": false,
+      "authenticateByDefault": false,
+      "linkOnly": false,
+      "firstBrokerLoginFlowAlias": "first broker login",
+      "config": {
+        "clientId": "00000000-aaaa-bbbb-cccc-000000000000",
+        "clientSecret": "${KC_IDP_WORK_CLIENT_SECRET}",
+        "syncMode": "IMPORT",
+        "issuer": "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/v2.0",
+        "authorizationUrl": "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/authorize",
+        "tokenUrl": "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/oauth2/v2.0/token",
+        "jwksUrl": "https://login.microsoftonline.com/11111111-2222-3333-4444-555555555555/discovery/v2.0/keys",
+        "userInfoUrl": "https://graph.microsoft.com/oidc/userinfo",
+        "validateSignature": "true",
+        "useJwksUrl": "true",
+        "clientAuthMethod": "client_secret_post",
+        "defaultScope": "openid profile email",
+        "pkceEnabled": "true",
+        "pkceMethod": "S256"
+      }
+    }
+  ],
+  "clientScopeMappings": {
+    "hub-api": [
+      {
+        "client": "hub-web",
+        "roles": [
+          "admin",
+          "editor",
+          "member"
+        ]
+      },
+      {
+        "client": "hub-web-docs",
+        "roles": [
+          "admin",
+          "editor",
+          "member"
+        ]
+      }
+    ]
+  },
+  "smtpServer": {
+    "host": "smtp.example.com",
+    "port": "587",
+    "from": "noreply@hub.example.com",
+    "fromDisplayName": "Hub",
+    "auth": "true",
+    "user": "${SMTP_USERNAME}",
+    "password": "${SMTP_PASSWORD}",
+    "ssl": "false",
+    "starttls": "true"
+  }
+}

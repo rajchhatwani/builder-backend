@@ -69,6 +69,33 @@ email / mobile flows, in `app/auth/` with its own migration (`0002_auth.py`) and
   Credentials stored with `PUT /projects/{id}/auth/secrets` stay on the builder and are not
   used by generation (see "Not yet").
 
+### Keycloak (single sign-on)
+
+A project can use **Keycloak** instead of the built-in auth. The generated backend then issues no
+tokens of its own: it only verifies Keycloak access tokens and applies your roles, permissions and
+row rules, so sign-in, passwords, MFA, social login and user management live in Keycloak. The full
+design, decisions and verification notes are in `KEYCLOAK_PLAN.md`.
+
+- Configure over the API: `PUT/GET /projects/{id}/keycloak` (realm, client ids, redirect URLs,
+  password / MFA / session / audit settings, identity providers), `GET .../keycloak/impact?action=`
+  and `POST .../keycloak/enable|disable` with `{"confirm": true}`. The settings are part of
+  `GET/PUT .../spec` (`auth.provider`, `auth.keycloak`). Client **secrets are never stored**: each
+  login's secret is an environment variable (`KC_IDP_<ALIAS>_CLIENT_SECRET`) of the generated project.
+- Two modes: `own` (the zip starts Keycloak with its own Postgres and an imported realm: hardened
+  defaults, your roles as client roles, Google / Microsoft Entra ID / GitHub / generic OIDC logins,
+  a Swagger UI sign-in client) and `shared` (no Keycloak in the zip; `scripts/keycloak_register.py`
+  adds this project's clients and roles to an existing realm, so one login works across projects).
+  Roles are client roles of each project's API client, and each API accepts only tokens issued for
+  its own client, so projects sharing a realm never accept each other's tokens.
+- Turning it off is deliberate: it needs `confirm`, reports its impact first, is refused while
+  another project still uses this project's realm, and keeps the settings so it can be turned back
+  on. The generated app records the provider it first started with and refuses to boot on a database
+  used by another one unless `AUTH_ALLOW_PROVIDER_SWITCH=true` (this lock exists for built-in auth too).
+- Not available with Keycloak yet (rejected by validation, never silently ignored): multi-tenancy,
+  custom registration fields, SMS codes, self-assignable and invite-only roles.
+- Verified against a real Keycloak: `uv run pytest tests/e2e/test_keycloak_stack.py` (needs Docker,
+  pulls the pinned Keycloak image, a few minutes).
+
 ### Tests
 
 ```bash
@@ -89,15 +116,17 @@ run `make test`'s command inside the stack (several minutes; skipped without `do
 
 ```bash
 docker compose up -d          # builder API :8000, Postgres, and the dashboard on :5173
-docker compose exec api python /app/scripts/seed.py   # loads three demo projects
+docker compose exec api python /app/scripts/seed.py   # loads six demo projects
 ```
 
 `scripts/seed.py` (standard library only; `--reset` recreates, `--base-url` points elsewhere)
 creates **Helpdesk** (roles, invitations, email + SMS sign-in, custom registration fields and
-every permission kind), **Vault** (RS256 + Redis), **Workspace** (multi-tenant) and **Bookshop**
-(plain CRUD, no auth). Open
-http://localhost:5173, then a project's Auth tab: it shows validation problems in place, and
-after "Download zip" the Schema tab lists the environment variables to set before running it.
+every permission kind), **Vault** (RS256 + Redis), **Workspace** (multi-tenant), **Bookshop**
+(plain CRUD, no auth), **SSO Hub** (Keycloak with Google and Entra ID logins) and **SSO Portal**
+(a second platform on the same Keycloak realm). Open http://localhost:5173: each project has a
+sidebar (Overview, Data model, Authentication, Keycloak, Roles & access, Generate). The Overview lists
+what is left to do and links to the fix for every validation problem; after a download, the
+Generate page lists the environment variables to set before running it.
 
 ## Stack
 

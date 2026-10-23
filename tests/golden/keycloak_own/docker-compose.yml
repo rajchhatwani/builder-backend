@@ -1,0 +1,110 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      # Where people reach Keycloak, and where this service fetches its signing keys from.
+      KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KEYCLOAK_INTERNAL_URL: http://keycloak:8080
+      APP_ENV: ${APP_ENV:-development}
+      AUTH_ALLOW_PROVIDER_SWITCH: ${AUTH_ALLOW_PROVIDER_SWITCH:-false}
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  keycloak_db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: keycloak
+    volumes:
+      - keycloak_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.1
+    # Production mode. It listens on plain http, so put a TLS-terminating proxy in front of it
+    # for anything but local work and set KEYCLOAK_PUBLIC_URL to the https address (README).
+    command: ["start", "--import-realm"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak_db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KEYCLOAK_DB_PASSWORD:?set KEYCLOAK_DB_PASSWORD in .env (see .env.example)}
+      KC_HOSTNAME: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
+      KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
+      # Behind a trusted TLS proxy that sets the X-Forwarded-* headers, add this line:
+      #   KC_PROXY_HEADERS: xforwarded
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:?set KC_BOOTSTRAP_ADMIN_USERNAME in .env (see .env.example)}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BOOTSTRAP_ADMIN_PASSWORD:?set KC_BOOTSTRAP_ADMIN_PASSWORD in .env (see .env.example)}
+      # Filled into keycloak/realm.json (${NAME} placeholders) when the realm is imported.
+      API_PUBLIC_URL: ${API_PUBLIC_URL:-http://localhost:8000}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      KC_IDP_CORP_CLIENT_SECRET: ${KC_IDP_CORP_CLIENT_SECRET:?set KC_IDP_CORP_CLIENT_SECRET in .env (see .env.example)}
+      KC_IDP_GH_CLIENT_SECRET: ${KC_IDP_GH_CLIENT_SECRET:?set KC_IDP_GH_CLIENT_SECRET in .env (see .env.example)}
+      KC_IDP_GOOGLE_CLIENT_SECRET: ${KC_IDP_GOOGLE_CLIENT_SECRET:?set KC_IDP_GOOGLE_CLIENT_SECRET in .env (see .env.example)}
+      KC_IDP_WORK_CLIENT_SECRET: ${KC_IDP_WORK_CLIENT_SECRET:?set KC_IDP_WORK_CLIENT_SECRET in .env (see .env.example)}
+    volumes:
+      - ./keycloak/realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "${KEYCLOAK_PORT:-8081}:8080"
+    # Keycloak needs no extra privileges, so it gets none.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      keycloak_db:
+        condition: service_healthy
+    healthcheck:
+      # The management port (9000) is not published; this asks it from inside the container
+      # and passes only on HTTP 200 (a 503 means Keycloak is still starting).
+      test:
+        - CMD
+        - bash
+        - -c
+        - |
+          exec 3<>/dev/tcp/127.0.0.1/9000
+          printf 'GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n' >&3
+          read -r status <&3
+          [[ "$$status" == *" 200 "* ]]
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 20s
+    restart: unless-stopped
+
+volumes:
+  db_data:
+  keycloak_db_data:

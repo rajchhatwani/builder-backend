@@ -1,11 +1,20 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { AuthConfig, Entity, Project, ProjectRole, Relation, ValidationIssue } from '../api/types'
+import type {
+  AuthConfig,
+  Entity,
+  KeycloakConfig,
+  Project,
+  ProjectRole,
+  Relation,
+  ValidationIssue,
+} from '../api/types'
 import { AuthChecks } from '../components/AuthChecks'
 import { AuthConfigPanel } from '../components/AuthConfigPanel'
 import { AuthCustomFieldsPanel } from '../components/AuthCustomFieldsPanel'
 import { DataModelPanel } from '../components/DataModelPanel'
 import { GeneratePanel } from '../components/GeneratePanel'
+import { KeycloakPanel } from '../components/KeycloakPanel'
 import { Layout } from '../components/Layout'
 import { OverviewPanel, sectionForIssue } from '../components/OverviewPanel'
 import { PermissionsPanel } from '../components/PermissionsPanel'
@@ -55,6 +64,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [relations, setRelations] = useState<Relation[]>([])
   const [roles, setRoles] = useState<ProjectRole[]>([])
   const [auth, setAuth] = useState<AuthConfig | null>(null)
+  const [keycloak, setKeycloak] = useState<KeycloakConfig | null>(null)
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null)
   const [generationCount, setGenerationCount] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -66,12 +76,13 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const load = useCallback(async () => {
     try {
-      const [proj, entityPage, relationPage, rolePage, authConfig, report, generations] = await Promise.all([
+      const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, report, generations] = await Promise.all([
         api.getProject(projectId),
         api.listEntities(projectId, 200, 0),
         api.listRelations(projectId, 200, 0),
         api.listRoles(projectId, 200, 0),
         api.getAuthConfig(projectId).catch(() => null),
+        api.getKeycloak(projectId).catch(() => null),
         api.validateProject(projectId).catch(() => null),
         api.listGenerations(projectId, 1, 0),
       ])
@@ -80,6 +91,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       setRelations(relationPage.items)
       setRoles(rolePage.items)
       setAuth(authConfig)
+      setKeycloak(keycloakConfig)
       setIssues(report ? report.issues : null)
       setGenerationCount(generations.total)
       setModelVersion((v) => v + 1)
@@ -130,13 +142,26 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
     problems[s] = (problems[s] ?? 0) + 1
   }
 
+  const keycloakOn = auth?.provider === 'keycloak' && auth.enabled
+
   return (
-    <Layout sidebar={<ProjectSidebar project={project} section={section} problems={problems} />}>
+    <Layout
+      sidebar={
+        <ProjectSidebar
+          project={project}
+          section={section}
+          problems={problems}
+          on={{ keycloak: keycloakOn }}
+        />
+      }
+    >
       {section === 'overview' && (
         <OverviewPanel
           projectId={project.id}
           entityCount={entities.length}
           authEnabled={auth?.enabled ?? false}
+          keycloakOn={keycloakOn}
+          keycloakSaved={keycloak !== null}
           roleCount={roles.length}
           issues={issues}
           generationCount={generationCount}
@@ -156,17 +181,33 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       {section === 'auth' && (
         <>
           <PageTitle title="Authentication">How people sign up and sign in to the backend you generate.</PageTitle>
-          <SubTabs
-            tabs={[
-              { id: 'settings', label: 'Settings' },
-              { id: 'fields', label: 'Extra sign-up fields' },
-            ]}
-            value={authTab}
-            onChange={setAuthTab}
-          />
+          {!keycloakOn && (
+            <SubTabs
+              tabs={[
+                { id: 'settings', label: 'Settings' },
+                { id: 'fields', label: 'Extra sign-up fields' },
+              ]}
+              value={authTab}
+              onChange={setAuthTab}
+            />
+          )}
           <AuthChecks projectId={project.id} checkKey={authTab} />
-          {authTab === 'settings' && <AuthConfigPanel projectId={project.id} />}
-          {authTab === 'fields' && <AuthCustomFieldsPanel projectId={project.id} />}
+          {(authTab === 'settings' || keycloakOn) && <AuthConfigPanel projectId={project.id} />}
+          {authTab === 'fields' && !keycloakOn && <AuthCustomFieldsPanel projectId={project.id} />}
+        </>
+      )}
+
+      {section === 'keycloak' && (
+        <>
+          <PageTitle title="Keycloak">
+            Single sign-on, sign-in with Google or Microsoft, multi-factor sign-in and an admin console for your users.
+          </PageTitle>
+          <KeycloakPanel
+            project={project}
+            provider={auth?.provider ?? 'builtin'}
+            issues={issues}
+            onChanged={load}
+          />
         </>
       )}
 
@@ -184,9 +225,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
               if (tab === 'permissions') api.listRoles(project.id, 200, 0).then((p) => setRoles(p.items))
             }}
           />
-          {accessTab === 'roles' && <RolesPanel projectId={project.id} />}
+          {accessTab === 'roles' && <RolesPanel projectId={project.id} keycloak={keycloakOn} />}
           {accessTab === 'permissions' && (
-            <PermissionsPanel projectId={project.id} entities={entities} roles={roles} />
+            <PermissionsPanel
+              projectId={project.id}
+              entities={entities}
+              roles={roles}
+              keycloak={keycloakOn}
+            />
           )}
         </>
       )}

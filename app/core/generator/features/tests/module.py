@@ -8,7 +8,7 @@ from pathlib import Path
 from app.core.generator.base import FileTree
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
-from app.core.validation import AUTH_TABLES
+from app.core.validation import auth_tables, uses_keycloak
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -49,11 +49,16 @@ class TestsModule:
         }
         tables = {e.table for e in project.entities} | {j.name for j in project.join_tables}
         if project.auth is not None:
-            tables |= set(AUTH_TABLES)
+            # The provider lock row is written at start-up, not per test, so it is not emptied.
+            tables |= set(auth_tables(project.auth)) - {"auth_provider_lock"}
             if project.auth.token_store == "redis":
                 tables.discard("auth_refresh_tokens")  # refresh tokens live in Redis
         files["tests/conftest.py"] = render_template(
-            self._env, "conftest.py.j2", tables=sorted(tables), auth=project.auth is not None
+            self._env,
+            "conftest.py.j2",
+            tables=sorted(tables),
+            auth=project.auth is not None,
+            keycloak=uses_keycloak(project.auth),
         )
         creatable_entities = [e for e in project.entities if creatable(e, project)]
         files["tests/_factories.py"] = render_template(

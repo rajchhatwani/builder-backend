@@ -10,6 +10,10 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_NAME = 'Vault'
+
+# Which identity provider this build uses (see app/auth/provider_lock.py).
+PROVIDER = "builtin"
+PROVIDER_REALM: str | None = None
 APP_URL = 'https://vault.example.com'
 
 JWT_ALGORITHM = 'RS256'
@@ -52,6 +56,9 @@ SMS_PROVIDER: str | None = None
 
 class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Start once with this on to move a database to a different identity provider on purpose.
+    auth_allow_provider_switch: bool = False
 
     # RSA private key (PEM) that signs access tokens. Generate one with: python -m app.auth.keys
     # In a .env file or compose, write the newlines as \n inside double quotes.

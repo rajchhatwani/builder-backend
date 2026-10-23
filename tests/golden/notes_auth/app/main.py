@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
 from app.auth.config import get_auth_settings
+from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
@@ -22,6 +23,7 @@ from app.routers.notes import router as notes_router
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_auth_settings()  # a missing secret stops the app here, with a clear message
+    await ensure_provider_lock()  # refuses to start on a database used by another provider
     yield
     await engine.dispose()
 

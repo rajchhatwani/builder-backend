@@ -31,6 +31,8 @@ NAMES = [
     "club_auth",
     "vault_auth",
     "workspace_auth",
+    "keycloak_own",
+    "keycloak_shared",
 ]
 
 

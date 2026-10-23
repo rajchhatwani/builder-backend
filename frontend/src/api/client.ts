@@ -11,6 +11,9 @@ import type {
   Field,
   FieldInput,
   GenerationSummary,
+  KeycloakConfig,
+  KeycloakImpact,
+  KeycloakWrite,
   OnDelete,
   Page,
   PermissionEntry,
@@ -125,6 +128,20 @@ export const api = {
   },
 
   // ── Auth Config ──────────────────────────────────────────────────────────
+
+  getKeycloak: (projectId: string) => request<KeycloakConfig>(`/projects/${projectId}/keycloak`),
+  putKeycloak: (projectId: string, data: KeycloakWrite) =>
+    request<KeycloakConfig>(`/projects/${projectId}/keycloak`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  keycloakImpact: (projectId: string, action: 'enable' | 'disable') =>
+    request<KeycloakImpact>(`/projects/${projectId}/keycloak/impact?action=${action}`),
+  switchKeycloak: (projectId: string, action: 'enable' | 'disable') =>
+    request<KeycloakConfig>(`/projects/${projectId}/keycloak/${action}`, {
+      method: 'POST',
+      body: JSON.stringify({ confirm: true }),
+    }),
 
   getAuthConfig: (projectId: string) =>
     request<AuthConfig>(`/projects/${projectId}/auth`),

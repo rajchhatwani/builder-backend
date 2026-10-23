@@ -6,6 +6,9 @@ interface OverviewPanelProps {
   projectId: string
   entityCount: number
   authEnabled: boolean
+  /** True when Keycloak, not built-in sign-in, manages users. */
+  keycloakOn: boolean
+  keycloakSaved: boolean
   roleCount: number
   issues: ValidationIssue[] | null
   generationCount: number
@@ -14,6 +17,7 @@ interface OverviewPanelProps {
 /** Which section can fix an issue, judged by its path. */
 export function sectionForIssue(issue: ValidationIssue): Section {
   if (issue.path.startsWith('auth.roles') || issue.path.startsWith('auth.permissions')) return 'access'
+  if (issue.path === 'auth.keycloak' || issue.path.startsWith('auth.keycloak.')) return 'keycloak'
   if (issue.path === 'auth' || issue.path.startsWith('auth.')) return 'auth'
   return 'model'
 }
@@ -31,6 +35,8 @@ export function OverviewPanel({
   projectId,
   entityCount,
   authEnabled,
+  keycloakOn,
+  keycloakSaved,
   roleCount,
   issues,
   generationCount,
@@ -50,13 +56,27 @@ export function OverviewPanel({
     },
     {
       title: 'Choose how people sign in',
-      detail: authEnabled ? 'Sign-in is on.' : 'Skip this if your API does not need user accounts.',
+      detail: authEnabled
+        ? keycloakOn
+          ? 'Sign-in is handled by Keycloak. Email, registration and token settings are here.'
+          : 'Sign-in is on.'
+        : 'Skip this if your API does not need user accounts.',
       done: authEnabled,
       optional: true,
       section: 'auth',
       action: authEnabled ? 'Edit' : 'Set up',
     },
   ]
+  steps.push({
+    title: 'Single sign-on with Keycloak',
+    detail: keycloakOn
+      ? 'Keycloak manages your users, with social logins, MFA and an admin console.'
+      : 'Use Keycloak for sign-in, SSO across projects, Google or Microsoft logins and MFA.',
+    done: keycloakOn,
+    optional: true,
+    section: 'keycloak',
+    action: keycloakOn ? 'Edit' : keycloakSaved ? 'Turn on' : 'Set up',
+  })
   if (authEnabled) {
     steps.push({
       title: 'Decide who can do what',
