@@ -84,9 +84,9 @@ class DeletionMode(StrEnum):
 class RowRule(StrEnum):
     """Row-level access rule applied by the generator to entity CRUD queries."""
 
-    owner = "owner"               # WHERE created_by = current_user.id
-    role_scoped = "role_scoped"   # admins see all; others see own rows
-    tenant = "tenant"             # WHERE tenant_id = current_user.tenant_id
+    owner = "owner"  # WHERE created_by = current_user.id
+    role_scoped = "role_scoped"  # admins see all; others see own rows
+    tenant = "tenant"  # WHERE tenant_id = current_user.tenant_id
     custom_filter = "custom_filter"  # configurable field + value filter
 
 
@@ -177,3 +177,55 @@ class DownloadMode(StrEnum):
 
     proxy = "proxy"
     presigned = "presigned"
+
+
+# ── Platform accounts (the builder's own users, not generated projects') ─────────────────
+
+
+class PlatformRole(StrEnum):
+    """What a person may do on the platform itself, independent of any project."""
+
+    customer = "customer"
+    platform_support = "platform_support"  # admin console, read-only
+    platform_admin = "platform_admin"  # admin console, full
+
+
+class AccountStatus(StrEnum):
+    active = "active"
+    suspended = "suspended"
+
+
+class MemberRole(StrEnum):
+    """A person's role inside one project. Ordered: viewer < editor < owner."""
+
+    viewer = "viewer"
+    editor = "editor"
+    owner = "owner"
+
+
+class TokenAudience(StrEnum):
+    """Which surface a refresh token / access token belongs to. They are never interchangeable."""
+
+    app = "app"
+    admin = "admin"
+
+
+class AuditResult(StrEnum):
+    ok = "ok"
+    denied = "denied"
+    error = "error"
+
+
+class AuthorizationModel(StrEnum):
+    """How a generated project decides who may do what.
+
+    rbac  roles and per-operation permissions with row rules (the original model)
+    abac  attribute-based: policies over subject, resource and environment attributes, all
+          applying to every signed-in person (NIST SP 800-162)
+    pbac  policy-based: named policies attached to roles; allow and deny effects. PBAC has no
+          standard definition: this is the meaning used here, and the docs say so
+    """
+
+    rbac = "rbac"
+    abac = "abac"
+    pbac = "pbac"

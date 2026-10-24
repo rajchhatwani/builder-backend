@@ -199,8 +199,13 @@ async def test_missing_secret_key_fails_loudly_instead_of_storing_plaintext(
 ) -> None:
     import app.core.crypto as crypto
 
-    monkeypatch.delenv("SECRET_KEY")
-    monkeypatch.setattr(crypto, "_fernet", None)
+    # Only the encryption layer loses its key here: with SECRET_KEY unset the builder cannot even
+    # verify sign-in tokens (that is covered in test_platform_security), so the request would never
+    # reach the secrets endpoint.
+    def no_key() -> object:
+        raise RuntimeError("SECRET_KEY environment variable is not set")
+
+    monkeypatch.setattr(crypto, "_get_fernet", no_key)
     project_id = await make_project(client)
     await client.post(f"/projects/{project_id}/auth", json=auth_body())
 

@@ -1,0 +1,153 @@
+# Deployment of Notes to AWS (generated).
+#
+#   push to main            -> build once, deploy to dev
+#   Actions > Deploy > Run  -> choose an environment (and an image tag that is already built) to promote
+#
+# Signs in to AWS with GitHub's short-lived OIDC token: there is no access key anywhere. Each GitHub
+# environment (dev, staging, prod) has its own role (variable AWS_ROLE_ARN), so production can require
+# reviewers in Settings > Environments. One-time setup: docs/DEPLOYMENT.md.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [dev, staging, prod]
+        default: dev
+      image_tag:
+        description: Image tag to promote (empty builds the current commit)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment || 'dev' }}
+  cancel-in-progress: false # never stop a deployment half way
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: ${{ inputs.environment || 'dev' }}
+    permissions:
+      contents: read
+      id-token: write # the OIDC token, for AWS and for signing the image
+    env:
+      TARGET: ${{ inputs.environment || 'dev' }}
+      AWS_REGION: ${{ vars.AWS_REGION || 'eu-west-1' }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      REGISTRY_REPO: ${{ vars.ECR_REPOSITORY_URL }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Sign in to AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Sign in to the registry
+        uses: aws-actions/amazon-ecr-login@03f1aad4c6c7ffd436567f42f9384779290529bd # v2.1.7
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build and push the image (skipped when promoting an existing tag)
+        id: build
+        if: ${{ inputs.image_tag == '' }}
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY_REPO }}:${{ env.IMAGE_TAG }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Make sure the image exists
+        run: |
+          aws ecr describe-images --repository-name "${REGISTRY_REPO##*/}" \
+            --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text
+
+      - name: Sign the image (keyless, recorded in the public transparency log)
+        if: ${{ inputs.image_tag == '' }}
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - if: ${{ inputs.image_tag == '' }}
+        run: cosign sign --yes "${REGISTRY_REPO}@${{ steps.build.outputs.digest }}"
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.17.0
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: deploy/aws
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="key=deploy-aws/${TARGET}/terraform.tfstate" \
+            -backend-config="region=${AWS_REGION}" \
+            -backend-config="use_lockfile=true" \
+            -backend-config="encrypt=true"
+
+      # Step 1: make sure the infrastructure exists and is current while the service keeps running the
+      # image it already has (the first deployment has none, so it starts from the new one).
+      - name: Terraform apply (infrastructure, service unchanged)
+        working-directory: deploy/aws
+        run: |
+          CURRENT="$(terraform output -raw deployed_image 2>/dev/null || true)"
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "image=${CURRENT:-${REGISTRY_REPO}:${IMAGE_TAG}}"
+
+      # Step 2: apply the database migrations with the NEW image before any traffic reaches it. Write
+      # migrations so the previous version keeps working against the new schema (add first, remove later).
+      - name: Run database migrations
+        working-directory: deploy/aws
+        run: |
+          IMAGE="${REGISTRY_REPO}:${IMAGE_TAG}"
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "image=${IMAGE}" -target=aws_ecs_task_definition.migrate
+          CLUSTER="$(terraform output -raw cluster_name)"
+          TASK_DEF="$(terraform output -raw migrate_task_definition)"
+          SUBNETS="$(terraform output -json private_subnet_ids | jq -r 'join(",")')"
+          SG="$(terraform output -raw tasks_security_group_id)"
+          TASK_ARN="$(aws ecs run-task --cluster "$CLUSTER" --task-definition "$TASK_DEF" --launch-type FARGATE \
+            --network-configuration "awsvpcConfiguration={subnets=[$SUBNETS],securityGroups=[$SG],assignPublicIp=DISABLED}" \
+            --query 'tasks[0].taskArn' --output text)"
+          aws ecs wait tasks-stopped --cluster "$CLUSTER" --tasks "$TASK_ARN"
+          EXIT_CODE="$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+            --query 'tasks[0].containers[0].exitCode' --output text)"
+          if [ "$EXIT_CODE" != "0" ]; then
+            echo "::error::The migration failed (exit code $EXIT_CODE). Logs: CloudWatch group /ecs/deploy-aws-${TARGET}, stream prefix migrate. The running service was not changed."
+            exit 1
+          fi
+
+      # Step 3: roll the service to the new image. If its tasks never become healthy, ECS stops the
+      # deployment and rolls back to the previous task definition by itself (deployment circuit breaker).
+      - name: Terraform apply (deploy the new image)
+        working-directory: deploy/aws
+        run: |
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "image=${REGISTRY_REPO}:${IMAGE_TAG}"
+
+      - name: Wait until the service is stable
+        working-directory: deploy/aws
+        run: |
+          aws ecs wait services-stable --cluster "$(terraform output -raw cluster_name)" \
+            --services "$(terraform output -raw service_name)"
+
+      - name: Smoke test
+        working-directory: deploy/aws
+        run: |
+          URL="$(terraform output -raw url)"
+          curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors "${URL}/ready"
+          echo "Deployed ${IMAGE_TAG} to ${TARGET}: ${URL}"

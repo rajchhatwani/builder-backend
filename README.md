@@ -167,6 +167,81 @@ research, decisions and the verified / unverified list are in `STORAGE_PLAN.md`.
   inside a zip) and never reaches the bucket, multipart upload, presigned links, a scanner outage and its recovery, a
   tampered object, the rescan command and deletion. **AWS S3 itself and a real MinIO were not available to the tests.**
 
+### Authorization models (RBAC, ABAC, PBAC)
+A generated project decides who may do what in one of three ways, chosen in the dashboard under
+**Authorization** (or in the spec's `authorization.model`):
+
+- **rbac** (default): roles with per-operation permissions and optional row rules (own records, own
+  organisation). Unlisted operations stay public, as before; signed-out routes only exist here.
+- **abac**: policies over attributes of the person (`id`, `email`, `roles`, `tenant_id`, sign-up fields),
+  the record (its own fields plus `id`, timestamps, `created_by_id`) and the moment (`hour_utc`,
+  `weekday_utc`, `client_ip`). Every policy applies to every signed-in person.
+- **pbac**: the same policies with an `allow` / `deny` effect, attached to roles (or `*` for everyone).
+  "PBAC" has no standard definition; this is the meaning used here.
+
+Under abac and pbac: default deny, a matching deny always wins, conditions are plain JSON data (no code is
+ever evaluated), lists, reads and writes are filtered in SQL and re-checked in Python, and the policy engine
+(`app/core/authz_engine.py`) is copied byte for byte into the generated project, so what the builder
+simulates is what ships. Multi-tenant projects stay scoped to the organisation before any policy runs.
+
+Builder endpoints (all behind the project guard; a viewer may read and simulate, an editor may save):
+`GET/PUT /projects/{id}/authorization` (`expected_version` guards against lost updates),
+`GET .../authorization/issues`, `POST .../authorization/simulate` (decision plus a trace per policy and
+comparison), `GET .../authorization/coverage` (entity by operation: closed / conditional / open),
+`POST .../authorization/recommend` and `GET .../authorization/recommendation` (a fixed scoring table that lists
+its reasons; no machine learning). The dashboard wraps these in a model picker with a questionnaire, a policy
+editor with a condition builder and templates, the simulator and the coverage matrix.
+
+Known limits: no signed-out routes under abac/pbac; conditions cannot look at a parent record's attributes;
+an update must leave the row readable rather than satisfy the update policy a second time; behind a proxy run
+uvicorn with `--proxy-headers` so `client_ip` is the caller's address (see MASTER_PLAN.md, L15-L20).
+
+### Observability (OpenTelemetry)
+Optional, per project (dashboard section **Observability**, or the spec's `observability` block). When on, the
+generated service gets `app/core/telemetry.py`, `docs/OBSERVABILITY.md`, tests, and (with `local_stack`) a compose
+overlay with a collector, Jaeger and Prometheus: `docker compose -f docker-compose.yml -f deploy/observability/compose.yml up`.
+
+- **Collected**: a server span per request named after the route template, a span per SQL statement (placeholders,
+  never values), request count and duration per route and status, a counter of policy denials, and JSON logs carrying
+  `trace_id` / `span_id` / `request_id`. Never collected: bodies, headers, cookies, SQL parameter values.
+- **Tuned by environment only** (`APP_OTEL_ENABLED` kill switch, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER_ARG`,
+  `OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_HEADERS`): changing cost never needs a code change. No endpoint or credential is
+  stored in the builder.
+- **Secrets**: every span is scrubbed before export (secret-looking keys, token shapes, every query-string value) and the
+  collector masks a second time. The generated tests send hostile payloads and assert nothing leaks.
+- **Sizing**: give the expected peak requests per second and the dashboard suggests a sample ratio (rule of thumb: 4 spans
+  per request, about 200 spans per second per small collector).
+- Endpoints: `GET/PUT /projects/{id}/observability`, `GET .../observability/issues`.
+
+Known limits: logs are not exported over OTLP (ship stdout JSON; they correlate by trace id); the sampler is head-based;
+only the web process is instrumented (not the payments worker); see MASTER_PLAN.md L23-L29.
+
+### CI/CD and cloud deployment (AWS, Azure, Google Cloud)
+Optional, per project (dashboard section **Deploy**, or the spec's `deployment` block). When on, the generated project gets
+GitHub Actions workflows (`ci.yml`, `deploy.yml`, `dependabot.yml`), Terraform in `deploy/<cloud>/` with one `.tfvars` per environment, a
+one-time `bootstrap/` module, and `docs/DEPLOYMENT.md`.
+
+- **CI**: lint, tests against PostgreSQL, `alembic check`, image build, vulnerability scan (fails on a fixable HIGH or CRITICAL), SBOM,
+  `terraform fmt` and `validate`.
+- **CD**: build once (tags immutable, image signed with cosign, provenance and SBOM attached), run migrations as a separate task with the *new*
+  image before traffic moves, roll out, smoke test `/ready`. A push to `main` deploys the first environment; "Run workflow" promotes an
+  existing tag to the next one without rebuilding. Rollback is automatic on AWS (deployment circuit breaker) and by revision on Azure and
+  Cloud Run.
+- **No cloud credentials anywhere**: pipelines use GitHub OIDC (AWS role, Azure federated credential, Google Workload Identity Federation),
+  trusted for one repository and one GitHub environment, so production can require reviewers. Secrets live in the cloud's secret manager and
+  are filled in by a person; Terraform only creates the containers and `DATABASE_URL`.
+- **Security defaults**: private database (no public address), TLS required, encrypted storage, least-privilege service identity, deletion
+  protection and longer backups where `deletion_protection` is on, state storage private and versioned, WAF on AWS outside dev, GitHub Actions
+  pinned to commit SHAs.
+- **Capacity is numbers**: a profile (small, medium, large) fills instances, CPU, memory and database size per environment; any number can be
+  overridden, and the dashboard previews the resulting `.tfvars`. `POST /projects/{id}/deployment/plan` does the same over the API.
+- Endpoints: `GET/PUT /projects/{id}/deployment`, `GET .../deployment/issues`, `POST .../deployment/plan`.
+
+Checked in Docker with the real tools: `terraform fmt`, `init` and `validate` against the real provider schemas (aws 6, azurerm 5, google 8)
+for every stack and bootstrap, and `actionlint` for the workflows (`tests/e2e/test_deploy_bundles.py`). **`terraform apply` has not been run
+against a real account.** Not supported yet (validation refuses them): payments, file uploads with malware scanning, Redis token storage, a
+Keycloak server of its own. See MASTER_PLAN.md L30-L38.
+
 ### Tests
 
 ```bash
@@ -187,10 +262,11 @@ run `make test`'s command inside the stack (several minutes; skipped without `do
 
 ```bash
 docker compose up -d          # builder API :8000, Postgres, and the dashboard on :5173
-docker compose exec api python /app/scripts/seed.py   # loads eight demo projects (`pay-shop` with Stripe and `rupee-shop` with Razorpay take payments)
+docker compose exec -e SEED_PASSWORD='a long passphrase' api python /app/scripts/seed.py   # signs in (or signs up) as demo@example.com and loads the demo projects
 ```
 
-`scripts/seed.py` (standard library only; `--reset` recreates, `--base-url` points elsewhere)
+`scripts/seed.py` (standard library only; `--reset` recreates, `--base-url` points elsewhere,
+`--email/--password` or `--token` choose who owns the demos)
 creates **Helpdesk** (roles, invitations, email + SMS sign-in, custom registration fields and
 every permission kind), **Vault** (RS256 + Redis), **Workspace** (multi-tenant), **Bookshop**
 (plain CRUD, no auth), **SSO Hub** (Keycloak with Google and Entra ID logins) and **SSO Portal**
@@ -217,16 +293,69 @@ This starts Postgres, runs `alembic upgrade head`, and serves the API on
 curl http://localhost:8000/health   # {"status": "ok"}
 curl http://localhost:8000/ready    # {"status": "ready"}  (round-trips the DB)
 
-curl -X POST http://localhost:8000/projects -H "Content-Type: application/json" \
-  -d '{"name": "Blog"}'
+# Everything else needs an account. Sign up, then use the access token:
+TOKEN=$(curl -s -X POST http://localhost:8000/account/register -H "Content-Type: application/json" \
+  -d '{"email": "you@example.com", "password": "a long passphrase here"}' | python -c "import sys,json;print(json.load(sys.stdin)['access_token'])")
+curl -X POST http://localhost:8000/projects -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" -d '{"name": "Blog"}'
 ```
+
+## Accounts, administration and API tokens
+
+The builder itself is a multi-user platform. **Nothing except `/health`, `/ready` and the sign-in
+endpoints is reachable without signing in**, and a project can only be seen by its members.
+
+| Surface | Where | Who |
+|---|---|---|
+| Customer app | dashboard `/`, API `/account/*`, `/projects/...` | anyone with an account (sign-up is open by default) |
+| Admin console | dashboard `#/admin`, API `/admin/*` | platform staff only: its own sign-in, tokens, cookie and look |
+
+* **People**: `POST /account/register`, `/login`, `/refresh`, `/logout`, `GET /account/me`,
+  `POST /account/password`. The access token (15 min) is kept in memory; the refresh token is an
+  httpOnly `SameSite=Strict` cookie that rotates on every use (replaying a used one signs the whole
+  session out). Five wrong passwords lock an account for 15 minutes; all failures look the same.
+* **Projects have members** (`/projects/{id}/members`): `owner` (also manages people, credentials
+  and deletion), `editor` (changes the model), `viewer` (read only). Someone else's project answers
+  `404`, exactly like one that does not exist.
+* **API tokens** (`/account/tokens`, Account page): for scripts, CI and tools such as Lovable.
+  Scopes `read`, `write`, `generate` (a zip leaves the platform, so it is separate), optional pinning to
+  one project, expiry up to a year. Shown once; only a hash is stored. They never work on `/admin`.
+* **Admin console**: create people (temporary password shown once, change forced), suspend, change
+  platform role (`platform_support` is read-only), reset passwords, end sessions, read the audit
+  log. Administrators see project names, owners and sizes. They **cannot** open customer models,
+  credentials or generated code.
+* **Audit log** (`platform_audit_log`): sign-ins, failures, refused access, every successful project
+  change, every admin action. Append-only (a database trigger refuses UPDATE and DELETE). Never
+  contains passwords, tokens or request bodies.
+
+First administrator: `docker compose exec api uv run python /app/scripts/create_admin.py you@example.com
+--adopt-projects` (prompts for the password; `--adopt-projects` claims projects created before
+accounts existed), or set `BUILDER_BOOTSTRAP_ADMIN_EMAIL` and `BUILDER_BOOTSTRAP_ADMIN_PASSWORD`
+once. There is no default password anywhere.
+
+Configuration (all environment variables, see `/admin` -> Settings for the live values):
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `SECRET_KEY` | dev value in compose | signs tokens and encrypts stored credentials. **Required outside `local`**: at least 32 characters, no placeholders (`openssl rand -base64 48`) |
+| `BUILDER_ENVIRONMENT` | `local` | anything else turns on secure cookies, HSTS and hides `/docs` |
+| `BUILDER_SIGNUP_MODE` | `open` | `closed`: only administrators create accounts |
+| `BUILDER_CORS_ORIGINS` | `["http://localhost:5173"]` | explicit origins only (`*` is refused: cookies are used) |
+| `BUILDER_ACCESS_TOKEN_MINUTES` / `_REFRESH_TOKEN_DAYS` / `_ADMIN_REFRESH_TOKEN_HOURS` | 15 / 14 / 12 | session lengths |
+| `BUILDER_LOGIN_MAX_FAILURES` / `_LOCKOUT_MINUTES` | 5 / 15 | account lockout |
+| `BUILDER_TRUST_PROXY_HEADERS` | `false` | set `true` only behind a proxy that overwrites `X-Forwarded-For` |
+| `BUILDER_MAX_REQUEST_BYTES` | 10 MiB | larger bodies get `413` |
+
+Known limits are tracked in `MASTER_PLAN.md` section 6 (no e-mail verification or e-mailed password
+reset yet, no MFA, in-process rate limiting is per worker).
 
 ## Local development
 
 ```bash
 uv sync                       # install deps (incl. dev group) into .venv
 cp .env.example .env          # adjust BUILDER_DATABASE_URL if not using docker compose
-export SECRET_KEY=...         # only needed to store auth credentials; read from the environment
+export SECRET_KEY=...         # signs sign-in tokens, encrypts stored credentials; read from the environment
+                               # (unset in BUILDER_ENVIRONMENT=local: a temporary key is generated)
 
 uv run ruff check .           # lint
 uv run mypy app alembic       # type check
@@ -241,7 +370,13 @@ uv run alembic upgrade head                            # apply migrations
 
 | Area | Endpoints |
 |---|---|
-| Health | `GET /health`, `GET /ready` |
+| Health (open) | `GET /health`, `GET /ready` |
+| Accounts (open to sign in) | `/account/register`, `/login`, `/refresh`, `/logout`, `/me`, `/password`, `/tokens` |
+| Members | `GET/POST /projects/{id}/members`, `PATCH/DELETE /projects/{id}/members/{user_id}` |
+| Admin console | `/admin/login`, `/users`, `/projects`, `/audit`, `/stats`, `/settings` |
+| Authorization | `GET/PUT /projects/{id}/authorization`, `/authorization/issues`, `/simulate`, `/coverage`, `/recommend`, `/recommendation` |
+| Observability | `GET/PUT /projects/{id}/observability`, `/observability/issues` |
+| Deployment | `GET/PUT /projects/{id}/deployment`, `/deployment/issues`, `/deployment/plan` |
 | Projects | `POST/GET /projects`, `GET/PATCH/DELETE /projects/{id}` |
 | Entities | `POST/GET /projects/{id}/entities`, `GET/PATCH/DELETE /entities/{id}` |
 | Fields | `POST/GET /entities/{id}/fields`, `PATCH/DELETE /fields/{id}` |

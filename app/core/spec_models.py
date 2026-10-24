@@ -186,11 +186,11 @@ class SpecAuth(_SpecModel):
     # so switching back and forth does not lose the settings.
     provider: str = "builtin"  # AuthProvider value
     keycloak: SpecKeycloak | None = None
-    token_store: str = "db"                     # TokenStore value
+    token_store: str = "db"  # TokenStore value
     access_token_ttl_minutes: int = 15
     refresh_token_ttl_days: int = 7
-    jwt_algorithm: str = "HS256"                # JwtAlgorithm value
-    deletion_mode: str = "soft"                 # DeletionMode value
+    jwt_algorithm: str = "HS256"  # JwtAlgorithm value
+    deletion_mode: str = "soft"  # DeletionMode value
     multi_tenant: bool = False
     security_headers_enabled: bool = True
     app_name: str | None = None
@@ -198,7 +198,7 @@ class SpecAuth(_SpecModel):
     password_reset: SpecPasswordReset = Field(default_factory=SpecPasswordReset)
     registration: SpecRegistration = Field(default_factory=SpecRegistration)
     smtp: SpecSmtpConfig | None = None
-    sms_provider: str | None = None             # SmsProvider value
+    sms_provider: str | None = None  # SmsProvider value
     sms: SpecSmsConfig | None = None
     login_rate_limit: str = "5/15minutes"
     register_rate_limit: str = "10/hour"
@@ -206,10 +206,96 @@ class SpecAuth(_SpecModel):
     roles: list[SpecRole] = Field(default_factory=list)
     permissions: list[SpecPermission] = Field(default_factory=list)
     # Populated at generation time only — excluded from JSON output
-    secrets: SpecAuthSecrets = Field(
-        default_factory=SpecAuthSecrets, exclude=True
-    )
+    secrets: SpecAuthSecrets = Field(default_factory=SpecAuthSecrets, exclude=True)
 
+
+class SpecPolicy(_SpecModel):
+    """One authorization policy (abac / pbac). `when` is plain data, never code: see authz_engine."""
+
+    id: str
+    description: str = ""
+    effect: str  # "allow" | "deny"
+    actions: list[str]  # "Order.list", "Order.*" or "*"
+    when: dict[str, Any] | None = None
+
+
+class SpecAuthorization(_SpecModel):
+    model: str = "rbac"  # AuthorizationModel value
+    policies: list[SpecPolicy] = Field(default_factory=list)
+    # pbac only: "*" (everyone signed in) or a role name -> ids of the policies it carries
+    attachments: dict[str, list[str]] = Field(default_factory=dict)
+
+
+class SpecObservability(_SpecModel):
+    """OpenTelemetry in the generated service: traces and metrics over OTLP/HTTP, log correlation.
+
+    Everything an operator tunes in production (endpoint, sampler, service name) stays an
+    environment variable of the generated project; this block only sets the defaults and what is
+    generated. No endpoint or header (they may hold credentials) is ever stored here.
+    """
+
+    enabled: bool = True
+    service_name: str | None = None  # default: the project slug
+    sample_ratio: float = 0.1  # share of new traces that are recorded, 0..1
+    metrics: bool = True
+    db_spans: bool = True  # one span per SQL statement (statement text only, never values)
+    exclude_paths: list[str] = Field(default_factory=lambda: ["/health", "/ready"])
+    extra_redact_keys: list[str] = Field(default_factory=list)  # added to the built-in secret keys
+    local_stack: bool = True  # emit deploy/observability/ (collector, Jaeger, Prometheus)
+    expected_rps: int | None = None  # peak requests per second: only used for sizing advice
+
+
+class SpecDeployEnvironment(_SpecModel):
+    """One environment (dev, staging, prod ...). `profile` fills every number left empty."""
+
+    name: str
+    profile: str = "small"  # small | medium | large
+    min_instances: int | None = None
+    max_instances: int | None = None
+    cpu: int | None = None  # millicores; must be a size the cloud offers
+    memory: int | None = None  # MB
+    db_storage_gb: int | None = None
+    db_high_availability: bool | None = None  # default: on above the small profile
+    deletion_protection: bool | None = None  # default: on for "prod"
+
+
+def _default_environments() -> list[SpecDeployEnvironment]:
+    return [
+        SpecDeployEnvironment(name="dev", profile="small"),
+        SpecDeployEnvironment(name="staging", profile="small"),
+        SpecDeployEnvironment(name="prod", profile="medium"),
+    ]
+
+
+class SpecDeployment(_SpecModel):
+    """CI/CD workflows and Terraform for one cloud. No cloud credential is ever stored: pipelines
+    sign in with short-lived OIDC tokens (one-time trust setup: deploy/<cloud>/bootstrap)."""
+
+    enabled: bool = True
+    cloud: str = "aws"  # aws | azure | gcp
+    region: str = ""
+    github_repo: str = ""  # owner/name, trusted by the cloud's OIDC setup
+    environments: list[SpecDeployEnvironment] = Field(default_factory=_default_environments)
+
+
+class SpecDocTemplate(_SpecModel):
+    """One PDF template: the plain-data structure `doc_engine` renders, plus who may render it."""
+
+    id: str  # the route key: POST /documents/{id}/render
+    title: str = ""
+    kind: str = "custom"  # the library template it was copied from, or custom
+    entity: str | None = None  # bind to an entity: POST /documents/{id}/records/{record_id}
+    compute: str | None = None  # the list whose totals are recomputed (items)
+    roles: list[str] = Field(default_factory=list)  # who may render it; empty means nobody
+    template: dict[str, Any] = Field(default_factory=dict)
+
+
+class SpecDocuments(_SpecModel):
+    """PDF documents (invoice, receipt, statement ...) rendered by the generated API."""
+
+    enabled: bool = True
+    templates: list[SpecDocTemplate] = Field(default_factory=list)
+    rate_limit: str = "30/minute"  # per client, on every document route
 
 
 class SpecPaymentsPayable(_SpecModel):
@@ -341,6 +427,10 @@ class Spec(_SpecModel):
     auth: SpecAuth | None = None
     payments: SpecPayments | None = None
     storage: SpecStorage | None = None
+    authorization: SpecAuthorization | None = None
+    observability: SpecObservability | None = None
+    deployment: SpecDeployment | None = None
+    documents: SpecDocuments | None = None
 
 
 def spec_hash(spec: Spec) -> str:

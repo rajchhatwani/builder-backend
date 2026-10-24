@@ -46,6 +46,10 @@ from app.core.spec_models import (
     SpecProject,
     SpecRelation,
 )
+from app.core.validation_authorization import check_authorization
+from app.core.validation_deploy import check_deployment
+from app.core.validation_documents import check_documents
+from app.core.validation_observability import check_observability
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
 
@@ -124,6 +128,10 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         _check_auth(spec.auth, entities_by_name, ctx)
     check_payments(spec, entities_by_name, ctx.add, redirect_uri_problem)
     check_storage(spec, entities_by_name, ctx.add)
+    check_authorization(spec, entities_by_name, ctx.add)
+    check_observability(spec, ctx.add)
+    check_deployment(spec, ctx.add)
+    check_documents(spec, ctx.add)
     return ctx.issues
 
 
@@ -365,7 +373,9 @@ def _check_file_definition(field: SpecField, p: str, ctx: _Ctx) -> None:
         ctx.add(p, "unsupported_option", "file fields cannot be unique")
     for option in ("default", "max_length", "min_value", "max_value", "enum_values"):
         if getattr(field, option) is not None:
-            ctx.add(f"{p}.{option}", "unsupported_option", f"{option} does not apply to file fields")
+            ctx.add(
+                f"{p}.{option}", "unsupported_option", f"{option} does not apply to file fields"
+            )
 
 
 def _check_enum_values(field: SpecField, p: str, ctx: _Ctx) -> None:
@@ -474,9 +484,7 @@ def _check_options(options: SpecEntityOptions, p: str, types: dict[str, str], ct
     if len(set(options.operations)) != len(options.operations):
         ctx.add(f"{p}.operations", "duplicate_name", "operations must be unique")
 
-    _check_field_refs(
-        options.filterable, f"{p}.filterable", types, ctx, excluded={"json", "file"}
-    )
+    _check_field_refs(options.filterable, f"{p}.filterable", types, ctx, excluded={"json", "file"})
     for k, name in enumerate(options.filterable):
         if name in naming.RESERVED_QUERY_PARAMS:
             ctx.add(
@@ -670,6 +678,7 @@ def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
 
 def uses_keycloak(auth: SpecAuth | None) -> bool:
     return auth is not None and auth.enabled and auth.provider == AuthProvider.keycloak
+
 
 # Columns of auth_users that custom registration fields may not reuse.
 AUTH_USER_COLUMNS = frozenset(

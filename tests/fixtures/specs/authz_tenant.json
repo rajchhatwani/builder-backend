@@ -1,0 +1,172 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Team Tasks",
+    "slug": "authz-tenant",
+    "description": "PBAC on a multi-tenant project with soft delete and many-to-many",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Task",
+      "table_name": "tasks",
+      "plural_path": "tasks",
+      "options": {
+        "soft_delete": true,
+        "filterable": [
+          "done"
+        ]
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "done",
+          "type": "boolean",
+          "required": false,
+          "default": false
+        },
+        {
+          "name": "points",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "Label",
+      "table_name": "labels",
+      "plural_path": "labels",
+      "options": {},
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 60
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "many_to_many",
+      "from_entity": "Task",
+      "to_entity": "Label",
+      "from_name": "labels",
+      "to_name": "tasks",
+      "on_delete": "restrict",
+      "required": false
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://workspace.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@workspace.example.com",
+      "from_name": "Workspace"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": []
+  },
+  "authorization": {
+    "model": "pbac",
+    "policies": [
+      {
+        "id": "see_team",
+        "description": "Everybody in the organisation reads tasks and labels.",
+        "effect": "allow",
+        "actions": [
+          "Task.list",
+          "Task.get",
+          "Task.head",
+          "Label.list",
+          "Label.get",
+          "Label.head"
+        ],
+        "when": null
+      },
+      {
+        "id": "own_tasks",
+        "description": "Members create tasks and change their own.",
+        "effect": "allow",
+        "actions": [
+          "Task.create",
+          "Task.update"
+        ],
+        "when": {
+          "left": {
+            "resource": "created_by_id"
+          },
+          "op": "eq",
+          "right": {
+            "subject": "id"
+          }
+        }
+      },
+      {
+        "id": "admin_all",
+        "description": "Admins do anything with tasks and labels.",
+        "effect": "allow",
+        "actions": [
+          "*"
+        ],
+        "when": null
+      },
+      {
+        "id": "finish_before_delete",
+        "description": "Only finished tasks may be deleted.",
+        "effect": "deny",
+        "actions": [
+          "Task.delete"
+        ],
+        "when": {
+          "left": {
+            "resource": "done"
+          },
+          "op": "ne",
+          "right": {
+            "literal": true
+          }
+        }
+      }
+    ],
+    "attachments": {
+      "*": [
+        "see_team",
+        "finish_before_delete"
+      ],
+      "member": [
+        "own_tasks"
+      ],
+      "admin": [
+        "admin_all"
+      ]
+    }
+  }
+}

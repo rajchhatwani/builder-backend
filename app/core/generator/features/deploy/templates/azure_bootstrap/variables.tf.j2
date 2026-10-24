@@ -1,0 +1,26 @@
+variable "project" {
+  type    = string
+  default = "{{ slug }}"
+}
+
+variable "subscription_id" {
+  description = "Azure subscription that will host the environments."
+  type        = string
+}
+
+variable "region" {
+  type    = string
+  default = "{{ region }}"
+}
+
+variable "github_repo" {
+  description = "owner/name of the repository whose workflows may deploy. Nobody else can use the identities."
+  type        = string
+  default     = "{{ repo }}"
+}
+
+variable "environments" {
+  description = "One deploy identity per GitHub environment, so production can require approvals."
+  type        = list(string)
+  default     = [{% for e in environments %}"{{ e }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+}

@@ -330,3 +330,12 @@ An entity field of type `file` holds the id of an uploaded file: upload first, t
 Run `make storage-maintenance` hourly. **`deploy/storage/STORAGE.md`** covers setting up the bucket, credentials, scanner limits, operations and erasure requests;
 `docs/storage-security.md` is the threat model. `make test` runs the upload tests against a stand-in scanner and an in-memory bucket.
 {% endif %}
+{% if otel %}
+
+## Observability
+
+Traces, metrics and trace-correlated JSON logs through OpenTelemetry, configured by `OTEL_*` variables
+(`.env.example`). {% if otel_stack %}`docker compose -f docker-compose.yml -f deploy/observability/compose.yml up --build` adds a collector,
+Jaeger (<http://localhost:16686>) and Prometheus (<http://localhost:9090>) for development. {% endif %}**`docs/OBSERVABILITY.md`** lists what is
+collected, how secrets are kept out, and how to size sampling. `make test` includes the telemetry tests.
+{% endif %}

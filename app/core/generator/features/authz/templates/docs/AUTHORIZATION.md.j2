@@ -1,0 +1,47 @@
+# Authorization in {{ project_name }}
+
+This project decides access with **{{ model | upper }}** policies. They are written in the builder and
+shipped as data in `app/auth/policy_data.py`; `app/auth/policy.py` is the engine that evaluates them.
+Change a policy in the builder and generate again: do not edit the data by hand.
+
+## How a decision is made
+
+1. **Default deny.** A request is allowed only if at least one *allow* policy applies and its condition holds.
+2. **Deny wins.** If any *deny* policy applies and its condition holds, the request is refused, whatever else allows it.
+3. **Signed in.** Every route needs a signed-in person; there are no public routes in this model.
+4. **Rows are filtered in the database.** Listing, reading, changing and deleting only ever see rows the person may
+   see, so totals and pages cannot leak anything. Someone else's row looks exactly like a row that does not exist (404).
+5. **Writes are checked twice.** A new row must satisfy the `create` policies with the values sent. After an update the
+   row must still be one the person could read, so a row cannot be handed away or moved out of reach.
+{% if multi_tenant %}
+6. **Tenants are isolated automatically**, independent of any policy: every query is confined to the caller's own tenant.
+{% endif %}
+
+## The policies
+
+| Policy | Effect | Applies to | Carried by | Condition |
+|---|---|---|---|---|
+{% for row in policy_rows %}
+| `{{ row.id }}` | {{ row.effect }} | {{ row.actions }} | {{ row.who }} | {{ row.when | replace("|", "/") }} |
+{% endfor %}
+
+## What conditions can look at
+
+* **You** (the signed-in person): {{ subject_attributes | join(", ") }}.
+* **The record**: its own fields, plus `id`, `created_at`, `updated_at` and `created_by_id`.
+* **The request**: the hour (UTC), the weekday (UTC, Monday is 0) and the caller's IP address.
+
+Conditions are plain data (`all` / `any` groups of comparisons). There is no scripting: nothing in a policy is ever executed.
+
+## Things to know
+
+* **Missing values never match.** A comparison with an empty value is false, in the database and in Python alike.
+  Creating a record without a field that a `create` policy checks is therefore refused. Send the value explicitly.
+  The same rule applies to **deny** policies: a deny whose condition looks at an empty field does not fire for
+  that record. Make such fields required, or add a second policy that covers the empty case.
+* **IP conditions behind a proxy.** Run the application with `uvicorn --proxy-headers --forwarded-allow-ips <proxy address>`
+  so the caller's address is the real one. Without it every request appears to come from the proxy.
+* **Time is UTC.**
+* **Tests.** `tests/test_authz.py` pins the engine file by hash, checks the policy data loads, and checks that unconditional
+  deny policies and sign-in requirements hold. Entities governed by policies have no generic smoke test, because who may
+  do what depends on your policies: add scenario tests for the rules that matter to your business.

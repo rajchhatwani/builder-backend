@@ -1,6 +1,43 @@
+import {
+  BASE_URL,
+  CSRF_HEADERS,
+  authHeader,
+  notifySessionLost,
+  refreshSession,
+  setAccessToken,
+  type Surface,
+} from './session'
 import type {
+  AdminProject,
+  AdminStats,
+  AdminUser,
   ApiErrorBody,
+  ApiTokenCreated,
+  ApiTokenInfo,
+  AuditEntry,
+  Member,
+  MemberRole,
+  PlatformRole,
+  PlatformSettings,
+  SessionResponse,
+  UserAccount,
   AuthConfig,
+  AuthorizationSettings,
+  DeploymentPlan,
+  DocumentsSettings,
+  DocumentsWrite,
+  LibraryTemplate,
+  DeploymentSettings,
+  DeploymentWrite,
+  ObservabilitySettings,
+  ObservabilityWrite,
+  AuthorizationWrite,
+  CoverageResult,
+  RecommendAnswers,
+  Recommendation,
+  SimulateRequest,
+  SimulateResult,
+  SpecForPolicies,
   AuthConfigCreate,
   AuthConfigUpdate,
   AuthCustomField,
@@ -32,10 +69,9 @@ import type {
   ProjectRoleUpdate,
   Relation,
   RelationKind,
+  ValidationIssue,
   ValidationReport,
 } from './types'
-
-const BASE_URL = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://localhost:8000'
 
 export class ApiError extends Error {
   code: string
@@ -50,11 +86,33 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+interface RequestOptions {
+  surface?: Surface
+  /** Sign-in style calls: a 401 means "wrong password", not "session expired". */
+  anonymous?: boolean
+}
+
+async function request<T>(
+  path: string,
+  init?: RequestInit,
+  options: RequestOptions = {},
+  retried = false,
+): Promise<T> {
+  const surface = options.surface ?? 'app'
   const response = await fetch(`${BASE_URL}${path}`, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options.anonymous ? {} : authHeader(surface)),
+      ...init?.headers,
+    },
   })
+
+  if (response.status === 401 && !options.anonymous && !retried) {
+    if (await refreshSession(surface)) return request<T>(path, init, options, true)
+    notifySessionLost(surface)
+  }
 
   if (response.status === 204) {
     return undefined as T
@@ -65,6 +123,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(response.status, body as ApiErrorBody)
   }
   return body as T
+}
+
+const json = (data: unknown) => JSON.stringify(data)
+const admin: RequestOptions = { surface: 'admin' }
+
+function queryString(params: Record<string, string | number | undefined>): string {
+  const query = new URLSearchParams()
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== '') query.set(key, String(value))
+  })
+  return query.toString()
+}
+
+/** Remember a fresh access token and return the session it came with. */
+function adopt(surface: Surface, session: SessionResponse): SessionResponse {
+  setAccessToken(surface, session.access_token)
+  return session
 }
 
 export const api = {
@@ -125,7 +200,13 @@ export const api = {
 
   /** Downloads the generated project zip and records a generation. */
   async downloadZip(projectId: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
-    const response = await fetch(`${BASE_URL}/projects/${projectId}/generate/download`)
+    const download = () =>
+      fetch(`${BASE_URL}/projects/${projectId}/generate/download`, {
+        credentials: 'include',
+        headers: authHeader('app'),
+      })
+    let response = await download()
+    if (response.status === 401 && (await refreshSession('app'))) response = await download()
     if (!response.ok) {
       throw new ApiError(response.status, (await response.json()) as ApiErrorBody)
     }
@@ -179,6 +260,86 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ confirm: true }),
     }),
+
+  getDocuments: (projectId: string) =>
+    request<DocumentsSettings>(`/projects/${projectId}/documents`),
+  putDocuments: (projectId: string, data: DocumentsWrite) =>
+    request<DocumentsSettings>(`/projects/${projectId}/documents`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  documentsIssues: (projectId: string) =>
+    request<{ issues: ValidationIssue[] }>(`/projects/${projectId}/documents/issues`),
+  documentsLibrary: (projectId: string) =>
+    request<LibraryTemplate[]>(`/projects/${projectId}/documents/library`),
+  /** The PDF the generated API would render for this template and data. */
+  previewDocument: async (
+    projectId: string,
+    data: { template: Record<string, unknown>; data: Record<string, unknown>; compute: string | null },
+  ): Promise<Blob> => {
+    const response = await fetch(`${BASE_URL}/projects/${projectId}/documents/preview`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', ...authHeader('app') },
+      body: JSON.stringify(data),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => ({ message: 'Preview failed' }))) as ApiErrorBody
+      throw new ApiError(response.status, body)
+    }
+    return response.blob()
+  },
+
+  getDeployment: (projectId: string) =>
+    request<DeploymentSettings>(`/projects/${projectId}/deployment`),
+  putDeployment: (projectId: string, data: DeploymentWrite) =>
+    request<DeploymentSettings>(`/projects/${projectId}/deployment`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deploymentIssues: (projectId: string) =>
+    request<{ issues: ValidationIssue[] }>(`/projects/${projectId}/deployment/issues`),
+  deploymentPlan: (projectId: string, data: DeploymentWrite) =>
+    request<DeploymentPlan>(`/projects/${projectId}/deployment/plan`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  getObservability: (projectId: string) =>
+    request<ObservabilitySettings>(`/projects/${projectId}/observability`),
+  putObservability: (projectId: string, data: ObservabilityWrite) =>
+    request<ObservabilitySettings>(`/projects/${projectId}/observability`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  observabilityIssues: (projectId: string) =>
+    request<{ issues: ValidationIssue[] }>(`/projects/${projectId}/observability/issues`),
+
+  getAuthorization: (projectId: string) =>
+    request<AuthorizationSettings>(`/projects/${projectId}/authorization`),
+  putAuthorization: (projectId: string, data: AuthorizationWrite) =>
+    request<AuthorizationSettings>(`/projects/${projectId}/authorization`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  authorizationIssues: (projectId: string) =>
+    request<{ issues: ValidationIssue[] }>(`/projects/${projectId}/authorization/issues`),
+  simulateAuthorization: (projectId: string, data: SimulateRequest) =>
+    request<SimulateResult>(`/projects/${projectId}/authorization/simulate`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  authorizationCoverage: (projectId: string) =>
+    request<CoverageResult>(`/projects/${projectId}/authorization/coverage`),
+  recommendFromProject: (projectId: string) =>
+    request<Recommendation>(`/projects/${projectId}/authorization/recommendation`),
+  recommendAuthorization: (projectId: string, data: RecommendAnswers) =>
+    request<Recommendation>(`/projects/${projectId}/authorization/recommend`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getSpecForPolicies: (projectId: string) =>
+    request<SpecForPolicies>(`/projects/${projectId}/spec`),
 
   getAuthConfig: (projectId: string) =>
     request<AuthConfig>(`/projects/${projectId}/auth`),
@@ -248,5 +409,152 @@ export const api = {
     }),
   deleteAuthCustomField: (fieldId: string) =>
     request<void>(`/auth/custom-fields/${fieldId}`, { method: 'DELETE' }),
-}
 
+  // ── Accounts ─────────────────────────────────────────────────────────────
+
+  register: async (data: { email: string; password: string; name?: string }) =>
+    adopt(
+      'app',
+      await request<SessionResponse>(
+        '/account/register',
+        { method: 'POST', body: json(data) },
+        { anonymous: true },
+      ),
+    ),
+  login: async (email: string, password: string) =>
+    adopt(
+      'app',
+      await request<SessionResponse>(
+        '/account/login',
+        { method: 'POST', body: json({ email, password }) },
+        { anonymous: true },
+      ),
+    ),
+  /** Try to resume a session from the refresh cookie (page load). Null if there is none. */
+  async resume(): Promise<UserAccount | null> {
+    if (!(await refreshSession('app'))) return null
+    try {
+      return await request<UserAccount>('/account/me')
+    } catch {
+      return null
+    }
+  },
+  async logout() {
+    try {
+      await request<void>(
+        '/account/logout',
+        { method: 'POST', headers: CSRF_HEADERS },
+        { anonymous: true },
+      )
+    } finally {
+      setAccessToken('app', null)
+    }
+  },
+  logoutEverywhere: async () => {
+    await request<void>('/account/logout-all', { method: 'POST' })
+    setAccessToken('app', null)
+  },
+  changePassword: async (current_password: string, new_password: string) =>
+    adopt(
+      'app',
+      await request<SessionResponse>('/account/password', {
+        method: 'POST',
+        body: json({ current_password, new_password }),
+      }),
+    ),
+  listApiTokens: () => request<ApiTokenInfo[]>('/account/tokens'),
+  createApiToken: (data: {
+    name: string
+    scopes: string[]
+    expires_in_days: number
+    project_id?: string | null
+  }) => request<ApiTokenCreated>('/account/tokens', { method: 'POST', body: json(data) }),
+  revokeApiToken: (id: string) => request<void>(`/account/tokens/${id}`, { method: 'DELETE' }),
+
+  // ── Project members ──────────────────────────────────────────────────────
+
+  listMembers: (projectId: string) => request<Member[]>(`/projects/${projectId}/members`),
+  addMember: (projectId: string, email: string, role: MemberRole) =>
+    request<Member>(`/projects/${projectId}/members`, {
+      method: 'POST',
+      body: json({ email, role }),
+    }),
+  setMemberRole: (projectId: string, userId: string, role: MemberRole) =>
+    request<Member>(`/projects/${projectId}/members/${userId}`, {
+      method: 'PATCH',
+      body: json({ role }),
+    }),
+  removeMember: (projectId: string, userId: string) =>
+    request<void>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+
+  // ── Admin console (a separate surface with its own tokens) ───────────────
+
+  adminLogin: async (email: string, password: string) =>
+    adopt(
+      'admin',
+      await request<SessionResponse>(
+        '/admin/login',
+        { method: 'POST', body: json({ email, password }) },
+        { anonymous: true, surface: 'admin' },
+      ),
+    ),
+  async adminResume(): Promise<UserAccount | null> {
+    if (!(await refreshSession('admin'))) return null
+    try {
+      return await request<UserAccount>('/admin/me', undefined, admin)
+    } catch {
+      return null
+    }
+  },
+  async adminLogout() {
+    try {
+      await request<void>(
+        '/admin/logout',
+        { method: 'POST', headers: CSRF_HEADERS },
+        { anonymous: true, surface: 'admin' },
+      )
+    } finally {
+      setAccessToken('admin', null)
+    }
+  },
+  adminStats: () => request<AdminStats>('/admin/stats', undefined, admin),
+  adminSettings: () => request<PlatformSettings>('/admin/settings', undefined, admin),
+  adminUsers: (params: {
+    q?: string
+    status?: string
+    role?: string
+    limit?: number
+    offset?: number
+  }) => request<Page<AdminUser>>(`/admin/users?${queryString(params)}`, undefined, admin),
+  adminCreateUser: (data: {
+    email: string
+    name?: string
+    platform_role: PlatformRole
+    password?: string
+  }) =>
+    request<{ user: AdminUser; temporary_password: string | null }>(
+      '/admin/users',
+      { method: 'POST', body: json(data) },
+      admin,
+    ),
+  adminUpdateUser: (
+    id: string,
+    data: { name?: string; status?: 'active' | 'suspended'; platform_role?: PlatformRole },
+  ) => request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: json(data) }, admin),
+  adminRevokeSessions: (id: string) =>
+    request<void>(`/admin/users/${id}/revoke-sessions`, { method: 'POST' }, admin),
+  adminResetPassword: (id: string) =>
+    request<{ temporary_password: string }>(
+      `/admin/users/${id}/reset-password`,
+      { method: 'POST' },
+      admin,
+    ),
+  adminProjects: (q = '', limit = 50, offset = 0) =>
+    request<Page<AdminProject>>(
+      `/admin/projects?${queryString({ q, limit, offset })}`,
+      undefined,
+      admin,
+    ),
+  adminAudit: (params: { action?: string; result?: string; limit?: number; offset?: number }) =>
+    request<Page<AuditEntry>>(`/admin/audit?${queryString(params)}`, undefined, admin),
+}

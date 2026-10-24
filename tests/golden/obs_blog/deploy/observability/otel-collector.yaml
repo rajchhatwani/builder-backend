@@ -1,0 +1,72 @@
+# OpenTelemetry Collector for local development of Blog (generated).
+# The service sends OTLP to this collector; the collector scrubs, batches and forwards.
+# Production: keep this file's receivers/processors, change the exporters to your backend, and read
+# the sizing notes in docs/OBSERVABILITY.md.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  # First in every pipeline: refuse data instead of running out of memory.
+  memory_limiter:
+    check_interval: 1s
+    limit_percentage: 75
+    spike_limit_percentage: 20
+  # Second line of defence behind the service's own redaction: secrets that slipped into an attribute
+  # value are masked here, and header attributes are dropped outright.
+  redaction:
+    allow_all_keys: true
+    blocked_values:
+      - 'eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]*'
+      - '(?i)bearer\s+[A-Za-z0-9._~+/=-]{8,}'
+      - '\b(?:sk|rk|pk)_(?:live|test)_[A-Za-z0-9]{8,}'
+    summary: info
+  attributes/drop_headers:
+    actions:
+      - key: http.request.header.authorization
+        action: delete
+      - key: http.request.header.cookie
+        action: delete
+      - key: http.response.header.set-cookie
+        action: delete
+  batch:
+    send_batch_size: 512
+    timeout: 5s
+  # Tail sampling (keep every error and slow trace, sample the rest) needs the whole trace on one
+  # collector instance. Add it here when you run a single gateway collector:
+  # tail_sampling:
+  #   decision_wait: 10s
+  #   policies:
+  #     - {name: errors, type: status_code, status_code: {status_codes: [ERROR]}}
+  #     - {name: slow, type: latency, latency: {threshold_ms: 1000}}
+  #     - {name: rest, type: probabilistic, probabilistic: {sampling_percentage: 10}}
+
+exporters:
+  debug:
+    verbosity: basic
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+  prometheus:
+    endpoint: 0.0.0.0:8889
+    resource_to_telemetry_conversion:
+      enabled: true
+
+service:
+  telemetry:
+    metrics:
+      level: basic
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [memory_limiter, attributes/drop_headers, redaction, batch]
+      exporters: [debug, otlp/jaeger]
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug, prometheus]

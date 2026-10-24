@@ -74,6 +74,13 @@ services:
 {% else %}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
 {% endif %}
+{% if otel %}
+      # OpenTelemetry (see docs/OBSERVABILITY.md). Empty endpoint: nothing leaves the container.
+      APP_OTEL_ENABLED: ${APP_OTEL_ENABLED:-true}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-{{ otel_ratio }}}
+{% endif %}
 {% if storage %}
       # File storage: the bucket, the malware scanner (see deploy/storage/STORAGE.md).
       APP_ENV: ${APP_ENV:-development}

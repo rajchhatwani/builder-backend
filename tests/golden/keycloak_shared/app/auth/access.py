@@ -31,6 +31,8 @@ class Access:
     # the signed-in caller's tenant, even for entities that are not tenant-scoped themselves:
     # a reference to a tenant-scoped row must stay inside it
     caller_tenant_id: uuid.UUID | None = None
+    # abac / pbac only: the decision for this request (see app/auth/authorize.py)
+    policy: Any = None
 
     @property
     def repo_kwargs(self) -> dict[str, Any]:
@@ -40,6 +42,7 @@ class Access:
             "tenant_id": self.tenant_id,
             "caller_tenant_id": self.caller_tenant_id,
             "caller": self.user,
+            "policy": self.policy,
         }
 
 

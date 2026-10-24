@@ -20,9 +20,12 @@ import { KeycloakPanel } from '../components/KeycloakPanel'
 import { PaymentsPanel } from '../components/PaymentsPanel'
 import { StoragePanel } from '../components/StoragePanel'
 import { Layout } from '../components/Layout'
+import { MembersDialog } from '../components/MembersDialog'
 import { OverviewPanel, sectionForIssue } from '../components/OverviewPanel'
-import { PermissionsPanel } from '../components/PermissionsPanel'
-import { RolesPanel } from '../components/RolesPanel'
+import { AuthorizationPanel } from '../components/AuthorizationPanel'
+import { DeploymentPanel } from '../components/DeploymentPanel'
+import { DocumentsPanel } from '../components/DocumentsPanel'
+import { ObservabilityPanel } from '../components/ObservabilityPanel'
 import { ProjectSidebar, ProjectsSidebar, type Section } from '../components/Sidebar'
 
 interface ProjectWorkspaceProps {
@@ -74,11 +77,11 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [issues, setIssues] = useState<ValidationIssue[] | null>(null)
   const [generationCount, setGenerationCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [sharing, setSharing] = useState(false)
   // Bumped on every reload so the generate panel drops results for an outdated model.
   const [modelVersion, setModelVersion] = useState(0)
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
-  const [accessTab, setAccessTab] = useState<'roles' | 'permissions'>('roles')
 
   const load = useCallback(async () => {
     try {
@@ -164,6 +167,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           section={section}
           problems={problems}
           on={{ keycloak: keycloakOn, payments: paymentsOn, storage: storageOn }}
+          onShare={() => setSharing(true)}
         />
       }
     >
@@ -261,27 +265,45 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
       {section === 'access' && (
         <>
-          <PageTitle title="Roles & access">Create roles, then choose what each role can do with your data.</PageTitle>
-          <SubTabs
-            tabs={[
-              { id: 'roles', label: 'Roles' },
-              { id: 'permissions', label: 'Permissions' },
-            ]}
-            value={accessTab}
-            onChange={(tab) => {
-              setAccessTab(tab)
-              if (tab === 'permissions') api.listRoles(project.id, 200, 0).then((p) => setRoles(p.items))
-            }}
+          <PageTitle title="Authorization">
+            Decide who may do what with your data: roles and permissions, or rules over attributes and policies.
+          </PageTitle>
+          <AuthorizationPanel
+            projectId={project.id}
+            entities={entities}
+            roles={roles}
+            keycloak={keycloakOn}
+            authEnabled={auth?.enabled ?? false}
+            onRolesChanged={() => api.listRoles(project.id, 200, 0).then((p) => setRoles(p.items))}
+            onChanged={load}
           />
-          {accessTab === 'roles' && <RolesPanel projectId={project.id} keycloak={keycloakOn} />}
-          {accessTab === 'permissions' && (
-            <PermissionsPanel
-              projectId={project.id}
-              entities={entities}
-              roles={roles}
-              keycloak={keycloakOn}
-            />
-          )}
+        </>
+      )}
+
+      {section === 'observability' && (
+        <>
+          <PageTitle title="Observability">
+            Traces, metrics and trace-correlated logs from your generated backend, through OpenTelemetry, with secrets kept out.
+          </PageTitle>
+          <ObservabilityPanel projectId={project.id} onChanged={load} />
+        </>
+      )}
+
+      {section === 'documents' && (
+        <>
+          <PageTitle title="Documents">
+            Generate invoices, receipts, statements, certificates and more as PDFs: ten ready-made templates you can edit, with totals recomputed on the server.
+          </PageTitle>
+          <DocumentsPanel projectId={project.id} onChanged={load} />
+        </>
+      )}
+
+      {section === 'deployment' && (
+        <>
+          <PageTitle title="Deploy">
+            GitHub Actions pipelines and Terraform that put your backend on AWS, Azure or Google Cloud, with no stored cloud credentials.
+          </PageTitle>
+          <DeploymentPanel projectId={project.id} onChanged={load} />
         </>
       )}
 
@@ -291,6 +313,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <GeneratePanel project={project} modelVersion={modelVersion} />
         </>
       )}
+      <MembersDialog
+        open={sharing}
+        projectId={project.id}
+        projectName={project.name}
+        onClose={() => setSharing(false)}
+      />
     </Layout>
   )
 }

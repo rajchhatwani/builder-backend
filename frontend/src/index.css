@@ -594,3 +594,106 @@ dialog footer {
 .idp-card code {
   overflow-wrap: anywhere;
 }
+
+
+/* ── Sign-in, account and admin console ───────────────────────────────────── */
+
+.auth-page {
+  /* #root is a sidebar grid; sign-in screens span all of it */
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+}
+
+.auth-card {
+  width: min(26rem, 100%);
+}
+
+.auth-card h2 {
+  margin-block: var(--space-3) var(--space-4);
+}
+
+.auth-card form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-brand {
+  margin-block-end: var(--space-2);
+}
+
+.auth-switch {
+  margin-block: var(--space-4) 0;
+  text-align: center;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+section.card {
+  margin-block-end: var(--space-6);
+}
+
+.token-box {
+  display: block;
+  padding: var(--space-3);
+  overflow-wrap: anywhere;
+  user-select: all;
+  background: var(--muted);
+  border-radius: var(--radius-medium);
+}
+
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-block-end: var(--space-2);
+}
+
+/* The admin console must never be mistaken for the customer app. */
+.admin-badge {
+  display: inline-block;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-medium);
+  background: var(--danger);
+  color: var(--danger-foreground);
+  font-size: var(--text-7);
+  font-weight: var(--font-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-topnav].admin-band {
+  border-block-end: 3px solid var(--danger);
+}
+
+.stat-card.status-warn .stat-value {
+  color: var(--warning, var(--danger));
+}
+
+
+/* ── Authorization policy editor ──────────────────────────────────────────── */
+
+dialog:has(.policy-form) {
+  width: min(56rem, 95vw);
+  max-width: min(56rem, 95vw);
+}
+
+.policy-form {
+  min-width: 0;
+}
+
+.policy-form .cond-row select,
+.policy-form .cond-row input:not([type='checkbox']):not([type='radio']) {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+}

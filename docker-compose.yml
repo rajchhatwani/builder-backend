@@ -19,8 +19,16 @@ services:
     build: .
     environment:
       BUILDER_DATABASE_URL: postgresql+asyncpg://builder:builder@postgres:5432/builder
-      # Needed only to store auth credentials (PUT /projects/{id}/auth/secrets).
-      SECRET_KEY: ${SECRET_KEY:-}
+      # Signs sign-in tokens and encrypts stored credentials. The default below is for this laptop
+      # setup only: the app refuses it unless BUILDER_ENVIRONMENT is `local`. Set a real one
+      # (`openssl rand -base64 48`) anywhere else.
+      SECRET_KEY: ${SECRET_KEY:-local-development-only-secret-key-change-me}
+      BUILDER_ENVIRONMENT: ${BUILDER_ENVIRONMENT:-local}
+      BUILDER_SIGNUP_MODE: ${BUILDER_SIGNUP_MODE:-open}
+      # Optional: create the first administrator at startup (no default password on purpose).
+      # Or run: docker compose exec api uv run python /app/scripts/create_admin.py you@example.com
+      BUILDER_BOOTSTRAP_ADMIN_EMAIL: ${BUILDER_BOOTSTRAP_ADMIN_EMAIL:-}
+      BUILDER_BOOTSTRAP_ADMIN_PASSWORD: ${BUILDER_BOOTSTRAP_ADMIN_PASSWORD:-}
     ports:
       - "8000:8000"
     depends_on:

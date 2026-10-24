@@ -1,0 +1,84 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Vault",
+    "slug": "obs-vault",
+    "description": "RS256 tokens and Redis refresh tokens",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Secret",
+      "table_name": "secrets",
+      "plural_path": "secrets",
+      "options": {},
+      "fields": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://vault.example.com",
+    "jwt_algorithm": "RS256",
+    "token_store": "redis",
+    "deletion_mode": "hard",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@vault.example.com",
+      "from_name": "Vault"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Secret",
+        "operation": "list",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Secret",
+        "operation": "create",
+        "roles": [
+          "member",
+          "admin"
+        ]
+      }
+    ]
+  },
+  "observability": {
+    "enabled": true,
+    "metrics": false,
+    "db_spans": false,
+    "local_stack": false,
+    "service_name": "vault-api"
+  }
+}

@@ -3,9 +3,13 @@
 from app.core.generator.base import FeatureModule, FileTree
 from app.core.generator.context import build_context
 from app.core.generator.features.auth.module import AuthModule
+from app.core.generator.features.authz.module import AuthzModule
 from app.core.generator.features.crud.module import CrudModule
+from app.core.generator.features.deploy.module import DeployModule
 from app.core.generator.features.docker.module import DockerModule
+from app.core.generator.features.documents.module import DocumentsModule
 from app.core.generator.features.keycloak.module import KeycloakModule
+from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.storage.module import StorageModule
 from app.core.generator.features.tests.module import TestsModule
@@ -25,9 +29,13 @@ def default_modules() -> list[FeatureModule]:
         DockerModule(),
         TestsModule(),
         AuthModule(),
+        AuthzModule(),
         KeycloakModule(),
         PaymentsModule(),
         StorageModule(),
+        ObservabilityModule(),
+        DeployModule(),
+        DocumentsModule(),
     ]
 
 

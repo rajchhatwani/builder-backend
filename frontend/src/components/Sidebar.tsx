@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import type { Project } from '../api/types'
 
-export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'payments' | 'storage' | 'access' | 'generate'
+export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'payments' | 'storage' | 'access' | 'observability' | 'deployment' | 'documents' | 'generate'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
@@ -67,11 +67,43 @@ export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   },
   {
     id: 'access',
-    label: 'Roles & access',
+    label: 'Authorization',
     icon: (
       <>
         <path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z" />
         <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+  },
+  {
+    id: 'observability',
+    label: 'Observability',
+    icon: (
+      <>
+        <path d="M3 12h4l3-8 4 16 3-8h4" />
+      </>
+    ),
+  },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: (
+      <>
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+        <path d="M14 3v5h5" />
+        <path d="M9 13h6" />
+        <path d="M9 17h4" />
+      </>
+    ),
+  },
+  {
+    id: 'deployment',
+    label: 'Deploy',
+    icon: (
+      <>
+        <path d="M12 3l4 4-4 4" />
+        <path d="M20 7H8a4 4 0 0 0 0 8h2" />
+        <path d="M6 21h12" />
       </>
     ),
   },
@@ -138,10 +170,12 @@ interface ProjectSidebarProps {
   problems: Partial<Record<Section, number>>
   /** Sections that are switched on, shown with a dot. */
   on?: Partial<Record<Section, boolean>>
+  /** Opens the dialog listing who can access the project. */
+  onShare?: () => void
 }
 
 /** Sidebar inside a project: one entry per step of building the backend. */
-export function ProjectSidebar({ project, section, problems, on = {} }: ProjectSidebarProps) {
+export function ProjectSidebar({ project, section, problems, on = {}, onShare }: ProjectSidebarProps) {
   return (
     <nav>
       <a className="sidebar-back" href={link('/')}>
@@ -149,6 +183,11 @@ export function ProjectSidebar({ project, section, problems, on = {} }: ProjectS
       </a>
       <div className="sidebar-project">
         <strong>{project.name}</strong>
+        {onShare && (
+          <button className="ghost small" onClick={onShare} title="Who can access this project">
+            Share
+          </button>
+        )}
       </div>
       <ul>
         {SECTIONS.map((s) => (

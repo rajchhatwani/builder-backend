@@ -1,0 +1,100 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Portal",
+    "slug": "authz-keycloak",
+    "description": "Trusts a Keycloak realm that other platforms share",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {},
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "provider": "keycloak",
+    "password_reset": {
+      "email_magic_link": false
+    },
+    "registration": {
+      "email_verification_required": false,
+      "invite_only": true
+    },
+    "keycloak": {
+      "mode": "shared",
+      "realm": "company",
+      "api_client_id": "portal-api",
+      "web_client_id": "portal-web",
+      "redirect_uris": [
+        "https://portal.example.com/callback"
+      ]
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent",
+        "is_default": true
+      }
+    ],
+    "permissions": []
+  },
+  "authorization": {
+    "model": "abac",
+    "policies": [
+      {
+        "id": "own_tickets",
+        "description": "Everybody works on their own tickets.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.*"
+        ],
+        "when": {
+          "left": {
+            "resource": "created_by_id"
+          },
+          "op": "eq",
+          "right": {
+            "subject": "id"
+          }
+        }
+      },
+      {
+        "id": "admins",
+        "description": "Admins see every ticket.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.list",
+          "Ticket.get",
+          "Ticket.delete"
+        ],
+        "when": {
+          "left": {
+            "subject": "roles"
+          },
+          "op": "contains",
+          "right": {
+            "literal": "admin"
+          }
+        }
+      }
+    ],
+    "attachments": {}
+  }
+}

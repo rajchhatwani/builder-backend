@@ -1,0 +1,14 @@
+# dev: generated from the project spec (profile small).
+# Edit the numbers to change capacity (cpu in millicores, memory in MB):
+# no code change or rebuild is needed.
+environment          = "dev"
+region               = "westeurope"
+cpu                  = 500
+memory               = 1024
+min_instances        = 1
+max_instances        = 2
+db_class             = "B_Standard_B1ms"
+db_storage_gb        = 20
+db_high_availability = false
+deletion_protection  = false
+app_env              = "development"

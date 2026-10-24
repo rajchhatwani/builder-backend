@@ -6,6 +6,96 @@
   },
   "item": [
     {
+      "name": "Account (run first)",
+      "description": "Every request after this folder needs a signed-in account. Set accountPassword (a long passphrase) in the collection variables, run Register once, then Login whenever the 15 minute access token expires. The token is saved to {{accessToken}} and sent as a Bearer header.",
+      "item": [
+        {
+          "name": "Register",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('signed in', () => pm.expect(body.access_token).to.be.a('string'));",
+                  "pm.collectionVariables.set('accessToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{accountEmail}}\",\n  \"password\": \"{{accountPassword}}\",\n  \"name\": \"Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/account/register",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "account",
+                "register"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const body = pm.response.json();",
+                  "pm.test('signed in', () => pm.expect(body.access_token).to.be.a('string'));",
+                  "pm.collectionVariables.set('accessToken', body.access_token);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{accountEmail}}\",\n  \"password\": \"{{accountPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/account/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "account",
+                "login"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
       "name": "Blog demo (run in order)",
       "item": [
         {
@@ -2604,6 +2694,28 @@
     {
       "key": "adminRoleId",
       "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "accountEmail",
+      "value": "postman@example.com"
+    },
+    {
+      "key": "accountPassword",
+      "value": ""
     }
-  ]
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
 }

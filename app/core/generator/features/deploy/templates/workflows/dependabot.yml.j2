@@ -1,0 +1,22 @@
+# Proposes updates as pull requests, so pinned versions do not go stale: the GitHub Actions in the
+# workflows (pinned to commit SHAs), the Terraform providers, the Python packages and the base image.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: terraform
+    directories:
+      - /deploy/{{ cloud }}
+      - /deploy/{{ cloud }}/bootstrap
+    schedule:
+      interval: weekly

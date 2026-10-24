@@ -78,6 +78,9 @@ def ok(result: subprocess.CompletedProcess[str]) -> str:
         "storage_s3",
         "storage_tenant",
         "storage_payments",
+        "obs_blog",
+        "obs_vault",
+        "docs_desk",
     ],
 )
 def test_generated_project_migrates_and_passes_its_own_tests(

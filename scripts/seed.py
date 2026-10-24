@@ -1,6 +1,7 @@
 """Load demo projects into a running Backend Builder through its public API.
 
-    python scripts/seed.py                      # against http://localhost:8000
+    SEED_EMAIL=demo@example.com SEED_PASSWORD='a long passphrase' python scripts/seed.py
+    python scripts/seed.py --token bb_pat_...   # an API token with the read + write scopes
     python scripts/seed.py --base-url http://localhost:8000 --reset
     docker compose exec api python /app/scripts/seed.py
 
@@ -24,6 +25,7 @@ projects read them from environment variables.
 
 import argparse
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
@@ -42,14 +44,26 @@ ALL_OPS = ["list", "get", "head", "create", "replace", "update", "delete"]
 class Api:
     def __init__(self, base_url: str) -> None:
         self.base = base_url.rstrip("/")
+        self.token: str | None = None
 
-    def call(self, method: str, path: str, body: Any = None) -> Any:
+    def sign_in(self, email: str, password: str) -> None:
+        """Log in, or create the account when it does not exist (sign-up must be open for that)."""
+        body = {"email": email, "password": password}
+        try:
+            session = self.call("POST", "/account/login", body, authenticated=False)
+        except SystemExit:
+            session = self.call(
+                "POST", "/account/register", {**body, "name": "Demo"}, authenticated=False
+            )
+        self.token = session["access_token"]
+
+    def call(self, method: str, path: str, body: Any = None, authenticated: bool = True) -> Any:
         data = None if body is None else json.dumps(body).encode()
+        headers = {"Content-Type": "application/json"} if data else {}
+        if authenticated and self.token:
+            headers["Authorization"] = f"Bearer {self.token}"
         request = urllib.request.Request(
-            self.base + path,
-            data=data,
-            method=method,
-            headers={"Content-Type": "application/json"} if data else {},
+            self.base + path, data=data, method=method, headers=headers
         )
         try:
             with urllib.request.urlopen(request, timeout=30) as response:
@@ -604,11 +618,20 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--reset", action="store_true", help="delete and recreate existing demos")
+    parser.add_argument("--email", default=os.environ.get("SEED_EMAIL", "demo@example.com"))
+    parser.add_argument("--password", default=os.environ.get("SEED_PASSWORD"))
+    parser.add_argument("--token", default=os.environ.get("SEED_TOKEN"), help="API token instead")
     parser.add_argument("only", nargs="*", choices=list(PROJECTS), help="seed only these")
     args = parser.parse_args()
 
     api = Api(args.base_url)
     api.get("/health")
+    if args.token:
+        api.token = args.token
+    elif args.password:
+        api.sign_in(args.email, args.password)
+    else:
+        parser.error("give --password (or SEED_PASSWORD), or --token: the API requires sign-in")
     existing = {p["slug"]: p for p in api.get("/projects?limit=200&offset=0")["items"]}
     ok = True
     for slug, build in PROJECTS.items():

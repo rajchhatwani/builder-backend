@@ -29,6 +29,11 @@ def creatable(entity: EntityCtx, project: ProjectCtx, seen: frozenset[str] = fro
 
 
 def _skip_reason(entity: EntityCtx, project: ProjectCtx) -> str | None:
+    if entity.policy:
+        return (
+            f"access to {entity.name} is decided by authorization policies, so a generic smoke "
+            "test cannot know who may do what; see tests/test_authz.py and docs/AUTHORIZATION.md"
+        )
     if creatable(entity, project):
         return None
     return (

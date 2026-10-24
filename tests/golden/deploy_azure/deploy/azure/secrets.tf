@@ -1,0 +1,73 @@
+locals {
+  # Secrets the application reads from its environment. Terraform creates each with a placeholder; YOU set
+  # the real value (never in this repository or in a .tfvars file):
+  #   az keyvault secret set --vault-name <vault> --name <NAME-with-dashes> --value '...'
+  # (Key Vault names use dashes: AUTH_JWT_SECRET is stored as AUTH-JWT-SECRET.) The pipeline refuses to
+  # deploy while a placeholder is still in place.
+  app_secret_names = ["AUTH_JWT_SECRET"]
+  placeholder      = "__SET_ME_BEFORE_THE_FIRST_DEPLOYMENT__"
+}
+
+data "azurerm_client_config" "current" {}
+
+resource "azurerm_key_vault" "main" {
+  name                       = "${substr(local.short, 0, 15)}-kv"
+  location                   = azurerm_resource_group.main.location
+  resource_group_name        = azurerm_resource_group.main.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  rbac_authorization_enabled = true
+  purge_protection_enabled   = var.deletion_protection
+  soft_delete_retention_days = 7
+}
+
+# Whoever runs this stack (the pipeline's identity) writes the secrets it manages.
+resource "azurerm_role_assignment" "vault_admin" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_key_vault_secret" "database_url" {
+  name = "DATABASE-URL"
+  # ssl=require: the database accepts encrypted connections only.
+  value        = "postgresql+asyncpg://app:${random_password.db.result}@${azurerm_postgresql_flexible_server.main.fqdn}:5432/app?ssl=require"
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.vault_admin]
+}
+
+resource "azurerm_key_vault_secret" "app" {
+  for_each     = toset(local.app_secret_names)
+  name         = replace(each.value, "_", "-")
+  value        = local.placeholder
+  key_vault_id = azurerm_key_vault.main.id
+  depends_on   = [azurerm_role_assignment.vault_admin]
+
+  lifecycle {
+    ignore_changes = [value] # the real value is set by a person and must never be reset
+  }
+}
+
+# The service's own identity reads secrets and pulls its image, nothing else.
+resource "azurerm_user_assigned_identity" "app" {
+  name                = "${local.name}-app"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+}
+
+resource "azurerm_role_assignment" "app_secrets" {
+  scope                = azurerm_key_vault.main.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}
+
+data "azurerm_container_registry" "main" {
+  name                = var.registry_name
+  resource_group_name = var.registry_resource_group
+}
+
+resource "azurerm_role_assignment" "app_pull" {
+  scope                = data.azurerm_container_registry.main.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.app.principal_id
+}

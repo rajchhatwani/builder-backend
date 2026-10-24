@@ -1,0 +1,27 @@
+variable "project" {
+  type    = string
+  default = "{{ slug }}"
+}
+
+variable "region" {
+  type    = string
+  default = "{{ region }}"
+}
+
+variable "github_repo" {
+  description = "owner/name of the repository whose workflows may deploy. Nobody else can assume the roles."
+  type        = string
+  default     = "{{ repo }}"
+}
+
+variable "environments" {
+  description = "One deploy role per GitHub environment, so production can require approvals."
+  type        = list(string)
+  default     = [{% for e in environments %}"{{ e }}"{% if not loop.last %}, {% endif %}{% endfor %}]
+}
+
+variable "create_oidc_provider" {
+  description = "Set false when this AWS account already has the GitHub OIDC provider."
+  type        = bool
+  default     = true
+}

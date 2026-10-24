@@ -1,0 +1,136 @@
+# Deployment of @@PROJECT@@ to Google Cloud (generated).
+#
+#   push to main            -> build once, deploy to @@FIRST_ENV@@
+#   Actions > Deploy > Run  -> choose an environment (and an image tag that is already built) to promote
+#
+# Signs in with Workload Identity Federation (GitHub's short-lived OIDC token): there is no service
+# account key anywhere. Each GitHub environment (@@ENV_LIST@@) maps to its own service account, so production
+# can require reviewers in Settings > Environments. One-time setup: docs/DEPLOYMENT.md.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Where to deploy
+        type: choice
+        options: [@@ENV_OPTIONS@@]
+        default: @@FIRST_ENV@@
+      image_tag:
+        description: Image tag to promote (empty builds the current commit)
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-${{ inputs.environment || '@@FIRST_ENV@@' }}
+  cancel-in-progress: false # never stop a deployment half way
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: ${{ inputs.environment || '@@FIRST_ENV@@' }}
+    permissions:
+      contents: read
+      id-token: write # the OIDC token, for Google Cloud and for signing the image
+    env:
+      TARGET: ${{ inputs.environment || '@@FIRST_ENV@@' }}
+      REGION: ${{ vars.GCP_REGION || '@@REGION@@' }}
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+      REGISTRY: ${{ vars.GCP_REGISTRY }}
+      IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+    steps:
+      - uses: @@pin:actions/checkout@@
+        with:
+          persist-credentials: false
+
+      - name: Sign in to Google Cloud (OIDC)
+        uses: @@pin:google-github-actions/auth@@
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - uses: @@pin:google-github-actions/setup-gcloud@@
+
+      - name: Let Docker push to Artifact Registry
+        run: gcloud auth configure-docker "${REGISTRY%%/*}" --quiet
+
+      - uses: @@pin:docker/setup-buildx-action@@
+
+      - name: Build and push the image (skipped when promoting an existing tag)
+        id: build
+        if: ${{ inputs.image_tag == '' }}
+        uses: @@pin:docker/build-push-action@@
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/@@SLUG@@:${{ env.IMAGE_TAG }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Make sure the image exists
+        run: gcloud artifacts docker images describe "${REGISTRY}/@@SLUG@@:${IMAGE_TAG}" --format='value(image_summary.digest)'
+
+      - name: Sign the image (keyless, recorded in the public transparency log)
+        if: ${{ inputs.image_tag == '' }}
+        uses: @@pin:sigstore/cosign-installer@@
+      - if: ${{ inputs.image_tag == '' }}
+        run: cosign sign --yes "${REGISTRY}/@@SLUG@@@${{ steps.build.outputs.digest }}"
+
+      - uses: @@pin:hashicorp/setup-terraform@@
+        with:
+          terraform_version: @@TERRAFORM_VERSION@@
+          terraform_wrapper: false
+
+      - name: Terraform init
+        working-directory: deploy/gcp
+        run: |
+          terraform init -input=false \
+            -backend-config="bucket=${TF_STATE_BUCKET}" \
+            -backend-config="prefix=@@SLUG@@/${TARGET}"
+
+      # Step 1: make sure the infrastructure exists and is current while the service keeps running the
+      # image it already has (the first deployment has none, so it starts from the new one).
+      - name: Terraform apply (infrastructure, service unchanged)
+        working-directory: deploy/gcp
+        run: |
+          IMAGE="${REGISTRY}/@@SLUG@@:${IMAGE_TAG}"
+          CURRENT="$(terraform output -raw deployed_image 2>/dev/null || true)"
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "project_id=${PROJECT_ID}" -var "image=${CURRENT:-$IMAGE}"
+
+      # Step 2: apply the database migrations with the NEW image before any traffic reaches it. Write
+      # migrations so the previous version keeps working against the new schema (add first, remove later).
+      - name: Run database migrations
+        working-directory: deploy/gcp
+        run: |
+          IMAGE="${REGISTRY}/@@SLUG@@:${IMAGE_TAG}"
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "project_id=${PROJECT_ID}" -var "image=${IMAGE}" -target=google_cloud_run_v2_job.migrate
+          if ! gcloud run jobs execute "$(terraform output -raw migrate_job)" --region "$REGION" --wait; then
+            echo "::error::The migration failed. Logs: Cloud Run job $(terraform output -raw migrate_job), Executions. The running service was not changed."
+            exit 1
+          fi
+
+      # Step 3: a new revision receives traffic only when its startup probe passes. If it never does the
+      # deployment fails here and the previous revision keeps serving.
+      - name: Terraform apply (deploy the new image)
+        working-directory: deploy/gcp
+        run: |
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "project_id=${PROJECT_ID}" -var "image=${REGISTRY}/@@SLUG@@:${IMAGE_TAG}"
+
+      - name: Smoke test
+        working-directory: deploy/gcp
+        run: |
+          URL="$(terraform output -raw url)"
+          curl --fail --silent --show-error --retry 10 --retry-delay 6 --retry-all-errors "${URL}/ready"
+          echo "Deployed ${IMAGE_TAG} to ${TARGET}: ${URL}"

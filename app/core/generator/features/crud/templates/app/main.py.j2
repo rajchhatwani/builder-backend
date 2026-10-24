@@ -22,9 +22,15 @@ from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 {% endif %}
 from app.config import get_settings
+{% if observability %}
+from app.core import telemetry
+{% endif %}
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
+{% if documents %}
+from app.documents.router import router as _documents_router
+{% endif %}
 {% if payments %}
 from app.payments.lock import ensure_payments_lock
 from app.payments.router import router as _payments_router
@@ -55,6 +61,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await prepare_bucket()  # development only: create the bucket when asked to
 {% endif %}
     yield
+{% if observability %}
+    telemetry.shutdown()  # flush what has not been exported yet
+{% endif %}
     await engine.dispose()
 
 
@@ -103,6 +112,9 @@ def create_app() -> FastAPI:
 {% endif %}
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
+{% if observability %}
+    telemetry.setup(app)  # traces, metrics and log correlation; configured by OTEL_* variables
+{% endif %}
     app.include_router(_health_router)
 {% if auth %}
     app.include_router(_auth_router)
@@ -112,6 +124,9 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if storage %}
     app.include_router(_storage_router)
+{% endif %}
+{% if documents %}
+    app.include_router(_documents_router)
 {% endif %}
 {% for e in entities %}
     app.include_router({{ e.table }}_router)

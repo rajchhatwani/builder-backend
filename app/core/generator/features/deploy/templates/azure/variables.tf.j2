@@ -1,0 +1,92 @@
+variable "project" {
+  description = "Name prefix of every resource."
+  type        = string
+  default     = "{{ slug }}"
+}
+
+variable "subscription_id" {
+  description = "Azure subscription id (passed by the pipeline from the AZURE_SUBSCRIPTION_ID variable)."
+  type        = string
+}
+
+variable "app_env" {
+  description = "APP_ENV of the service: production switches on the strict checks (https URLs, live keys)."
+  type        = string
+  default     = "production"
+}
+
+variable "environment" {
+  description = "dev, staging, prod ... (set by environments/<name>.tfvars)."
+  type        = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "image" {
+  description = "Full image reference with a tag, passed by the pipeline: <acr>.azurecr.io/<name>:<git-sha>."
+  type        = string
+
+  validation {
+    condition     = can(regex(":", var.image)) || can(regex("@sha256:", var.image))
+    error_message = "image must include a tag or a digest."
+  }
+}
+
+variable "registry_name" {
+  description = "Name of the Azure Container Registry created by bootstrap/."
+  type        = string
+}
+
+variable "registry_resource_group" {
+  description = "Resource group of that registry."
+  type        = string
+}
+
+variable "cpu" {
+  description = "Container CPU in millicores (500, 1000, 1500 or 2000)."
+  type        = number
+}
+
+variable "memory" {
+  description = "Container memory in MB."
+  type        = number
+}
+
+variable "min_instances" {
+  type = number
+}
+
+variable "max_instances" {
+  type = number
+}
+
+variable "db_class" {
+  type = string
+}
+
+variable "db_storage_gb" {
+  type = number
+}
+
+variable "db_high_availability" {
+  description = "A standby database in a second availability zone."
+  type        = bool
+}
+
+variable "deletion_protection" {
+  description = "Locks the resource group against deletion, keeps Key Vault purge protection on."
+  type        = bool
+}
+
+variable "vnet_cidr" {
+  type    = string
+  default = "10.30.0.0/16"
+}
+
+variable "app_env_vars" {
+  description = "Plain (non-secret) environment variables of the service, for example CORS_ORIGINS."
+  type        = map(string)
+  default     = {}
+}

@@ -1,0 +1,112 @@
+variable "project" {
+  description = "Name prefix of every resource."
+  type        = string
+  default     = "deploy-aws"
+}
+
+variable "app_env" {
+  description = "APP_ENV of the service: production switches on the strict checks (https URLs, live keys)."
+  type        = string
+  default     = "production"
+}
+
+variable "environment" {
+  description = "dev, staging, prod ... (set by environments/<name>.tfvars)."
+  type        = string
+}
+
+variable "region" {
+  type = string
+}
+
+variable "image" {
+  description = "Full image reference with a tag or digest, passed by the pipeline: <ecr-url>:<git-sha>."
+  type        = string
+
+  validation {
+    condition     = can(regex(":", var.image)) || can(regex("@sha256:", var.image))
+    error_message = "image must include a tag or a digest."
+  }
+}
+
+variable "cpu" {
+  description = "Task CPU in millicores (512, 1024, 2048 or 4096: Fargate units)."
+  type        = number
+}
+
+variable "memory" {
+  description = "Task memory in MB (must be a size Fargate offers for the CPU)."
+  type        = number
+}
+
+variable "min_instances" {
+  type = number
+}
+
+variable "max_instances" {
+  type = number
+}
+
+variable "db_class" {
+  type = string
+}
+
+variable "db_storage_gb" {
+  type = number
+}
+
+variable "db_high_availability" {
+  description = "A standby database in a second availability zone."
+  type        = bool
+}
+
+variable "deletion_protection" {
+  description = "Blocks deleting the database and the load balancer, and keeps a final snapshot."
+  type        = bool
+}
+
+variable "acm_certificate_arn" {
+  description = "ACM certificate for the load balancer's HTTPS listener. Required unless allow_http is true."
+  type        = string
+  default     = ""
+}
+
+variable "allow_http" {
+  description = "Serve plain HTTP without a certificate. For a throwaway dev environment only."
+  type        = bool
+  default     = false
+}
+
+variable "enable_waf" {
+  description = "AWS WAF in front of the load balancer (managed rules plus a per-address rate limit)."
+  type        = bool
+  default     = true
+}
+
+variable "waf_rate_limit" {
+  description = "Requests per five minutes from one address before it is blocked."
+  type        = number
+  default     = 2000
+}
+
+variable "single_nat_gateway" {
+  description = "One NAT gateway for all private subnets (cheaper) instead of one per zone."
+  type        = bool
+  default     = true
+}
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.20.0.0/16"
+}
+
+variable "log_retention_days" {
+  type    = number
+  default = 30
+}
+
+variable "app_env_vars" {
+  description = "Plain (non-secret) environment variables of the service, for example CORS_ORIGINS."
+  type        = map(string)
+  default     = {}
+}

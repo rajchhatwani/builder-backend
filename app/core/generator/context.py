@@ -12,6 +12,11 @@ from typing import Any
 from app.core import naming
 from app.core.enums import OnDelete, RelationKind, RowRule
 from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation
+from app.core.validation_authorization import (
+    authz_active,
+    policies_for_entity,
+    references_created_by,
+)
 
 _ON_DELETE_SQL = {
     OnDelete.cascade: "CASCADE",
@@ -104,10 +109,20 @@ class AccessCtx:
     stamp: bool = False  # record the user as created_by_id on create
     authenticate: bool = False  # a signed-in user is required even without roles
     tenant: bool = False  # only rows of the caller's tenant (and stamp it on create)
+    policy: bool = False  # decided by the abac / pbac policies (app/auth/authorize.py)
 
     @property
     def needs_user(self) -> bool:
         return bool(self.roles or self.owner or self.stamp or self.authenticate or self.tenant)
+
+    def policy_call(self, entity: str) -> str:
+        """The dependency for a policy-governed operation (entity and op are validated names)."""
+        args = [repr(entity), repr(self.op)]
+        if self.stamp:
+            args.append("stamp=True")
+        if self.tenant:
+            args.append("tenant=True")
+        return f"policy_dependency({', '.join(args)})"
 
     @property
     def call(self) -> str:
@@ -158,6 +173,7 @@ class EntityCtx:
     access: tuple[AccessCtx, ...] = ()  # operations that need a signed-in user or row scoping
     owned: bool = False  # rows record who created them (created_by_id)
     tenant_scoped: bool = False  # rows belong to a tenant (tenant_id)
+    policy: bool = False  # access is decided by abac / pbac policies, not role permissions
 
     @property
     def file_fields(self) -> tuple[FieldCtx, ...]:
@@ -718,7 +734,36 @@ def _filter_literal(field_type: str, value: str) -> str:
             return repr(value)
 
 
+def _attach_policy_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """abac / pbac: every operation of every entity needs a signed-in person and a policy decision.
+
+    Nothing is public (default deny). An entity records its creator only when a policy talks about
+    created_by_id, and a multi-tenant project confines every entity to the caller's tenant no
+    matter what the policies say: isolation must not depend on a policy being written.
+    """
+    tenant = bool(spec.auth is not None and spec.auth.multi_tenant)
+    result: list[EntityCtx] = []
+    for entity in entities:
+        owned = any(references_created_by(p) for p in policies_for_entity(spec, entity.name))
+        access = tuple(
+            AccessCtx(
+                op=op,
+                authenticate=True,
+                stamp=owned and op == "create",
+                tenant=tenant,
+                policy=True,
+            )
+            for op in sorted(entity.ops)
+        )
+        result.append(
+            replace(entity, access=access, owned=owned, tenant_scoped=tenant, policy=True)
+        )
+    return tuple(result)
+
+
 def _attach_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    if authz_active(spec) and spec.auth is not None and spec.auth.enabled:
+        return _attach_policy_access(spec, entities)
     auth = spec.auth
     if auth is None or not auth.enabled or not auth.permissions:
         return entities

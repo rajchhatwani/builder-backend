@@ -1,0 +1,63 @@
+"""Application entry point (generated)."""
+
+import importlib
+import pkgutil
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from app import custom_routers
+from app.config import get_settings
+from app.core import telemetry
+from app.core.errors import register_exception_handlers
+from app.core.logging import RequestIdMiddleware, configure_logging
+from app.db import engine
+from app.routers._health import router as _health_router
+from app.routers.comments import router as comments_router
+from app.routers.posts import router as posts_router
+from app.routers.tags import router as tags_router
+from app.routers.users import router as users_router
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    yield
+    telemetry.shutdown()  # flush what has not been exported yet
+    await engine.dispose()
+
+
+def include_custom_routers(app: FastAPI) -> None:
+    """Mount every module in app/custom_routers that defines a `router`."""
+    for module_info in sorted(pkgutil.iter_modules(custom_routers.__path__), key=lambda m: m.name):
+        module = importlib.import_module(f"{custom_routers.__name__}.{module_info.name}")
+        router = getattr(module, "router", None)
+        if router is not None:
+            app.include_router(router)
+
+
+def create_app() -> FastAPI:
+    settings = get_settings()
+    configure_logging(settings.log_level)
+
+    app = FastAPI(title='Blog', version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.add_middleware(RequestIdMiddleware)
+    register_exception_handlers(app)
+    telemetry.setup(app)  # traces, metrics and log correlation; configured by OTEL_* variables
+    app.include_router(_health_router)
+    app.include_router(comments_router)
+    app.include_router(posts_router)
+    app.include_router(tags_router)
+    app.include_router(users_router)
+    include_custom_routers(app)
+    return app
+
+
+app = create_app()

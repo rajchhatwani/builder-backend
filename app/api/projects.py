@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
+from app.api.security import guard
 from app.db import get_session
 from app.schemas.common import Page
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
+from app.services.access_service import Principal
 from app.services.project_service import ProjectService
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -14,17 +16,23 @@ router = APIRouter(prefix="/projects", tags=["projects"])
 
 @router.post("", response_model=ProjectRead, status_code=status.HTTP_201_CREATED)
 async def create_project(
-    body: ProjectCreate, session: AsyncSession = Depends(get_session)
+    body: ProjectCreate,
+    principal: Principal = Depends(guard),
+    session: AsyncSession = Depends(get_session),
 ) -> ProjectRead:
-    project = await ProjectService(session).create(body)
+    project = await ProjectService(session).create(body, principal.user)
     return ProjectRead.model_validate(project)
 
 
 @router.get("", response_model=Page[ProjectRead])
 async def list_projects(
-    page: Pagination = Depends(pagination), session: AsyncSession = Depends(get_session)
+    page: Pagination = Depends(pagination),
+    principal: Principal = Depends(guard),
+    session: AsyncSession = Depends(get_session),
 ) -> Page[ProjectRead]:
-    projects, total = await ProjectService(session).list(page.limit, page.offset)
+    projects, total = await ProjectService(session).list(
+        principal.user.id, page.limit, page.offset, principal.token_project_id
+    )
     return Page[ProjectRead](
         items=[ProjectRead.model_validate(p) for p in projects],
         total=total,

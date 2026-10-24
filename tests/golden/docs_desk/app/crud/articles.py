@@ -1,0 +1,15 @@
+"""Repository for Article (generated). Add custom queries by subclassing in your own module."""
+
+from app.crud import _base as _crud_base
+from app.models.articles import Article
+
+
+class ArticleRepository(_crud_base.Repository[Article]):
+    model = Article
+    soft_delete = False
+    filterable = ()
+    sortable = ()
+    searchable = ()
+    eager = ()
+    references = {}
+    many_to_many = {}

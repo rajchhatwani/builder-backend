@@ -1,0 +1,486 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Desk",
+    "slug": "docs-desk",
+    "description": "Help desk with roles and row rules",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Article",
+      "table_name": "articles",
+      "plural_path": "articles",
+      "options": {},
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "published"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {},
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://desk.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@desk.example.com",
+      "from_name": "Desk"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin",
+        "inherits_from": "staff"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      },
+      {
+        "name": "staff",
+        "label": "Staff"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Article",
+        "operation": "list",
+        "roles": [],
+        "row_rule": "custom_filter",
+        "custom_filter_field": "status",
+        "custom_filter_value": "published"
+      },
+      {
+        "entity": "Article",
+        "operation": "get",
+        "roles": [],
+        "row_rule": "custom_filter",
+        "custom_filter_field": "status",
+        "custom_filter_value": "published"
+      },
+      {
+        "entity": "Article",
+        "operation": "create",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Article",
+        "operation": "update",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Article",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "customer",
+          "staff"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "customer"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "customer"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "delete",
+        "roles": [
+          "admin",
+          "customer"
+        ],
+        "row_rule": "owner"
+      }
+    ]
+  },
+  "documents": {
+    "enabled": true,
+    "rate_limit": "60/minute",
+    "templates": [
+      {
+        "id": "invoice",
+        "title": "Invoice",
+        "kind": "invoice",
+        "entity": null,
+        "compute": "items",
+        "roles": [
+          "staff",
+          "admin"
+        ],
+        "template": {
+          "title": "Invoice {{number}}",
+          "page": {
+            "size": "A4",
+            "orientation": "portrait",
+            "margin_mm": 18
+          },
+          "footer": "{{seller.name}} - page {{page}} of {{pages}}",
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Invoice {{number}}"
+            },
+            {
+              "type": "kv",
+              "rows": [
+                {
+                  "label": "Issue date",
+                  "value": "{{issue_date | date:%d %B %Y}}"
+                },
+                {
+                  "label": "Due date",
+                  "value": "{{due_date | date:%d %B %Y}}"
+                },
+                {
+                  "label": "Reference",
+                  "value": "{{reference}}"
+                }
+              ]
+            },
+            {
+              "type": "kv",
+              "rows": [
+                {
+                  "label": "From",
+                  "value": "{{seller.name}}\n{{seller.address}}\n{{seller.tax_id}}"
+                },
+                {
+                  "label": "To",
+                  "value": "{{buyer.name}}\n{{buyer.address}}\n{{buyer.tax_id}}"
+                }
+              ]
+            },
+            {
+              "type": "rule"
+            },
+            {
+              "type": "table",
+              "source": "items",
+              "columns": [
+                {
+                  "header": "Description",
+                  "value": "{{item.description}}",
+                  "width": 5
+                },
+                {
+                  "header": "Qty",
+                  "value": "{{item.quantity | number}}",
+                  "align": "right",
+                  "width": 1
+                },
+                {
+                  "header": "Unit price",
+                  "value": "{{item.unit_price | money:@currency}}",
+                  "align": "right",
+                  "width": 2
+                },
+                {
+                  "header": "Tax %",
+                  "value": "{{item.tax_rate | default:0}}",
+                  "align": "right",
+                  "width": 1
+                },
+                {
+                  "header": "Amount",
+                  "value": "{{item.line_total | money:@currency}}",
+                  "align": "right",
+                  "width": 2
+                }
+              ]
+            },
+            {
+              "type": "totals",
+              "rows": [
+                {
+                  "label": "Subtotal",
+                  "value": "{{totals.subtotal | money:@currency}}"
+                },
+                {
+                  "label": "Tax",
+                  "value": "{{totals.tax_total | money:@currency}}"
+                },
+                {
+                  "label": "Total",
+                  "value": "{{totals.total | money:@currency}}"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "Payment terms: {{payment_terms | default:Due within 30 days}}."
+            },
+            {
+              "type": "paragraph",
+              "text": "{{notes}}"
+            }
+          ]
+        }
+      },
+      {
+        "id": "receipt",
+        "title": "Receipt",
+        "kind": "receipt",
+        "entity": null,
+        "compute": "items",
+        "roles": [
+          "staff",
+          "admin"
+        ],
+        "template": {
+          "title": "Receipt {{number}}",
+          "page": {
+            "size": "A4",
+            "orientation": "portrait",
+            "margin_mm": 14
+          },
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Receipt",
+              "level": 1
+            },
+            {
+              "type": "kv",
+              "rows": [
+                {
+                  "label": "Receipt no.",
+                  "value": "{{number}}"
+                },
+                {
+                  "label": "Paid on",
+                  "value": "{{paid_at | date:%d %B %Y %H:%M}}"
+                },
+                {
+                  "label": "Method",
+                  "value": "{{payment_method}}"
+                },
+                {
+                  "label": "Received from",
+                  "value": "{{buyer.name}}"
+                }
+              ]
+            },
+            {
+              "type": "table",
+              "source": "items",
+              "columns": [
+                {
+                  "header": "Description",
+                  "value": "{{item.description}}",
+                  "width": 5
+                },
+                {
+                  "header": "Qty",
+                  "value": "{{item.quantity | number}}",
+                  "align": "right",
+                  "width": 1
+                },
+                {
+                  "header": "Unit price",
+                  "value": "{{item.unit_price | money:@currency}}",
+                  "align": "right",
+                  "width": 2
+                },
+                {
+                  "header": "Tax %",
+                  "value": "{{item.tax_rate | default:0}}",
+                  "align": "right",
+                  "width": 1
+                },
+                {
+                  "header": "Amount",
+                  "value": "{{item.line_total | money:@currency}}",
+                  "align": "right",
+                  "width": 2
+                }
+              ]
+            },
+            {
+              "type": "totals",
+              "rows": [
+                {
+                  "label": "Subtotal",
+                  "value": "{{totals.subtotal | money:@currency}}"
+                },
+                {
+                  "label": "Tax",
+                  "value": "{{totals.tax_total | money:@currency}}"
+                },
+                {
+                  "label": "Total",
+                  "value": "{{totals.total | money:@currency}}"
+                }
+              ]
+            },
+            {
+              "type": "paragraph",
+              "text": "Paid in full. {{seller.name}}, {{seller.tax_id}}."
+            }
+          ]
+        }
+      },
+      {
+        "id": "certificate",
+        "title": "Certificate",
+        "kind": "certificate",
+        "entity": null,
+        "compute": null,
+        "roles": [
+          "admin"
+        ],
+        "template": {
+          "title": "Certificate for {{recipient}}",
+          "page": {
+            "size": "A4",
+            "orientation": "landscape",
+            "margin_mm": 24
+          },
+          "blocks": [
+            {
+              "type": "spacer",
+              "height_mm": 14
+            },
+            {
+              "type": "heading",
+              "text": "Certificate of completion",
+              "level": 1
+            },
+            {
+              "type": "paragraph",
+              "text": "This certifies that"
+            },
+            {
+              "type": "heading",
+              "text": "{{recipient}}",
+              "level": 2
+            },
+            {
+              "type": "paragraph",
+              "text": "has successfully completed {{course}} on {{completed_on | date:%d %B %Y}}."
+            },
+            {
+              "type": "spacer",
+              "height_mm": 12
+            },
+            {
+              "type": "signature",
+              "text": "{{issuer}}"
+            },
+            {
+              "type": "qr",
+              "value": "{{verify_url}}",
+              "size_mm": 24
+            }
+          ]
+        }
+      },
+      {
+        "id": "ticket_summary",
+        "title": "Ticket summary",
+        "kind": "custom",
+        "entity": "Ticket",
+        "compute": null,
+        "roles": [
+          "customer",
+          "staff"
+        ],
+        "template": {
+          "title": "Ticket {{row.subject}}",
+          "page": {
+            "size": "A4",
+            "orientation": "portrait",
+            "margin_mm": 18
+          },
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Ticket"
+            },
+            {
+              "type": "kv",
+              "rows": [
+                {
+                  "label": "Subject",
+                  "value": "{{row.subject}}"
+                },
+                {
+                  "label": "Opened",
+                  "value": "{{row.created_at | date:%d %B %Y}}"
+                },
+                {
+                  "label": "Printed",
+                  "value": "{{now | date:%d %B %Y}}"
+                },
+                {
+                  "label": "Handled by",
+                  "value": "{{extra.agent | default:unassigned}}"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

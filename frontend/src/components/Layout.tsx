@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react'
+import { useAuth } from './AuthProvider'
 
 function getInitialTheme(): 'light' | 'dark' {
   const stored = localStorage.getItem('theme')
@@ -26,6 +27,8 @@ interface LayoutProps {
 
 export function Layout({ sidebar, children }: LayoutProps) {
   const { theme, toggle } = useTheme()
+  const { state, signOut } = useAuth()
+  const user = state.status === 'user' ? state.user : null
 
   return (
     <>
@@ -56,6 +59,21 @@ export function Layout({ sidebar, children }: LayoutProps) {
             <span>Backend Builder</span>
           </div>
           <div className="col-6 justify-end hstack">
+            {user && (
+              <>
+                <a className="muted small-text" href="#/account" title="Account, password and API tokens">
+                  {user.email}
+                </a>
+                {user.platform_role !== 'customer' && (
+                  <a className="button outline small" href="#/admin">
+                    Admin
+                  </a>
+                )}
+                <button className="outline small" onClick={signOut}>
+                  Sign out
+                </button>
+              </>
+            )}
             <button className="outline small" onClick={toggle} aria-label="Toggle color theme">
               {theme === 'light' ? (
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

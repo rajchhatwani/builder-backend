@@ -209,7 +209,11 @@ async def test_ping_and_version(clamd: FakeClamd) -> None:
 # --- the upload size cap ------------------------------------------------------------------------
 
 
+CALLS: list[int] = []  # every time the wrapped app actually ran
+
+
 async def _echo_size(scope, receive, send) -> None:  # type: ignore[no-untyped-def]
+    CALLS.append(1)
     total = 0
     while True:
         message = await receive()
@@ -233,10 +237,12 @@ async def test_a_body_within_the_limit_passes() -> None:
 
 
 async def test_a_declared_oversize_body_is_refused_at_once() -> None:
+    CALLS.clear()
     async with _client(1000) as client:
         response = await client.post("/files", content=b"x" * (1000 + OVERHEAD_BYTES + 1))
     assert response.status_code == 413
     assert response.json()["code"] == "file_too_large"
+    assert CALLS == []  # the application never saw the request
 
 
 async def test_a_body_that_lies_about_its_size_is_cut_off() -> None:

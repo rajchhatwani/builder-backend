@@ -25,9 +25,11 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.community.postgres import PostgresContainer
 
+from app.core import platform_security as sec
 from app.db import get_session
 from app.main import app
 from app.models.base import Base
+from app.models.platform import PlatformUser
 from tests.api.test_spec import build_blog
 
 
@@ -91,8 +93,30 @@ async def builder(builder_engine: AsyncEngine) -> AsyncGenerator[AsyncClient, No
             yield session
 
     app.dependency_overrides[get_session] = override
+    # The builder requires sign-in: create an account directly and use its access token.
+    os.environ.setdefault("SECRET_KEY", "e2e-test-secret-key")
+    async with factory() as session:
+        user = PlatformUser(
+            email="e2e@example.com",
+            name="E2E",
+            password_hash=sec.hash_password("unused-password-1"),
+        )
+        session.add(user)
+        await session.commit()
+    token = sec.encode_jwt(
+        sec.access_claims(
+            user_id=str(user.id),
+            audience=sec.AUDIENCE_APP,
+            token_version=0,
+            ttl_seconds=3600,
+        )
+    )
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://builder") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://builder",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
         yield client
     app.dependency_overrides.pop(get_session, None)
 

@@ -1,0 +1,175 @@
+"""Telemetry behaves as documented (generated): spans, log correlation, redaction, low-cardinality
+metrics, and the kill switch. Uses in-memory exporters: no collector is needed."""
+
+import json
+from collections.abc import Iterator
+
+import pytest
+import structlog
+from fastapi import FastAPI, HTTPException
+from httpx import ASGITransport, AsyncClient
+from opentelemetry.sdk.metrics.export import InMemoryMetricReader
+from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
+
+from app.core import redact, telemetry
+from app.core.logging import configure_logging
+
+SECRET_QUERY = "tok_abcdef0123456789"
+SECRET_KEY = "sk_live_abcdefgh12345678"
+
+
+def build_app() -> FastAPI:
+    app = FastAPI()
+    log = structlog.get_logger()
+
+    @app.get("/items/{item_id}")
+    async def item(item_id: int) -> dict[str, int]:
+        log.info("item_read", request_id="req-1")
+        return {"id": item_id}
+
+    @app.get("/hook")
+    async def hook() -> dict[str, str]:
+        return {"ok": "yes"}
+
+    @app.get("/boom")
+    async def boom() -> None:
+        raise ValueError(f"upstream refused {SECRET_KEY}")
+
+    @app.get("/health")
+    async def health() -> dict[str, str]:
+        return {"status": "ok"}
+
+    @app.get("/denied")
+    async def denied() -> None:
+        log.info("authz_denied", entity="Thing", op="get", user_id="u-1")
+        raise HTTPException(status_code=403)
+
+    return app
+
+
+@pytest.fixture
+def probes(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, object]]:
+    monkeypatch.setenv("APP_OTEL_ENABLED", "true")
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "always_on")
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    configure_logging("INFO")
+    spans = InMemorySpanExporter()
+    reader = InMemoryMetricReader()
+    app = build_app()
+    handle = telemetry.setup(app, span_exporter=spans, metric_reader=reader)
+    yield {"app": app, "spans": spans, "reader": reader, "handle": handle}
+    handle.shutdown()
+    structlog.reset_defaults()
+
+
+async def call(app: FastAPI, path: str, **kwargs: object) -> int:
+    async with AsyncClient(
+        transport=ASGITransport(app=app, raise_app_exceptions=False), base_url="http://test"
+    ) as http:
+        return (await http.get(path, **kwargs)).status_code  # type: ignore[arg-type]
+
+
+def finished(probes: dict[str, object]) -> list:  # noqa: ANN001
+    return list(probes["spans"].get_finished_spans())  # type: ignore[attr-defined]
+
+
+async def test_a_request_becomes_a_server_span_named_after_the_route(probes) -> None:  # noqa: ANN001
+    assert await call(probes["app"], "/items/7") == 200  # type: ignore[arg-type]
+    names = {s.name for s in finished(probes)}
+    assert any("/items/{item_id}" in n for n in names), names
+    assert [s.kind.name for s in finished(probes)].count("SERVER") == 1
+    resource = finished(probes)[0].resource.attributes
+    assert resource["service.name"] == telemetry.DEFAULT_SERVICE_NAME
+
+
+async def test_probe_paths_produce_no_spans(probes) -> None:  # noqa: ANN001
+    assert await call(probes["app"], "/health") == 200  # type: ignore[arg-type]
+    assert [s for s in finished(probes) if "/health" in s.name] == []
+
+
+async def test_log_lines_carry_the_trace_id_of_their_request(probes, capsys) -> None:  # noqa: ANN001
+    await call(probes["app"], "/items/3")  # type: ignore[arg-type]
+    server = next(s for s in finished(probes) if s.kind.name == "SERVER")
+    lines = [json.loads(line) for line in capsys.readouterr().out.splitlines() if line.startswith("{")]
+    line = next(entry for entry in lines if entry.get("event") == "item_read")
+    assert line["trace_id"] == format(server.context.trace_id, "032x")
+    assert line["span_id"] == format(server.context.span_id, "016x")
+    # the span knows the request id too, so a ticket with a request id finds the trace
+    assert server.attributes["app.request_id"] == "req-1"
+
+
+async def test_secrets_never_reach_an_exported_span(probes) -> None:  # noqa: ANN001
+    await call(
+        probes["app"],  # type: ignore[arg-type]
+        f"/hook?token={SECRET_QUERY}&page=2",
+        headers={"Authorization": "Bearer abcdefghijklmnop.qrstuvwx.yz0123456"},
+    )
+    await call(probes["app"], "/boom")  # type: ignore[arg-type]
+    dump = json.dumps(
+        [
+            {"name": s.name, "attributes": dict(s.attributes), "events": [dict(e.attributes) for e in s.events]}
+            for s in finished(probes)
+        ],
+        default=str,
+    )
+    assert SECRET_QUERY not in dump
+    assert SECRET_KEY not in dump
+    assert "abcdefghijklmnop" not in dump
+    assert "page=" in dump  # parameter names stay, so the shape of the request is still visible
+
+
+def test_scrub_span_covers_names_attributes_events_and_status() -> None:
+    from opentelemetry.sdk.trace import Event, ReadableSpan
+    from opentelemetry.trace import Status, StatusCode
+
+    span = ReadableSpan(
+        name=f"GET /x?token={SECRET_QUERY}",
+        attributes={
+            "http.url": f"http://h/x?token={SECRET_QUERY}&a=1",
+            "http.request.header.authorization": "Bearer abcdefghijklmnop",
+            "db.password": "hunter2hunter2",
+            "ok": 5,
+            "tags": ("a", f"{SECRET_KEY}"),
+        },
+        events=(Event("exception", {"exception.message": f"bad key {SECRET_KEY}"}, 1),),
+        status=Status(StatusCode.ERROR, f"failed with {SECRET_KEY}"),
+    )
+    clean = telemetry.scrub_span(span)
+    text = json.dumps(
+        {"n": clean.name, "a": dict(clean.attributes), "e": [dict(e.attributes) for e in clean.events], "s": clean.status.description},
+        default=str,
+    )
+    for secret in (SECRET_QUERY, SECRET_KEY, "abcdefghijklmnop", "hunter2hunter2"):
+        assert secret not in text
+    assert clean.attributes["ok"] == 5
+
+
+def test_extra_redact_keys_from_the_spec_are_honoured() -> None:
+    for key in telemetry.EXTRA_REDACT_KEYS:
+        assert redact.is_secret_key(f"x_{key}_y")
+    assert not redact.is_secret_key("page_size")
+
+
+async def test_sampling_off_exports_nothing_but_requests_still_work(
+    probes, monkeypatch  # noqa: ANN001
+) -> None:
+    probes["handle"].shutdown()  # type: ignore[attr-defined]
+    monkeypatch.setenv("OTEL_TRACES_SAMPLER", "always_off")
+    spans = InMemorySpanExporter()
+    app = build_app()
+    handle = telemetry.setup(app, span_exporter=spans)
+    try:
+        assert await call(app, "/items/1") == 200
+        assert list(spans.get_finished_spans()) == []
+    finally:
+        handle.shutdown()
+
+
+async def test_the_kill_switch_turns_everything_off(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("APP_OTEL_ENABLED", "false")
+    spans = InMemorySpanExporter()
+    app = build_app()
+    handle = telemetry.setup(app, span_exporter=spans)
+    assert handle.active is False
+    assert await call(app, "/items/1") == 200
+    assert list(spans.get_finished_spans()) == []

@@ -40,6 +40,17 @@ NAMES = [
     "storage_s3",
     "storage_tenant",
     "storage_payments",
+    "authz_abac",
+    "authz_pbac",
+    "authz_tenant",
+    "authz_keycloak",
+    "authz_keycloak_tenant",
+    "obs_blog",
+    "obs_vault",
+    "deploy_aws",
+    "deploy_azure",
+    "deploy_gcp",
+    "docs_desk",
 ]
 
 

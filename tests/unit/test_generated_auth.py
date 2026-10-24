@@ -573,6 +573,7 @@ def test_access_decisions(desk: Path) -> None:
             "tenant_id": None,
             "caller_tenant_id": None,
             "caller": customer,
+            "policy": None,
         }
         assert build_access(admin, owner=True).scope == {"created_by_id": admin.id}
         # role_scoped: admins see everything, everyone else their own
@@ -813,6 +814,7 @@ def test_tenant_access_decisions(workspace: Path) -> None:
             "tenant_id": one,
             "caller_tenant_id": one,
             "caller": ann,
+            "policy": None,
         }
         """,
         AUTH_JWT_SECRET="j" * 40,

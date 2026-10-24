@@ -601,3 +601,348 @@ export interface StorageImpact {
   blockers: string[]
   warnings: string[]
 }
+
+
+// ── Accounts, API tokens, members, admin console ─────────────────────────────────────────
+
+export type PlatformRole = 'customer' | 'platform_support' | 'platform_admin'
+export type MemberRole = 'viewer' | 'editor' | 'owner'
+
+export interface UserAccount {
+  id: string
+  email: string
+  name: string
+  platform_role: PlatformRole
+  status: 'active' | 'suspended'
+  must_change_password: boolean
+  created_at: string
+  last_login_at: string | null
+}
+
+export interface SessionResponse {
+  access_token: string
+  token_type: string
+  expires_in: number
+  user: UserAccount
+}
+
+export interface ApiTokenInfo {
+  id: string
+  name: string
+  public_id: string
+  scopes: string[]
+  project_id: string | null
+  created_at: string
+  expires_at: string
+  last_used_at: string | null
+  revoked_at: string | null
+}
+
+export interface ApiTokenCreated extends ApiTokenInfo {
+  token: string
+}
+
+export interface Member {
+  user_id: string
+  email: string
+  name: string
+  role: MemberRole
+  created_at: string
+}
+
+export interface AdminUser extends UserAccount {
+  failed_logins: number
+  locked_until: string | null
+  project_count: number
+}
+
+export interface AdminProject {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+  owner_emails: string[]
+  entity_count: number
+}
+
+export interface AuditEntry {
+  id: number
+  at: string
+  actor_id: string | null
+  actor_email: string | null
+  via: string
+  action: string
+  target_type: string | null
+  target_id: string | null
+  project_id: string | null
+  result: 'ok' | 'denied' | 'error'
+  client_ip: string | null
+  detail: Record<string, unknown> | null
+}
+
+export interface AdminStats {
+  users: number
+  active_users: number
+  suspended_users: number
+  admins: number
+  projects: number
+  api_tokens: number
+  failed_logins_24h: number
+}
+
+export interface PlatformSettings {
+  environment: string
+  signup_mode: string
+  access_token_minutes: number
+  refresh_token_days: number
+  admin_refresh_token_hours: number
+  login_max_failures: number
+  lockout_minutes: number
+  trust_proxy_headers: boolean
+  docs_enabled: boolean
+  cors_origins: string[]
+}
+
+// ── Documents (PDF) ─────────────────────────────────────────────────────────
+
+export interface DocumentTemplate {
+  id: string
+  title: string
+  kind: string
+  entity: string | null
+  compute: string | null
+  roles: string[]
+  template: {
+    title?: string
+    page?: { size?: string; orientation?: string; margin_mm?: number }
+    header?: string
+    footer?: string
+    blocks: Record<string, unknown>[]
+  }
+}
+
+export interface DocumentsSettings {
+  project_id: string
+  enabled: boolean
+  rate_limit: string
+  templates: DocumentTemplate[]
+  version: number
+  updated_at: string | null
+}
+
+export type DocumentsWrite = Omit<DocumentsSettings, 'project_id' | 'version' | 'updated_at'> & { expected_version?: number }
+
+export interface LibraryTemplate {
+  id: string
+  title: string
+  industries: string[]
+  why: string
+  compute: string | null
+  template: DocumentTemplate['template']
+  sample: Record<string, unknown>
+}
+
+// ── Deployment (CI/CD and Terraform) ────────────────────────────────────────
+
+export interface DeployEnvironment {
+  name: string
+  profile: string
+  min_instances: number | null
+  max_instances: number | null
+  cpu: number | null
+  memory: number | null
+  db_storage_gb: number | null
+  db_high_availability: boolean | null
+  deletion_protection: boolean | null
+}
+
+export interface DeploymentSettings {
+  project_id: string
+  enabled: boolean
+  cloud: string
+  region: string
+  github_repo: string
+  environments: DeployEnvironment[]
+  version: number
+  updated_at: string | null
+}
+
+export type DeploymentWrite = Omit<DeploymentSettings, 'project_id' | 'version' | 'updated_at'> & {
+  expected_version?: number
+}
+
+export interface DeploymentPlan {
+  cloud: string
+  region: string
+  environments: {
+    name: string
+    profile: string
+    cpu: number
+    memory: number
+    min_instances: number
+    max_instances: number
+    db_class: string
+    db_storage_gb: number
+    db_high_availability: boolean
+    deletion_protection: boolean
+    tfvars: string
+  }[]
+  valid_sizes: [number, number][]
+  notes: string[]
+}
+
+// ── Observability (OpenTelemetry) ───────────────────────────────────────────
+
+export interface ObservabilitySettings {
+  project_id: string
+  enabled: boolean
+  service_name: string | null
+  sample_ratio: number
+  metrics: boolean
+  db_spans: boolean
+  exclude_paths: string[]
+  extra_redact_keys: string[]
+  local_stack: boolean
+  expected_rps: number | null
+  version: number
+  updated_at: string | null
+  recommended_sample_ratio: number
+  default_service_name: string
+  redacted_keys: string[]
+}
+
+export type ObservabilityWrite = Omit<
+  ObservabilitySettings,
+  'project_id' | 'version' | 'updated_at' | 'recommended_sample_ratio' | 'default_service_name' | 'redacted_keys'
+> & { expected_version?: number }
+
+// ── Authorization (rbac / abac / pbac) ──────────────────────────────────────
+
+export type AuthorizationModel = 'rbac' | 'abac' | 'pbac'
+
+/** One side of a comparison. Exactly one key is set. */
+export type Operand =
+  | { subject: string }
+  | { resource: string }
+  | { env: string }
+  | { literal: unknown }
+
+export interface PolicyLeaf {
+  left: Operand
+  op: string
+  right?: Operand
+}
+
+export interface PolicyGroup {
+  all?: PolicyCondition[]
+  any?: PolicyCondition[]
+}
+
+export type PolicyCondition = PolicyGroup | PolicyLeaf
+
+export interface Policy {
+  id: string
+  description: string
+  effect: 'allow' | 'deny'
+  actions: string[]
+  when: PolicyCondition | null
+}
+
+export interface AuthorizationSettings {
+  project_id: string
+  model: AuthorizationModel
+  policies: Policy[]
+  attachments: Record<string, string[]>
+  version: number
+  updated_at: string | null
+}
+
+export interface AuthorizationWrite {
+  model: AuthorizationModel
+  policies: Policy[]
+  attachments: Record<string, string[]>
+  expected_version?: number
+}
+
+export interface SimulateRequest {
+  entity: string
+  op: string
+  subject: Record<string, unknown>
+  resource: Record<string, unknown> | null
+  env: Record<string, unknown>
+}
+
+export interface SimulateTraceLeaf {
+  text: string
+  result: boolean
+}
+
+export interface SimulateTrace {
+  policy: string
+  effect: 'allow' | 'deny'
+  condition: string
+  condition_met: boolean
+  leaves: SimulateTraceLeaf[]
+}
+
+export interface SimulateResult {
+  allowed: boolean
+  reason: string
+  allow_matched: string[]
+  deny_matched: string[]
+  trace: SimulateTrace[]
+}
+
+export interface CoverageItem {
+  policy: string
+  who: string
+  condition: string
+  unconditional: boolean
+}
+
+export interface CoverageRow {
+  entity: string
+  op: string
+  state: 'closed' | 'conditional' | 'open'
+  allow: CoverageItem[]
+  deny: CoverageItem[]
+}
+
+export interface CoverageResult {
+  model: AuthorizationModel
+  rows: CoverageRow[]
+}
+
+export interface RecommendAnswers {
+  roles: number
+  ownership_rules: boolean
+  tenant_rules: boolean
+  time_or_network_rules: boolean
+  per_record_rules: boolean
+  deny_rules: boolean
+  audit_needs: boolean
+  policy_editors: 'developers' | 'admins'
+  public_routes: boolean
+}
+
+export interface Recommendation {
+  model: AuthorizationModel
+  scores: Record<string, number>
+  reasons: string[]
+  cautions: string[]
+  alternatives: string[]
+}
+
+/** The slice of the project spec the policy editor needs. */
+export interface SpecForPolicies {
+  entities: {
+    name: string
+    options: { operations?: string[] }
+    fields: { name: string; type: string; enum_values?: string[] | null }[]
+  }[]
+  auth: {
+    multi_tenant: boolean
+    roles: { name: string; label: string }[]
+    registration?: { custom_fields?: { name: string; type: string }[] }
+  } | null
+}
