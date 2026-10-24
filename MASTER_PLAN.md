@@ -350,7 +350,7 @@ Things that look wrong but are fine and things that look fine but are wrong - ch
 | 2 | RBAC / ABAC / PBAC + recommender | [x] | 2026-10-24. Engine, generator, builder persistence (`project_authorizations`, migration `f6b2d84a1c35`), API (get/put/issues/simulate/coverage/recommend), recommender, dashboard "Authorization" section (verified in the browser), e2e on real Postgres for abac, pbac and pbac + multi-tenant + soft delete + many-to-many; generated-code goldens also for Keycloak (shared and tenant). Unit + API 1328 tests green. Limitations L15-L20 below. |
 | 3 | OpenTelemetry observability | [x] | 2026-10-24. Spec block + validation, persistence (`project_observability`, migration `a8d4f1c7b362`), API, generator feature (telemetry module, redacting exporter, trace-correlated logs, counters, tests, docs, compose overlay with collector/Jaeger/Prometheus), dashboard Observability section (verified in the browser). Verified for real: generated telemetry tests in Docker/Postgres (`obs_blog`, `obs_vault`); the generated collector config validates in the pinned collector image; real OTLP from a generated service through a real collector arrives with route templates and no secrets (`tests/e2e/test_observability_stack.py`). Not done: builder dogfooding, OTLP log export (L23-L29). |
 | 4 | CI/CD + AWS/Azure/GCP | [x] | 2026-10-24. Spec block + validation + sizing profiles, persistence (`project_deployments`, migration `b9e5a2d8c473`), API (get/put/issues/plan), generator feature (CI, per-cloud deploy workflow, dependabot, Terraform stack + bootstrap for aws/azure/gcp, tfvars from sizing, DEPLOYMENT.md), dashboard Deploy section (verified in the browser). Verified for real in Docker: `terraform fmt`/`init`/`validate` of all six roots against the real providers (aws 6.70, azurerm 5.11, google 8.8), `actionlint` on the three deploy workflows, no-secret and SHA-pin scans (`tests/e2e/test_deploy_bundles.py`). **Not done / unverified:** `terraform apply` in a real account (L30), platform-side deployment tracking (L37). |
-| 5 | PDF documents | [ ] | |
+| 5 | PDF documents | [x] | 2026-10-24 (sessions 2-3). Code complete: `app/core/doc_engine.py` (641 lines), `doc_library.py` (10 built-in templates), generator feature `features/documents/`, builder API/service/model/migration (`c1f6b3e9d584`), `DocumentsPanel.tsx` wired in the sidebar. Tests: 53 unit (engine) + 18 API + 58 new service coverage tests + generator golden `docs_desk` + e2e Docker stack all green. Session 3 fixes: 3 failing tests in `test_service_coverage.py` fixed (relation schema corrected to use `from_entity_id`/`to_entity_id` and `one_to_many` instead of `many_to_one`, project role schema corrected to use lowercase name + label without description). Full test suite: 1573 passed, 2 skipped. E2e verified: `tests/e2e/test_documents_stack.py` PASSED. |
 | 6 | MCP server | [ ] | |
 | 7 | Dashboard IA | [ ] | |
 | 8 | Documentation | [ ] | |
@@ -438,6 +438,23 @@ as time allows; anything not started is described in its section so the next run
 - Nothing is committed. The working tree also contains earlier uncommitted storage work.
 - Docker: the dev stack (postgres volume with 8 demo projects adopted by test admin `admin@example.com`) was started by me and may still be running (`docker compose stop` to stop). **Change/delete that test admin.**
 
+## 9. CHECKPOINT (written 2026-10-24, session 2 – stability pass)
+
+**Resume here.** WP5 code is complete (marked [~]); the only remaining step is running the e2e Docker stack test. Next full work package to start: **WP5 e2e verification → then WP6 (MCP server)**.
+
+### Fixes applied this session
+- `tests/golden/docs_desk/app/documents/engine.py` regenerated (stale: missing `MAX_AMOUNT`, tighter error text, tax-rate format fix, `doc.build` try/except). Test was FAILED → now green.
+- `app/errors.py` missing trailing newline (W292) fixed by `ruff --fix`.
+
+### Verified state after session 2
+- `uv run pytest tests/unit/test_generator.py`: **182 passed** (all golden fixtures including docs_desk).
+- `uv run pytest tests/unit tests/api` (non-Docker): **1132 unit + 359 API = 1491 passed**, 2 skipped.
+- `uv run pytest tests/unit/test_doc_engine.py`: 53 passed. `tests/api/test_documents.py`: 18 passed.
+- `uv run mypy app`: **Success: no issues in 148 source files**.
+- `ruff check app/ --select E,W,F --ignore E501`: **0 errors**.
+- Docker e2e tests: not re-run this session (Docker daemon not available in test environment).
+- Nothing is committed.
+
 ### WP1 (done): see section 7.
 
 ### WP2 done so far
@@ -456,4 +473,39 @@ as time allows; anything not started is described in its section so the next run
 - API tests: `client` fixture = signed-in customer; `client_for("x@y.z")`, `anon_client`, `make_user`; admin audience via `client_for(..., audience=sec.AUDIENCE_ADMIN)`.
 - Goldens: `UPDATE_GOLDEN=1 uv run pytest tests/unit/test_generator.py` then review `git diff tests/golden`.
 - Frontend check without Node: see memory note (docker node:22-alpine, `npx tsc -b && npx vite build`, delete `dist`). `#root` is an Oat sidebar grid: full-page screens need `grid-column: 1 / -1`; admin shell must keep nav/aside/main as direct children of `#root`.
+
+## 10. CHECKPOINT (written 2026-10-24, session 3 – WP5 completion & stabilization)
+
+**Resume here.** WP5 is now fully complete and verified [x]. System is stable through WP5. Next work package: **WP6 (MCP server)**.
+
+### Fixes applied this session
+- Fixed 3 failing tests in `tests/api/test_service_coverage.py`:
+  1. `test_spec_assemble_includes_all_entities_and_relations`: Corrected relation payload to use `from_entity_id`/`to_entity_id` (not `from_entity`/`to_entity`), added required `to_name` field, and changed relation kind from invalid `many_to_one` to valid `one_to_many` (User→Posts).
+  2. `test_project_role_lifecycle`: Removed unnecessary auth creation, used lowercase role name (`manager`) with required `label` field, removed non-existent `description` field, and fixed route paths to use `/roles/{role_id}` instead of `/projects/{pid}/roles/{role_id}` for GET/PATCH/DELETE operations.
+  3. `test_project_role_duplicate_name_conflict`: Removed unnecessary auth creation and used proper lowercase role name with label.
+
+### Verified state after session 3
+- `uv run pytest tests/api/test_service_coverage.py -v`: **58 passed, 1 warning** (all service coverage tests green).
+- `uv run pytest tests/unit tests/api -q`: **1573 passed, 2 skipped, 58 warnings** (full unit + API test suite green).
+- `uv run pytest tests/e2e/test_documents_stack.py -v`: **1 passed, 1 warning** (WP5 e2e Docker stack verified).
+- `uv run ruff check app/ --select E,W,F --ignore E501`: **All checks passed!**
+- `uv run mypy app --ignore-missing-imports`: **Success: no issues found in 148 source files**.
+- Nothing is committed.
+
+### Discovery: API Schema Corrections
+During test fixes, confirmed the actual API schemas (documenting for future reference):
+- **RelationCreate** requires: `kind` (one_to_many|many_to_many|one_to_one, NOT many_to_one), `from_entity_id` (UUID), `to_entity_id` (UUID), `from_name` (str), `to_name` (str).
+- **ProjectRoleCreate/Update** requires: `name` (lowercase snake_case starting with letter), `label` (display string). No `description` field exists.
+- **Project roles** do NOT require auth to be configured first (can be created independently).
+- Route paths: `/roles/{role_id}` for GET/PATCH/DELETE (not `/projects/{id}/roles/{role_id}`), but `/projects/{id}/roles` for POST/list.
+
+### Status Summary
+All work packages WP0-WP5 are complete and stable:
+- WP1: Platform accounts, IAM, admin console [x]
+- WP2: Authorization models (RBAC, ABAC, PBAC) [x]
+- WP3: OpenTelemetry observability [x]
+- WP4: CI/CD + AWS/Azure/GCP [x]
+- WP5: PDF documents [x] ← just verified
+
+**System is stable and ready for WP6.**
 

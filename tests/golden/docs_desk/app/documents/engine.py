@@ -65,6 +65,7 @@ MAX_IMAGE_BYTES = 200_000
 MAX_IMAGE_PIXELS = 4000
 MAX_PAGES = 50
 MAX_DATA_DEPTH = 12
+MAX_AMOUNT = Decimal(10) ** 15
 
 BLOCK_TYPES = (
     "heading",
@@ -130,8 +131,8 @@ def _decimal(value: Any) -> Decimal:
         )
     except (InvalidOperation, ValueError) as exc:
         raise DocumentError(f"{value!r} is not a number") from exc
-    if not number.is_finite():
-        raise DocumentError(f"{value!r} is not a number")
+    if not number.is_finite() or abs(number) > MAX_AMOUNT:
+        raise DocumentError(f"{value!r} is not an acceptable number")
     return number
 
 
@@ -252,7 +253,7 @@ def compute_totals(data: Mapping[str, Any], items_path: str = "items") -> dict[s
         tax = (net_by_rate[rate] * rate / 100).quantize(quantum, rounding=ROUND_HALF_UP)
         tax_total += tax
         breakdown.append(
-            {"rate": str(rate.normalize()), "net": str(net_by_rate[rate]), "tax": str(tax)}
+            {"rate": format(rate.normalize(), "f"), "net": str(net_by_rate[rate]), "tax": str(tax)}
         )
     result[items_path] = lines
     result["totals"] = {
@@ -629,5 +630,12 @@ def _build(template: Mapping[str, Any], data: Mapping[str, Any]) -> bytes:
         creator="",
         invariant=1,  # fixed dates and ids: the same input always gives the same bytes
     )
-    doc.build(flow, canvasmaker=NumberedCanvas)
+    try:
+        doc.build(flow, canvasmaker=NumberedCanvas)
+    except DocumentError:
+        raise
+    except Exception as exc:  # ReportLab raises many types for a layout it cannot make
+        raise DocumentError(
+            f"the document could not be laid out ({type(exc).__name__}): an item may be too large for the page"
+        ) from exc
     return buffer.getvalue()

@@ -33,6 +33,7 @@ dev = [
     "pypdf>=6.21.2",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "python-multipart>=0.0.22",
     "redis>=8.1.0",
     "reportlab>=5.1.0",
