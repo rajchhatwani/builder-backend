@@ -6,10 +6,20 @@ import { Modal } from '../components/Modal'
 import { PasswordForm } from '../components/PasswordForm'
 import { useUi } from '../components/Ui'
 
-const SCOPES: { id: string; label: string; help: string }[] = [
-  { id: 'read', label: 'Read', help: 'See projects, models and settings' },
-  { id: 'write', label: 'Write', help: 'Change models and settings (includes read)' },
-  { id: 'generate', label: 'Generate', help: 'Download generated code: the zip leaves the platform' },
+interface ScopeDef {
+  id: string
+  label: string
+  help: string
+  group: 'api' | 'mcp'
+}
+
+const SCOPES: ScopeDef[] = [
+  { id: 'read', label: 'Read', help: 'See projects, models and settings', group: 'api' },
+  { id: 'write', label: 'Write', help: 'Change models and settings (includes read)', group: 'api' },
+  { id: 'generate', label: 'Generate', help: 'Download generated code: the zip leaves the platform', group: 'api' },
+  { id: 'mcp:read', label: 'MCP read', help: 'Let an AI tool read the project through MCP', group: 'mcp' },
+  { id: 'mcp:write', label: 'MCP write', help: 'Let an AI tool change the model through MCP (editor+ role required)', group: 'mcp' },
+  { id: 'mcp:generate', label: 'MCP generate', help: 'Let an AI tool request a code download through MCP', group: 'mcp' },
 ]
 
 function when(iso: string | null): string {
@@ -28,6 +38,7 @@ function NewTokenDialog({
   onCreated: (token: ApiTokenCreated) => void
 }) {
   const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
   const [scopes, setScopes] = useState<string[]>(['read'])
   const [days, setDays] = useState(90)
   const [projectId, setProjectId] = useState('')
@@ -41,11 +52,13 @@ function NewTokenDialog({
     try {
       const created = await api.createApiToken({
         name,
+        description: description.trim() || null,
         scopes,
         expires_in_days: days,
         project_id: projectId || null,
       })
       setName('')
+      setDescription('')
       setScopes(['read'])
       onCreated(created)
     } catch (err) {
@@ -74,11 +87,35 @@ function NewTokenDialog({
           )}
           <label>
             Name
-            <input required value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" />
+            <input required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} placeholder="CI pipeline" />
+          </label>
+          <label>
+            Description <span className="muted small-text">(optional, 255 characters)</span>
+            <input
+              maxLength={255}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="What is this token for?"
+            />
           </label>
           <fieldset>
-            <legend>Permissions</legend>
-            {SCOPES.map((s) => (
+            <legend>API scopes</legend>
+            {SCOPES.filter((s) => s.group === 'api').map((s) => (
+              <label key={s.id} className="check-row">
+                <input type="checkbox" checked={scopes.includes(s.id)} onChange={() => toggle(s.id)} />
+                <span>
+                  <strong>{s.label}</strong> <span className="muted small-text">{s.help}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          <fieldset>
+            <legend>MCP scopes (for AI tools)</legend>
+            <p className="muted small-text">
+              Only enable what the client actually needs. MCP access also requires the project
+              owner to enable MCP for your member in the project's Integrations page.
+            </p>
+            {SCOPES.filter((s) => s.group === 'mcp').map((s) => (
               <label key={s.id} className="check-row">
                 <input type="checkbox" checked={scopes.includes(s.id)} onChange={() => toggle(s.id)} />
                 <span>
@@ -217,25 +254,43 @@ export function AccountPage() {
                 <th>Can</th>
                 <th>For</th>
                 <th>Last used</th>
+                <th>Last MCP use</th>
                 <th>Expires</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {active.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.name}</td>
-                  <td>{t.scopes.join(', ')}</td>
-                  <td>{projectName(t.project_id)}</td>
-                  <td>{when(t.last_used_at)}</td>
-                  <td>{when(t.expires_at)}</td>
-                  <td className="row-actions">
-                    <button className="ghost small" data-variant="danger" onClick={() => revoke(t)}>
-                      Revoke
-                    </button>
-                  </td>
-                </tr>
-              ))}
+              {active.map((t) => {
+                const hasMcpScope = t.scopes.some((s) => s.startsWith('mcp:'))
+                return (
+                  <tr key={t.id}>
+                    <td>
+                      {t.name}
+                      {t.description && <div className="muted small-text">{t.description}</div>}
+                    </td>
+                    <td>
+                      <code className="small-text">{t.scopes.join(', ')}</code>
+                      {hasMcpScope && (
+                        <>
+                          {' '}
+                          <span className="badge status-ok" title="This token can be used by MCP clients">
+                            MCP
+                          </span>
+                        </>
+                      )}
+                    </td>
+                    <td>{projectName(t.project_id)}</td>
+                    <td>{when(t.last_used_at)}</td>
+                    <td>{when(t.last_mcp_use_at)}</td>
+                    <td>{when(t.expires_at)}</td>
+                    <td className="row-actions">
+                      <button className="ghost small" data-variant="danger" onClick={() => revoke(t)}>
+                        Revoke
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}

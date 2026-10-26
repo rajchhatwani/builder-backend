@@ -13,7 +13,16 @@ from app.config import Settings
 from app.exceptions import AppError
 from app.models.entity import Entity
 from app.models.enums import AccountStatus, AuditResult, MemberRole, PlatformRole
-from app.models.platform import ApiToken, AuditLog, PlatformUser, ProjectMember
+from app.models.platform import (
+    ApiToken,
+    AuditLog,
+    Organization,
+    OrganizationMember,
+    Plan,
+    PlatformUser,
+    ProjectMember,
+    Subscription,
+)
 from app.models.project import Project
 from app.schemas.account import AdminStats
 from app.services import audit_service
@@ -280,6 +289,200 @@ class AdminService:
             ).all():
                 counts[pid] = int(n)
         return [(p, owners[p.id], counts[p.id]) for p in projects], total
+
+    # -- organizations (operator view) --------------------------------------------------
+
+    async def list_organizations(
+        self, *, limit: int, offset: int, query: str | None
+    ) -> tuple[list[tuple[Organization, int, int, Subscription]], int]:
+        conditions = [Organization.deleted_at.is_(None)]
+        if query:
+            like = f"%{query.strip().lower()[:100]}%"
+            conditions.append(
+                or_(func.lower(Organization.name).like(like), Organization.slug.like(like))
+            )
+        total = (
+            await self.db.execute(
+                select(func.count()).select_from(Organization).where(*conditions)
+            )
+        ).scalar_one()
+        orgs = (
+            (
+                await self.db.execute(
+                    select(Organization)
+                    .where(*conditions)
+                    .order_by(Organization.created_at.desc())
+                    .limit(limit)
+                    .offset(offset)
+                )
+            )
+            .scalars()
+            .all()
+        )
+        ids = [o.id for o in orgs]
+        members: dict[uuid.UUID, int] = dict.fromkeys(ids, 0)
+        projects: dict[uuid.UUID, int] = dict.fromkeys(ids, 0)
+        subs: dict[uuid.UUID, Subscription] = {}
+        if ids:
+            for oid, n in (
+                await self.db.execute(
+                    select(OrganizationMember.organization_id, func.count())
+                    .where(OrganizationMember.organization_id.in_(ids))
+                    .group_by(OrganizationMember.organization_id)
+                )
+            ).all():
+                members[oid] = int(n)
+            for oid, n in (
+                await self.db.execute(
+                    select(Project.organization_id, func.count())
+                    .where(Project.organization_id.in_(ids))
+                    .group_by(Project.organization_id)
+                )
+            ).all():
+                projects[oid] = int(n)
+            for sub in (
+                (
+                    await self.db.execute(
+                        select(Subscription).where(Subscription.organization_id.in_(ids))
+                    )
+                )
+                .scalars()
+                .all()
+            ):
+                subs[sub.organization_id] = sub
+        return [
+            (o, members[o.id], projects[o.id], subs.get(o.id))  # type: ignore[misc]
+            for o in orgs
+        ], total
+
+    async def get_organization(
+        self, org_id: uuid.UUID
+    ) -> tuple[Organization, int, int, Subscription]:
+        org = await self.db.get(Organization, org_id)
+        if org is None:
+            raise AppError(code="not_found", message="organization not found", status_code=404)
+        member_count = int(
+            (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(OrganizationMember)
+                    .where(OrganizationMember.organization_id == org_id)
+                )
+            ).scalar_one()
+        )
+        project_count = int(
+            (
+                await self.db.execute(
+                    select(func.count())
+                    .select_from(Project)
+                    .where(Project.organization_id == org_id)
+                )
+            ).scalar_one()
+        )
+        sub = await self.db.get(Subscription, org_id)
+        if sub is None:
+            raise AppError(
+                code="not_found", message="organization has no subscription", status_code=404
+            )
+        return org, member_count, project_count, sub
+
+    async def set_org_overrides(
+        self,
+        actor: Principal,
+        org_id: uuid.UUID,
+        *,
+        seat_override: int | None,
+        project_override: int | None,
+        reason: str,
+        info: RequestInfo,
+    ) -> Subscription:
+        sub = await self.db.get(Subscription, org_id)
+        if sub is None:
+            raise AppError(code="not_found", message="subscription not found", status_code=404)
+        sub.seat_override = seat_override
+        sub.project_override = project_override
+        await audit_service.record(
+            self.db,
+            action="admin.org_override",
+            actor_id=actor.user.id,
+            actor_email=actor.user.email,
+            organization_id=org_id,
+            target_type="organization",
+            target_id=org_id,
+            client_ip=info.client_ip,
+            request_id=info.request_id,
+            detail={
+                "seat_override": seat_override,
+                "project_override": project_override,
+                "reason": reason[:200],
+            },
+        )
+        await self.db.commit()
+        return sub
+
+    async def set_org_plan(
+        self,
+        actor: Principal,
+        org_id: uuid.UUID,
+        *,
+        plan_id: str,
+        info: RequestInfo,
+    ) -> Subscription:
+        sub = await self.db.get(Subscription, org_id)
+        if sub is None:
+            raise AppError(code="not_found", message="subscription not found", status_code=404)
+        plan = await self.db.get(Plan, plan_id)
+        if plan is None:
+            raise AppError(code="not_found", message="plan not found", status_code=404)
+        old = sub.plan_id
+        sub.plan_id = plan_id
+        await audit_service.record(
+            self.db,
+            action="admin.org_plan_change",
+            actor_id=actor.user.id,
+            actor_email=actor.user.email,
+            organization_id=org_id,
+            target_type="organization",
+            target_id=org_id,
+            client_ip=info.client_ip,
+            request_id=info.request_id,
+            detail={"from_plan": old, "to_plan": plan_id},
+        )
+        await self.db.commit()
+        return sub
+
+    # -- plans (operator) ----------------------------------------------------------------
+
+    async def list_plans(self) -> list[Plan]:
+        rows = await self.db.execute(select(Plan).order_by(Plan.monthly_price_usd))
+        return list(rows.scalars())
+
+    async def upsert_plan(
+        self, actor: Principal, plan_id: str, data: dict[str, object], info: RequestInfo
+    ) -> Plan:
+        plan = await self.db.get(Plan, plan_id)
+        action = "admin.plan_update"
+        if plan is None:
+            plan = Plan(id=plan_id, **{k: v for k, v in data.items() if hasattr(Plan, k)})
+            self.db.add(plan)
+            action = "admin.plan_create"
+        else:
+            for key, value in data.items():
+                if hasattr(plan, key):
+                    setattr(plan, key, value)
+        await audit_service.record(
+            self.db,
+            action=action,
+            actor_id=actor.user.id,
+            actor_email=actor.user.email,
+            target_type="plan",
+            target_id=plan_id,
+            client_ip=info.client_ip,
+            request_id=info.request_id,
+            detail={"plan_id": plan_id},
+        )
+        await self.db.commit()
+        return plan
 
     async def stats(self) -> AdminStats:
         async def count(stmt: object) -> int:

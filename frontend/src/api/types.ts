@@ -629,12 +629,14 @@ export interface SessionResponse {
 export interface ApiTokenInfo {
   id: string
   name: string
+  description: string | null
   public_id: string
   scopes: string[]
   project_id: string | null
   created_at: string
   expires_at: string
   last_used_at: string | null
+  last_mcp_use_at: string | null
   revoked_at: string | null
 }
 
@@ -642,11 +644,18 @@ export interface ApiTokenCreated extends ApiTokenInfo {
   token: string
 }
 
+/** The owner's view of a token pinned to their project: who created it. */
+export interface ProjectToken extends ApiTokenInfo {
+  user_id: string
+  user_email: string
+}
+
 export interface Member {
   user_id: string
   email: string
   name: string
   role: MemberRole
+  mcp_enabled: boolean
   created_at: string
 }
 
@@ -945,4 +954,89 @@ export interface SpecForPolicies {
     roles: { name: string; label: string }[]
     registration?: { custom_fields?: { name: string; type: string }[] }
   } | null
+}
+
+// ── Organizations, plans & quotas (Platform SaaS Phase B) ──────────────────
+
+export type OrgRole = 'owner' | 'admin' | 'member'
+
+export interface Organization {
+  id: string
+  name: string
+  slug: string
+  kind: 'personal' | 'team'
+  created_at: string
+  my_role: OrgRole
+  member_count: number
+}
+
+export interface PlanInfo {
+  id: string
+  display_name: string
+  max_seats: number | null
+  max_projects: number | null
+  max_api_tokens: number | null
+  max_mcp_tokens: number | null
+  allow_sso: boolean
+  allow_scim: boolean
+  allow_mcp: boolean
+  monthly_price_usd: number // cents
+  is_public: boolean
+}
+
+export interface OrgUsage {
+  seats_used: number
+  seats_cap: number | null
+  pending_invites: number
+  projects_used: number
+  projects_cap: number | null
+  api_tokens_used: number // the viewer's own tokens in this org
+  api_tokens_cap: number | null // per member
+  mcp_tokens_used: number
+  mcp_tokens_cap: number | null
+}
+
+export interface OrgPlan {
+  plan: PlanInfo
+  subscription: {
+    organization_id: string
+    plan_id: string
+    status: 'active' | 'past_due' | 'canceled' | 'trial'
+    trial_ends_at: string | null
+    current_period_end: string | null
+    seat_override: number | null
+    project_override: number | null
+  }
+  usage: OrgUsage
+  checkout_available: boolean
+  upgrades: PlanInfo[]
+  /** The org has a Stripe customer: owners/admins can open "Manage billing". */
+  portal_available: boolean
+}
+
+/** `details[0]` of a 402 quota refusal. */
+export interface QuotaDetail {
+  resource: 'seats' | 'projects' | 'api_tokens' | 'mcp_tokens'
+  plan: string
+  /** null when the refusal is not about a cap (reason 'past_due'). */
+  cap: number | null
+  used: number
+  /** 'cap': the plan's counter is full. 'past_due': the last payment failed. */
+  reason?: 'cap' | 'past_due'
+  organization_slug: string | null
+}
+
+export interface AdminOrg {
+  id: string
+  name: string
+  slug: string
+  kind: 'personal' | 'team'
+  created_at: string
+  deleted_at: string | null
+  member_count: number
+  project_count: number
+  plan_id: string
+  status: string
+  seat_override: number | null
+  project_override: number | null
 }

@@ -16,6 +16,7 @@ import { AuthConfigPanel } from '../components/AuthConfigPanel'
 import { AuthCustomFieldsPanel } from '../components/AuthCustomFieldsPanel'
 import { DataModelPanel } from '../components/DataModelPanel'
 import { GeneratePanel } from '../components/GeneratePanel'
+import { IntegrationsPanel } from '../components/IntegrationsPanel'
 import { KeycloakPanel } from '../components/KeycloakPanel'
 import { PaymentsPanel } from '../components/PaymentsPanel'
 import { StoragePanel } from '../components/StoragePanel'
@@ -306,6 +307,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <DeploymentPanel projectId={project.id} onChanged={load} />
         </>
       )}
+
+      {section === 'integrations' && <IntegrationsPanel projectId={project.id} />}
 
       {section === 'generate' && (
         <>

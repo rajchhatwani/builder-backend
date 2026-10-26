@@ -16,6 +16,7 @@ from app.api import (
     admin,
     auth,
     authorization,
+    billing,
     deployment,
     documents,
     entities,
@@ -25,11 +26,13 @@ from app.api import (
     keycloak,
     members,
     observability,
+    orgs,
     payments,
     projects,
     relations,
     spec,
     storage,
+    wellknown,
 )
 from app.api.security import guard
 from app.config import Settings, get_settings
@@ -186,7 +189,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise RuntimeError(f"BUILDER_BOOTSTRAP_ADMIN_* is invalid: {exc.message}") from exc
         if admin_user is not None:
             log.info("bootstrap_admin_created", email=admin_user.email)
-    yield
+    # The MCP sub-app has its own lifespan that starts the Streamable-HTTP session
+    # manager's task group. A mounted Starlette app's lifespan is NOT run automatically,
+    # so we drive it here. Without this, every /mcp request raises
+    # "Task group is not initialized".
+    mcp_app = getattr(app.state, "mcp_app", None)
+    if mcp_app is not None:
+        async with mcp_app.router.lifespan_context(mcp_app):
+            yield
+    else:
+        yield
 
 
 def create_app() -> FastAPI:
@@ -216,6 +228,9 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(account.router)
     app.include_router(admin.router)
+    app.include_router(orgs.router)  # organization routes authenticate via current_principal
+    app.include_router(wellknown.router)  # RFC 9728 discovery, no auth
+    app.include_router(billing.router)  # Stripe webhook: authenticated by its signature
 
     # Everything else sits behind the request guard (authentication + project membership).
     guarded = [Depends(guard)]
@@ -237,6 +252,14 @@ def create_app() -> FastAPI:
         generate.router,
     ):
         app.include_router(router, dependencies=guarded)
+
+    # MCP server (Streamable HTTP, own auth middleware, NOT behind the REST guard).
+    from app.api.mcp import build_mcp_app
+    from app.db import get_session_factory as _gsf
+    mcp_starlette = build_mcp_app(_gsf())
+    app.state.mcp_app = mcp_starlette
+    app.mount("/mcp", mcp_starlette)
+
     return app
 
 

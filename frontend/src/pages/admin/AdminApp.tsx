@@ -3,13 +3,21 @@ import { api, ApiError } from '../../api/client'
 import { onSessionLost } from '../../api/session'
 import type { UserAccount } from '../../api/types'
 import { useUi } from '../../components/Ui'
-import { AdminAudit, AdminOverview, AdminProjects, AdminSettings, AdminUsers } from './AdminPages'
+import {
+  AdminAudit,
+  AdminOrganizations,
+  AdminOverview,
+  AdminProjects,
+  AdminSettings,
+  AdminUsers,
+} from './AdminPages'
 
-export type AdminSection = 'overview' | 'users' | 'projects' | 'audit' | 'settings'
+export type AdminSection = 'overview' | 'users' | 'organizations' | 'projects' | 'audit' | 'settings'
 
 const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'users', label: 'People' },
+  { id: 'organizations', label: 'Organizations' },
   { id: 'projects', label: 'Projects' },
   { id: 'audit', label: 'Audit log' },
   { id: 'settings', label: 'Settings' },
@@ -150,6 +158,7 @@ export function AdminApp({ section }: { section: AdminSection }) {
         <div className="container">
           {section === 'overview' && <AdminOverview />}
           {section === 'users' && <AdminUsers me={user} readOnly={readOnly} />}
+          {section === 'organizations' && <AdminOrganizations readOnly={readOnly} />}
           {section === 'projects' && <AdminProjects />}
           {section === 'audit' && <AdminAudit />}
           {section === 'settings' && <AdminSettings />}

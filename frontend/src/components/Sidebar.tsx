@@ -1,7 +1,20 @@
-import type { ReactNode } from 'react'
-import type { Project } from '../api/types'
+import { useEffect, useState, type ReactNode } from 'react'
+import { api } from '../api/client'
+import type { Organization, Project } from '../api/types'
 
-export type Section = 'overview' | 'model' | 'auth' | 'keycloak' | 'payments' | 'storage' | 'access' | 'observability' | 'deployment' | 'documents' | 'generate'
+export type Section =
+  | 'overview'
+  | 'model'
+  | 'auth'
+  | 'keycloak'
+  | 'payments'
+  | 'storage'
+  | 'access'
+  | 'observability'
+  | 'deployment'
+  | 'documents'
+  | 'integrations'
+  | 'generate'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
@@ -108,6 +121,19 @@ export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
     ),
   },
   {
+    id: 'integrations',
+    label: 'Integrations',
+    icon: (
+      <>
+        <circle cx="6" cy="6" r="3" />
+        <circle cx="18" cy="6" r="3" />
+        <circle cx="12" cy="18" r="3" />
+        <path d="M6 9v2a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V9" />
+        <path d="M12 13v2" />
+      </>
+    ),
+  },
+  {
     id: 'generate',
     label: 'Generate',
     icon: (
@@ -144,6 +170,18 @@ export function link(path: string): string {
 
 /** Sidebar on the projects list. */
 export function ProjectsSidebar() {
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  useEffect(() => {
+    let cancelled = false
+    api
+      .listOrgs()
+      .then((page) => !cancelled && setOrgs(page.items))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const current = window.location.hash
   return (
     <nav>
       <ul>
@@ -159,6 +197,23 @@ export function ProjectsSidebar() {
           </a>
         </li>
       </ul>
+      {orgs.length > 0 && (
+        <>
+          <p className="muted small-text sidebar-heading">Plan & usage</p>
+          <ul>
+            {orgs.map((org) => {
+              const href = link(`/org/${encodeURIComponent(org.slug)}/plan`)
+              return (
+                <li key={org.id}>
+                  <a href={href} aria-current={current.startsWith(href) ? 'page' : undefined}>
+                    {org.kind === 'personal' ? 'Personal' : org.name}
+                  </a>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
     </nav>
   )
 }

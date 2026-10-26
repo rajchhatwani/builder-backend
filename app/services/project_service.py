@@ -22,12 +22,41 @@ class ProjectService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def create(self, data: ProjectCreate, owner: PlatformUser) -> Project:
+    async def create(
+        self, data: ProjectCreate, owner: PlatformUser, *, organization_id: uuid.UUID | None = None
+    ) -> Project:
+        """Create a project owned by `owner` inside `organization_id` (defaults to the owner's
+        default org). Enforces the plan's project cap transactionally."""
+        from app.services.organization_service import OrganizationService
+
+        org_service = OrganizationService(self.session)
+        if organization_id is None:
+            # Fall back to default org; create a personal one if the user has none yet (older
+            # accounts predating Phase A).
+            organization_id = owner.default_organization_id
+            if organization_id is None:
+                org = await org_service.ensure_personal_org(owner)
+                organization_id = org.id
+                await self.session.flush()
+        role = await org_service.member_role(owner.id, organization_id)
+        if role is None:
+            raise AppError(
+                code="forbidden",
+                message="you must be a member of this organization to create a project",
+                status_code=403,
+            )
+        # §6.2: locks the subscription row until the commit below, so concurrent creates
+        # in one org cannot overshoot the cap.
+        await org_service.enforce_project_limit(
+            organization_id, actor_id=owner.id, actor_email=owner.email
+        )
+
         project = Project(
             name=data.name,
             slug=data.slug or slugify(data.name),
             description=data.description,
             db_engine=data.db_engine,
+            organization_id=organization_id,
         )
         self.session.add(project)
         try:

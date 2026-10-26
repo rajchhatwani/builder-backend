@@ -24,6 +24,7 @@ class ApiTokenService:
         user: PlatformUser,
         *,
         name: str,
+        description: str | None = None,
         scopes: list[str],
         expires_in_days: int,
         project_id: uuid.UUID | None,
@@ -67,10 +68,12 @@ class ApiTokenService:
                 message=f"at most {MAX_ACTIVE_TOKENS_PER_USER} active tokens; revoke one first",
                 status_code=409,
             )
+        await self._enforce_plan_limits(user, scopes=scopes, project_id=project_id)
         raw, public_id, digest = sec.new_api_token()
         row = ApiToken(
             user_id=user.id,
             name=name.strip(),
+            description=description.strip() if description else None,
             public_id=public_id,
             token_hash=digest,
             scopes=sorted(set(scopes)),
@@ -93,7 +96,32 @@ class ApiTokenService:
         await self.db.commit()
         return row, raw
 
-    async def list(self, user: PlatformUser) -> list[ApiToken]:
+    async def _enforce_plan_limits(
+        self, user: PlatformUser, *, scopes: list[str], project_id: uuid.UUID | None
+    ) -> None:
+        """§6.2: charge the token to its project's org when pinned, else to the user's
+        default org (`OrganizationService.count_active_tokens` uses the same rule)."""
+        from app.models.project import Project
+        from app.services.organization_service import OrganizationService
+
+        orgs = OrganizationService(self.db)
+        if project_id is not None:
+            project = await self.db.get(Project, project_id)
+            organization_id = project.organization_id if project is not None else None
+        else:
+            organization_id = user.default_organization_id
+            if organization_id is None:  # an account predating Phase A
+                organization_id = (await orgs.ensure_personal_org(user)).id
+        if organization_id is None:  # a legacy project with no org yet: nothing to charge
+            return
+        await orgs.enforce_token_limits(
+            organization_id,
+            user_id=user.id,
+            mcp=any(s.startswith("mcp:") for s in scopes),
+            actor_email=user.email,
+        )
+
+    async def list_tokens(self, user: PlatformUser) -> list[ApiToken]:
         rows = await self.db.execute(
             select(ApiToken).where(ApiToken.user_id == user.id).order_by(ApiToken.created_at.desc())
         )
@@ -114,5 +142,89 @@ class ApiTokenService:
                 target_id=row.public_id,
                 client_ip=info.client_ip,
                 request_id=info.request_id,
+            )
+            await self.db.commit()
+
+    # -- project-scoped token management (project owners) --------------------------------
+
+    async def list_for_project(
+        self, project_id: uuid.UUID
+    ) -> list[tuple[ApiToken, PlatformUser]]:
+        """All active tokens explicitly pinned to this project. Owner-only endpoint."""
+        from app.models.platform import PlatformUser as _User
+
+        rows = await self.db.execute(
+            select(ApiToken, _User)
+            .join(_User, _User.id == ApiToken.user_id)
+            .where(
+                ApiToken.project_id == project_id,
+                ApiToken.revoked_at.is_(None),
+                ApiToken.expires_at > datetime.now(UTC),
+            )
+            .order_by(ApiToken.created_at.desc())
+        )
+        return [(tok, usr) for tok, usr in rows.all()]
+
+    async def revoke_for_project(
+        self,
+        actor: PlatformUser,
+        project_id: uuid.UUID,
+        token_id: uuid.UUID,
+        info: RequestInfo,
+    ) -> None:
+        """Project owner revokes a token pinned to their project."""
+        row = await self.db.get(ApiToken, token_id)
+        if row is None or row.project_id != project_id:
+            raise AppError(code="not_found", message="token not found", status_code=404)
+        if row.revoked_at is None:
+            row.revoked_at = datetime.now(UTC)
+            await audit_service.record(
+                self.db,
+                action="token.revoke_by_owner",
+                actor_id=actor.id,
+                actor_email=actor.email,
+                target_type="api_token",
+                target_id=row.public_id,
+                project_id=project_id,
+                client_ip=info.client_ip,
+                request_id=info.request_id,
+            )
+            await self.db.commit()
+
+    # -- admin token management ----------------------------------------------------------
+
+    async def list_for_user_admin(self, user_id: uuid.UUID) -> list[ApiToken]:
+        """Platform admins: list all tokens for any user."""
+        rows = await self.db.execute(
+            select(ApiToken)
+            .where(ApiToken.user_id == user_id)
+            .order_by(ApiToken.created_at.desc())
+        )
+        return list(rows.scalars())
+
+    async def revoke_admin(
+        self,
+        actor: PlatformUser,
+        user_id: uuid.UUID,
+        token_id: uuid.UUID,
+        info: RequestInfo,
+    ) -> None:
+        """Platform admin revokes any token."""
+        row = await self.db.get(ApiToken, token_id)
+        if row is None or row.user_id != user_id:
+            raise AppError(code="not_found", message="token not found", status_code=404)
+        if row.revoked_at is None:
+            row.revoked_at = datetime.now(UTC)
+            await audit_service.record(
+                self.db,
+                action="admin.token_revoke",
+                actor_id=actor.id,
+                actor_email=actor.email,
+                target_type="api_token",
+                target_id=row.public_id,
+                project_id=row.project_id,
+                client_ip=info.client_ip,
+                request_id=info.request_id,
+                detail={"target_user_id": str(user_id)},
             )
             await self.db.commit()

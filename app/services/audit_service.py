@@ -33,6 +33,7 @@ async def record(
     target_type: str | None = None,
     target_id: str | uuid.UUID | None = None,
     project_id: uuid.UUID | None = None,
+    organization_id: uuid.UUID | None = None,
     client_ip: str | None = None,
     request_id: str | None = None,
     detail: dict[str, object] | None = None,
@@ -48,6 +49,7 @@ async def record(
             target_type=target_type,
             target_id=str(target_id) if target_id is not None else None,
             project_id=project_id,
+            organization_id=organization_id,
             result=result,
             client_ip=client_ip,
             request_id=request_id,
@@ -64,8 +66,10 @@ async def search(
     actor_id: uuid.UUID | None = None,
     action: str | None = None,
     project_id: uuid.UUID | None = None,
+    organization_id: uuid.UUID | None = None,
     since: datetime | None = None,
     result: AuditResult | None = None,
+    via: str | None = None,
 ) -> tuple[list[AuditLog], int]:
     conditions = []
     if actor_id is not None:
@@ -74,10 +78,14 @@ async def search(
         conditions.append(AuditLog.action.startswith(action))
     if project_id is not None:
         conditions.append(AuditLog.project_id == project_id)
+    if organization_id is not None:
+        conditions.append(AuditLog.organization_id == organization_id)
     if since is not None:
         conditions.append(AuditLog.at >= since)
     if result is not None:
         conditions.append(AuditLog.result == result)
+    if via is not None:
+        conditions.append(AuditLog.via == via)
     total = (
         await session.execute(select(func.count()).select_from(AuditLog).where(*conditions))
     ).scalar_one()

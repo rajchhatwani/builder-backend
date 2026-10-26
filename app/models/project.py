@@ -1,5 +1,8 @@
+import uuid
+
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -19,3 +22,12 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=DbEngine.postgres,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # Every project belongs to exactly one org. Nullable until Phase A backfill lands; the
+    # service refuses to create a project without this at request-time (so new rows are safe).
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+
+    __table_args__ = (Index("ix_projects_org", "organization_id"),)

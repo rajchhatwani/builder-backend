@@ -77,6 +77,14 @@ export function MembersDialog({ open, projectId, projectName, onClose }: Members
             </div>
           )}
           <table>
+            <thead>
+              <tr>
+                <th>Member</th>
+                <th>Role</th>
+                <th>MCP</th>
+                {iAmOwner && <th />}
+              </tr>
+            </thead>
             <tbody>
               {members.map((m) => (
                 <tr key={m.user_id}>
@@ -106,17 +114,27 @@ export function MembersDialog({ open, projectId, projectName, onClose }: Members
                       m.role
                     )}
                   </td>
-                  <td className="row-actions">
-                    {iAmOwner && (
+                  <td>
+                    <span className={`badge ${m.mcp_enabled ? 'status-ok' : 'status-warn'}`}>
+                      {m.mcp_enabled ? 'On' : 'Off'}
+                    </span>
+                  </td>
+                  {iAmOwner && (
+                    <td className="row-actions">
                       <button type="button" className="ghost small" data-variant="danger" onClick={() => remove(m)}>
                         Remove
                       </button>
-                    )}
-                  </td>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
+          {iAmOwner && (
+            <p className="muted small-text">
+              Grant or revoke MCP access on the project's <strong>Integrations</strong> page.
+            </p>
+          )}
 
           {iAmOwner ? (
             <div className="field-grid">

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import type {
+  AdminOrg,
   AdminProject,
   AdminStats,
   AdminUser,
+  ApiTokenInfo,
   AuditEntry,
   Page,
   PlatformRole,
@@ -159,6 +161,127 @@ function NewUserDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   )
 }
 
+function UserTokensDialog({
+  user,
+  open,
+  onClose,
+}: {
+  user: AdminUser | null
+  open: boolean
+  onClose: () => void
+}) {
+  const { confirm, toast } = useUi()
+  const [tokens, setTokens] = useState<ApiTokenInfo[] | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    if (!user) return
+    setError(null)
+    try {
+      setTokens(await api.adminListUserTokens(user.id))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't load tokens.")
+    }
+  }, [user])
+
+  useEffect(() => {
+    if (open && user) {
+      setTokens(null)
+      load()
+    }
+  }, [open, user, load])
+
+  async function revoke(t: ApiTokenInfo) {
+    if (!user) return
+    const ok = await confirm({
+      title: `Revoke "${t.name}"?`,
+      message: `Belongs to ${user.email}. Anything using it stops working immediately.`,
+      confirmLabel: 'Revoke token',
+      danger: true,
+    })
+    if (!ok) return
+    try {
+      await api.adminRevokeUserToken(user.id, t.id)
+      toast('Token revoked.')
+      await load()
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't revoke token.", 'danger')
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <header>
+        <h3>API tokens</h3>
+        {user && <p className="muted small-text">{user.email}</p>}
+      </header>
+      <div className="stack">
+        {error && (
+          <div role="alert" data-variant="danger">
+            {error}
+          </div>
+        )}
+        {tokens === null ? (
+          <p className="muted">Loading…</p>
+        ) : tokens.length === 0 ? (
+          <p className="muted">No tokens.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Scopes</th>
+                <th>Last used</th>
+                <th>Last MCP use</th>
+                <th>State</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {tokens.map((t) => {
+                const now = Date.now()
+                const revoked = t.revoked_at !== null
+                const expired = !revoked && new Date(t.expires_at).getTime() <= now
+                const state = revoked ? 'revoked' : expired ? 'expired' : 'active'
+                return (
+                  <tr key={t.id}>
+                    <td>
+                      {t.name}
+                      {t.description && <div className="muted small-text">{t.description}</div>}
+                    </td>
+                    <td>
+                      <code className="small-text">{t.scopes.join(', ')}</code>
+                    </td>
+                    <td>{when(t.last_used_at)}</td>
+                    <td>{when(t.last_mcp_use_at)}</td>
+                    <td>
+                      <span className={`badge ${state === 'active' ? 'status-ok' : 'status-warn'}`}>
+                        {state}
+                      </span>
+                    </td>
+                    <td className="row-actions">
+                      {state === 'active' && (
+                        <button className="ghost small" data-variant="danger" onClick={() => revoke(t)}>
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+      <footer>
+        <button type="button" onClick={onClose}>
+          Done
+        </button>
+      </footer>
+    </Modal>
+  )
+}
+
 export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolean }) {
   const { confirm, toast } = useUi()
   const [page, setPage] = useState<Page<AdminUser> | null>(null)
@@ -168,6 +291,7 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
   const [offset, setOffset] = useState(0)
   const [creating, setCreating] = useState(false)
   const [secret, setSecret] = useState<{ email: string; password: string } | null>(null)
+  const [tokensUser, setTokensUser] = useState<AdminUser | null>(null)
 
   const load = useCallback(async () => {
     setPage(await api.adminUsers({ q, status, role, limit: 25, offset }))
@@ -307,6 +431,9 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
                     <td>{when(u.last_login_at)}</td>
                     {!readOnly && (
                       <td className="row-actions">
+                        <button className="ghost small" onClick={() => setTokensUser(u)}>
+                          Tokens
+                        </button>
                         {!self && (
                           <>
                             <button className="ghost small" onClick={() => suspendOrRestore(u)}>
@@ -330,6 +457,12 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
           <Pager page={page} onPage={setOffset} />
         </>
       )}
+
+      <UserTokensDialog
+        open={tokensUser !== null}
+        user={tokensUser}
+        onClose={() => setTokensUser(null)}
+      />
 
       <NewUserDialog
         open={creating}
@@ -391,20 +524,171 @@ export function AdminProjects() {
   )
 }
 
+// ── Organizations: plan + seat/project overrides (§6.5) ─────────────────────
+
+function numberOrNull(value: string): number | null {
+  return value.trim() === '' ? null : Number(value)
+}
+
+function OverrideDialog({ org, onClose, onSaved }: { org: AdminOrg; onClose: () => void; onSaved: (org: AdminOrg) => void }) {
+  const [seats, setSeats] = useState(org.seat_override?.toString() ?? '')
+  const [projects, setProjects] = useState(org.project_override?.toString() ?? '')
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      onSaved(
+        await api.adminSetOrgOverrides(org.id, {
+          seat_override: numberOrNull(seats),
+          project_override: numberOrNull(projects),
+          reason: reason.trim(),
+        }),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>Limits for {org.name}</h3>
+          <p>Replaces the {org.plan_id} plan's cap for this organization. Leave empty to use the plan default.</p>
+        </header>
+        <div>
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          <label>
+            Seats
+            <input type="number" min={0} placeholder="plan default" value={seats} onChange={(e) => setSeats(e.target.value)} />
+          </label>
+          <label>
+            Projects
+            <input type="number" min={0} placeholder="plan default" value={projects} onChange={(e) => setProjects(e.target.value)} />
+          </label>
+          <label>
+            Reason (recorded in the audit log)
+            <input required maxLength={255} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy || !reason.trim()}>
+            {busy ? 'Saving…' : 'Save limits'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
+export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
+  const { toast } = useUi()
+  const [page, setPage] = useState<Page<AdminOrg> | null>(null)
+  const [q, setQ] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [editing, setEditing] = useState<AdminOrg | null>(null)
+  useEffect(() => {
+    const timer = setTimeout(() => api.adminOrganizations(q, 25, offset).then(setPage).catch(() => undefined), 200)
+    return () => clearTimeout(timer)
+  }, [q, offset])
+
+  function saved(org: AdminOrg) {
+    setEditing(null)
+    setPage((current) => current && { ...current, items: current.items.map((o) => (o.id === org.id ? org : o)) })
+    toast(`Limits updated for ${org.name}.`)
+  }
+
+  return (
+    <>
+      <Header title="Organizations">Plan, size and granted overrides. Project contents are not visible here.</Header>
+      <div className="table-toolbar">
+        <input type="search" placeholder="Search name or slug" value={q} onChange={(e) => { setOffset(0); setQ(e.target.value) }} />
+      </div>
+      {page && (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Organization</th>
+                <th>Plan</th>
+                <th>Members</th>
+                <th>Projects</th>
+                <th>Overrides</th>
+                <th />
+              </tr>
+            </thead>
+            <tbody>
+              {page.items.map((o) => (
+                <tr key={o.id}>
+                  <td>
+                    {o.name} <span className="muted small-text">{o.slug}{o.kind === 'personal' ? ' · personal' : ''}</span>
+                  </td>
+                  <td>
+                    {o.plan_id} <span className="muted small-text">{o.status}</span>
+                  </td>
+                  <td>{o.member_count}</td>
+                  <td>{o.project_count}</td>
+                  <td className="small-text">
+                    {o.seat_override === null && o.project_override === null ? (
+                      <span className="muted">none</span>
+                    ) : (
+                      [o.seat_override !== null && `${o.seat_override} seats`, o.project_override !== null && `${o.project_override} projects`]
+                        .filter(Boolean)
+                        .join(', ')
+                    )}
+                  </td>
+                  <td>
+                    {!readOnly && (
+                      <button className="outline small" onClick={() => setEditing(o)}>
+                        Limits
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pager page={page} onPage={setOffset} />
+        </>
+      )}
+      {editing && <OverrideDialog org={editing} onClose={() => setEditing(null)} onSaved={saved} />}
+    </>
+  )
+}
+
 // ── Audit log ────────────────────────────────────────────────────────────────
 
 export function AdminAudit() {
   const [page, setPage] = useState<Page<AuditEntry> | null>(null)
   const [action, setAction] = useState('')
   const [result, setResult] = useState('')
+  const [via, setVia] = useState('')
   const [offset, setOffset] = useState(0)
   useEffect(() => {
     const timer = setTimeout(
-      () => api.adminAudit({ action, result, limit: 50, offset }).then(setPage).catch(() => undefined),
+      () =>
+        api
+          .adminAudit({ action, result, via, limit: 50, offset })
+          .then(setPage)
+          .catch(() => undefined),
       200,
     )
     return () => clearTimeout(timer)
-  }, [action, result, offset])
+  }, [action, result, via, offset])
   return (
     <>
       <Header title="Audit log">An append-only record of sign-ins, changes and refused attempts.</Header>
@@ -417,11 +701,18 @@ export function AdminAudit() {
             <option value="project.">Project changes</option>
             <option value="access.">Refused access</option>
             <option value="token.">API tokens</option>
+            <option value="mcp.">MCP tool calls</option>
           </select>
           <select aria-label="Outcome" value={result} onChange={(e) => { setOffset(0); setResult(e.target.value) }}>
             <option value="">Any outcome</option>
             <option value="ok">Succeeded</option>
             <option value="denied">Refused</option>
+          </select>
+          <select aria-label="Source" value={via} onChange={(e) => { setOffset(0); setVia(e.target.value) }}>
+            <option value="">Any source</option>
+            <option value="session">Browser session</option>
+            <option value="api_token">API / MCP token</option>
+            <option value="admin">Admin console</option>
           </select>
         </div>
       </div>

@@ -14,10 +14,13 @@ from app.models.enums import MemberRole, PlatformRole
 SCOPE_READ = "read"
 SCOPE_WRITE = "write"
 SCOPE_GENERATE = "generate"
-# Reserved for the MCP endpoint (WP6) so tokens minted now keep working then.
+# MCP endpoint scopes (WP6).
 SCOPE_MCP_READ = "mcp:read"
 SCOPE_MCP_WRITE = "mcp:write"
-VALID_SCOPES = frozenset({SCOPE_READ, SCOPE_WRITE, SCOPE_GENERATE, SCOPE_MCP_READ, SCOPE_MCP_WRITE})
+SCOPE_MCP_GENERATE = "mcp:generate"
+VALID_SCOPES = frozenset(
+    {SCOPE_READ, SCOPE_WRITE, SCOPE_GENERATE, SCOPE_MCP_READ, SCOPE_MCP_WRITE, SCOPE_MCP_GENERATE}
+)
 
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
@@ -27,6 +30,11 @@ _OWNER_ONLY: tuple[tuple[str, str], ...] = (
     ("POST", "/projects/{project_id}/members"),
     ("PATCH", "/projects/{project_id}/members/"),
     ("DELETE", "/projects/{project_id}/members/"),
+    # MCP access grant: only an owner may enable/disable MCP for a member.
+    ("PATCH", "/projects/{project_id}/members/{user_id}/mcp"),
+    # Project-scoped token management: owner sees and revokes pinned tokens.
+    ("GET", "/projects/{project_id}/tokens"),
+    ("DELETE", "/projects/{project_id}/tokens/"),
     # Credentials for e-mail / SMS providers: the most sensitive thing the builder stores.
     ("PUT", "/projects/{project_id}/auth/secrets"),
 )

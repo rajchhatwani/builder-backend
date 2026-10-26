@@ -2,17 +2,20 @@ import { useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './components/AuthProvider'
 import { Layout } from './components/Layout'
 import { PasswordForm } from './components/PasswordForm'
+import { QuotaPrompt } from './components/QuotaPrompt'
 import { ProjectsSidebar, SECTIONS, type Section } from './components/Sidebar'
 import { UiProvider } from './components/Ui'
 import { AccountPage } from './pages/AccountPage'
 import { AdminApp, parseAdminSection, type AdminSection } from './pages/admin/AdminApp'
 import { LoginPage } from './pages/LoginPage'
+import { OrgPlanPage } from './pages/OrgPlanPage'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { ProjectWorkspace } from './pages/ProjectWorkspace'
 
 type Route =
   | { page: 'projects' }
   | { page: 'account' }
+  | { page: 'org-plan'; slug: string }
   | { page: 'admin'; section: AdminSection }
   | { page: 'project'; projectId: string; section: Section }
 
@@ -20,6 +23,9 @@ type Route =
 function parseHash(hash: string): Route {
   if (hash.startsWith('#/admin')) return { page: 'admin', section: parseAdminSection(hash) }
   if (hash.startsWith('#/account')) return { page: 'account' }
+  // Only the Plan tab of the org console exists so far; #/org/<slug> lands on it too.
+  const org = hash.match(/^#\/org\/([^/?]+)/)
+  if (org) return { page: 'org-plan', slug: decodeURIComponent(org[1]) }
   const match = hash.match(/^#\/p\/([^/]+)(?:\/([a-z]+))?/)
   if (!match) return { page: 'projects' }
   const section = SECTIONS.find((s) => s.id === match[2])?.id ?? 'overview'
@@ -47,11 +53,23 @@ function CustomerApp({ route }: { route: Route }) {
   if (state.user.must_change_password) return <MustChangePassword />
 
   if (route.page === 'project') {
-    return <ProjectWorkspace projectId={route.projectId} section={route.section} />
+    return (
+      <>
+        <ProjectWorkspace projectId={route.projectId} section={route.section} />
+        <QuotaPrompt />
+      </>
+    )
   }
   return (
     <Layout sidebar={<ProjectsSidebar />}>
-      {route.page === 'account' ? <AccountPage /> : <ProjectsPage />}
+      {route.page === 'account' ? (
+        <AccountPage />
+      ) : route.page === 'org-plan' ? (
+        <OrgPlanPage slug={route.slug} />
+      ) : (
+        <ProjectsPage />
+      )}
+      <QuotaPrompt />
     </Layout>
   )
 }

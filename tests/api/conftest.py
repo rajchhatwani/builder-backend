@@ -36,6 +36,26 @@ async def engine(database_url: str) -> AsyncGenerator[AsyncEngine, None]:
     eng = create_async_engine(database_url)
     async with eng.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Seed the plans table (Phase A invariant): a Subscription row references a Plan.
+    async with eng.begin() as conn:
+        from sqlalchemy import text as _text
+
+        await conn.execute(
+            _text(
+                """
+                INSERT INTO plans (
+                    id, display_name, max_seats, max_projects, max_api_tokens,
+                    max_mcp_tokens, allow_sso, allow_scim, allow_mcp,
+                    monthly_price_usd, is_public, created_at
+                ) VALUES
+                    ('free',       'Free',       1,    1,    3,   0,  false, false, false, 0,    true,  now()),
+                    ('team',       'Team',       5,    10,   20,  5,  false, false, true,  2900, true,  now()),
+                    ('business',   'Business',   25,   50,   100, 25, true,  false, true,  9900, true,  now()),
+                    ('enterprise', 'Enterprise', NULL, NULL, NULL, NULL, true, true, true,  0,    false, now())
+                ON CONFLICT (id) DO NOTHING
+                """
+            )
+        )
     yield eng
     await eng.dispose()
 
@@ -50,10 +70,29 @@ async def _clean_tables(engine: AsyncEngine) -> AsyncGenerator[None, None]:
     yield
     async with engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
+            if table.name == "plans":
+                continue  # Plans are seeded once and reused across tests.
             await conn.execute(table.delete())
 
 
+async def _seed_personal_org(session: AsyncSession, user: PlatformUser) -> None:
+    """Match the sign-up flow: give the user a personal org + free subscription."""
+    from app.services.organization_service import OrganizationService
+
+    await OrganizationService(session).ensure_personal_org(user)
+
+
 TEST_PASSWORD = "correct-horse-battery-staple"
+
+
+@pytest.fixture(autouse=True)
+def _unlimited_personal_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Phase B enforces plan caps (free = 1 project, 0 MCP tokens). Most tests are about
+    builder features, not quotas, so test users' personal orgs start on the uncapped
+    'enterprise' plan. Quota tests (test_plan_enforcement.py) set the plan they need."""
+    from app.services import organization_service
+
+    monkeypatch.setattr(organization_service, "DEFAULT_PERSONAL_PLAN_ID", "enterprise")
 
 
 @pytest.fixture(autouse=True)
@@ -83,7 +122,12 @@ MakeUser = Callable[..., Awaitable[PlatformUser]]
 
 @pytest.fixture
 def make_user(session_factory: async_sessionmaker[AsyncSession]) -> MakeUser:
-    """Insert an account directly (no HTTP, no slow hashing path) and return it."""
+    """Insert an account directly (no HTTP, no slow hashing path) and return it.
+
+    Phase A invariant: every signed-in user has a personal org. Mirror the sign-up flow by
+    seeding a personal org for each test user (on 'enterprise' in tests — see
+    `_unlimited_personal_plan`).
+    """
 
     async def make(
         email: str = "primary@example.com",
@@ -101,6 +145,10 @@ def make_user(session_factory: async_sessionmaker[AsyncSession]) -> MakeUser:
             )
             session.add(user)
             await session.commit()
+            # Phase A: give the user a personal org + subscription.
+            await _seed_personal_org(session, user)
+            await session.commit()
+            await session.refresh(user)
             return user
 
     return make

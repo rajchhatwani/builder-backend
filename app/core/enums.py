@@ -203,6 +203,39 @@ class MemberRole(StrEnum):
     owner = "owner"
 
 
+class OrgKind(StrEnum):
+    """Shape of an organization: a one-member account versus a multi-member team."""
+
+    personal = "personal"
+    team = "team"
+
+
+class OrgRole(StrEnum):
+    """A person's role inside one organization. Ordered: member < admin < owner."""
+
+    member = "member"
+    admin = "admin"
+    owner = "owner"
+
+
+class SubscriptionStatus(StrEnum):
+    """One Subscription row per org; status mirrors Stripe but Stripe is not required."""
+
+    trial = "trial"
+    active = "active"
+    past_due = "past_due"
+    canceled = "canceled"
+
+
+class InvitationStatus(StrEnum):
+    """Transient status of an Organization invitation. The row keeps timestamps too."""
+
+    pending = "pending"
+    accepted = "accepted"
+    revoked = "revoked"
+    expired = "expired"
+
+
 class TokenAudience(StrEnum):
     """Which surface a refresh token / access token belongs to. They are never interchangeable."""
 

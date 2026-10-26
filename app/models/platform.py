@@ -19,7 +19,16 @@ from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
-from app.models.enums import AccountStatus, AuditResult, MemberRole, PlatformRole, TokenAudience
+from app.models.enums import (
+    AccountStatus,
+    AuditResult,
+    MemberRole,
+    OrgKind,
+    OrgRole,
+    PlatformRole,
+    SubscriptionStatus,
+    TokenAudience,
+)
 from app.models.mixins import TimestampMixin, UUIDPrimaryKeyMixin
 
 
@@ -54,6 +63,12 @@ class PlatformUser(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     # Set when an administrator chose the password: it must be replaced before anything else.
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Which org to drop the user into after login when they belong to several.
+    default_organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="SET NULL", use_alter=True),
+        nullable=True,
+    )
 
     __table_args__ = (
         CheckConstraint("email = lower(email)", name="ck_platform_users_email_lower"),
@@ -94,6 +109,7 @@ class ApiToken(UUIDPrimaryKeyMixin, Base):
         UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
+    description: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Public lookup id embedded in the token (not secret); the secret part is only hashed.
     public_id: Mapped[str] = mapped_column(String(10), nullable=False, unique=True)
     token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -107,6 +123,7 @@ class ApiToken(UUIDPrimaryKeyMixin, Base):
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_mcp_use_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
@@ -124,11 +141,160 @@ class ProjectMember(Base):
     role: Mapped[MemberRole] = mapped_column(
         SAEnum(MemberRole, name="member_role", native_enum=False, length=10), nullable=False
     )
+    # When True, this member may use the MCP endpoint on this project.
+    # Defaults to False: the project owner must explicitly grant access.
+    mcp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
 
     __table_args__ = (Index("ix_project_members_user", "user_id"),)
+
+
+class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """A customer tenant. Every project and every org-scoped resource lives inside one of these.
+
+    A single-user ('individual') account is just an Organization with kind='personal' and one
+    owner. The code paths never fork on kind; the UI hides concepts (invites, SSO) that make
+    no sense for a solo org.
+    """
+
+    __tablename__ = "organizations"
+
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    kind: Mapped[OrgKind] = mapped_column(
+        SAEnum(OrgKind, name="org_kind", native_enum=False, length=20),
+        nullable=False,
+        default=OrgKind.team,
+    )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="SET NULL"), nullable=True
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OrganizationMember(Base):
+    """Who sits in an org and what they may do inside it.
+
+    `(organization_id, user_id)` is the natural key: a user can be in many orgs, each with its
+    own role, and never twice in the same one.
+    """
+
+    __tablename__ = "organization_members"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="CASCADE"), primary_key=True
+    )
+    role: Mapped[OrgRole] = mapped_column(
+        SAEnum(OrgRole, name="org_role", native_enum=False, length=20),
+        nullable=False,
+    )
+    joined_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+    __table_args__ = (Index("ix_organization_members_user", "user_id"),)
+
+
+class OrganizationInvitation(UUIDPrimaryKeyMixin, Base):
+    """A pending seat. The caller gets the raw token exactly once; only its hash is kept."""
+
+    __tablename__ = "organization_invitations"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    email: Mapped[str] = mapped_column(String(254), nullable=False)
+    role: Mapped[OrgRole] = mapped_column(
+        SAEnum(OrgRole, name="org_role", native_enum=False, length=20),
+        nullable=False,
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    invited_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="SET NULL"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_organization_invitations_org", "organization_id"),
+        Index("ix_organization_invitations_email", "email"),
+    )
+
+
+class Plan(Base):
+    """A plan is a row describing what a Subscription on it allows.
+
+    Plans are platform-defined and seeded. Caps are nullable (NULL = unlimited), but we never
+    ship NULL caps on free/team: that is a trap when the business later wants to charge for a
+    knob they already gave away.
+    """
+
+    __tablename__ = "plans"
+
+    id: Mapped[str] = mapped_column(String(40), primary_key=True)
+    display_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    max_seats: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_projects: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_api_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_mcp_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    allow_sso: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    allow_scim: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    allow_mcp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    monthly_price_usd: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    is_public: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+
+
+class Subscription(Base):
+    """One active subscription row per org, pointing at the current Plan.
+
+    Stripe fields are nullable because free/team plans do not create a Stripe customer. The
+    `seat_override` is what the platform operator can bump above the plan's own cap.
+    """
+
+    __tablename__ = "subscriptions"
+
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    plan_id: Mapped[str] = mapped_column(
+        String(40), ForeignKey("plans.id", ondelete="RESTRICT"), nullable=False
+    )
+    status: Mapped[SubscriptionStatus] = mapped_column(
+        SAEnum(SubscriptionStatus, name="subscription_status", native_enum=False, length=20),
+        nullable=False,
+        default=SubscriptionStatus.active,
+    )
+    trial_ends_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    current_period_end: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    seat_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    project_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
 
 
 class AuditLog(Base):
@@ -151,6 +317,7 @@ class AuditLog(Base):
     target_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     project_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     result: Mapped[AuditResult] = mapped_column(
         SAEnum(AuditResult, name="audit_result", native_enum=False, length=10), nullable=False
     )
@@ -162,4 +329,5 @@ class AuditLog(Base):
         Index("ix_platform_audit_at", "at"),
         Index("ix_platform_audit_actor", "actor_id", "at"),
         Index("ix_platform_audit_project", "project_id", "at"),
+        Index("ix_platform_audit_org", "organization_id", "at"),
     )

@@ -23,7 +23,7 @@ class MemberService:
         return [(m, u) for m, u in rows.all()]
 
     async def add(
-        self, project_id: uuid.UUID, email: str, role: MemberRole
+        self, project_id: uuid.UUID, email: str, role: MemberRole, mcp_enabled: bool = False
     ) -> tuple[ProjectMember, PlatformUser]:
         user = (
             await self.db.execute(
@@ -40,7 +40,12 @@ class MemberService:
         existing = await self.db.get(ProjectMember, (project_id, user.id))
         if existing is not None:
             raise AppError(code="conflict", message="already a member", status_code=409)
-        member = ProjectMember(project_id=project_id, user_id=user.id, role=role)
+        member = ProjectMember(
+            project_id=project_id,
+            user_id=user.id,
+            role=role,
+            mcp_enabled=mcp_enabled,
+        )
         self.db.add(member)
         await self.db.commit()
         return member, user
@@ -52,6 +57,16 @@ class MemberService:
         if member.role is MemberRole.owner and role is not MemberRole.owner:
             await self._require_another_owner(project_id, user_id)
         member.role = role
+        await self.db.commit()
+        user = await self.db.get(PlatformUser, user_id)
+        assert user is not None
+        return member, user
+
+    async def set_mcp_enabled(
+        self, project_id: uuid.UUID, user_id: uuid.UUID, mcp_enabled: bool
+    ) -> tuple[ProjectMember, PlatformUser]:
+        member = await self._get(project_id, user_id)
+        member.mcp_enabled = mcp_enabled
         await self.db.commit()
         user = await self.db.get(PlatformUser, user_id)
         assert user is not None

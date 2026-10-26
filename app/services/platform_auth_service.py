@@ -95,6 +95,11 @@ class PlatformAuthService:
         user = await self.create_user(
             email=email, password=password, name=name, role=PlatformRole.customer, info=info
         )
+        # Every account gets a personal org on sign-up. One account model: an 'individual'
+        # account is just an Organization with kind='personal' and one owner.
+        from app.services.organization_service import OrganizationService
+
+        org = await OrganizationService(self.db).ensure_personal_org(user)
         await audit_service.record(
             self.db,
             action="account.register",
@@ -102,6 +107,7 @@ class PlatformAuthService:
             actor_email=user.email,
             target_type="user",
             target_id=user.id,
+            organization_id=org.id,
             client_ip=info.client_ip,
             request_id=info.request_id,
         )
@@ -463,7 +469,18 @@ class PlatformAuthService:
             role=PlatformRole.platform_admin,
             info=RequestInfo(),
         )
+        from app.services.organization_service import OrganizationService
+
+        admin_org = await OrganizationService(self.db).ensure_personal_org(admin)
         adopted = await self.adopt_unclaimed_projects(admin)
+        # Any newly-adopted project also lands in the admin's personal org so it has a tenant.
+        from sqlalchemy import update as sa_update
+
+        await self.db.execute(
+            sa_update(Project)
+            .where(Project.organization_id.is_(None))
+            .values(organization_id=admin_org.id)
+        )
         await audit_service.record(
             self.db,
             action="admin.bootstrap",
@@ -471,6 +488,7 @@ class PlatformAuthService:
             actor_email=admin.email,
             target_type="user",
             target_id=admin.id,
+            organization_id=admin_org.id,
             detail={"adopted_projects": adopted},
         )
         await self.db.commit()

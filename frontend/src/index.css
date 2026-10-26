@@ -697,3 +697,14 @@ dialog:has(.policy-form) {
   max-width: 100%;
   margin: 0;
 }
+
+/* ── Plan & usage (Platform SaaS Phase B) ─────────────────────────────────── */
+
+.stat-card.status-error .stat-value {
+  color: var(--danger);
+}
+
+.stat-card progress {
+  width: 100%;
+  margin-block-start: var(--space-2);
+}

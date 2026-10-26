@@ -8,12 +8,17 @@ import {
   type Surface,
 } from './session'
 import type {
+  AdminOrg,
+  Organization,
+  OrgPlan,
+  QuotaDetail,
   AdminProject,
   AdminStats,
   AdminUser,
   ApiErrorBody,
   ApiTokenCreated,
   ApiTokenInfo,
+  ProjectToken,
   AuditEntry,
   Member,
   MemberRole,
@@ -120,9 +125,28 @@ async function request<T>(
 
   const body = await response.json()
   if (!response.ok) {
-    throw new ApiError(response.status, body as ApiErrorBody)
+    const error = new ApiError(response.status, body as ApiErrorBody)
+    if (response.status === 402) notifyQuotaExceeded(error)
+    throw error
   }
   return body as T
+}
+
+// ── 402 Payment Required: a plan cap was hit (seats, projects, tokens) ──────
+type QuotaListener = (error: ApiError, detail: QuotaDetail | null) => void
+const quotaListeners = new Set<QuotaListener>()
+
+/** Subscribe to quota refusals from any API call. Returns an unsubscribe function. */
+export function onQuotaExceeded(listener: QuotaListener): () => void {
+  quotaListeners.add(listener)
+  return () => {
+    quotaListeners.delete(listener)
+  }
+}
+
+function notifyQuotaExceeded(error: ApiError) {
+  const detail = (error.details[0] as QuotaDetail | undefined) ?? null
+  quotaListeners.forEach((listener) => listener(error, detail))
 }
 
 const json = (data: unknown) => JSON.stringify(data)
@@ -143,6 +167,18 @@ function adopt(surface: Surface, session: SessionResponse): SessionResponse {
 }
 
 export const api = {
+  // ── Organizations & plan (customer) ──────────────────────────────────────
+  listOrgs: () => request<Page<Organization>>('/orgs'),
+  orgPlan: (slug: string) => request<OrgPlan>(`/orgs/${encodeURIComponent(slug)}/plan`),
+  startCheckout: (slug: string, planId: string) =>
+    request<{ id: string; url: string }>(`/orgs/${encodeURIComponent(slug)}/billing/checkout`, {
+      method: 'POST',
+      body: json({ plan_id: planId }),
+    }),
+  /** Stripe Billing Portal for an org that already pays: plan change, card, cancel. */
+  openBillingPortal: (slug: string) =>
+    request<{ url: string }>(`/orgs/${encodeURIComponent(slug)}/billing/portal`, { method: 'POST' }),
+
   listProjects: (limit = 50, offset = 0) =>
     request<Page<Project>>(`/projects?limit=${limit}&offset=${offset}`),
   createProject: (data: { name: string; slug?: string; description?: string }) =>
@@ -465,11 +501,18 @@ export const api = {
   listApiTokens: () => request<ApiTokenInfo[]>('/account/tokens'),
   createApiToken: (data: {
     name: string
+    description?: string | null
     scopes: string[]
     expires_in_days: number
     project_id?: string | null
   }) => request<ApiTokenCreated>('/account/tokens', { method: 'POST', body: json(data) }),
   revokeApiToken: (id: string) => request<void>(`/account/tokens/${id}`, { method: 'DELETE' }),
+
+  // ── Project-scoped tokens (owners only) ──────────────────────────────────
+  listProjectTokens: (projectId: string) =>
+    request<ProjectToken[]>(`/projects/${projectId}/tokens`),
+  revokeProjectToken: (projectId: string, tokenId: string) =>
+    request<void>(`/projects/${projectId}/tokens/${tokenId}`, { method: 'DELETE' }),
 
   // ── Project members ──────────────────────────────────────────────────────
 
@@ -483,6 +526,12 @@ export const api = {
     request<Member>(`/projects/${projectId}/members/${userId}`, {
       method: 'PATCH',
       body: json({ role }),
+    }),
+  /** Owner-only: grant or revoke a member's MCP access. */
+  setMemberMcp: (projectId: string, userId: string, mcp_enabled: boolean) =>
+    request<Member>(`/projects/${projectId}/members/${userId}/mcp`, {
+      method: 'PATCH',
+      body: json({ mcp_enabled }),
     }),
   removeMember: (projectId: string, userId: string) =>
     request<void>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
@@ -555,6 +604,34 @@ export const api = {
       undefined,
       admin,
     ),
-  adminAudit: (params: { action?: string; result?: string; limit?: number; offset?: number }) =>
-    request<Page<AuditEntry>>(`/admin/audit?${queryString(params)}`, undefined, admin),
+  adminAudit: (params: {
+    action?: string
+    result?: string
+    via?: string
+    limit?: number
+    offset?: number
+  }) => request<Page<AuditEntry>>(`/admin/audit?${queryString(params)}`, undefined, admin),
+
+  // ── Admin: organizations (seat / project overrides, §6.5) ────────────────
+  adminOrganizations: (q = '', limit = 25, offset = 0) =>
+    request<Page<AdminOrg>>(
+      `/admin/organizations?${queryString({ q, limit, offset })}`,
+      undefined,
+      admin,
+    ),
+  adminSetOrgOverrides: (
+    id: string,
+    data: { seat_override: number | null; project_override: number | null; reason: string },
+  ) =>
+    request<AdminOrg>(
+      `/admin/organizations/${id}/overrides`,
+      { method: 'PATCH', body: json(data) },
+      admin,
+    ),
+
+  // ── Admin: tokens of any user ────────────────────────────────────────────
+  adminListUserTokens: (userId: string) =>
+    request<ApiTokenInfo[]>(`/admin/users/${userId}/tokens`, undefined, admin),
+  adminRevokeUserToken: (userId: string, tokenId: string) =>
+    request<void>(`/admin/users/${userId}/tokens/${tokenId}`, { method: 'DELETE' }, admin),
 }

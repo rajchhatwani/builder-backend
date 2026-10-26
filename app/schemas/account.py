@@ -52,6 +52,7 @@ class SessionRead(BaseModel):
 
 class ApiTokenCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
+    description: str | None = Field(default=None, max_length=255)
     scopes: list[str] = Field(min_length=1, max_length=8)
     expires_in_days: int = Field(default=90, ge=1, le=365)
     project_id: uuid.UUID | None = None
@@ -62,17 +63,26 @@ class ApiTokenRead(BaseModel):
 
     id: uuid.UUID
     name: str
+    description: str | None
     public_id: str
     scopes: list[str]
     project_id: uuid.UUID | None
     created_at: datetime
     expires_at: datetime
     last_used_at: datetime | None
+    last_mcp_use_at: datetime | None
     revoked_at: datetime | None
 
 
 class ApiTokenCreated(ApiTokenRead):
     token: str  # shown exactly once
+
+
+class ProjectTokenRead(ApiTokenRead):
+    """An API token as seen by a project owner — includes whose token it is."""
+
+    user_id: uuid.UUID
+    user_email: str
 
 
 # -- project members -----------------------------------------------------------------------
@@ -83,16 +93,22 @@ class MemberRead(BaseModel):
     email: str
     name: str
     role: MemberRole
+    mcp_enabled: bool
     created_at: datetime
 
 
 class MemberAdd(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     role: MemberRole = MemberRole.viewer
+    mcp_enabled: bool = False
 
 
 class MemberUpdate(BaseModel):
     role: MemberRole
+
+
+class MemberMcpUpdate(BaseModel):
+    mcp_enabled: bool
 
 
 # -- admin console -------------------------------------------------------------------------
@@ -146,6 +162,7 @@ class AuditRead(BaseModel):
     target_type: str | None
     target_id: str | None
     project_id: uuid.UUID | None
+    organization_id: uuid.UUID | None = None
     result: AuditResult
     client_ip: str | None
     detail: dict[str, object] | None
@@ -159,6 +176,46 @@ class AdminStats(BaseModel):
     projects: int
     api_tokens: int
     failed_logins_24h: int
+
+
+class AdminOrgRead(BaseModel):
+    """Operator-facing view of an organization: metadata, counts, plan, status."""
+
+    id: uuid.UUID
+    name: str
+    slug: str
+    kind: str  # OrgKind.value
+    created_at: datetime
+    deleted_at: datetime | None
+    member_count: int
+    project_count: int
+    plan_id: str
+    status: str  # SubscriptionStatus.value
+    seat_override: int | None
+    project_override: int | None
+
+
+class AdminOrgSeatOverride(BaseModel):
+    """Operator sets a per-org seat override above the plan cap, with a reason."""
+
+    seat_override: int | None = Field(default=None, ge=0, le=100000)
+    project_override: int | None = Field(default=None, ge=0, le=100000)
+    reason: str = Field(min_length=1, max_length=255)
+
+
+class PlanWrite(BaseModel):
+    """Operator-facing plan editor. The id is immutable once created."""
+
+    display_name: str = Field(min_length=1, max_length=100)
+    max_seats: int | None = Field(default=None, ge=0, le=100000)
+    max_projects: int | None = Field(default=None, ge=0, le=100000)
+    max_api_tokens: int | None = Field(default=None, ge=0, le=100000)
+    max_mcp_tokens: int | None = Field(default=None, ge=0, le=100000)
+    allow_sso: bool = False
+    allow_scim: bool = False
+    allow_mcp: bool = False
+    monthly_price_usd: int = Field(default=0, ge=0, le=10_000_000)
+    is_public: bool = True
 
 
 class PlatformSettingsRead(BaseModel):

@@ -240,7 +240,7 @@ async def list_tokens(
     principal: Principal = Depends(session_principal), db: AsyncSession = Depends(get_session)
 ) -> list[ApiTokenRead]:
     _active_session(principal)
-    rows = await ApiTokenService(db).list(principal.user)
+    rows = await ApiTokenService(db).list_tokens(principal.user)
     return [ApiTokenRead.model_validate(r) for r in rows]
 
 
@@ -256,6 +256,7 @@ async def create_token(
     row, raw = await ApiTokenService(db).create(
         principal.user,
         name=body.name,
+        description=body.description,
         scopes=body.scopes,
         expires_in_days=body.expires_in_days,
         project_id=body.project_id,

@@ -32,6 +32,8 @@ PUBLIC = {
     ("POST", "/admin/login"),
     ("POST", "/admin/refresh"),
     ("POST", "/admin/logout"),
+    # Stripe calls it; authenticated by the Stripe-Signature HMAC, not by a session.
+    ("POST", "/billing/stripe/webhook"),
 }
 ID_PARAMS = {
     "project_id",
