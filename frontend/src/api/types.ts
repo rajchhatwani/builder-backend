@@ -33,6 +33,10 @@ export interface Project {
   description: string | null
   db_engine: DbEngine
   version: number
+  organization_id: string | null
+  /** The project's org is waiting for deletion: opening it answers 423. */
+  organization_locked?: boolean
+  organization_deletion_scheduled_for?: string | null
   created_at: string
   updated_at: string
 }
@@ -110,6 +114,7 @@ export interface FieldInput {
 }
 
 export interface EntityUpdate {
+  name?: string
   table_name?: string
   plural_path?: string
   options?: EntityOptions
@@ -617,6 +622,9 @@ export interface UserAccount {
   must_change_password: boolean
   created_at: string
   last_login_at: string | null
+  default_organization_id?: string | null
+  /** TOTP is turned on for this account. */
+  mfa_enabled?: boolean
 }
 
 export interface SessionResponse {
@@ -684,6 +692,7 @@ export interface AuditEntry {
   target_type: string | null
   target_id: string | null
   project_id: string | null
+  organization_id?: string | null
   result: 'ok' | 'denied' | 'error'
   client_ip: string | null
   detail: Record<string, unknown> | null
@@ -968,6 +977,20 @@ export interface Organization {
   created_at: string
   my_role: OrgRole
   member_count: number
+  /** Set while a deletion request waits out its grace period. The org is locked meanwhile. */
+  deletion_requested_at?: string | null
+  deletion_scheduled_for?: string | null
+  /** Security policies (§8): members need two-factor; absolute session cap in hours (null = default). */
+  require_mfa?: boolean
+  session_ttl_hours?: number | null
+}
+
+/** `details[0]` of a 423 `org_deletion_pending` refusal. */
+export interface OrgLockedDetail {
+  organization_id?: string
+  organization_slug?: string
+  organization_name?: string
+  deletion_scheduled_for: string | null
 }
 
 export interface PlanInfo {
@@ -1016,13 +1039,13 @@ export interface OrgPlan {
 
 /** `details[0]` of a 402 quota refusal. */
 export interface QuotaDetail {
-  resource: 'seats' | 'projects' | 'api_tokens' | 'mcp_tokens'
+  resource: 'seats' | 'projects' | 'api_tokens' | 'mcp_tokens' | 'sso' | 'scim'
   plan: string
   /** null when the refusal is not about a cap (reason 'past_due'). */
   cap: number | null
   used: number
   /** 'cap': the plan's counter is full. 'past_due': the last payment failed. */
-  reason?: 'cap' | 'past_due'
+  reason?: 'cap' | 'past_due' | 'feature'
   organization_slug: string | null
 }
 
@@ -1039,4 +1062,294 @@ export interface AdminOrg {
   status: string
   seat_override: number | null
   project_override: number | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  current_period_end: string | null
+  trial_ends_at: string | null
+  mrr_cents: number
+  last_activity_at: string | null
+  deletion_requested_at?: string | null
+  deletion_scheduled_for?: string | null
+  /** SSO status (§7): protocol is null when no connection is configured. */
+  sso_protocol?: SsoProtocol | null
+  sso_active?: boolean
+  sso_verified_domains?: number
+  sso_last_test_at?: string | null
+  sso_last_test_result?: string | null
+  require_mfa?: boolean
+  session_ttl_hours?: number | null
+  /** SCIM status (§12.E.4). */
+  scim_configured?: boolean
+  scim_active?: boolean
+  /** Active SCIM-provisioned people. */
+  scim_users?: number
+  scim_last_sync_at?: string | null
+  scim_token_created_at?: string | null
+}
+
+export interface AdminOrgMember {
+  user_id: string
+  email: string
+  name: string
+  role: OrgRole
+  joined_at: string
+  status: 'active' | 'suspended'
+  last_login_at: string | null
+  mfa_enabled?: boolean
+}
+
+export interface AdminOrgProject {
+  id: string
+  name: string
+  slug: string
+  created_at: string
+  updated_at: string
+  entity_count: number
+}
+
+export interface AdminSubscription {
+  organization_id: string
+  organization_slug: string
+  organization_name: string
+  plan_id: string
+  status: string
+  current_period_end: string | null
+  trial_ends_at: string | null
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  seat_override: number | null
+  updated_at: string
+}
+
+export interface AdminInsights {
+  signups_per_day: { day: string; count: number }[]
+  orgs_per_day: { day: string; count: number }[]
+  total_orgs: number
+  active_orgs_7d: number
+  total_projects: number
+  mcp_calls_24h: number
+  denied_by_quota_7d: number
+}
+
+export interface ReconcileReport {
+  checked: number
+  changed: number
+  failed: number
+  trials_expired: number
+}
+
+/** `GET /orgs/{slug}/audit` — no details or IPs (§7.1). */
+export interface OrgAuditEntry {
+  id: number
+  at: string
+  actor_email: string | null
+  via: string
+  action: string
+  target_type: string | null
+  target_id: string | null
+  project_id: string | null
+  result: 'ok' | 'denied' | 'error'
+}
+
+// ── Org console (Platform SaaS Phase A step 6) ─────────────────────────────
+
+export interface OrgMember {
+  user_id: string
+  email: string
+  name: string
+  role: OrgRole
+  joined_at: string
+  status?: 'active' | 'suspended'
+  last_login_at?: string | null
+  mfa_enabled?: boolean
+}
+
+export interface OrgInvitation {
+  id: string
+  organization_id: string
+  organization_slug: string
+  organization_name: string
+  email: string
+  role: OrgRole
+  status: 'pending' | 'accepted' | 'revoked' | 'expired'
+  created_at: string
+  expires_at: string
+}
+
+/** Returned once, when the invitation is created. */
+export interface OrgInvitationCreated extends OrgInvitation {
+  token: string
+  invite_url: string
+  emailed: boolean // false when the platform has no SMTP configured
+}
+
+/** Body of `PUT /admin/plans/{id}`: everything but the id. */
+export type PlanWrite = Omit<PlanInfo, 'id'>
+
+// ── Two-factor authentication (§4.4) ───────────────────────────────────────
+
+/** `POST /account/login` or `/admin/login` when a second step is needed. */
+export interface MfaChallenge {
+  mfa_required: true
+  /** true: the account has no TOTP yet and must set it up now (platform staff). */
+  enrollment_required: boolean
+  mfa_token: string
+  expires_in: number
+  methods: ('totp' | 'recovery_code')[]
+}
+
+export type LoginResult = SessionResponse | MfaChallenge
+
+export function isMfaChallenge(result: LoginResult): result is MfaChallenge {
+  return 'mfa_required' in result && result.mfa_required === true
+}
+
+export interface TotpSetup {
+  secret: string
+  otpauth_uri: string
+}
+
+/** Turning TOTP on returns a new session that counts as MFA'd, plus the codes, shown once. */
+export interface SessionWithRecoveryCodes extends SessionResponse {
+  recovery_codes: string[]
+}
+
+export interface MfaStatus {
+  totp_enabled: boolean
+  enabled_at: string | null
+  recovery_codes_left: number
+  /** This session was started with a second factor. */
+  session_mfa: boolean
+  required_for_staff: boolean
+  required_by: { organization_id: string; slug: string; name: string }[]
+  /** SSO-only accounts: the identity provider handles two-factor. */
+  sso_only: boolean
+}
+
+/** `details[0]` of a 403 `org_mfa_required` refusal. */
+export interface OrgMfaDetail {
+  organization_id: string
+  organization_slug: string
+  organization_name: string
+  mfa_enabled: boolean
+}
+
+// ── Security policies (§8) ─────────────────────────────────────────────────
+
+export interface OrgPolicies {
+  require_mfa: boolean
+  session_ttl_hours: number | null
+  members_without_mfa: number
+  default_session_hours: number
+}
+
+export interface OrgPoliciesUpdate {
+  require_mfa?: boolean
+  session_ttl_hours?: number | null
+}
+
+// ── Single sign-on (§4.2) ──────────────────────────────────────────────────
+
+export type SsoProtocol = 'saml' | 'oidc'
+
+export interface LoginDiscovery {
+  method: 'sso' | 'password'
+  login_url?: string | null
+  organization_name?: string | null
+}
+
+export interface SsoDomain {
+  domain: string
+  verified_at: string | null
+  created_at: string
+  dns_record_type?: string
+  dns_record_name: string
+  dns_record_value: string
+}
+
+export interface SsoConfig {
+  configured: boolean
+  allowed_by_plan: boolean
+  protocol?: SsoProtocol | null
+  active?: boolean
+  idp_entity_id?: string | null
+  idp_sso_url?: string | null
+  idp_certificate?: { sha256_fingerprint: string; not_after: string; subject: string } | null
+  oidc_discovery_url?: string | null
+  oidc_client_id?: string | null
+  oidc_client_secret_set?: boolean
+  jit_enabled?: boolean
+  jit_role?: 'member' | 'admin'
+  trust_unverified_email?: boolean
+  updated_at?: string | null
+  last_test?: { at: string; result: string; tested_by_email?: string | null } | null
+  sp: {
+    entity_id: string
+    acs_url: string
+    metadata_url: string
+    oidc_redirect_uri: string
+    login_url: string
+  }
+  domains: SsoDomain[]
+}
+
+export interface SsoConfigWrite {
+  protocol: SsoProtocol
+  idp_entity_id?: string | null
+  idp_sso_url?: string | null
+  idp_cert_pem?: string | null
+  oidc_discovery_url?: string | null
+  oidc_client_id?: string | null
+  /** Write-only. Leave out to keep the stored secret. */
+  oidc_client_secret?: string | null
+  jit_enabled?: boolean
+  jit_role?: 'member' | 'admin'
+  trust_unverified_email?: boolean
+}
+
+export interface SsoCheck {
+  ok: boolean
+  protocol: string | null
+  active: boolean
+  checks: { name: string; status: 'ok' | 'warning' | 'error'; detail?: string | null }[]
+}
+
+// ── SCIM provisioning setup (§4.3, §12.E.5) ─────────────────────────────────
+
+export type ScimRole = 'owner' | 'admin' | 'member'
+
+export interface ScimGroupSummary {
+  display_name: string
+  members: number
+  mapped_role: string | null
+}
+
+export interface ScimConfig {
+  configured: boolean
+  allowed_by_plan: boolean
+  active: boolean
+  /** Paste into the IdP as the SCIM base / tenant URL. */
+  base_url: string
+  /** base_url + "/Users", for IdPs that ask for it. */
+  users_url: string
+  /** Last 4 characters of the token; null after an operator rotation (nobody knows the token). */
+  token_hint: string | null
+  token_created_at: string | null
+  created_at: string | null
+  last_sync_at: string | null
+  /** Lower-cased group name -> org role. */
+  group_roles: Record<string, ScimRole>
+  active_users: number
+  deactivated_users: number
+  groups: ScimGroupSummary[]
+}
+
+/** POST /orgs/{slug}/scim/token. `token` is shown this once. */
+export interface ScimToken extends ScimConfig {
+  token: string
+}
+
+export interface ScimConfigUpdate {
+  active?: boolean
+  group_roles?: Record<string, ScimRole>
 }

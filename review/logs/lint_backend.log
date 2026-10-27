@@ -1,0 +1,60 @@
+
+E501 Line too long (102 > 100)
+   --> tests/unit/test_storage_generation.py:240:101
+    |
+238 |     assert "no compliance opinion" in guide.replace("not a compliance opinion", "no compliance opinion")
+239 |     if spec.storage.backend == "minio":
+240 |         assert "stopped publishing container images" in guide  # the MinIO situation is stated plainly
+    |                                                                                                     ^^
+
+E501 Line too long (101 > 100)
+   --> tests/unit/test_storage_generation.py:250:101
+    |
+248 |     bucket, prefix = spec.storage.bucket, spec.storage.key_prefix
+249 |     policy = json.loads(files["deploy/storage/bucket-policy.json"])
+250 |     assert {s["Sid"] for s in policy["Statement"]} == {"DenyInsecureTransport", "DenyOldTlsVersions"}
+    |                                                                                                     ^
+251 |     iam = json.loads(files["deploy/storage/iam-policy.json"])
+252 |     object_rule = next(s for s in iam["Statement"] if s["Sid"] == "ObjectsUnderThePrefixOnly")
+    |
+
+E501 Line too long (103 > 100)
+   --> tests/unit/test_storage_generation.py:256:101
+    |
+254 |     assert "s3:*" not in str(iam)
+255 |     lifecycle = json.loads(files["deploy/storage/lifecycle.json"])
+256 |     assert {r["ID"] for r in lifecycle["Rules"]} >= {"abort-incomplete-uploads", "expire-old-versions"}
+    |                                                                                                     ^^^
+
+Found 96 errors.
+[*] 23 fixable with `--fix` (1 unsafe fix available with `--fix --unsafe-fixes`).
+--- format
+267 +     assert {r["ID"] for r in lifecycle["Rules"]} >= {
+268 +         "abort-incomplete-uploads",
+269 +         "expire-old-versions",
+270 +     }
+    |
+
+unformatted: File would be reformatted
+   --> tests/unit/test_validation.py:587:1
+    |
+586 |
+    -
+587 | # --- generator-safety rules -------------------------------------------------------------
+    |
+
+34 files would be reformatted, 272 files already formatted
+--- mypy
+app/services/stripe_client.py:86: error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+app/api/security.py:270: error: Returning Any from function declared to return "OrgRole"  [no-any-return]
+app/api/orgs.py:210: error: Function is missing a type annotation for one or more parameters  [no-untyped-def]
+app/api/orgs.py:581: error: Argument 1 to "OrgUsage" has incompatible type "**dict[str, int | None]"; expected "int"  [arg-type]
+app/services/admin_service.py:313: error: Argument 1 to "append" of "list" has incompatible type "ColumnElement[bool]"; expected "BinaryExpression[bool]"  [arg-type]
+app/services/admin_service.py:625: error: Item "None" of "Subscription | None" has no attribute "plan_id"  [union-attr]
+app/services/admin_service.py:669: error: Argument 1 to "append" of "list" has incompatible type "ColumnElement[bool]"; expected "BinaryExpression[bool]"  [arg-type]
+app/services/admin_service.py:673: error: Argument 1 to "append" of "list" has incompatible type "ColumnElement[bool]"; expected "BinaryExpression[bool]"  [arg-type]
+app/services/admin_service.py:703: error: Argument 2 to "where" of "Select" has incompatible type "*tuple[object, ...]"; expected "ColumnElement[bool] | _HasClauseElement[bool] | SQLCoreOperations[bool] | ExpressionElementRole[bool] | TypedColumnsClauseRole[bool] | Callable[[], ColumnElement[bool]] | LambdaElement"  [arg-type]
+app/api/admin.py:554: error: Argument 1 to "org_extras" of "AdminService" has incompatible type "list[tuple[Organization, int, int, Subscription]]"; expected "list[tuple[Organization, int, int, Subscription | None]]"  [arg-type]
+app/api/admin.py:554: note: "list" is invariant -- see https://mypy.readthedocs.io/en/stable/common_issues.html#variance
+app/api/admin.py:554: note: Consider using "Sequence" instead, which is covariant
+Found 10 errors in 5 files (checked 175 source files)

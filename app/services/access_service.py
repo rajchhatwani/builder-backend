@@ -29,6 +29,18 @@ class Principal:
     audience: TokenAudience
     scopes: frozenset[str]  # empty for sessions: they are not scope-limited
     token_project_id: uuid.UUID | None = None  # an API token pinned to one project
+    # How the session was signed in (`amr` claim): {'pwd'}, {'pwd', 'otp'}, {'sso'}, ...
+    # Empty for API tokens.
+    auth_methods: frozenset[str] = frozenset()
+
+    @property
+    def mfa_satisfied(self) -> bool:
+        """For an org that requires MFA (§4.4): a session must have used a second factor (or
+        SSO, where the IdP owns MFA); an API token's owner must have MFA set up or be an
+        SSO-only account."""
+        if self.via == "session":
+            return bool(self.auth_methods & sec.MFA_METHODS)
+        return self.user.mfa_enabled or self.user.password_hash == sec.SSO_ONLY_PASSWORD_HASH
 
 
 def _now() -> datetime:
@@ -54,7 +66,9 @@ async def principal_from_jwt(
         or claims.get("tv") != user.token_version
     ):
         return None
-    return Principal(user, "session", audience, frozenset())
+    amr = claims.get("amr")
+    methods = frozenset(m for m in amr if isinstance(m, str)) if isinstance(amr, list) else None
+    return Principal(user, "session", audience, frozenset(), auth_methods=methods or frozenset())
 
 
 async def principal_from_api_token(db: AsyncSession, token: str) -> Principal | None:

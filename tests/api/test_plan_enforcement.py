@@ -325,3 +325,23 @@ async def test_the_quota_is_not_bypassed_by_an_unknown_org(
     async with session_factory() as session:
         org = await session.get(Organization, org_id)
         assert org is not None
+
+
+# -- review F-011: a refusal names who was refused ----------------------------------------------
+
+
+async def test_quota_denied_audit_rows_carry_the_actor_address(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    org = (await client.post("/orgs", json={"name": "Free", "slug": "free-co"})).json()
+    await _set_plan(session_factory, org["id"], "free")
+    one = await client.post("/projects", json={"name": "a", "organization_id": org["id"]})
+    two = await client.post("/projects", json={"name": "b", "organization_id": org["id"]})
+    seat = await client.post(
+        "/orgs/free-co/invitations", json={"email": "x@example.com", "role": "member"}
+    )
+    assert one.status_code == 201 and two.status_code == 402 and seat.status_code == 402
+    audit = (await client.get("/orgs/free-co/audit", params={"action": "quota.denied"})).json()
+    rows = audit["items"]
+    assert len(rows) >= 2
+    assert {r["actor_email"] for r in rows} == {"primary@example.com"}

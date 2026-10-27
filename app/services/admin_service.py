@@ -1,18 +1,26 @@
 """Operations behind the admin console. Administrators manage people and see metadata; they do
 not read customer specs, secrets or generated code (that is a deliberate privacy line)."""
 
+import re
 import secrets
 import string
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.exceptions import AppError
 from app.models.entity import Entity
-from app.models.enums import AccountStatus, AuditResult, MemberRole, PlatformRole
+from app.models.enums import (
+    AccountStatus,
+    AuditResult,
+    MemberRole,
+    OrgKind,
+    PlatformRole,
+    SubscriptionStatus,
+)
 from app.models.platform import (
     ApiToken,
     AuditLog,
@@ -42,6 +50,9 @@ def generate_temporary_password() -> str:
             and any(c.isdigit() for c in candidate)
         ):
             return candidate
+
+
+_PLAN_ID_RE = re.compile(r"[a-z][a-z0-9_-]{0,39}")
 
 
 class AdminService:
@@ -302,9 +313,7 @@ class AdminService:
                 or_(func.lower(Organization.name).like(like), Organization.slug.like(like))
             )
         total = (
-            await self.db.execute(
-                select(func.count()).select_from(Organization).where(*conditions)
-            )
+            await self.db.execute(select(func.count()).select_from(Organization).where(*conditions))
         ).scalar_one()
         orgs = (
             (
@@ -426,14 +435,27 @@ class AdminService:
         org_id: uuid.UUID,
         *,
         plan_id: str,
+        reason: str,
         info: RequestInfo,
     ) -> Subscription:
+        from app.services.billing_service import has_live_stripe_subscription
+
         sub = await self.db.get(Subscription, org_id)
         if sub is None:
             raise AppError(code="not_found", message="subscription not found", status_code=404)
         plan = await self.db.get(Plan, plan_id)
         if plan is None:
             raise AppError(code="not_found", message="plan not found", status_code=404)
+        if has_live_stripe_subscription(sub):
+            # The next customer.subscription.updated webhook would silently undo it.
+            raise AppError(
+                code="stripe_managed",
+                message=(
+                    "this organization is billed through Stripe; change its plan in the Stripe "
+                    "Dashboard (or the customer's billing portal) instead"
+                ),
+                status_code=409,
+            )
         old = sub.plan_id
         sub.plan_id = plan_id
         await audit_service.record(
@@ -446,7 +468,7 @@ class AdminService:
             target_id=org_id,
             client_ip=info.client_ip,
             request_id=info.request_id,
-            detail={"from_plan": old, "to_plan": plan_id},
+            detail={"from_plan": old, "to_plan": plan_id, "reason": reason[:200]},
         )
         await self.db.commit()
         return sub
@@ -460,16 +482,36 @@ class AdminService:
     async def upsert_plan(
         self, actor: Principal, plan_id: str, data: dict[str, object], info: RequestInfo
     ) -> Plan:
+        if not _PLAN_ID_RE.fullmatch(plan_id):
+            raise AppError(
+                code="invalid_plan_id",
+                message=(
+                    "plan ids are 1–40 lowercase letters, digits, '-' or '_', "
+                    "starting with a letter"
+                ),
+                status_code=422,
+            )
         plan = await self.db.get(Plan, plan_id)
         action = "admin.plan_update"
+        changes: dict[str, list[object]] = {}
         if plan is None:
             plan = Plan(id=plan_id, **{k: v for k, v in data.items() if hasattr(Plan, k)})
             self.db.add(plan)
             action = "admin.plan_create"
         else:
             for key, value in data.items():
-                if hasattr(plan, key):
+                if hasattr(plan, key) and getattr(plan, key) != value:
+                    changes[key] = [getattr(plan, key), value]
                     setattr(plan, key, value)
+        # Not grandfathered (yet): a change applies to every org on the plan at once, so the
+        # audit row says how many orgs that was.
+        affected = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(Subscription)
+                .where(Subscription.plan_id == plan_id)
+            )
+        ).scalar_one()
         await audit_service.record(
             self.db,
             action=action,
@@ -479,10 +521,229 @@ class AdminService:
             target_id=plan_id,
             client_ip=info.client_ip,
             request_id=info.request_id,
-            detail={"plan_id": plan_id},
+            # One flat string: audit details are flat by design, and field names such as
+            # max_api_tokens would trip the secret-key filter as separate keys.
+            detail={
+                "plan_id": plan_id,
+                "changes": "; ".join(f"{k}: {a!r} -> {b!r}" for k, (a, b) in changes.items())
+                or "none",
+                "affected_orgs": int(affected),
+            },
         )
         await self.db.commit()
         return plan
+
+    async def org_sso(self, ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, object]]:
+        """§12.D.5 SSO status column: protocol, on/off, verified domains, last test."""
+        from app.models.sso import SsoConnection, SsoDomain
+
+        if not ids:
+            return {}
+        out: dict[uuid.UUID, dict[str, object]] = {}
+        for conn in (
+            (
+                await self.db.execute(
+                    select(SsoConnection).where(SsoConnection.organization_id.in_(ids))
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            out[conn.organization_id] = {
+                "sso_protocol": conn.protocol,
+                "sso_active": conn.active,
+                "sso_last_test_at": conn.last_test_at,
+                "sso_last_test_result": conn.last_test_result,
+            }
+        for oid, n in (
+            await self.db.execute(
+                select(SsoDomain.organization_id, func.count())
+                .where(SsoDomain.organization_id.in_(ids), SsoDomain.verified_at.is_not(None))
+                .group_by(SsoDomain.organization_id)
+            )
+        ).all():
+            out.setdefault(oid, {})["sso_verified_domains"] = int(n)
+        return out
+
+    async def org_scim(self, ids: list[uuid.UUID]) -> dict[uuid.UUID, dict[str, object]]:
+        """§12.E.4 SCIM status column: on/off, last sync, active provisioned people."""
+        from app.models.scim import ScimDirectory, ScimUser
+
+        if not ids:
+            return {}
+        out: dict[uuid.UUID, dict[str, object]] = {}
+        for d in (
+            (
+                await self.db.execute(
+                    select(ScimDirectory).where(ScimDirectory.organization_id.in_(ids))
+                )
+            )
+            .scalars()
+            .all()
+        ):
+            out[d.organization_id] = {
+                "scim_configured": True,
+                "scim_active": d.active,
+                "scim_last_sync_at": d.last_sync_at,
+                "scim_token_created_at": d.token_created_at,
+            }
+        for oid, n in (
+            await self.db.execute(
+                select(ScimUser.organization_id, func.count())
+                .where(ScimUser.organization_id.in_(ids), ScimUser.active)
+                .group_by(ScimUser.organization_id)
+            )
+        ).all():
+            out.setdefault(oid, {})["scim_users"] = int(n)
+        return out
+
+    async def org_extras(
+        self, rows: list[tuple[Organization, int, int, Subscription | None]]
+    ) -> dict[uuid.UUID, tuple[int, datetime | None]]:
+        """(MRR in cents, last activity) per org. MRR counts only orgs paying through Stripe:
+        the plan's monthly price per seat × current members (Checkout bills per seat)."""
+        ids = [o.id for o, *_ in rows]
+        if not ids:
+            return {}
+        last = dict(
+            (
+                await self.db.execute(
+                    select(AuditLog.organization_id, func.max(AuditLog.at))
+                    .where(AuditLog.organization_id.in_(ids))
+                    .group_by(AuditLog.organization_id)
+                )
+            ).all()
+        )
+        prices = dict((await self.db.execute(select(Plan.id, Plan.monthly_price_usd))).all())
+        out: dict[uuid.UUID, tuple[int, datetime | None]] = {}
+        for org, members, _projects, sub in rows:
+            paying = (
+                sub is not None
+                and sub.stripe_subscription_id
+                and sub.status in (SubscriptionStatus.active, SubscriptionStatus.past_due)
+            )
+            mrr = int(prices.get(sub.plan_id, 0) or 0) * max(members, 1) if paying else 0
+            out[org.id] = (mrr, last.get(org.id))
+        return out
+
+    async def org_members(self, org_id: uuid.UUID) -> list[tuple[OrganizationMember, PlatformUser]]:
+        await self.get_organization(org_id)  # 404 if unknown
+        rows = await self.db.execute(
+            select(OrganizationMember, PlatformUser)
+            .join(PlatformUser, PlatformUser.id == OrganizationMember.user_id)
+            .where(OrganizationMember.organization_id == org_id)
+            .order_by(OrganizationMember.joined_at, PlatformUser.email)
+        )
+        return [(m, u) for m, u in rows.all()]
+
+    async def org_projects(self, org_id: uuid.UUID) -> list[tuple[Project, int]]:
+        await self.get_organization(org_id)
+        projects = list(
+            (
+                await self.db.execute(
+                    select(Project)
+                    .where(Project.organization_id == org_id)
+                    .order_by(Project.created_at)
+                )
+            ).scalars()
+        )
+        counts: dict[uuid.UUID, int] = {}
+        if projects:
+            counts = dict(
+                (
+                    await self.db.execute(
+                        select(Entity.project_id, func.count())
+                        .where(Entity.project_id.in_([p.id for p in projects]))
+                        .group_by(Entity.project_id)
+                    )
+                ).all()
+            )
+        return [(p, int(counts.get(p.id, 0))) for p in projects]
+
+    async def list_subscriptions(
+        self, *, limit: int, offset: int, status: SubscriptionStatus | None, query: str | None
+    ) -> tuple[list[tuple[Subscription, Organization]], int]:
+        """§7 Billing tab. Deep links to Stripe are built from the ids by the UI."""
+        conditions = [Organization.deleted_at.is_(None)]
+        if status is not None:
+            conditions.append(Subscription.status == status)
+        if query:
+            like = f"%{query.strip().lower()[:100]}%"
+            conditions.append(
+                or_(func.lower(Organization.name).like(like), Organization.slug.like(like))
+            )
+        base = select(Subscription, Organization).join(
+            Organization, Organization.id == Subscription.organization_id
+        )
+        total = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(Subscription)
+                .join(Organization, Organization.id == Subscription.organization_id)
+                .where(*conditions)
+            )
+        ).scalar_one()
+        rows = await self.db.execute(
+            base.where(*conditions)
+            .order_by(Subscription.current_period_end.asc().nulls_last(), Organization.slug)
+            .limit(limit)
+            .offset(offset)
+        )
+        return [(sub, org) for sub, org in rows.all()], int(total)
+
+    async def insights(self) -> dict[str, object]:
+        now = datetime.now(UTC)
+
+        async def per_day(column: object, *where: object) -> list[dict[str, object]]:
+            since = (now - timedelta(days=29)).date()
+            day = cast(column, Date)
+            counts = dict(
+                (
+                    await self.db.execute(
+                        select(day, func.count()).where(day >= since, *where).group_by(day)
+                    )
+                ).all()
+            )
+            return [
+                {
+                    "day": (since + timedelta(days=i)).isoformat(),
+                    "count": int(counts.get(since + timedelta(days=i), 0)),
+                }
+                for i in range(30)
+            ]
+
+        async def scalar(stmt: object) -> int:
+            return int((await self.db.execute(stmt)).scalar_one())  # type: ignore[call-overload]
+
+        return {
+            "signups_per_day": await per_day(PlatformUser.created_at),
+            "orgs_per_day": await per_day(
+                Organization.created_at, Organization.kind == OrgKind.team
+            ),
+            "total_orgs": await scalar(
+                select(func.count())
+                .select_from(Organization)
+                .where(Organization.deleted_at.is_(None))
+            ),
+            "active_orgs_7d": await scalar(
+                select(func.count(func.distinct(AuditLog.organization_id))).where(
+                    AuditLog.organization_id.is_not(None),
+                    AuditLog.result == AuditResult.ok,
+                    AuditLog.at >= now - timedelta(days=7),
+                )
+            ),
+            "total_projects": await scalar(select(func.count()).select_from(Project)),
+            "mcp_calls_24h": await scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.action == "mcp.tool_call", AuditLog.at >= now - timedelta(days=1))
+            ),
+            "denied_by_quota_7d": await scalar(
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.action == "quota.denied", AuditLog.at >= now - timedelta(days=7))
+            ),
+        }
 
     async def stats(self) -> AdminStats:
         async def count(stmt: object) -> int:

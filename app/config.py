@@ -41,11 +41,47 @@ class Settings(BaseSettings):
     stripe_price_ids: dict[str, str] = {}
     # Where the browser app lives; Checkout returns the customer here.
     public_app_url: str = "http://localhost:5173"
+
+    # Days between an owner's deletion request and the deletion itself. Access is blocked
+    # meanwhile; the owner can revoke. An operator can set another period per org.
+    org_deletion_grace_days: int = 7
+
+    # -- platform e-mail (org invitations). Unset host → invites aren't e-mailed; the admin
+    # copies the link from the UI instead. Never logged.
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: SecretStr | None = None
+    smtp_from: str = "Backend Builder <no-reply@localhost>"
+    smtp_starttls: bool = True
     # Phase C: signing secret(s) of the Stripe webhook endpoint (whsec_...). Comma-separate
     # two during a secret roll. Unset → POST /billing/stripe/webhook answers 503.
     stripe_webhook_secret: SecretStr | None = None
     # Deliveries signed longer ago than this are refused (replay protection).
     stripe_webhook_tolerance_seconds: int = 300
+
+    # -- enterprise SSO (Phase D). The API's own public base URL: SAML entity IDs, the ACS URL
+    # and the OIDC redirect URI are built from it, so it must be what the IdP can reach.
+    public_api_url: str = "http://localhost:8000"
+    # Let org admins point OIDC at hosts on private networks (a self-hosted IdP inside the
+    # same VPC). Off: such URLs are refused, which is what stops SSRF through the config form.
+    sso_allow_private_idp: bool = False
+    # Allow plain-http IdP URLs (a local Keycloak on a laptop). Never in production.
+    sso_allow_http_idp: bool = False
+    # How long a started SSO login may take at the IdP before it has to be restarted.
+    sso_login_ttl_seconds: int = 600
+
+    # -- MFA (§4.4 Phase 1). Platform staff must use TOTP at every sign-in (admin console and
+    # customer app); turning this off is for local development only.
+    admin_mfa_required: bool = True
+    # How long the "enter your code" step may take after the password was accepted.
+    mfa_challenge_seconds: int = 300
+    # The name authenticator apps show next to the account.
+    totp_issuer: str = "Builder"
+
+    @property
+    def sso_require_https(self) -> bool:
+        return not self.sso_allow_http_idp
 
     def stripe_webhook_secrets(self) -> list[str]:
         if self.stripe_webhook_secret is None:

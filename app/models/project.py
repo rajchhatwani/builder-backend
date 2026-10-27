@@ -22,12 +22,12 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=DbEngine.postgres,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
-    # Every project belongs to exactly one org. Nullable until Phase A backfill lands; the
-    # service refuses to create a project without this at request-time (so new rows are safe).
-    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+    # Every project belongs to exactly one org (§3.2). RESTRICT: an org can't be deleted out
+    # from under its projects.
+    organization_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("organizations.id", ondelete="RESTRICT"),
-        nullable=True,
+        nullable=False,
     )
 
     __table_args__ = (Index("ix_projects_org", "organization_id"),)

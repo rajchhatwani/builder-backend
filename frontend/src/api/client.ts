@@ -8,14 +8,42 @@ import {
   type Surface,
 } from './session'
 import type {
+  AdminInsights,
   AdminOrg,
+  AdminOrgMember,
+  AdminOrgProject,
+  AdminSubscription,
+  OrgAuditEntry,
+  ReconcileReport,
   Organization,
+  OrgInvitation,
+  OrgLockedDetail,
+  OrgInvitationCreated,
+  OrgMember,
   OrgPlan,
+  OrgRole,
+  PlanInfo,
+  PlanWrite,
   QuotaDetail,
   AdminProject,
   AdminStats,
   AdminUser,
   ApiErrorBody,
+  LoginDiscovery,
+  LoginResult,
+  MfaStatus,
+  OrgMfaDetail,
+  OrgPolicies,
+  OrgPoliciesUpdate,
+  SessionWithRecoveryCodes,
+  ScimConfig,
+  ScimConfigUpdate,
+  ScimToken,
+  SsoCheck,
+  SsoConfig,
+  SsoConfigWrite,
+  SsoDomain,
+  TotpSetup,
   ApiTokenCreated,
   ApiTokenInfo,
   ProjectToken,
@@ -77,6 +105,7 @@ import type {
   ValidationIssue,
   ValidationReport,
 } from './types'
+import { isMfaChallenge } from './types'
 
 export class ApiError extends Error {
   code: string
@@ -127,6 +156,8 @@ async function request<T>(
   if (!response.ok) {
     const error = new ApiError(response.status, body as ApiErrorBody)
     if (response.status === 402) notifyQuotaExceeded(error)
+    if (response.status === 423 && error.code === 'org_deletion_pending') notifyOrgLocked(error)
+    if (response.status === 403 && error.code === 'org_mfa_required') notifyOrgMfaRequired(error)
     throw error
   }
   return body as T
@@ -149,6 +180,40 @@ function notifyQuotaExceeded(error: ApiError) {
   quotaListeners.forEach((listener) => listener(error, detail))
 }
 
+// ── 423 Locked: the organization is waiting for deletion ───────────────────
+type OrgLockedListener = (error: ApiError, detail: OrgLockedDetail | null) => void
+const orgLockedListeners = new Set<OrgLockedListener>()
+
+/** Subscribe to "this organization is scheduled for deletion" refusals from any API call. */
+export function onOrgLocked(listener: OrgLockedListener): () => void {
+  orgLockedListeners.add(listener)
+  return () => {
+    orgLockedListeners.delete(listener)
+  }
+}
+
+function notifyOrgLocked(error: ApiError) {
+  const detail = (error.details[0] as OrgLockedDetail | undefined) ?? null
+  orgLockedListeners.forEach((listener) => listener(error, detail))
+}
+
+// ── 403 org_mfa_required: the org requires two-factor and this session has none ──
+type OrgMfaListener = (error: ApiError, detail: OrgMfaDetail | null) => void
+const orgMfaListeners = new Set<OrgMfaListener>()
+
+/** Subscribe to "this organization requires two-factor authentication" refusals. */
+export function onOrgMfaRequired(listener: OrgMfaListener): () => void {
+  orgMfaListeners.add(listener)
+  return () => {
+    orgMfaListeners.delete(listener)
+  }
+}
+
+function notifyOrgMfaRequired(error: ApiError) {
+  const detail = (error.details[0] as OrgMfaDetail | undefined) ?? null
+  orgMfaListeners.forEach((listener) => listener(error, detail))
+}
+
 const json = (data: unknown) => JSON.stringify(data)
 const admin: RequestOptions = { surface: 'admin' }
 
@@ -161,15 +226,163 @@ function queryString(params: Record<string, string | number | undefined>): strin
 }
 
 /** Remember a fresh access token and return the session it came with. */
-function adopt(surface: Surface, session: SessionResponse): SessionResponse {
+function adopt<S extends SessionResponse>(surface: Surface, session: S): S {
   setAccessToken(surface, session.access_token)
   return session
+}
+
+/** A password sign-in either opens a session or asks for a second step (§4.4). */
+function adoptLogin(surface: Surface, result: LoginResult): LoginResult {
+  if (!isMfaChallenge(result)) setAccessToken(surface, result.access_token)
+  return result
+}
+
+const LOGIN_PREFIX: Record<Surface, string> = { app: '/account/login', admin: '/admin/login' }
+
+/**
+ * The second sign-in step, shared by both surfaces. These are sign-in style calls: a 401 means
+ * "wrong code" or "step expired", never "refresh the session".
+ */
+function mfaStep(surface: Surface) {
+  const options: RequestOptions = { anonymous: true, surface }
+  const prefix = LOGIN_PREFIX[surface]
+  return {
+    verify: async (mfaToken: string, code: string) =>
+      adopt(
+        surface,
+        await request<SessionResponse>(
+          `${prefix}/mfa`,
+          { method: 'POST', body: json({ mfa_token: mfaToken, code }) },
+          options,
+        ),
+      ),
+    setup: (mfaToken: string) =>
+      request<TotpSetup>(`${prefix}/mfa/setup`, { method: 'POST', body: json({ mfa_token: mfaToken }) }, options),
+    enable: async (mfaToken: string, code: string) =>
+      adopt(
+        surface,
+        await request<SessionWithRecoveryCodes>(
+          `${prefix}/mfa/enable`,
+          { method: 'POST', body: json({ mfa_token: mfaToken, code }) },
+          options,
+        ),
+      ),
+  }
+}
+
+export type MfaStepApi = ReturnType<typeof mfaStep>
+
+function sso(slug: string, path = ''): string {
+  return `/orgs/${encodeURIComponent(slug)}/sso${path}`
+}
+
+function scim(slug: string, path = ''): string {
+  return `/orgs/${encodeURIComponent(slug)}/scim${path}`
 }
 
 export const api = {
   // ── Organizations & plan (customer) ──────────────────────────────────────
   listOrgs: () => request<Page<Organization>>('/orgs'),
+  getOrg: (slug: string) => request<Organization>(`/orgs/${encodeURIComponent(slug)}`),
+  createOrg: (data: { name: string; slug?: string }) =>
+    request<Organization>('/orgs', { method: 'POST', body: json(data) }),
+  /** Requests deletion (202): the org locks now and is deleted, with its projects, after the grace period. */
+  deleteOrg: (slug: string) =>
+    request<Organization>(`/orgs/${encodeURIComponent(slug)}`, { method: 'DELETE' }),
+  cancelOrgDeletion: (slug: string) =>
+    request<Organization>(`/orgs/${encodeURIComponent(slug)}/deletion/cancel`, { method: 'POST' }),
+  orgMembers: (slug: string) => request<Page<OrgMember>>(`/orgs/${encodeURIComponent(slug)}/members`),
+  setOrgMemberRole: (slug: string, userId: string, role: OrgRole) =>
+    request<OrgMember>(`/orgs/${encodeURIComponent(slug)}/members/${userId}`, {
+      method: 'PATCH',
+      body: json({ role }),
+    }),
+  /** Also used to leave an organization (your own user id). */
+  removeOrgMember: (slug: string, userId: string) =>
+    request<void>(`/orgs/${encodeURIComponent(slug)}/members/${userId}`, { method: 'DELETE' }),
+  transferOrgOwnership: (slug: string, toUserId: string) =>
+    request<void>(
+      `/orgs/${encodeURIComponent(slug)}/transfer?${queryString({ to_user_id: toUserId })}`,
+      { method: 'POST' },
+    ),
+  orgInvitations: (slug: string) =>
+    request<Page<OrgInvitation>>(`/orgs/${encodeURIComponent(slug)}/invitations`),
+  createOrgInvitation: (slug: string, email: string, role: OrgRole) =>
+    request<OrgInvitationCreated>(`/orgs/${encodeURIComponent(slug)}/invitations`, {
+      method: 'POST',
+      body: json({ email, role }),
+    }),
+  revokeOrgInvitation: (slug: string, id: string) =>
+    request<void>(`/orgs/${encodeURIComponent(slug)}/invitations/${id}`, { method: 'DELETE' }),
+  myPendingInvitations: () => request<Page<OrgInvitation>>('/orgs/invitations/pending'),
+  acceptInvitation: (token: string) =>
+    request<Organization>('/orgs/invitations/accept', { method: 'POST', body: json({ token }) }),
+  /** Accept one of my pending invites without the link (the signed-in address is the proof). */
+  acceptInvitationById: (id: string) =>
+    request<Organization>(`/orgs/invitations/${id}/accept`, { method: 'POST' }),
+  resendOrgInvitation: (slug: string, id: string) =>
+    request<OrgInvitationCreated>(`/orgs/${encodeURIComponent(slug)}/invitations/${id}/resend`, {
+      method: 'POST',
+    }),
+  renameOrg: (slug: string, name: string) =>
+    request<Organization>(`/orgs/${encodeURIComponent(slug)}`, { method: 'PATCH', body: json({ name }) }),
+  joinOrgProject: (slug: string, projectId: string, role: 'owner' | 'editor' | 'viewer' = 'editor') =>
+    request<{ project_id: string; role: string }>(
+      `/orgs/${encodeURIComponent(slug)}/projects/${projectId}/join`,
+      { method: 'POST', body: json({ role }) },
+    ),
+  transferOrgProject: (slug: string, projectId: string, toSlug: string) =>
+    request<Project>(`/orgs/${encodeURIComponent(slug)}/projects/${projectId}/transfer`, {
+      method: 'POST',
+      body: json({ to_slug: toSlug }),
+    }),
+  orgAudit: (slug: string, limit = 50, offset = 0) =>
+    request<Page<OrgAuditEntry>>(
+      `/orgs/${encodeURIComponent(slug)}/audit?${queryString({ limit, offset })}`,
+    ),
+  setDefaultOrg: (organizationId: string) =>
+    request<UserAccount>('/account/me/default-organization', {
+      method: 'PUT',
+      body: json({ organization_id: organizationId }),
+    }),
+  orgProjects: (slug: string) => request<Page<Project>>(`/orgs/${encodeURIComponent(slug)}/projects`),
   orgPlan: (slug: string) => request<OrgPlan>(`/orgs/${encodeURIComponent(slug)}/plan`),
+
+  // ── Org security policies (§8) ───────────────────────────────────────────
+  orgPolicies: (slug: string) => request<OrgPolicies>(`/orgs/${encodeURIComponent(slug)}/policies`),
+  updateOrgPolicies: (slug: string, data: OrgPoliciesUpdate) =>
+    request<OrgPolicies>(`/orgs/${encodeURIComponent(slug)}/policies`, {
+      method: 'PATCH',
+      body: json(data),
+    }),
+
+  // ── Org single sign-on (§4.2, §12.D) — session only ──────────────────────
+  ssoConfig: (slug: string) => request<SsoConfig>(sso(slug)),
+  saveSsoConfig: (slug: string, data: SsoConfigWrite) =>
+    request<SsoConfig>(sso(slug), { method: 'PUT', body: json(data) }),
+  deleteSsoConfig: (slug: string) => request<void>(sso(slug), { method: 'DELETE' }),
+  activateSso: (slug: string, on: boolean) =>
+    request<SsoConfig>(sso(slug, on ? '/activate' : '/deactivate'), { method: 'POST' }),
+  addSsoDomain: (slug: string, domain: string) =>
+    request<SsoDomain>(sso(slug, '/domains'), { method: 'POST', body: json({ domain }) }),
+  verifySsoDomain: (slug: string, domain: string) =>
+    request<SsoDomain>(sso(slug, `/domains/${encodeURIComponent(domain)}/verify`), { method: 'POST' }),
+  removeSsoDomain: (slug: string, domain: string) =>
+    request<void>(sso(slug, `/domains/${encodeURIComponent(domain)}`), { method: 'DELETE' }),
+  /** "Test with my own e-mail": a login URL to open; the result comes back in the hash. */
+  startSsoTest: (slug: string) =>
+    request<{ login_url: string; expires_in: number }>(sso(slug, '/test'), { method: 'POST' }),
+  checkSso: (slug: string) => request<SsoCheck>(sso(slug, '/check'), { method: 'POST' }),
+
+  // ── Org SCIM provisioning (§4.3, §12.E.5) — admins, session only ─────────
+  scimConfig: (slug: string) => request<ScimConfig>(scim(slug)),
+  /** Creates the directory (switched on) or rotates its token; the old token stops at once. */
+  issueScimToken: (slug: string) => request<ScimToken>(scim(slug, '/token'), { method: 'POST' }),
+  /** `group_roles` replaces the whole dictionary. */
+  updateScim: (slug: string, data: ScimConfigUpdate) =>
+    request<ScimConfig>(scim(slug), { method: 'PATCH', body: json(data) }),
+  /** Removes the directory and its user/group records; org memberships stay. */
+  deleteScim: (slug: string) => request<void>(scim(slug), { method: 'DELETE' }),
   startCheckout: (slug: string, planId: string) =>
     request<{ id: string; url: string }>(`/orgs/${encodeURIComponent(slug)}/billing/checkout`, {
       method: 'POST',
@@ -181,7 +394,7 @@ export const api = {
 
   listProjects: (limit = 50, offset = 0) =>
     request<Page<Project>>(`/projects?limit=${limit}&offset=${offset}`),
-  createProject: (data: { name: string; slug?: string; description?: string }) =>
+  createProject: (data: { name: string; slug?: string; description?: string; organization_id?: string }) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify(data) }),
   getProject: (id: string) => request<Project>(`/projects/${id}`),
   deleteProject: (id: string) => request<void>(`/projects/${id}`, { method: 'DELETE' }),
@@ -458,14 +671,44 @@ export const api = {
       ),
     ),
   login: async (email: string, password: string) =>
-    adopt(
+    adoptLogin(
       'app',
-      await request<SessionResponse>(
+      await request<LoginResult>(
         '/account/login',
         { method: 'POST', body: json({ email, password }) },
         { anonymous: true },
       ),
     ),
+  /** Email first (§4.2): an address on a domain with active SSO goes to the org's IdP. */
+  discoverLogin: (email: string) =>
+    request<LoginDiscovery>(
+      '/account/login/discover',
+      { method: 'POST', body: json({ email }) },
+      { anonymous: true },
+    ),
+  loginMfa: mfaStep('app'),
+
+  // ── Two-factor authentication (signed in) ────────────────────────────────
+  // Wrong password / code answer 422 here (not 401), so the session stays.
+  mfaStatus: () => request<MfaStatus>('/account/mfa'),
+  totpSetup: (password: string) =>
+    request<TotpSetup>('/account/mfa/totp/setup', { method: 'POST', body: json({ password }) }),
+  /** Returns a fresh session that counts as MFA'd, plus the recovery codes (shown once). */
+  totpEnable: async (code: string) =>
+    adopt(
+      'app',
+      await request<SessionWithRecoveryCodes>('/account/mfa/totp/enable', {
+        method: 'POST',
+        body: json({ code }),
+      }),
+    ),
+  totpDisable: (password: string, code: string) =>
+    request<void>('/account/mfa/totp/disable', { method: 'POST', body: json({ password, code }) }),
+  regenerateRecoveryCodes: (code: string) =>
+    request<{ recovery_codes: string[] }>('/account/mfa/recovery-codes', {
+      method: 'POST',
+      body: json({ code }),
+    }),
   /** Try to resume a session from the refresh cookie (page load). Null if there is none. */
   async resume(): Promise<UserAccount | null> {
     if (!(await refreshSession('app'))) return null
@@ -539,14 +782,15 @@ export const api = {
   // ── Admin console (a separate surface with its own tokens) ───────────────
 
   adminLogin: async (email: string, password: string) =>
-    adopt(
+    adoptLogin(
       'admin',
-      await request<SessionResponse>(
+      await request<LoginResult>(
         '/admin/login',
         { method: 'POST', body: json({ email, password }) },
         { anonymous: true, surface: 'admin' },
       ),
     ),
+  adminLoginMfa: mfaStep('admin'),
   async adminResume(): Promise<UserAccount | null> {
     if (!(await refreshSession('admin'))) return null
     try {
@@ -598,6 +842,15 @@ export const api = {
       { method: 'POST' },
       admin,
     ),
+  /** Platform admins only; ends the person's sessions. Refused for your own account. */
+  adminResetMfa: (id: string, reason: string) =>
+    request<AdminUser>(`/admin/users/${id}/reset-mfa`, { method: 'POST', body: json({ reason }) }, admin),
+  /** Configuration check of the org's SSO (operators can't sign in at a customer's IdP). */
+  adminCheckSso: (id: string) =>
+    request<SsoCheck>(`/admin/organizations/${id}/sso/check`, { method: 'POST' }, admin),
+  /** Platform admins only. The new token is shown to nobody (§7.1); SCIM is off until the org issues one. */
+  adminRotateScim: (id: string, reason: string) =>
+    request<AdminOrg>(`/admin/organizations/${id}/scim/rotate`, { method: 'POST', body: json({ reason }) }, admin),
   adminProjects: (q = '', limit = 50, offset = 0) =>
     request<Page<AdminProject>>(
       `/admin/projects?${queryString({ q, limit, offset })}`,
@@ -606,6 +859,9 @@ export const api = {
     ),
   adminAudit: (params: {
     action?: string
+    organization_id?: string
+    actor_id?: string
+    since?: string
     result?: string
     via?: string
     limit?: number
@@ -628,6 +884,42 @@ export const api = {
       { method: 'PATCH', body: json(data) },
       admin,
     ),
+
+  adminRescheduleOrgDeletion: (id: string, graceDays: number, reason: string) =>
+    request<AdminOrg>(
+      `/admin/organizations/${id}/deletion`,
+      { method: 'PATCH', body: json({ grace_days: graceDays, reason }) },
+      admin,
+    ),
+  adminExecuteOrgDeletion: (id: string, reason: string) =>
+    request<AdminOrg>(
+      `/admin/organizations/${id}/deletion/execute`,
+      { method: 'POST', body: json({ reason }) },
+      admin,
+    ),
+  adminOrganization: (id: string) =>
+    request<AdminOrg>(`/admin/organizations/${id}`, undefined, admin),
+  adminOrgMembers: (id: string) =>
+    request<AdminOrgMember[]>(`/admin/organizations/${id}/members`, undefined, admin),
+  adminOrgProjects: (id: string) =>
+    request<AdminOrgProject[]>(`/admin/organizations/${id}/projects`, undefined, admin),
+  adminSubscriptions: (params: { status?: string; q?: string; limit?: number; offset?: number }) =>
+    request<Page<AdminSubscription>>(`/admin/subscriptions?${queryString(params)}`, undefined, admin),
+  adminInsights: () => request<AdminInsights>('/admin/insights', undefined, admin),
+  adminReconcileBilling: () =>
+    request<ReconcileReport>('/admin/billing/reconcile', { method: 'POST' }, admin),
+  /** Manual plan change for orgs not billed through Stripe; needs a reason (§6.5). */
+  adminSetOrgPlan: (id: string, planId: string, reason: string) =>
+    request<AdminOrg>(
+      `/admin/organizations/${id}/plan`,
+      { method: 'PATCH', body: json({ plan_id: planId, reason }) },
+      admin,
+    ),
+
+  // ── Admin: plan catalog (§7 Plans tab) ───────────────────────────────────
+  adminPlans: () => request<PlanInfo[]>('/admin/plans', undefined, admin),
+  adminSavePlan: (id: string, data: PlanWrite) =>
+    request<PlanInfo>(`/admin/plans/${encodeURIComponent(id)}`, { method: 'PUT', body: json(data) }, admin),
 
   // ── Admin: tokens of any user ────────────────────────────────────────────
   adminListUserTokens: (userId: string) =>

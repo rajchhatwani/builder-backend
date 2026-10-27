@@ -1,0 +1,24 @@
+--- tsc
+tsc exit 0
+--- lint
+src/components/PaymentsPanel.tsx:320:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/components/PaymentsPanel.tsx:328:7: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/components/PaymentsPanel.tsx:933:5: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+src/components/PaymentsPanel.tsx:320:5: warning react-hooks(exhaustive-deps): React Hook useEffect has a missing dependency: 'load' help: Either include it or remove the dependency array.
+src/components/PaymentsPanel.tsx:327:10: warning react-hooks(exhaustive-deps): React Hook useEffect has a missing dependency: 'entity' help: Either include it or remove the dependency array.
+src/pages/admin/AdminPages.tsx:250:29: warning react(purity): Cannot call impure function during render help: `Date.now` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component re-renders
+src/pages/admin/AdminPages.tsx:491:69: warning react(purity): Cannot call impure function during render help: `Date` is an impure function. Calling an impure function can produce unstable results that update unpredictably when the component re-renders
+src/pages/admin/AdminPages.tsx:197:7: warning react(set-state-in-effect): Calling setState synchronously within an effect can trigger cascading renders help: Effects should synchronize React with external systems. Calling setState synchronously inside an effect starts another render and is usually unnecessary. Derive the value during render, initialize state directly, or update it from the event that caused the change. Use an effect only when synchronizing with an external system.
+--- build
+computing gzip size...
+dist/index.html                    0.80 kB │ gzip:   0.46 kB
+dist/assets/index-DYjv8dTI.css    52.44 kB │ gzip:   9.72 kB
+dist/assets/browser-Deq4_wWM.js   23.46 kB │ gzip:   8.85 kB
+dist/assets/index-CDyQv0rz.js    675.08 kB │ gzip: 179.09 kB
+
+✓ built in 361ms
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.

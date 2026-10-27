@@ -9,13 +9,16 @@ import {
 } from 'react'
 import { api } from '../api/client'
 import { onSessionLost } from '../api/session'
-import type { UserAccount } from '../api/types'
+import { isMfaChallenge, type MfaChallenge, type SessionResponse, type UserAccount } from '../api/types'
 
 type AuthState = { status: 'loading' } | { status: 'anon' } | { status: 'user'; user: UserAccount }
 
 interface AuthApi {
   state: AuthState
-  signIn: (email: string, password: string) => Promise<void>
+  /** Resolves with a challenge when a second step is needed (§4.4); null when signed in. */
+  signIn: (email: string, password: string) => Promise<MfaChallenge | null>
+  /** Finish a sign-in whose second step returned a session. */
+  completeSignIn: (session: SessionResponse) => void
   signUp: (email: string, password: string, name: string) => Promise<void>
   signOut: () => Promise<void>
   /** After a password change or profile update the server returns a fresh user. */
@@ -56,7 +59,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback(async (email: string, password: string) => {
-    const session = await api.login(email, password)
+    const result = await api.login(email, password)
+    if (isMfaChallenge(result)) return result
+    setState({ status: 'user', user: result.user })
+    return null
+  }, [])
+
+  const completeSignIn = useCallback((session: SessionResponse) => {
     setState({ status: 'user', user: session.user })
   }, [])
 
@@ -74,8 +83,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const setUser = useCallback((user: UserAccount) => setState({ status: 'user', user }), [])
 
   const value = useMemo(
-    () => ({ state, signIn, signUp, signOut, setUser }),
-    [state, signIn, signUp, signOut, setUser],
+    () => ({ state, signIn, completeSignIn, signUp, signOut, setUser }),
+    [state, signIn, completeSignIn, signUp, signOut, setUser],
   )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

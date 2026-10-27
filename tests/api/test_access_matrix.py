@@ -11,18 +11,19 @@ Three kinds of test, none of which needs updating when a route is added:
 import re
 import uuid
 
-from fastapi.routing import APIRoute
 from httpx import AsyncClient
 
 from app.api import security
 from app.core import platform_authz as authz
 from app.core import platform_security as sec
-from app.main import app
 from app.models.enums import PlatformRole
 from tests.api._auth_helpers import make_entity, make_project, make_role
-from tests.api.conftest import ClientFor
+from tests.api._routes import RouteInfo, all_routes
+from tests.api.conftest import ClientFor, add_to_project_org
 
 PUBLIC = {
+    # RFC 9728 discovery document for MCP clients; carries no data.
+    ("GET", "/.well-known/oauth-protected-resource"),
     ("GET", "/health"),
     ("GET", "/ready"),
     ("POST", "/account/register"),
@@ -32,8 +33,24 @@ PUBLIC = {
     ("POST", "/admin/login"),
     ("POST", "/admin/refresh"),
     ("POST", "/admin/logout"),
+    # MFA sign-in steps (§4.4): authenticated by the short-lived challenge token in the body,
+    # which only a correct password produces.
+    ("POST", "/account/login/mfa"),
+    ("POST", "/account/login/mfa/setup"),
+    ("POST", "/account/login/mfa/enable"),
+    ("POST", "/admin/login/mfa"),
+    ("POST", "/admin/login/mfa/setup"),
+    ("POST", "/admin/login/mfa/enable"),
     # Stripe calls it; authenticated by the Stripe-Signature HMAC, not by a session.
     ("POST", "/billing/stripe/webhook"),
+    # Enterprise SSO sign-in (Phase D): before any session exists. Discovery answers only
+    # about the e-mail domain; the callbacks are authenticated by the IdP's signature plus a
+    # single-use, browser-bound login state.
+    ("POST", "/account/login/discover"),
+    ("GET", "/sso/metadata/{slug}"),
+    ("GET", "/sso/{slug}/login"),
+    ("POST", "/sso/saml/{slug}/acs"),
+    ("GET", "/sso/oidc/{slug}/callback"),
 }
 ID_PARAMS = {
     "project_id",
@@ -46,52 +63,51 @@ ID_PARAMS = {
 }
 
 
-def _calls(dependant: object) -> set[object]:
-    found: set[object] = set()
-    stack = [dependant]
-    while stack:
-        d = stack.pop()
-        found.add(d.call)  # type: ignore[attr-defined]
-        stack.extend(d.dependencies)  # type: ignore[attr-defined]
-    return found
+def _routes() -> list[RouteInfo]:
+    return all_routes()
 
 
-def _routes() -> list[tuple[str, APIRoute]]:
-    return [
-        (m, r) for r in app.routes if isinstance(r, APIRoute) for m in sorted(r.methods - {"HEAD"})
-    ]
+def test_the_route_walker_sees_the_whole_app() -> None:
+    """A walker that finds nothing makes every test below pass (review F-001)."""
+    routes = _routes()
+    assert len(routes) > 100
+    paths = {r.path for r in routes}
+    assert {"/orgs/{slug}/members", "/admin/users", "/scim/v2/Users", "/projects"} <= paths
 
 
-def _names(route: APIRoute) -> set[str]:
-    return {getattr(c, "__qualname__", "") for c in _calls(route.dependant)}
+def test_public_list_has_no_stale_entries() -> None:
+    existing = {(r.method, r.path) for r in _routes()}
+    assert sorted(PUBLIC - existing) == []
 
 
 def test_every_route_is_guarded_or_deliberately_public() -> None:
     unguarded = []
-    for method, route in _routes():
-        if (method, route.path) in PUBLIC:
+    for route in _routes():
+        if (route.method, route.path) in PUBLIC:
             continue
-        names = _names(route)
         ok = (
-            security.guard in _calls(route.dependant)
-            or any("require_admin" in n for n in names)
-            or security.current_principal in _calls(route.dependant)
-            or security.session_principal in _calls(route.dependant)
+            security.guard in route.calls
+            or any("require_admin" in n or "admin_principal" in n for n in route.names)
+            or security.current_principal in route.calls
+            or security.session_principal in route.calls
+            or security.org_context in route.calls
+            # SCIM 2.0 (Phase E): the org's SCIM bearer token, checked by scim_auth.
+            or "scim_auth" in route.names
         )
         if not ok:
-            unguarded.append(f"{method} {route.path}")
+            unguarded.append(f"{route.method} {route.path}")
     assert unguarded == [], "routes reachable without authentication: " + ", ".join(unguarded)
 
 
 def test_every_guarded_route_resolves_to_a_project_or_is_listed_unscoped() -> None:
     orphans = []
-    for method, route in _routes():
-        if security.guard not in _calls(route.dependant):
+    for route in _routes():
+        if security.guard not in route.calls:
             continue
         params = set(re.findall(r"{(\w+)}", route.path))
-        if (method, route.path) in authz.UNSCOPED_ROUTES or params & ID_PARAMS:
+        if (route.method, route.path) in authz.UNSCOPED_ROUTES or params & ID_PARAMS:
             continue
-        orphans.append(f"{method} {route.path}")
+        orphans.append(f"{route.method} {route.path}")
     assert orphans == [], (
         "guarded routes that name no project and are not allow-listed: " + ", ".join(orphans)
     )
@@ -107,12 +123,12 @@ def _fill(path: str) -> str:
 
 async def test_unauthenticated_sweep_is_401_everywhere(anon_client: AsyncClient) -> None:
     offenders = []
-    for method, route in _routes():
-        if (method, route.path) in PUBLIC:
+    for route in _routes():
+        if (route.method, route.path) in PUBLIC:
             continue
-        r = await anon_client.request(method, _fill(route.path), json={})
+        r = await anon_client.request(route.method, _fill(route.path), json={})
         if r.status_code != 401:
-            offenders.append(f"{method} {route.path} -> {r.status_code}")
+            offenders.append(f"{route.method} {route.path} -> {r.status_code}")
     assert offenders == []
 
 
@@ -213,6 +229,7 @@ async def test_malformed_ids_do_not_crash(client: AsyncClient) -> None:
 
 
 async def _add_member(owner: AsyncClient, project: str, email: str, role: str) -> None:
+    await add_to_project_org(project, email)
     r = await owner.post(f"/projects/{project}/members", json={"email": email, "role": role})
     assert r.status_code == 201, r.text
 
@@ -322,9 +339,11 @@ async def test_adding_unknown_or_suspended_people_looks_the_same(
     owner = await client_for("owner@example.com")
     p = await make_project(owner)
     await make_user("gone@example.com", status=AccountStatus.suspended)
+    await add_to_project_org(p, "nobody@example.com")
     a = await owner.post(
         f"/projects/{p}/members", json={"email": "nobody@example.com", "role": "viewer"}
     )
+    await add_to_project_org(p, "gone@example.com")
     b = await owner.post(
         f"/projects/{p}/members", json={"email": "gone@example.com", "role": "viewer"}
     )
@@ -336,6 +355,7 @@ async def test_member_added_twice_conflicts(client_for: ClientFor) -> None:
     await client_for("x@example.com")
     p = await make_project(owner)
     await _add_member(owner, p, "x@example.com", "viewer")
+    await add_to_project_org(p, "x@example.com")
     again = await owner.post(
         f"/projects/{p}/members", json={"email": "x@example.com", "role": "editor"}
     )

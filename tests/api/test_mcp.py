@@ -39,7 +39,7 @@ from app.models.platform import ApiToken, AuditLog, PlatformUser, ProjectMember
 from app.services.access_service import Principal
 from app.services.mcp_service import MAX_RESPONSE_CHARS, McpService
 from tests.api._auth_helpers import make_entity, make_project
-from tests.api.conftest import ClientFor, MakeUser
+from tests.api.conftest import ClientFor, MakeUser, add_to_project_org
 
 ADMIN = PlatformRole.platform_admin
 
@@ -175,6 +175,7 @@ async def test_viewer_write_tool_denied_even_with_mcp_write_scope(
     project_id = uuid.UUID(await make_project(client))
     viewer_client = await client_for("v@example.com")
     viewer: PlatformUser = viewer_client.user  # type: ignore[attr-defined]
+    await add_to_project_org(project_id, viewer.email)
     await _enable_mcp(session_factory, project_id, viewer.id, role=MemberRole.viewer)
     await _set_owner_mcp(session_factory, project_id, owner.id, True)
 
@@ -248,9 +249,7 @@ async def test_pinned_token_hides_other_projects(
     await _set_owner_mcp(session_factory, b, user.id, True)
 
     async with session_factory() as db:
-        listed = await McpService(db).list_projects(
-            await _principal(user, pinned=a)
-        )
+        listed = await McpService(db).list_projects(await _principal(user, pinned=a))
     assert {p["id"] for p in listed} == {str(a)}
 
 
@@ -314,9 +313,7 @@ async def test_get_frontend_contract_exposes_pagination_and_errors(
     await _set_owner_mcp(session_factory, project_id, user.id, True)
 
     async with session_factory() as db:
-        contract = await McpService(db).get_frontend_contract(
-            await _principal(user), project_id
-        )
+        contract = await McpService(db).get_frontend_contract(await _principal(user), project_id)
 
     assert contract["pagination"]["style"] == "limit_offset"  # type: ignore[index]
     assert set(contract["errors"]["common_codes"].keys()) >= {  # type: ignore[attr-defined,index]
@@ -420,9 +417,7 @@ async def test_every_tool_call_writes_an_audit_entry(
     async with session_factory() as session:
         rows = list(
             (
-                await session.execute(
-                    select(AuditLog).where(AuditLog.action == "mcp.tool_call")
-                )
+                await session.execute(select(AuditLog).where(AuditLog.action == "mcp.tool_call"))
             ).scalars()
         )
     tools = {(r.detail or {}).get("tool") for r in rows}
@@ -461,12 +456,11 @@ async def test_admin_audit_filter_by_via(
 # ── member MCP toggle endpoint ──────────────────────────────────────────────────────────
 
 
-async def test_owner_can_toggle_member_mcp_flag(
-    client: AsyncClient, client_for: ClientFor
-) -> None:
+async def test_owner_can_toggle_member_mcp_flag(client: AsyncClient, client_for: ClientFor) -> None:
     other = await client_for("mate@example.com")
     other_user: PlatformUser = other.user  # type: ignore[attr-defined]
     project_id = await make_project(client)
+    await add_to_project_org(project_id, "mate@example.com")
     r = await client.post(
         f"/projects/{project_id}/members",
         json={"email": "mate@example.com", "role": "editor"},
@@ -489,12 +483,11 @@ async def test_owner_can_toggle_member_mcp_flag(
     assert off.json()["mcp_enabled"] is False
 
 
-async def test_non_owner_cannot_toggle_mcp_flag(
-    client: AsyncClient, client_for: ClientFor
-) -> None:
+async def test_non_owner_cannot_toggle_mcp_flag(client: AsyncClient, client_for: ClientFor) -> None:
     editor = await client_for("ed@example.com")
     editor_user: PlatformUser = editor.user  # type: ignore[attr-defined]
     project_id = await make_project(client)
+    await add_to_project_org(project_id, "ed@example.com")
     await client.post(
         f"/projects/{project_id}/members",
         json={"email": "ed@example.com", "role": "editor"},
@@ -510,6 +503,7 @@ async def test_non_owner_cannot_toggle_mcp_flag(
 async def test_add_member_can_pre_grant_mcp(client: AsyncClient, client_for: ClientFor) -> None:
     await client_for("mate@example.com")
     project_id = await make_project(client)
+    await add_to_project_org(project_id, "mate@example.com")
     r = await client.post(
         f"/projects/{project_id}/members",
         json={"email": "mate@example.com", "role": "editor", "mcp_enabled": True},
@@ -555,6 +549,7 @@ async def test_non_owner_cannot_see_project_tokens(
 ) -> None:
     other = await client_for("mate@example.com")
     project_id = await make_project(client)
+    await add_to_project_org(project_id, "mate@example.com")
     await client.post(
         f"/projects/{project_id}/members",
         json={"email": "mate@example.com", "role": "editor"},
@@ -605,9 +600,7 @@ async def test_admin_can_revoke_any_user_token(
 ) -> None:
     import app.core.platform_security as sec
 
-    created = (
-        await client.post("/account/tokens", json={"name": "t1", "scopes": ["read"]})
-    ).json()
+    created = (await client.post("/account/tokens", json={"name": "t1", "scopes": ["read"]})).json()
     customer: PlatformUser = client.user  # type: ignore[attr-defined]
     admin = await client_for("admin2@example.com", ADMIN, audience=sec.AUDIENCE_ADMIN)
     r = await admin.delete(f"/admin/users/{customer.id}/tokens/{created['id']}")
@@ -675,9 +668,7 @@ async def test_auth_rejects_non_pat_and_invalid_tokens(
 async def test_auth_rejects_missing_mcp_scope(
     client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    created = await client.post(
-        "/account/tokens", json={"name": "readonly", "scopes": ["read"]}
-    )
+    created = await client.post("/account/tokens", json={"name": "readonly", "scopes": ["read"]})
     raw = created.json()["token"]
 
     async with session_factory() as db:
@@ -713,9 +704,7 @@ async def test_revoked_token_fails_auth(
     client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
     created = (
-        await client.post(
-            "/account/tokens", json={"name": "x", "scopes": ["mcp:read"]}
-        )
+        await client.post("/account/tokens", json={"name": "x", "scopes": ["mcp:read"]})
     ).json()
     raw = created["token"]
     await client.delete(f"/account/tokens/{created['id']}")
@@ -751,6 +740,7 @@ async def test_cross_user_isolation(
     assert exc.value.status_code == 404
 
     # After owner invites + enables MCP, stranger can see the project.
+    await add_to_project_org(project_id, "mate@example.com")
     await client.post(
         f"/projects/{project_id}/members",
         json={"email": "mate@example.com", "role": "editor"},
@@ -774,15 +764,67 @@ async def test_last_mcp_use_at_column_exists(
 ) -> None:
     """The migration added last_mcp_use_at; a fresh token has it unset."""
     created = (
-        await client.post(
-            "/account/tokens", json={"name": "x", "scopes": ["mcp:read"]}
-        )
+        await client.post("/account/tokens", json={"name": "x", "scopes": ["mcp:read"]})
     ).json()
     async with session_factory() as session:
         row = (
-            await session.execute(
-                select(ApiToken).where(ApiToken.id == uuid.UUID(created["id"]))
-            )
+            await session.execute(select(ApiToken).where(ApiToken.id == uuid.UUID(created["id"])))
         ).scalar_one()
     assert row.last_mcp_use_at is None
     assert row.description is None
+
+
+# ── org rules apply to MCP too (row 6: §4.4 MFA policy; row 4c: deletion lock) ──────────
+
+
+async def _project_org(
+    session_factory: async_sessionmaker[AsyncSession], project_id: uuid.UUID
+) -> uuid.UUID:
+    from app.models.project import Project
+
+    async with session_factory() as session:
+        project = await session.get(Project, project_id)
+        assert project is not None
+        return project.organization_id
+
+
+async def test_mcp_refuses_when_the_org_requires_mfa_the_owner_lacks(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    from app.models.platform import Organization
+
+    user: PlatformUser = client.user  # type: ignore[attr-defined]
+    project_id = uuid.UUID(await make_project(client))
+    await _set_owner_mcp(session_factory, project_id, user.id, True)
+    org_id = await _project_org(session_factory, project_id)
+    async with session_factory() as session:
+        org = await session.get(Organization, org_id)
+        assert org is not None
+        org.require_mfa = True
+        await session.commit()
+    async with session_factory() as db:
+        with pytest.raises(AppError) as exc:
+            await McpService(db).get_project_spec(await _principal(user), project_id)
+    assert exc.value.status_code == 403 and exc.value.code == "org_mfa_required"
+
+
+async def test_mcp_refuses_a_locked_org(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    from datetime import UTC, datetime
+
+    from app.models.platform import Organization
+
+    user: PlatformUser = client.user  # type: ignore[attr-defined]
+    project_id = uuid.UUID(await make_project(client))
+    await _set_owner_mcp(session_factory, project_id, user.id, True)
+    org_id = await _project_org(session_factory, project_id)
+    async with session_factory() as session:
+        org = await session.get(Organization, org_id)
+        assert org is not None
+        org.deletion_requested_at = datetime.now(UTC)
+        await session.commit()
+    async with session_factory() as db:
+        with pytest.raises(AppError) as exc:
+            await McpService(db).get_project_spec(await _principal(user), project_id)
+    assert exc.value.status_code == 423 and exc.value.code == "org_deletion_pending"

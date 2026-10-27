@@ -7,9 +7,12 @@ tests/api/test_access_matrix.py walks the OpenAPI schema to make sure none exist
 """
 
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+from typing import Any
 
 import structlog
 from fastapi import Depends, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
@@ -17,7 +20,9 @@ from app.core import platform_authz as authz
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db import get_session
 from app.exceptions import AppError
-from app.models.enums import AuditResult, TokenAudience
+from app.models.enums import AuditResult, OrgRole, TokenAudience
+from app.models.platform import Organization, OrganizationMember
+from app.models.project import Project
 from app.services import access_service, audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
 from app.services.platform_auth_service import RequestInfo
@@ -202,6 +207,24 @@ async def guard(
     role = await access_service.member_role(db, user.id, project_id)
     if role is None:
         raise not_found()  # not a member: same answer as "does not exist"
+    # §5: a project belongs to an org, and only that org's members may act on it. Leaving the
+    # org removes project memberships too; this is the belt to that pair of braces.
+    organization_id = (
+        await db.execute(select(Project.organization_id).where(Project.id == project_id))
+    ).scalar_one_or_none()
+    if (
+        organization_id is not None
+        and (await db.get(OrganizationMember, (organization_id, user.id))) is None
+    ):
+        raise not_found()
+    if organization_id is not None:
+        structlog.contextvars.bind_contextvars(organization_id=str(organization_id))
+        org = await db.get(Organization, organization_id)
+        if org is not None and org.deletion_requested_at is not None:
+            raise org_deletion_pending(org)
+        if org is not None and org.require_mfa and not principal.mfa_satisfied:
+            await _deny(db, request, principal, "org_mfa", project_id=project_id)
+            raise org_mfa_required(org, principal)
     needed = authz.required_member_role(method, template)
     if ROLE_LEVEL[role] < ROLE_LEVEL[needed]:
         await _deny(
@@ -210,6 +233,7 @@ async def guard(
         raise forbidden(f"this needs the project role '{needed.value}'")
 
     request.state.project_id = project_id
+    request.state.organization_id = organization_id
     request.state.member_role = role
     if method not in ("GET", "HEAD", "OPTIONS"):
         # Rides on the handler's own commit, so only changes that actually happened are recorded.
@@ -220,11 +244,164 @@ async def guard(
             actor_email=user.email,
             via=principal.via,
             project_id=project_id,
+            organization_id=organization_id,
             client_ip=client_ip(request),
             request_id=getattr(request.state, "request_id", None),
             detail={"method": method, "route": template},
         )
     return principal
+
+
+# -- organization routes (§5): /orgs/{slug}/... ------------------------------------------
+
+
+@dataclass
+class OrgContext:
+    """The resolved org a /orgs/{slug} request is about, and the caller's role in it."""
+
+    principal: Principal
+    summary: Any  # OrgSummary (kept untyped to avoid importing the service at module load)
+
+    @property
+    def org(self) -> Any:
+        return self.summary.organization
+
+    @property
+    def role(self) -> OrgRole:
+        return self.summary.role
+
+    def require(self, needed: OrgRole, owner_emails: list[str]) -> None:
+        if not authz.org_role_allows(self.role, needed):
+            raise org_forbidden(needed, owner_emails)
+
+
+def org_deletion_pending(org: Organization) -> AppError:
+    """423 Locked: the org is waiting for deletion; only an owner's revoke unlocks it.
+    The details name the org, so the UI can link to it without another lookup."""
+    when = org.deletion_scheduled_for.isoformat() if org.deletion_scheduled_for else None
+    return AppError(
+        code="org_deletion_pending",
+        message=(
+            "this organization is scheduled for deletion and is locked; "
+            "an owner can cancel the request to unlock it"
+        ),
+        status_code=423,
+        details=[
+            {
+                "organization_id": str(org.id),
+                "organization_slug": org.slug,
+                "organization_name": org.name,
+                "deletion_scheduled_for": when,
+            }
+        ],
+    )
+
+
+def org_mfa_required(org: Organization, principal: Principal) -> AppError:
+    """403: the org requires MFA and this session (or this API token's owner) has none.
+    `mfa_enabled` tells the UI whether to send the person to set up TOTP or to sign in again."""
+    return AppError(
+        code="org_mfa_required",
+        message=(
+            f"{org.name} requires two-factor authentication; "
+            "turn it on in your account and sign in again"
+        ),
+        status_code=403,
+        details=[
+            {
+                "organization_id": str(org.id),
+                "organization_slug": org.slug,
+                "organization_name": org.name,
+                "mfa_enabled": principal.user.mfa_enabled,
+            }
+        ],
+    )
+
+
+def org_forbidden(needed: OrgRole, owner_emails: list[str]) -> AppError:
+    """§8: an admin-only panel answers 403 with the owners' addresses, so the member knows
+    whom to ask."""
+    return AppError(
+        code="org_role_required",
+        message=f"this needs the organization role '{needed.value}'",
+        status_code=403,
+        details=[{"needed_role": needed.value, "owner_emails": owner_emails}],
+    )
+
+
+def require_write_scope(principal: Principal) -> None:
+    """Account-level writes (create an org, ...) aren't under `/orgs/{slug}`, so `org_context`
+    doesn't see them: an API token needs the `write` scope for them."""
+    if principal.via == "api_token" and not authz.scopes_allow(
+        principal.scopes, authz.SCOPE_WRITE
+    ):
+        raise forbidden(
+            f"this API token lacks the '{authz.SCOPE_WRITE}' scope", "insufficient_scope"
+        )
+
+
+async def org_context(
+    request: Request,
+    principal: Principal = Depends(current_principal),
+    db: AsyncSession = Depends(get_session),
+) -> OrgContext:
+    """Resolve `{slug}`, check membership (404 otherwise) and the role the route needs."""
+    from app.services.organization_service import OrganizationService
+
+    route = request.scope.get("route")
+    template: str = getattr(route, "path", request.url.path)
+    method = request.method.upper()
+    needed = authz.required_org_role(method, template)
+    if needed is None:
+        log.error("unlisted_org_route_refused", method=method, route=template)
+        raise forbidden("this endpoint is not available", "unscoped_route")
+    if principal.via == "api_token":
+        # A project-pinned token is about one project, never about the org around it.
+        if principal.token_project_id is not None:
+            raise forbidden("this API token is limited to one project", "insufficient_scope")
+        if (method, template) in authz.ORG_ROUTES_SESSION_ONLY:
+            raise forbidden(
+                "this action needs a signed-in session, not an API token", "session_required"
+            )
+        needed_scope = authz.SCOPE_READ if method in ("GET", "HEAD") else authz.SCOPE_WRITE
+        if not authz.scopes_allow(principal.scopes, needed_scope):
+            raise forbidden(
+                f"this API token lacks the '{needed_scope}' scope", "insufficient_scope"
+            )
+    service = OrganizationService(db)
+    summary = await service.get_by_slug(principal.user.id, request.path_params["slug"])
+    ctx = OrgContext(principal=principal, summary=summary)
+    structlog.contextvars.bind_contextvars(organization_id=str(summary.organization.id))
+    if (
+        summary.organization.deletion_requested_at is not None
+        and (method, template) not in authz.ORG_ROUTES_OPEN_DURING_DELETION
+    ):
+        raise org_deletion_pending(summary.organization)
+    if (
+        summary.organization.require_mfa
+        and not principal.mfa_satisfied
+        and (method, template) not in authz.ORG_ROUTES_OPEN_WITHOUT_MFA
+    ):
+        await _deny(db, request, principal, "org_mfa", detail={"route": template})
+        raise org_mfa_required(summary.organization, principal)
+    if not authz.org_role_allows(summary.role, needed):
+        owners = await service.owner_emails(summary.organization.id)
+        await audit_service.record(
+            db,
+            action="access.denied",
+            result=AuditResult.denied,
+            actor_id=principal.user.id,
+            actor_email=principal.user.email,
+            via=principal.via,
+            organization_id=summary.organization.id,
+            client_ip=client_ip(request),
+            request_id=getattr(request.state, "request_id", None),
+            detail={"why": "org_role", "method": method, "needed": needed.value},
+        )
+        await db.commit()
+        raise org_forbidden(needed, owners)
+    request.state.organization_id = summary.organization.id
+    return ctx
 
 
 async def _deny(
@@ -258,9 +435,17 @@ def require_admin(permission: str) -> Callable[..., Awaitable[Principal]]:
     """Dependency factory: a signed-in administrator holding `permission`. Customer tokens are
     refused by audience, API tokens are never accepted, the role is read from the database."""
 
-    async def dependency(request: Request, db: AsyncSession = Depends(get_session)) -> Principal:
+    async def dependency(
+        request: Request,
+        db: AsyncSession = Depends(get_session),
+        settings: Settings = Depends(get_settings),
+    ) -> Principal:
         principal = await _principal(request, db, TokenAudience.admin)
         user = principal.user
+        # §4.4: staff sign in with a second factor. Login and refresh already insist on it; a
+        # token minted without one (older, or from a bug) is refused here too.
+        if settings.admin_mfa_required and not principal.mfa_satisfied:
+            raise forbidden("sign in again with two-factor authentication", "mfa_required")
         if user.must_change_password:
             raise forbidden("choose a new password before continuing", "password_change_required")
         if not authz.admin_can(user.platform_role, permission):

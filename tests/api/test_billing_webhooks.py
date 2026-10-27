@@ -557,3 +557,26 @@ async def test_events_from_a_replaced_subscription_do_not_touch_the_live_one(
     sub = await _sub(session_factory, org_id)
     assert (sub.plan_id, sub.status) == ("business", SubscriptionStatus.active)
     assert sub.stripe_subscription_id == "sub_new"
+
+
+# -- review F-004: signed events that aren't shaped like Stripe events ---------------------------
+
+
+@pytest.mark.usefixtures("webhook_configured")
+@pytest.mark.parametrize(
+    "mangle",
+    [
+        {"data": {"object": "x"}},
+        {"data": {"object": ["a"]}},
+        {"data": None},
+        {"data": []},
+        {"data": "x"},
+    ],
+)
+async def test_signed_but_malformed_event_is_acknowledged_not_a_500(
+    anon_client: AsyncClient, mangle: dict[str, Any]
+) -> None:
+    evt = {**event("customer.subscription.updated", {"id": "sub_x"}), **mangle}
+    r = await deliver(anon_client, evt)
+    assert r.status_code == 200, r.text
+    assert r.json()["outcome"] == "ignored"

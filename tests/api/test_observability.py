@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests.api._auth_helpers import make_project
-from tests.api.conftest import ClientFor
+from tests.api.conftest import add_to_project_org, ClientFor
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 
@@ -124,6 +124,7 @@ async def test_roles_and_isolation(client_for: ClientFor) -> None:
     viewer = await client_for("viewer@example.com")
     stranger = await client_for("stranger@example.com")
     project_id = await make_project(owner)
+    await add_to_project_org(project_id, "viewer@example.com")
     added = await owner.post(
         f"/projects/{project_id}/members", json={"email": "viewer@example.com", "role": "viewer"}
     )
@@ -134,3 +135,31 @@ async def test_roles_and_isolation(client_for: ClientFor) -> None:
     assert (await viewer.put(base, json={})).status_code == 403
     assert (await stranger.get(base)).status_code == 404
     assert (await stranger.put(base, json={})).status_code == 404
+
+
+# -- review F-015: log lines of an org-scoped request carry the organization --------------------
+
+
+async def test_org_scoped_requests_bind_the_organization_into_the_log_context(
+    client, monkeypatch  # noqa: ANN001
+) -> None:
+    import structlog
+
+    from app.api import orgs as orgs_api
+
+    org = (await client.post("/orgs", json={"name": "Logs", "slug": "logs-co"})).json()
+    seen: list[dict[str, object]] = []
+    real = orgs_api._org_read  # noqa: SLF001
+
+    def spy(summary):  # noqa: ANN001,ANN202
+        seen.append(dict(structlog.contextvars.get_contextvars()))
+        return real(summary)
+
+    monkeypatch.setattr(orgs_api, "_org_read", spy)
+    assert (await client.get("/orgs/logs-co")).status_code == 200
+    assert seen and seen[0]["organization_id"] == org["id"]
+    assert "request_id" in seen[0]
+    # nothing leaks into the next request
+    seen.clear()
+    assert (await client.get("/orgs")).status_code == 200
+    assert structlog.contextvars.get_contextvars().get("organization_id") is None

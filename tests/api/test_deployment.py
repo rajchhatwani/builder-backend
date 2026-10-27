@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests.api._auth_helpers import make_project
-from tests.api.conftest import ClientFor
+from tests.api.conftest import add_to_project_org, ClientFor
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 
@@ -134,6 +134,7 @@ async def test_roles_and_isolation(client_for: ClientFor) -> None:
     viewer = await client_for("viewer@example.com")
     stranger = await client_for("stranger@example.com")
     project_id = await make_project(owner)
+    await add_to_project_org(project_id, "viewer@example.com")
     added = await owner.post(
         f"/projects/{project_id}/members", json={"email": "viewer@example.com", "role": "viewer"}
     )

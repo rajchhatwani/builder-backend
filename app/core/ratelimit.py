@@ -36,6 +36,16 @@ class SlidingWindowLimiter:
             self._evict(now)
         return True
 
+    def blocked(self, key: str) -> bool:
+        """True when `key` is over its limit; records nothing."""
+        hits = self._hits.get(key)
+        if not hits:
+            return False
+        now = self._clock()
+        while hits and now - hits[0] > self.window:
+            hits.popleft()
+        return len(hits) >= self.attempts
+
     def retry_after(self, key: str) -> int:
         hits = self._hits.get(key)
         if not hits:

@@ -16,17 +16,18 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Text, cast, func, select
+from sqlalchemy import Text, cast, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.core import platform_security as sec
 from app.core.naming import slugify
 from app.exceptions import AppError
 from app.models.enums import (
-    AccountStatus,
     AuditResult,
     InvitationStatus,
+    MemberRole,
     OrgKind,
     OrgRole,
     SubscriptionStatus,
@@ -38,15 +39,26 @@ from app.models.platform import (
     OrganizationMember,
     Plan,
     PlatformUser,
+    ProjectMember,
     Subscription,
 )
 from app.models.project import Project
+from app.models.scim import ScimDirectory, ScimGroup, ScimUser
+from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.services import audit_service
 from app.services.platform_auth_service import normalize_email
 
 INVITATION_TTL = timedelta(days=14)
 DEFAULT_PERSONAL_PLAN_ID = "free"
-DEFAULT_TEAM_PLAN_ID = "team"
+# Owner decision: a new team org starts free and moves up only by paying (Checkout → webhook)
+# or when an operator onboards it (admin plan change).
+DEFAULT_TEAM_PLAN_ID = "free"
+# Holding org for projects that predate accounts and have no owner yet (the migration that
+# made projects.organization_id NOT NULL puts them here). No members; the bootstrap
+# administrator adopts its projects into their own org.
+UNCLAIMED_ORG_SLUG = "unclaimed-projects"
+# Where an org lands when a platform-granted trial ends (same as a canceled Stripe plan).
+EXPIRED_TRIAL_PLAN_ID = "free"
 
 
 def _now() -> datetime:
@@ -135,6 +147,25 @@ class OrganizationService:
         )
         if user.default_organization_id is None:
             user.default_organization_id = org.id
+        await self.db.flush()
+        return org
+
+    async def ensure_unclaimed_org(self) -> Organization:
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.slug == UNCLAIMED_ORG_SLUG)
+            )
+        ).scalar_one_or_none()
+        if org is not None:
+            return org
+        org = Organization(name="Unclaimed projects", slug=UNCLAIMED_ORG_SLUG, kind=OrgKind.team)
+        self.db.add(org)
+        await self.db.flush()
+        self.db.add(
+            Subscription(
+                organization_id=org.id, plan_id="enterprise", status=SubscriptionStatus.active
+            )
+        )
         await self.db.flush()
         return org
 
@@ -256,12 +287,19 @@ class OrganizationService:
         )
         return [(m, u) for m, u in rows.all()]
 
-    async def list_projects(self, organization_id: uuid.UUID) -> list[Project]:
-        rows = await self.db.execute(
-            select(Project)
-            .where(Project.organization_id == organization_id)
-            .order_by(Project.created_at)
-        )
+    async def list_projects(
+        self, organization_id: uuid.UUID, *, only_for_user: uuid.UUID | None = None
+    ) -> list[Project]:
+        """All of the org's projects, or (for plain members, §8) only those `only_for_user`
+        is a member of."""
+        stmt = select(Project).where(Project.organization_id == organization_id)
+        if only_for_user is not None:
+            stmt = stmt.where(
+                Project.id.in_(
+                    select(ProjectMember.project_id).where(ProjectMember.user_id == only_for_user)
+                )
+            )
+        rows = await self.db.execute(stmt.order_by(Project.created_at))
         return list(rows.scalars())
 
     # -- invitations ------------------------------------------------------------------
@@ -357,6 +395,28 @@ class OrganizationService:
         await self.db.commit()
         return invitation, raw
 
+    async def resend_invitation(
+        self, organization_id: uuid.UUID, invitation_id: uuid.UUID, *, actor_id: uuid.UUID
+    ) -> tuple[OrganizationInvitation, str]:
+        """Tokens are stored hashed, so "resend" rotates: new token, new expiry, old link dead.
+        An expired invite stopped counting as a seat, so reviving it is checked like a new one."""
+        inv = await self.db.get(OrganizationInvitation, invitation_id)
+        if inv is None or inv.organization_id != organization_id:
+            raise AppError(code="not_found", message="invitation not found", status_code=404)
+        if inv.accepted_at is not None or inv.revoked_at is not None:
+            raise AppError(
+                code="conflict", message="only a pending invitation can be resent", status_code=409
+            )
+        if inv.expires_at <= _now():
+            await self.enforce_seat_limit(organization_id, extra=1, actor_id=actor_id)
+            inv = await self.db.get(OrganizationInvitation, invitation_id)
+            assert inv is not None
+        raw, digest = _new_invitation_token()
+        inv.token_hash = digest
+        inv.expires_at = _now() + INVITATION_TTL
+        await self.db.commit()
+        return inv, raw
+
     async def revoke_invitation(
         self, organization_id: uuid.UUID, invitation_id: uuid.UUID
     ) -> OrganizationInvitation:
@@ -379,8 +439,33 @@ class OrganizationService:
                 )
             )
         ).scalar_one_or_none()
+        return await self._accept(user, row, by_link=True)
+
+    async def accept_invitation_by_id(
+        self, user: PlatformUser, invitation_id: uuid.UUID
+    ) -> tuple[Organization, OrgRole]:
+        """Accept from the "pending invitations" list without the link. Sign-up never proves the
+        mailbox, so this only works once the account's address is verified (the e-mailed link,
+        SSO or SCIM did that); otherwise whoever registered the address first could accept."""
+        row = await self.db.get(OrganizationInvitation, invitation_id)
+        if user.email_verified_at is None:
+            raise AppError(
+                code="email_not_verified",
+                message="open the link from the invitation e-mail to accept it",
+                status_code=403,
+            )
+        return await self._accept(user, row)
+
+    async def _accept(
+        self, user: PlatformUser, row: OrganizationInvitation | None, *, by_link: bool = False
+    ) -> tuple[Organization, OrgRole]:
         if row is None:
             raise AppError(code="invalid_token", message="invitation is invalid", status_code=404)
+        if normalize_email(user.email) != row.email:
+            # Addresses don't match: treat as not found rather than confirm it exists.
+            raise AppError(code="invalid_token", message="invitation is invalid", status_code=404)
+        if by_link and user.email_verified_at is None:
+            user.email_verified_at = _now()  # the link only reached the real mailbox
         if row.revoked_at is not None:
             raise AppError(code="invalid_token", message="invitation was revoked", status_code=404)
         if row.accepted_at is not None:
@@ -389,11 +474,8 @@ class OrganizationService:
             )
         if row.expires_at <= _now():
             raise AppError(code="invalid_token", message="invitation expired", status_code=410)
-        if normalize_email(user.email) != row.email:
-            # Addresses don't match: treat as not found rather than confirm the token exists.
-            raise AppError(code="invalid_token", message="invitation is invalid", status_code=404)
         org = await self.db.get(Organization, row.organization_id)
-        if org is None or org.deleted_at is not None:
+        if org is None or org.deleted_at is not None or org.deletion_requested_at is not None:
             raise AppError(code="invalid_token", message="invitation is invalid", status_code=404)
         existing = await self.member_role(user.id, row.organization_id)
         if existing is None:
@@ -420,20 +502,107 @@ class OrganizationService:
         organization_id: uuid.UUID,
         user_id: uuid.UUID,
         role: OrgRole,
+        *,
+        actor_role: OrgRole = OrgRole.owner,
     ) -> OrganizationMember:
+        """§2.2/§8: admins change roles "except Owner" — only an owner may make or unmake one."""
         member = await self._require_member(organization_id, user_id)
+        if OrgRole.owner in (member.role, role) and actor_role is not OrgRole.owner:
+            raise await self._owner_only(organization_id)
         if member.role is OrgRole.owner and role is not OrgRole.owner:
             await self._require_another_owner(organization_id, user_id)
         member.role = role
         await self.db.commit()
         return member
 
-    async def remove_member(self, organization_id: uuid.UUID, user_id: uuid.UUID) -> None:
+    async def remove_member(
+        self,
+        organization_id: uuid.UUID,
+        user_id: uuid.UUID,
+        *,
+        actor_id: uuid.UUID | None = None,
+        actor_role: OrgRole = OrgRole.owner,
+    ) -> None:
+        """Remove someone (or leave). Their memberships of this org's projects go with it
+        (§3.2: project members must be org members)."""
         member = await self._require_member(organization_id, user_id)
         if member.role is OrgRole.owner:
+            if actor_id != user_id and actor_role is not OrgRole.owner:
+                raise await self._owner_only(organization_id)
             await self._require_another_owner(organization_id, user_id)
+        project_ids = select(Project.id).where(Project.organization_id == organization_id)
+        orphaned = await self._projects_solely_owned_by(organization_id, user_id)
+        if orphaned:
+            raise AppError(
+                code="sole_project_owner",
+                message=(
+                    f"this person is the only owner of {orphaned} project(s) in the "
+                    "organization; make someone else an owner of those first"
+                ),
+                status_code=409,
+                details=[{"projects": orphaned}],
+            )
+        await self.db.execute(
+            delete(ProjectMember).where(
+                ProjectMember.user_id == user_id, ProjectMember.project_id.in_(project_ids)
+            )
+        )
         await self.db.delete(member)
+        await self._reset_default_org(organization_id, user_id)
         await self.db.commit()
+
+    async def _projects_solely_owned_by(
+        self, organization_id: uuid.UUID, user_id: uuid.UUID
+    ) -> int:
+        other = aliased(ProjectMember)
+        return (
+            await self.db.execute(
+                select(func.count())
+                .select_from(ProjectMember)
+                .join(Project, Project.id == ProjectMember.project_id)
+                .where(
+                    Project.organization_id == organization_id,
+                    ProjectMember.user_id == user_id,
+                    ProjectMember.role == MemberRole.owner,
+                    ~select(other.user_id)
+                    .where(
+                        other.project_id == ProjectMember.project_id,
+                        other.role == MemberRole.owner,
+                        other.user_id != user_id,
+                    )
+                    .exists(),
+                )
+            )
+        ).scalar_one()
+
+    async def _reset_default_org(self, organization_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        """Anyone whose landing org was this one lands on their personal org instead."""
+        user = await self.db.get(PlatformUser, user_id)
+        if user is not None and user.default_organization_id == organization_id:
+            personal = await self.ensure_personal_org(user)
+            user.default_organization_id = personal.id
+
+    async def _owner_only(self, organization_id: uuid.UUID) -> AppError:
+        return AppError(
+            code="org_role_required",
+            message="only an owner can make or remove owners",
+            status_code=403,
+            details=[
+                {"needed_role": "owner", "owner_emails": await self.owner_emails(organization_id)}
+            ],
+        )
+
+    async def owner_emails(self, organization_id: uuid.UUID) -> list[str]:
+        rows = await self.db.execute(
+            select(PlatformUser.email)
+            .join(OrganizationMember, OrganizationMember.user_id == PlatformUser.id)
+            .where(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.role == OrgRole.owner,
+            )
+            .order_by(PlatformUser.email)
+        )
+        return list(rows.scalars())
 
     async def transfer_ownership(
         self, organization_id: uuid.UUID, from_user_id: uuid.UUID, to_user_id: uuid.UUID
@@ -452,20 +621,220 @@ class OrganizationService:
         dst.role = OrgRole.owner
         await self.db.commit()
 
-    async def delete_organization(self, organization_id: uuid.UUID) -> None:
-        """Soft delete: the org row stays so audit trails resolve, but members and projects
-        detach. Phase F wires hard-delete to a per-org GDPR export+erase job."""
-        org = await self.db.get(Organization, organization_id)
-        if org is None:
-            raise AppError(code="not_found", message="organization not found", status_code=404)
+    # -- deletion (owner decision: a request with a grace period) -------------------------
+
+    async def request_deletion(
+        self, organization_id: uuid.UUID, *, actor_id: uuid.UUID, grace_days: int
+    ) -> Organization:
+        """Block the org now and schedule its deletion. Refused for personal orgs and while a
+        Stripe subscription is live (cancel it in the billing portal first, so nobody keeps
+        being charged for a deleted org)."""
+        from app.services.billing_service import has_live_stripe_subscription
+
+        org = await self._live_org(organization_id)
         if org.kind is OrgKind.personal:
             raise AppError(
                 code="forbidden",
                 message="personal organizations cannot be deleted",
                 status_code=403,
             )
-        org.deleted_at = _now()
+        if org.deletion_requested_at is not None:
+            raise AppError(
+                code="deletion_already_requested",
+                message="deletion has already been requested for this organization",
+                status_code=409,
+            )
+        sub = await self.db.get(Subscription, organization_id)
+        if sub is not None and has_live_stripe_subscription(sub):
+            raise AppError(
+                code="org_has_billing",
+                message="cancel the organization's subscription in the billing portal first",
+                status_code=409,
+            )
+        now = _now()
+        org.deletion_requested_at = now
+        org.deletion_scheduled_for = now + timedelta(days=grace_days)
+        org.deletion_requested_by = actor_id
         await self.db.commit()
+        return org
+
+    async def cancel_deletion(self, organization_id: uuid.UUID) -> Organization:
+        org = await self._live_org(organization_id)
+        if org.deletion_requested_at is None:
+            raise AppError(
+                code="no_deletion_request",
+                message="no deletion has been requested for this organization",
+                status_code=409,
+            )
+        org.deletion_requested_at = None
+        org.deletion_scheduled_for = None
+        org.deletion_requested_by = None
+        await self.db.commit()
+        return org
+
+    async def reschedule_deletion(
+        self, organization_id: uuid.UUID, *, grace_days: int
+    ) -> Organization:
+        """Operator: give a pending request a different period, counted from now."""
+        org = await self._live_org(organization_id)
+        if org.deletion_requested_at is None:
+            raise AppError(
+                code="no_deletion_request",
+                message="no deletion has been requested for this organization",
+                status_code=409,
+            )
+        org.deletion_scheduled_for = _now() + timedelta(days=grace_days)
+        await self.db.commit()
+        return org
+
+    async def execute_deletion(self, organization_id: uuid.UUID) -> int:
+        """Delete a requested org: its projects (and all their data), memberships and pending
+        invites. The org row stays, soft-deleted, so audit trails resolve. Returns the number
+        of projects deleted. Callers check that a request exists."""
+        org = await self._live_org(organization_id)
+        projects = list(
+            (
+                await self.db.execute(select(Project).where(Project.organization_id == org.id))
+            ).scalars()
+        )
+        for project in projects:
+            await self.db.delete(project)  # entities, configs, members cascade in the DB
+        member_ids = list(
+            (
+                await self.db.execute(
+                    select(OrganizationMember.user_id).where(
+                        OrganizationMember.organization_id == organization_id
+                    )
+                )
+            ).scalars()
+        )
+        await self.db.execute(
+            delete(OrganizationMember).where(OrganizationMember.organization_id == organization_id)
+        )
+        await self.db.execute(
+            update(OrganizationInvitation)
+            .where(
+                OrganizationInvitation.organization_id == organization_id,
+                OrganizationInvitation.accepted_at.is_(None),
+                OrganizationInvitation.revoked_at.is_(None),
+            )
+            .values(revoked_at=_now())
+        )
+        for user_id in member_ids:
+            await self._reset_default_org(organization_id, user_id)
+        # Identity setup dies with the org; a verified domain must not stay claimed forever.
+        for model in (
+            ScimGroup,
+            ScimUser,
+            ScimDirectory,
+            SsoLoginRequest,
+            SsoDomain,
+            SsoConnection,
+        ):
+            await self.db.execute(delete(model).where(model.organization_id == organization_id))
+        org.deleted_at = _now()
+        await self.db.flush()
+        return len(projects)
+
+    async def _live_org(self, organization_id: uuid.UUID) -> Organization:
+        org = await self.db.get(Organization, organization_id)
+        if org is None or org.deleted_at is not None:
+            raise AppError(code="not_found", message="organization not found", status_code=404)
+        return org
+
+    async def rename(self, organization_id: uuid.UUID, name: str) -> Organization:
+        org = await self.db.get(Organization, organization_id)
+        if org is None:
+            raise AppError(code="not_found", message="organization not found", status_code=404)
+        org.name = name.strip()
+        await self.db.commit()
+        return org
+
+    # -- org projects (§8 "Projects") ---------------------------------------------------
+
+    async def join_project(
+        self,
+        organization_id: uuid.UUID,
+        project_id: uuid.UUID,
+        user_id: uuid.UUID,
+        role: MemberRole,
+    ) -> ProjectMember:
+        """An org admin adds themselves to one of the org's projects."""
+        project = await self.db.get(Project, project_id)
+        if project is None or project.organization_id != organization_id:
+            raise AppError(code="not_found", message="project not found", status_code=404)
+        existing = await self.db.get(ProjectMember, (project_id, user_id))
+        if existing is not None:
+            raise AppError(code="conflict", message="already a member", status_code=409)
+        member = ProjectMember(project_id=project_id, user_id=user_id, role=role)
+        self.db.add(member)
+        await self.db.commit()
+        return member
+
+    async def transfer_project(
+        self,
+        project_id: uuid.UUID,
+        *,
+        from_org_id: uuid.UUID,
+        to_slug: str,
+        actor: PlatformUser,
+    ) -> tuple[Project, Organization]:
+        """§8: move a project between two orgs the actor owns. Everyone on the project must
+        already be a member of the destination, and the destination's project cap and
+        billing status apply as for a new project."""
+        project = await self.db.get(Project, project_id)
+        if project is None or project.organization_id != from_org_id:
+            raise AppError(code="not_found", message="project not found", status_code=404)
+        target = await self.get_by_slug(actor.id, to_slug)  # 404 unless a member
+        if target.role is not OrgRole.owner:
+            raise AppError(
+                code="org_role_required",
+                message="you must own the destination organization",
+                status_code=403,
+                details=[
+                    {
+                        "needed_role": "owner",
+                        "owner_emails": await self.owner_emails(target.organization.id),
+                    }
+                ],
+            )
+        to_org = target.organization
+        if to_org.id == from_org_id:
+            raise AppError(
+                code="conflict",
+                message="the project is already in this organization",
+                status_code=409,
+            )
+        outsiders = (
+            await self.db.execute(
+                select(func.count())
+                .select_from(ProjectMember)
+                .where(
+                    ProjectMember.project_id == project_id,
+                    ~select(OrganizationMember.user_id)
+                    .where(
+                        OrganizationMember.organization_id == to_org.id,
+                        OrganizationMember.user_id == ProjectMember.user_id,
+                    )
+                    .exists(),
+                )
+            )
+        ).scalar_one()
+        if outsiders:
+            raise AppError(
+                code="not_an_org_member",
+                message=(
+                    f"{outsiders} project member(s) don't belong to '{to_org.slug}'; "
+                    "invite them there or remove them from the project first"
+                ),
+                status_code=409,
+            )
+        await self.enforce_project_limit(to_org.id, actor_id=actor.id, actor_email=actor.email)
+        project = await self.db.get(Project, project_id)  # still locked-in transaction
+        assert project is not None
+        project.organization_id = to_org.id
+        await self.db.commit()
+        return project, to_org
 
     # -- plan / usage ---------------------------------------------------------------
 
@@ -534,10 +903,39 @@ class OrganizationService:
             raise AppError(
                 code="not_found", message="organization subscription not found", status_code=404
             )
+        if await self.expire_trial_if_due(sub):
+            await self.db.commit()  # the expiry stands even if this write is then refused
+            return await self._locked_plan_and_subscription(organization_id)
         plan = await self.db.get(Plan, sub.plan_id)
         if plan is None:
             raise AppError(code="not_found", message="plan not found", status_code=500)
         return plan, sub
+
+    async def expire_trial_if_due(self, sub: Subscription) -> bool:
+        """A platform-granted trial (no Stripe subscription behind it) ends on its date: the
+        org drops to the free plan. Soft-fail, as for a downgrade (§6.3): nothing is deleted,
+        new growth past the free caps is refused. Stripe trials are Stripe's to end (C.3).
+        Adds the change and its audit row to the session; the caller commits."""
+        if (
+            sub.status is not SubscriptionStatus.trial
+            or sub.trial_ends_at is None
+            or sub.trial_ends_at > _now()
+            or sub.stripe_subscription_id
+        ):
+            return False
+        old_plan = sub.plan_id
+        sub.plan_id = EXPIRED_TRIAL_PLAN_ID
+        sub.status = SubscriptionStatus.canceled
+        await audit_service.record(
+            self.db,
+            action="billing.trial_expired",
+            via="system",
+            organization_id=sub.organization_id,
+            target_type="organization",
+            target_id=sub.organization_id,
+            detail={"from_plan": old_plan, "to_plan": EXPIRED_TRIAL_PLAN_ID},
+        )
+        return True
 
     async def _deny(
         self,
@@ -559,6 +957,10 @@ class OrganizationService:
         plan_id = plan.id  # read before rollback expires the instances
         org = await self.db.get(Organization, organization_id)
         slug = org.slug if org is not None else None
+        if actor_email is None and actor_id is not None:
+            # The audit views show the actor's address; an id alone renders as "session".
+            actor = await self.db.get(PlatformUser, actor_id)
+            actor_email = actor.email if actor is not None else None
         await self.db.rollback()
         detail: dict[str, object] = {
             "resource": resource,
@@ -657,6 +1059,15 @@ class OrganizationService:
                 actor_email=actor_email,
             )
 
+    async def _refuse_if_locked(self, organization_id: uuid.UUID) -> None:
+        """423: an org waiting for deletion takes nothing new (projects, tokens), however the
+        request reached it."""
+        from app.api.security import org_deletion_pending
+
+        org = await self.db.get(Organization, organization_id, populate_existing=True)
+        if org is not None and org.deletion_requested_at is not None:
+            raise org_deletion_pending(org)
+
     async def enforce_project_limit(
         self,
         organization_id: uuid.UUID,
@@ -664,6 +1075,7 @@ class OrganizationService:
         actor_id: uuid.UUID | None = None,
         actor_email: str | None = None,
     ) -> None:
+        await self._refuse_if_locked(organization_id)
         plan, sub = await self._locked_plan_and_subscription(organization_id)
         cap = sub.project_override if sub.project_override is not None else plan.max_projects
         used = await self._count_projects(organization_id)
@@ -699,6 +1111,7 @@ class OrganizationService:
     ) -> None:
         """API tokens: active tokens per user per org. MCP tokens: active tokens with any
         `mcp:*` scope per org, across all members. Both checked when `mcp` is true."""
+        await self._refuse_if_locked(organization_id)
         plan, _sub = await self._locked_plan_and_subscription(organization_id)
         if plan.max_api_tokens is not None:
             used = await self.count_active_tokens(organization_id, user_id=user_id)
@@ -731,6 +1144,32 @@ class OrganizationService:
                     actor_id=user_id,
                     actor_email=actor_email,
                 )
+        if mcp and not plan.allow_mcp:  # a generous cap doesn't switch the feature on
+            raise await self.deny_mcp_not_in_plan(
+                organization_id, plan, actor_id=user_id, actor_email=actor_email
+            )
+
+    async def deny_mcp_not_in_plan(
+        self,
+        organization_id: uuid.UUID,
+        plan: Plan,
+        *,
+        actor_id: uuid.UUID | None,
+        actor_email: str | None,
+    ) -> AppError:
+        """§6.2 `plans.allow_mcp`: MCP access follows the plan, whatever the token cap says."""
+        return await self._deny(
+            organization_id,
+            code="mcp_not_in_plan",
+            resource="mcp_tokens",
+            plan=plan,
+            cap=None,
+            used=0,
+            message=f"plan '{plan.id}' doesn't include MCP access; upgrade to use it",
+            actor_id=actor_id,
+            actor_email=actor_email,
+            reason="feature",
+        )
 
     async def count_active_tokens(
         self,

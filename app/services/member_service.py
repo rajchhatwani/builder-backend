@@ -5,7 +5,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError
 from app.models.enums import AccountStatus, MemberRole
-from app.models.platform import PlatformUser, ProjectMember
+from app.models.platform import OrganizationMember, PlatformUser, ProjectMember
+from app.models.project import Project
 from app.services.platform_auth_service import normalize_email
 
 
@@ -40,6 +41,20 @@ class MemberService:
         existing = await self.db.get(ProjectMember, (project_id, user.id))
         if existing is not None:
             raise AppError(code="conflict", message="already a member", status_code=409)
+        # §3.2: a project member must belong to the project's organization first. Sharing
+        # outside it means inviting them to the org (which is where seats are counted).
+        project = await self.db.get(Project, project_id)
+        if project is not None and project.organization_id is not None:
+            in_org = await self.db.get(OrganizationMember, (project.organization_id, user.id))
+            if in_org is None:
+                raise AppError(
+                    code="not_an_org_member",
+                    message=(
+                        "this person isn't a member of the project's organization; "
+                        "invite them to the organization first"
+                    ),
+                    status_code=409,
+                )
         member = ProjectMember(
             project_id=project_id,
             user_id=user.id,

@@ -285,6 +285,21 @@ details.auth-section > .auth-section-body {
   overflow-wrap: anywhere;
 }
 
+/* Org breadcrumb above the project name (§8.1). */
+.sidebar-org {
+  display: block;
+  text-decoration: none;
+}
+
+.sidebar-org:hover {
+  text-decoration: underline;
+}
+
+/* Org waiting for deletion, in the sidebar's org switcher. */
+.sidebar-locked {
+  margin-inline-start: auto;
+}
+
 .count-badge {
   margin-inline-start: auto;
   min-width: 1.4em;
@@ -707,4 +722,85 @@ dialog:has(.policy-form) {
 .stat-card progress {
   width: 100%;
   margin-block-start: var(--space-2);
+}
+
+/* ── Admin insights: 30-day bar strip ─────────────────────────────────────── */
+
+.sparkbars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 3rem;
+}
+
+.sparkbars span {
+  flex: 1;
+  min-height: 1px;
+  background: var(--primary, currentColor);
+  border-radius: 1px;
+  opacity: 0.8;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+/* ── SSO, two-factor (Platform SaaS Phase D) ─────────────────────────────── */
+
+.status-err {
+  background: var(--danger);
+  color: var(--danger-foreground, #fff);
+}
+
+.copy-row {
+  display: grid;
+  grid-template-columns: 8rem minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.copy-row code {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .copy-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .copy-row > span {
+    grid-column: 1 / -1;
+  }
+}
+
+.checklist,
+.plain-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.checklist li {
+  padding-block: var(--space-1);
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-1) var(--space-4);
+  font-family: var(--font-mono, monospace);
+}
+
+.field-note {
+  display: block;
+  font-weight: normal;
+}
+
+/* TOTP QR code: always dark-on-white so phones can scan it in dark mode too */
+.totp-qr {
+  display: block;
+  width: 180px;
+  height: 180px;
+  background: #fff;
+  border-radius: 6px;
+  border: 1px solid var(--border, #ddd);
 }

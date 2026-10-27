@@ -166,6 +166,18 @@ async def get_subscription(
     )
 
 
+async def fetch_subscription(
+    *,
+    secret_key: str,
+    subscription_id: str,
+    transport: httpx.AsyncBaseTransport | None = None,
+) -> dict[str, Any]:
+    """The full Subscription object, shaped like a webhook's `data.object` (reconciliation)."""
+    return await _call(
+        "GET", f"/subscriptions/{subscription_id}", secret_key=secret_key, transport=transport
+    )
+
+
 async def set_item_quantity(
     *,
     secret_key: str,

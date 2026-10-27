@@ -27,6 +27,13 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 ISSUER = "backend-builder"
 AUDIENCE_APP = "builder-app"
 AUDIENCE_ADMIN = "builder-admin"
+# The short-lived "password accepted, now the code" token of an MFA sign-in (§4.4). Never an
+# access token: no route accepts this audience as a bearer.
+AUDIENCE_MFA = "builder-mfa"
+# Authentication methods (`amr` claim, RFC 8176 spirit) that satisfy an MFA requirement.
+MFA_METHODS = frozenset({"otp", "rc", "sso"})
+# The password hash of an account that only ever signs in through SSO: no password matches it.
+SSO_ONLY_PASSWORD_HASH = "!sso-only"
 
 PASSWORD_MIN_LENGTH = 12
 PASSWORD_MAX_LENGTH = 128  # scrypt cost grows with input only up to a block, but cap abuse anyway
@@ -239,10 +246,16 @@ def decode_jwt(
 
 
 def access_claims(
-    *, user_id: str, audience: str, token_version: int, ttl_seconds: int, now: float | None = None
+    *,
+    user_id: str,
+    audience: str,
+    token_version: int,
+    ttl_seconds: int,
+    now: float | None = None,
+    amr: list[str] | None = None,
 ) -> dict[str, Any]:
     issued = int(time.time() if now is None else now)
-    return {
+    claims: dict[str, Any] = {
         "iss": ISSUER,
         "aud": audience,
         "sub": user_id,
@@ -251,6 +264,9 @@ def access_claims(
         "jti": secrets.token_hex(8),
         "tv": token_version,
     }
+    if amr:
+        claims["amr"] = amr
+    return claims
 
 
 def check_secret_strength(secret: str, environment: str) -> str | None:

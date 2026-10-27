@@ -9,7 +9,7 @@ A person's project role is looked up per request from `project_members`; nothing
 claim inside a token. Every deny is the default: a role or scope not named below gets nothing.
 """
 
-from app.models.enums import MemberRole, PlatformRole
+from app.models.enums import MemberRole, OrgRole, PlatformRole
 
 SCOPE_READ = "read"
 SCOPE_WRITE = "write"
@@ -85,6 +85,99 @@ def scopes_allow(granted: frozenset[str], needed: str) -> bool:
     if needed in granted:
         return True
     return needed == SCOPE_READ and SCOPE_WRITE in granted
+
+
+# -- organization routes (PLATFORM_SAAS_PLAN §5) -------------------------------------------
+#
+# (method, route template) -> the minimum org role. Default-deny: a /orgs/{slug} route that is
+# not listed here is refused (a test walks the app's routes to keep this table complete).
+# Handlers add the finer rules a flat table can't express: only an owner may create or remove
+# owners, and anyone may remove themselves.
+
+ORG_ROLE_LEVEL: dict[OrgRole, int] = {OrgRole.member: 1, OrgRole.admin: 2, OrgRole.owner: 3}
+
+ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
+    ("GET", "/orgs/{slug}"): OrgRole.member,
+    ("PATCH", "/orgs/{slug}"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}"): OrgRole.owner,  # requests deletion (grace period)
+    ("POST", "/orgs/{slug}/deletion/cancel"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/members"): OrgRole.member,
+    ("PATCH", "/orgs/{slug}/members/{user_id}"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/members/{user_id}"): OrgRole.member,  # self; else admin (handler)
+    ("POST", "/orgs/{slug}/transfer"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/invitations"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/invitations"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/invitations/{invitation_id}"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/invitations/{invitation_id}/resend"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/projects"): OrgRole.member,
+    ("POST", "/orgs/{slug}/projects/{project_id}/join"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/projects/{project_id}/transfer"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/plan"): OrgRole.member,
+    ("POST", "/orgs/{slug}/billing/checkout"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/billing/portal"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/audit"): OrgRole.admin,
+    # Enterprise SSO (§8 "SSO & SCIM", admins). Handlers also refuse API tokens.
+    ("GET", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("PUT", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/activate"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/deactivate"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/domains"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/domains/{domain}/verify"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/sso/domains/{domain}"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/test"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/check"): OrgRole.admin,
+    # SCIM 2.0 setup (§8 "SSO & SCIM", admins). Handlers also refuse API tokens; mapping a
+    # group to the owner role needs an owner (handler).
+    ("GET", "/orgs/{slug}/scim"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/scim/token"): OrgRole.admin,
+    ("PATCH", "/orgs/{slug}/scim"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/scim"): OrgRole.admin,
+    # §8 Security policies (admins). The PATCH handler also refuses API tokens.
+    ("GET", "/orgs/{slug}/policies"): OrgRole.admin,
+    ("PATCH", "/orgs/{slug}/policies"): OrgRole.admin,
+}
+
+
+# Destructive and owner-level org actions need a signed-in session: a personal access token
+# (script, CI, MCP client) can read and write ordinary data but never delete the org, change who
+# belongs to it or who owns it, or open the billing flow.
+ORG_ROUTES_SESSION_ONLY: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("DELETE", "/orgs/{slug}"),
+        ("POST", "/orgs/{slug}/deletion/cancel"),
+        ("PATCH", "/orgs/{slug}/members/{user_id}"),
+        ("DELETE", "/orgs/{slug}/members/{user_id}"),
+        ("POST", "/orgs/{slug}/transfer"),
+        ("POST", "/orgs/{slug}/projects/{project_id}/transfer"),
+        ("POST", "/orgs/{slug}/billing/checkout"),
+        ("POST", "/orgs/{slug}/billing/portal"),
+    }
+)
+
+
+# While an org waits for deletion, every route is blocked (423) except these, so members can
+# see what's happening and an owner can revoke the request.
+ORG_ROUTES_OPEN_DURING_DELETION: frozenset[tuple[str, str]] = frozenset(
+    {("GET", "/orgs/{slug}"), ("POST", "/orgs/{slug}/deletion/cancel")}
+)
+
+
+# When an org requires MFA (§4.4), a member whose session has no second factor is refused
+# everywhere in it (403 `org_mfa_required`) except these: the org page, so the UI can say why,
+# and leaving the org.
+ORG_ROUTES_OPEN_WITHOUT_MFA: frozenset[tuple[str, str]] = frozenset(
+    {("GET", "/orgs/{slug}"), ("DELETE", "/orgs/{slug}/members/{user_id}")}
+)
+
+
+def required_org_role(method: str, template: str) -> OrgRole | None:
+    """None means the route is not listed: refuse it."""
+    return ORG_ROUTE_ROLES.get((method.upper(), template))
+
+
+def org_role_allows(role: OrgRole, needed: OrgRole) -> bool:
+    return ORG_ROLE_LEVEL[role] >= ORG_ROLE_LEVEL[needed]
 
 
 # -- admin console ----------------------------------------------------------------------

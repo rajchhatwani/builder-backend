@@ -75,7 +75,39 @@ class McpService:
                 message="MCP access is not enabled for you on this project",
                 status_code=403,
             )
+        await self._check_org(principal, project_id)
         return member
+
+    async def _check_org(self, principal: Principal, project_id: uuid.UUID) -> None:
+        """The same org rules the HTTP guard applies (§5): org membership, the deletion lock
+        (423) and the org's MFA policy (403 `org_mfa_required`, §4.4)."""
+        from app.api.security import org_deletion_pending, org_mfa_required
+        from app.models.platform import Organization, OrganizationMember
+        from app.models.project import Project
+        from app.services.organization_service import OrganizationService
+
+        project = await self.db.get(Project, project_id)
+        if project is None or project.organization_id is None:
+            return
+        if (
+            await self.db.get(OrganizationMember, (project.organization_id, principal.user.id))
+            is None
+        ):
+            raise AppError(code="not_found", message="project not found", status_code=404)
+        org = await self.db.get(Organization, project.organization_id)
+        if org is None:
+            return
+        if org.deletion_requested_at is not None:
+            raise org_deletion_pending(org)
+        if org.require_mfa and not principal.mfa_satisfied:
+            raise org_mfa_required(org, principal)
+        # A downgrade switches MCP off for tokens that already exist, not only for new ones.
+        orgs = OrganizationService(self.db)
+        plan, _sub = await orgs.plan_and_subscription(org.id)
+        if not plan.allow_mcp:
+            raise await orgs.deny_mcp_not_in_plan(
+                org.id, plan, actor_id=principal.user.id, actor_email=principal.user.email
+            )
 
     async def _require_editor(self, member: ProjectMember) -> None:
         if ROLE_LEVEL[member.role] < ROLE_LEVEL[MemberRole.editor]:
@@ -121,10 +153,7 @@ class McpService:
         projects = []
         for project, member in rows.all():
             # Respect token pin
-            if (
-                principal.token_project_id is not None
-                and project.id != principal.token_project_id
-            ):
+            if principal.token_project_id is not None and project.id != principal.token_project_id:
                 continue
             projects.append(
                 {
@@ -169,21 +198,16 @@ class McpService:
                         {"name": f.name, "type": str(f.type), "required": f.required}
                         for f in e.fields
                     ],
-                    "operations": (
-                        [str(op) for op in e.options.operations] if e.options else []
-                    ),
+                    "operations": ([str(op) for op in e.options.operations] if e.options else []),
                 }
             )
         relations_out = [
-            {"kind": str(r.kind), "from": r.from_name, "to": r.to_name}
-            for r in spec.relations
+            {"kind": str(r.kind), "from": r.from_name, "to": r.to_name} for r in spec.relations
         ]
         await self._audit(principal, "get_data_model", project_id)
         return _cap_dict({"entities": entities_out, "relations": relations_out})
 
-    async def get_openapi(
-        self, principal: Principal, project_id: uuid.UUID
-    ) -> dict[str, object]:
+    async def get_openapi(self, principal: Principal, project_id: uuid.UUID) -> dict[str, object]:
         """Return the generated project's OpenAPI spec (from last snapshot or re-generated)."""
         await self._resolve_membership(principal, project_id)
         from app.models.generation import Generation
@@ -202,9 +226,7 @@ class McpService:
 
         file_tree = generate(spec)
         slug = spec.project.slug
-        openapi_content = file_tree.get("openapi.json") or file_tree.get(
-            f"{slug}/openapi.json"
-        )
+        openapi_content = file_tree.get("openapi.json") or file_tree.get(f"{slug}/openapi.json")
         if openapi_content:
             import json as _json
 
@@ -261,9 +283,7 @@ class McpService:
             {
                 "name": e.name,
                 "plural_path": e.plural_path,
-                "operations": (
-                    [str(op) for op in e.options.operations] if e.options else []
-                ),
+                "operations": ([str(op) for op in e.options.operations] if e.options else []),
             }
             for e in spec.entities
         ]
@@ -272,9 +292,7 @@ class McpService:
             "api_base": "/",
             "auth": {
                 "provider": (
-                    str(auth_block.provider)
-                    if auth_block and auth_block.provider
-                    else "none"
+                    str(auth_block.provider) if auth_block and auth_block.provider else "none"
                 ),
                 "login_endpoint": "/auth/login" if auth_block else None,
                 "register_endpoint": "/auth/register" if auth_block else None,
@@ -325,9 +343,7 @@ class McpService:
         await self._audit(principal, "get_deploy_info", project_id)
         return _cap_dict(result)
 
-    async def validate_spec(
-        self, principal: Principal, project_id: uuid.UUID
-    ) -> dict[str, object]:
+    async def validate_spec(self, principal: Principal, project_id: uuid.UUID) -> dict[str, object]:
         await self._resolve_membership(principal, project_id)
         from app.core import validation
 
@@ -336,10 +352,7 @@ class McpService:
         result: dict[str, object] = {
             "valid": len(issues) == 0,
             "issue_count": len(issues),
-            "issues": [
-                {"path": i.path, "code": i.code, "message": i.message}
-                for i in issues[:50]
-            ],
+            "issues": [{"path": i.path, "code": i.code, "message": i.message} for i in issues[:50]],
         }
         await self._audit(principal, "validate_spec", project_id)
         return _cap_dict(result)
@@ -360,9 +373,7 @@ class McpService:
 
         # EntityCreate has no description field; name is the only required field.
         entity = await EntityService(self.db).create(project_id, EntityCreate(name=name))
-        await self._audit(
-            principal, "create_entity", project_id, extra={"entity": name}
-        )
+        await self._audit(principal, "create_entity", project_id, extra={"entity": name})
         return _cap_dict(
             {"id": str(entity.id), "name": entity.name, "table_name": entity.table_name}
         )
@@ -378,9 +389,7 @@ class McpService:
         await self._require_editor(member)
         ent = (
             await self.db.execute(
-                select(Entity).where(
-                    Entity.project_id == project_id, Entity.name == entity_name
-                )
+                select(Entity).where(Entity.project_id == project_id, Entity.name == entity_name)
             )
         ).scalar_one_or_none()
         if ent is None:
@@ -399,9 +408,7 @@ class McpService:
             project_id,
             extra={"entity": entity_name, "field": str(field.get("name", ""))},
         )
-        return _cap_dict(
-            {"id": str(created.id), "name": created.name, "type": str(created.type)}
-        )
+        return _cap_dict({"id": str(created.id), "name": created.name, "type": str(created.type)})
 
     async def add_relation(
         self,
@@ -414,9 +421,7 @@ class McpService:
         from app.schemas.relation import RelationCreate
         from app.services.relation_service import RelationService
 
-        created = await RelationService(self.db).create(
-            project_id, RelationCreate(**relation)
-        )
+        created = await RelationService(self.db).create(project_id, RelationCreate(**relation))
         await self._audit(principal, "add_relation", project_id)
         return _cap_dict({"id": str(created.id), "kind": str(created.kind)})
 
@@ -433,9 +438,7 @@ class McpService:
         # Verify entity exists in this project
         ent = (
             await self.db.execute(
-                select(Entity).where(
-                    Entity.project_id == project_id, Entity.name == entity_name
-                )
+                select(Entity).where(Entity.project_id == project_id, Entity.name == entity_name)
             )
         ).scalar_one_or_none()
         if ent is None:

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import type {
   AuthConfig,
   Entity,
   KeycloakConfig,
+  Organization,
   PaymentsConfig,
   StorageConfig,
   Project,
@@ -28,6 +29,23 @@ import { DeploymentPanel } from '../components/DeploymentPanel'
 import { DocumentsPanel } from '../components/DocumentsPanel'
 import { ObservabilityPanel } from '../components/ObservabilityPanel'
 import { ProjectSidebar, ProjectsSidebar, type Section } from '../components/Sidebar'
+
+/** The organization that owns this project (one call: projects carry `organization_id`). */
+function useProjectOrg(organizationId: string | null | undefined): Organization | null {
+  const [found, setFound] = useState<Organization | null>(null)
+  useEffect(() => {
+    if (!organizationId) return
+    let cancelled = false
+    api
+      .listOrgs()
+      .then((page) => !cancelled && setFound(page.items.find((o) => o.id === organizationId) ?? null))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [organizationId])
+  return found?.id === organizationId ? found : null
+}
 
 interface ProjectWorkspaceProps {
   projectId: string
@@ -68,6 +86,10 @@ function PageTitle({ title, children }: { title: string; children: string }) {
 export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [missing, setMissing] = useState(false)
+  // 423: the project's org is waiting for deletion (the global prompt explains and links to it).
+  const [locked, setLocked] = useState(false)
+  // 403 org_mfa_required: the org requires two-factor (the global prompt explains the way out).
+  const [needsMfa, setNeedsMfa] = useState(false)
   const [entities, setEntities] = useState<Entity[]>([])
   const [relations, setRelations] = useState<Relation[]>([])
   const [roles, setRoles] = useState<ProjectRole[]>([])
@@ -83,6 +105,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [modelVersion, setModelVersion] = useState(0)
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
+  const org = useProjectOrg(project?.organization_id)
 
   const load = useCallback(async () => {
     try {
@@ -109,7 +132,9 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       setIssues(report ? report.issues : null)
       setGenerationCount(generations.total)
       setModelVersion((v) => v + 1)
-    } catch {
+    } catch (err) {
+      setLocked(err instanceof ApiError && err.code === 'org_deletion_pending')
+      setNeedsMfa(err instanceof ApiError && err.code === 'org_mfa_required')
       setMissing(true)
     } finally {
       setLoading(false)
@@ -132,8 +157,20 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
     return (
       <Layout sidebar={<ProjectsSidebar />}>
         <div className="card empty-hero">
-          <h2>We can't find this project</h2>
-          <p>It may have been deleted, or the backend is not reachable.</p>
+          <h2>
+            {locked
+              ? "This project's organization is scheduled for deletion"
+              : needsMfa
+                ? "This project's organization requires two-factor authentication"
+                : "We can't find this project"}
+          </h2>
+          <p>
+            {locked
+              ? 'It is locked until the deletion date, and then deleted with its projects. An owner can cancel the deletion from the organization page.'
+              : needsMfa
+                ? 'Turn on two-factor in your account, then sign in again with your code.'
+                : 'It may have been deleted, or the backend is not reachable.'}
+          </p>
           <a className="button" href="#/">
             Back to projects
           </a>
@@ -169,6 +206,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           problems={problems}
           on={{ keycloak: keycloakOn, payments: paymentsOn, storage: storageOn }}
           onShare={() => setSharing(true)}
+          org={org}
         />
       }
     >

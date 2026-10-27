@@ -14,6 +14,8 @@ class ProjectCreate(BaseModel):
     slug: str | None = Field(default=None, max_length=100)
     description: str | None = Field(default=None, max_length=2000)
     db_engine: DbEngine = DbEngine.postgres
+    # The org to create it in (must be a member). Omitted: the creator's default org.
+    organization_id: uuid.UUID | None = None
 
     @field_validator("slug")
     @classmethod
@@ -50,5 +52,10 @@ class ProjectRead(BaseModel):
     description: str | None
     db_engine: DbEngine
     version: int
+    organization_id: uuid.UUID | None = None
+    # Set by `GET /projects`: the project's org is waiting for deletion, so opening the
+    # project answers 423 until an owner cancels the request.
+    organization_locked: bool = False
+    organization_deletion_scheduled_for: datetime | None = None
     created_at: datetime
     updated_at: datetime

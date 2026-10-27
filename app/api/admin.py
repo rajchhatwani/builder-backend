@@ -13,7 +13,13 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.account import clear_refresh_cookie, session_body, set_refresh_cookie
+from app.api.account import (
+    clear_refresh_cookie,
+    login_result,
+    session_body,
+    session_with_codes,
+    set_refresh_cookie,
+)
 from app.api.deps import Pagination, pagination
 from app.api.security import (
     rate_limit_auth,
@@ -24,12 +30,27 @@ from app.api.security import (
 )
 from app.config import Settings, get_settings
 from app.db import get_session
-from app.models.enums import AccountStatus, AuditResult, PlatformRole, TokenAudience
+from app.exceptions import AppError
+from app.models.enums import (
+    AccountStatus,
+    AuditResult,
+    PlatformRole,
+    SubscriptionStatus,
+    TokenAudience,
+)
+from app.models.platform import PlatformUser
 from app.schemas.account import (
+    AdminInsights,
+    AdminOrgDeletionUpdate,
+    AdminOrgMemberRead,
+    AdminOrgPlanChange,
+    AdminOrgProjectRead,
     AdminOrgRead,
     AdminOrgSeatOverride,
     AdminProjectRead,
+    AdminReason,
     AdminStats,
+    AdminSubscriptionRead,
     AdminUserCreate,
     AdminUserCreated,
     AdminUserRead,
@@ -37,16 +58,23 @@ from app.schemas.account import (
     ApiTokenRead,
     AuditRead,
     LoginRequest,
+    MfaChallengeRead,
+    MfaLoginRequest,
+    MfaTokenRequest,
     PlanWrite,
     PlatformSettingsRead,
     SessionRead,
+    SessionWithRecoveryCodesRead,
+    TotpSetupRead,
     UserRead,
 )
-from app.schemas.organization import PlanRead
 from app.schemas.common import Page
+from app.schemas.organization import PlanRead
+from app.schemas.sso import SsoCheckRead
 from app.services import audit_service
 from app.services.access_service import Principal
 from app.services.admin_service import AdminService
+from app.services.mfa_service import MfaService
 from app.services.platform_auth_service import PlatformAuthService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -58,6 +86,7 @@ NEEDS_STATS_READ = Depends(require_admin("stats:read"))
 NEEDS_USERS_READ = Depends(require_admin("users:read"))
 NEEDS_USERS_WRITE = Depends(require_admin("users:write"))
 QUERY_TEXT = Query(default=None, max_length=100)
+STATUS_FILTER = Query(default=None, alias="status")
 QUERY_ACTION = Query(default=None, max_length=60)
 QUERY_STATUS = Query(default=None, alias="status")
 
@@ -79,30 +108,85 @@ def _user_read(user: object, project_count: int = 0) -> AdminUserRead:
 # -- session ---------------------------------------------------------------------------
 
 
-@router.post("/login", response_model=SessionRead, dependencies=[Depends(rate_limit_auth)])
+@router.post(
+    "/login",
+    response_model=SessionRead | MfaChallengeRead,
+    dependencies=[Depends(rate_limit_auth)],
+)
 async def admin_login(
     body: LoginRequest,
     request: Request,
     response: Response,
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
-) -> SessionRead:
-    session = await PlatformAuthService(db, settings).login(
+) -> SessionRead | MfaChallengeRead:
+    """§4.4: staff always need TOTP, so a correct password answers an MFA challenge
+    (`enrollment_required` when the account has no TOTP yet), never a session by itself
+    (unless `BUILDER_ADMIN_MFA_REQUIRED=false`, local development only)."""
+    result = await PlatformAuthService(db, settings).login(
         email=body.email,
         password=body.password,
         audience=TokenAudience.admin,
         info=request_info(request),
     )
-    set_refresh_cookie(
-        response,
-        ADMIN_COOKIE,
-        ADMIN_COOKIE_PATH,
-        session.refresh_token,
-        session.refresh_max_age,
-        settings,
+    return login_result(result, response, ADMIN_COOKIE, ADMIN_COOKIE_PATH, settings)
+
+
+@router.post("/login/mfa", response_model=SessionRead, dependencies=[Depends(rate_limit_auth)])
+async def admin_login_mfa(
+    body: MfaLoginRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> SessionRead:
+    session = await MfaService(db, settings).verify_login(
+        mfa_token=body.mfa_token,
+        code=body.code,
+        audience=TokenAudience.admin,
+        info=request_info(request),
+    )
+    result = login_result(session, response, ADMIN_COOKIE, ADMIN_COOKIE_PATH, settings)
+    assert isinstance(result, SessionRead)
+    return result
+
+
+@router.post(
+    "/login/mfa/setup", response_model=TotpSetupRead, dependencies=[Depends(rate_limit_auth)]
+)
+async def admin_login_mfa_setup(
+    body: MfaTokenRequest,
+    response: Response,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> TotpSetupRead:
+    setup = await MfaService(db, settings).setup_with_challenge(
+        mfa_token=body.mfa_token, audience=TokenAudience.admin
     )
     response.headers["Cache-Control"] = "no-store"
-    return session_body(session)
+    return TotpSetupRead(secret=setup.secret, otpauth_uri=setup.otpauth_uri)
+
+
+@router.post(
+    "/login/mfa/enable",
+    response_model=SessionWithRecoveryCodesRead,
+    dependencies=[Depends(rate_limit_auth)],
+)
+async def admin_login_mfa_enable(
+    body: MfaLoginRequest,
+    request: Request,
+    response: Response,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> SessionWithRecoveryCodesRead:
+    session, codes = await MfaService(db, settings).enable_with_challenge(
+        mfa_token=body.mfa_token,
+        code=body.code,
+        audience=TokenAudience.admin,
+        info=request_info(request),
+    )
+    login_result(session, response, ADMIN_COOKIE, ADMIN_COOKIE_PATH, settings)
+    return session_with_codes(session, codes)
 
 
 @router.post(
@@ -262,6 +346,32 @@ async def reset_password(
     return {"temporary_password": temporary}
 
 
+@router.post("/users/{user_id}/reset-mfa", response_model=AdminUserRead)
+async def reset_mfa(
+    user_id: uuid.UUID,
+    body: AdminReason,
+    request: Request,
+    principal: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminUserRead:
+    """Clear a person's TOTP and recovery codes (lost authenticator) and sign them out
+    everywhere. Needs a reason; audited as `admin.user_mfa_reset`."""
+    user = await db.get(PlatformUser, user_id)
+    if user is None:
+        raise AppError(code="not_found", message="user not found", status_code=404)
+    if user.id == principal.user.id:
+        raise AppError(
+            code="cannot_reset_own_mfa",
+            message="ask another administrator to reset your two-factor authentication",
+            status_code=409,
+        )
+    user = await MfaService(db, settings).reset_by_operator(
+        user, actor=principal.user, reason=body.reason, info=request_info(request)
+    )
+    return _user_read(user)
+
+
 # -- projects (metadata only), audit, stats, settings ---------------------------------------
 
 
@@ -375,9 +485,7 @@ async def admin_list_user_tokens(
     return [ApiTokenRead.model_validate(r) for r in rows]
 
 
-@router.delete(
-    "/users/{user_id}/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/users/{user_id}/tokens/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def admin_revoke_user_token(
     user_id: uuid.UUID,
     token_id: uuid.UUID,
@@ -390,18 +498,32 @@ async def admin_revoke_user_token(
     await AdminService(db, settings).get_user(user_id)
     from app.services.api_token_service import ApiTokenService
 
-    await ApiTokenService(db).revoke_admin(
-        principal.user, user_id, token_id, request_info(request)
-    )
+    await ApiTokenService(db).revoke_admin(principal.user, user_id, token_id, request_info(request))
 
 
 # -- organizations tab -----------------------------------------------------------------
 
 
 def _org_row(
-    org: object, member_count: int, project_count: int, sub: object
+    org: object,
+    member_count: int,
+    project_count: int,
+    sub: object,
+    extras: tuple[int, datetime | None] = (0, None),
+    sso: dict[str, object] | None = None,
 ) -> AdminOrgRead:
     return AdminOrgRead(
+        **(sso or {}),  # type: ignore[arg-type]
+        require_mfa=getattr(org, "require_mfa", False),
+        session_ttl_hours=getattr(org, "session_ttl_hours", None),
+        stripe_customer_id=getattr(sub, "stripe_customer_id", None),
+        stripe_subscription_id=getattr(sub, "stripe_subscription_id", None),
+        current_period_end=getattr(sub, "current_period_end", None),
+        trial_ends_at=getattr(sub, "trial_ends_at", None),
+        mrr_cents=extras[0],
+        last_activity_at=extras[1],
+        deletion_requested_at=getattr(org, "deletion_requested_at", None),
+        deletion_scheduled_for=getattr(org, "deletion_scheduled_for", None),
         id=org.id,  # type: ignore[attr-defined]
         name=org.name,  # type: ignore[attr-defined]
         slug=org.slug,  # type: ignore[attr-defined]
@@ -427,15 +549,29 @@ async def list_organizations(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> Page[AdminOrgRead]:
-    rows, total = await AdminService(db, settings).list_organizations(
-        limit=page.limit, offset=page.offset, query=q
-    )
+    service = AdminService(db, settings)
+    rows, total = await service.list_organizations(limit=page.limit, offset=page.offset, query=q)
+    extras = await service.org_extras(rows)
+    sso = await service.org_sso([o.id for o, *_ in rows])
+    scim = await service.org_scim([o.id for o, *_ in rows])
+    for oid, extra in scim.items():
+        sso.setdefault(oid, {}).update(extra)
     return Page[AdminOrgRead](
-        items=[_org_row(o, m, p, s) for o, m, p, s in rows],
+        items=[
+            _org_row(o, m, p, s, extras.get(o.id, (0, None)), sso.get(o.id)) for o, m, p, s in rows
+        ],
         total=total,
         limit=page.limit,
         offset=page.offset,
     )
+
+
+async def _one_org(service: AdminService, org_id: uuid.UUID) -> AdminOrgRead:
+    row = await service.get_organization(org_id)
+    extras = await service.org_extras([row])
+    sso = await service.org_sso([org_id])
+    sso.setdefault(org_id, {}).update((await service.org_scim([org_id])).get(org_id, {}))
+    return _org_row(*row, extras.get(org_id, (0, None)), sso.get(org_id))
 
 
 @router.get("/organizations/{org_id}", response_model=AdminOrgRead)
@@ -445,10 +581,7 @@ async def get_organization(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> AdminOrgRead:
-    org, member_count, project_count, sub = await AdminService(db, settings).get_organization(
-        org_id
-    )
-    return _org_row(org, member_count, project_count, sub)
+    return await _one_org(AdminService(db, settings), org_id)
 
 
 @router.patch("/organizations/{org_id}/overrides", response_model=AdminOrgRead)
@@ -469,25 +602,266 @@ async def set_org_overrides(
         reason=body.reason,
         info=request_info(request),
     )
-    org, member_count, project_count, sub = await service.get_organization(org_id)
-    return _org_row(org, member_count, project_count, sub)
+    return await _one_org(service, org_id)
 
 
 @router.patch("/organizations/{org_id}/plan", response_model=AdminOrgRead)
 async def set_org_plan(
     org_id: uuid.UUID,
+    body: AdminOrgPlanChange,
     request: Request,
-    plan_id: str = Query(min_length=1, max_length=40),
     principal: Principal = NEEDS_USERS_WRITE,
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> AdminOrgRead:
     service = AdminService(db, settings)
     await service.set_org_plan(
-        principal, org_id, plan_id=plan_id, info=request_info(request)
+        principal, org_id, plan_id=body.plan_id, reason=body.reason, info=request_info(request)
     )
-    org, member_count, project_count, sub = await service.get_organization(org_id)
-    return _org_row(org, member_count, project_count, sub)
+    return await _one_org(service, org_id)
+
+
+@router.patch("/organizations/{org_id}/deletion", response_model=AdminOrgRead)
+async def reschedule_org_deletion(
+    org_id: uuid.UUID,
+    body: AdminOrgDeletionUpdate,
+    principal: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminOrgRead:
+    from app.services.organization_service import OrganizationService
+
+    org = await OrganizationService(db).reschedule_deletion(org_id, grace_days=body.grace_days)
+    await audit_service.record(
+        db,
+        action="admin.org_deletion_rescheduled",
+        actor_id=principal.user.id,
+        actor_email=principal.user.email,
+        organization_id=org_id,
+        target_type="organization",
+        target_id=org_id,
+        detail={
+            "scheduled_for": org.deletion_scheduled_for.isoformat()
+            if org.deletion_scheduled_for
+            else None,
+            "reason": body.reason[:200],
+        },
+    )
+    await db.commit()
+    return await _one_org(AdminService(db, settings), org_id)
+
+
+@router.post("/organizations/{org_id}/deletion/execute", response_model=AdminOrgRead)
+async def execute_org_deletion(
+    org_id: uuid.UUID,
+    body: AdminReason,
+    principal: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminOrgRead:
+    """Accept a pending deletion request now, without waiting for the grace period."""
+    from app.models.platform import Organization
+    from app.services import org_deletion_service
+
+    org = await db.get(Organization, org_id)
+    if org is None or org.deleted_at is not None:
+        raise AppError(code="not_found", message="organization not found", status_code=404)
+    if org.deletion_requested_at is None:
+        raise AppError(
+            code="no_deletion_request",
+            message="the organization's owner hasn't requested deletion",
+            status_code=409,
+        )
+    await org_deletion_service.execute(
+        db,
+        org_id,
+        actor_id=principal.user.id,
+        actor_email=principal.user.email,
+        reason=f"accepted early by operator: {body.reason}",
+    )
+    return await _one_org(AdminService(db, settings), org_id)
+
+
+@router.post("/organizations/{org_id}/sso/check", response_model=SsoCheckRead)
+async def check_org_sso(
+    org_id: uuid.UUID,
+    request: Request,
+    principal: Principal = NEEDS_PROJECTS_READ,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> SsoCheckRead:
+    """§12.D.5 operator test button: checks the org's SSO configuration (plan, verified
+    domain, IdP certificate expiry, OIDC discovery + JWKS) without signing anyone in."""
+    from app.api.sso import check_read
+    from app.models.platform import Organization
+    from app.services.sso_service import SsoService
+
+    org = await db.get(Organization, org_id)
+    if org is None or org.deleted_at is not None:
+        raise AppError(code="not_found", message="organization not found", status_code=404)
+    result = await SsoService(db, settings).check(org)
+    info = request_info(request)
+    await audit_service.record(
+        db,
+        action="admin.sso_checked",
+        actor_id=principal.user.id,
+        actor_email=principal.user.email,
+        via="session",
+        organization_id=org.id,
+        target_type="organization",
+        target_id=org.id,
+        client_ip=info.client_ip,
+        request_id=info.request_id,
+        detail={"ok": result.ok},
+    )
+    await db.commit()
+    return check_read(result)
+
+
+@router.post("/sso/domains/{domain}/release", response_model=AdminOrgRead)
+async def release_sso_domain(
+    domain: str,
+    body: AdminReason,
+    request: Request,
+    principal: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminOrgRead:
+    """Frees a verified (or pending) SSO domain claim so another org can verify it. If it was
+    the holder's last verified domain its SSO is switched off. Platform admins only; needs a
+    reason; audited as `admin.sso_domain_released`. Returns the org that held the claim."""
+    from app.services.sso_service import SsoService
+
+    org = await SsoService(db, settings).operator_release_domain(
+        domain, principal.user, body.reason, request_info(request)
+    )
+    return await _one_org(AdminService(db, settings), org.id)
+
+
+@router.post("/organizations/{org_id}/scim/rotate", response_model=AdminOrgRead)
+async def rotate_org_scim_token(
+    org_id: uuid.UUID,
+    body: AdminReason,
+    request: Request,
+    principal: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminOrgRead:
+    """§12.E.4 bearer rotation: replaces the org's SCIM token with one nobody sees (§7.1) and
+    switches the directory off, until an org admin issues a new token. For a leaked token.
+    Platform admins only; needs a reason; audited as `admin.scim_token_rotated`."""
+    from app.models.platform import Organization
+    from app.services.scim_service import ScimService
+
+    org = await db.get(Organization, org_id)
+    if org is None or org.deleted_at is not None:
+        raise AppError(code="not_found", message="organization not found", status_code=404)
+    await ScimService(db, settings).operator_rotate(
+        org, principal.user, body.reason, request_info(request)
+    )
+    return await _one_org(AdminService(db, settings), org_id)
+
+
+@router.get("/organizations/{org_id}/members", response_model=list[AdminOrgMemberRead])
+async def org_members(
+    org_id: uuid.UUID,
+    _: Principal = NEEDS_USERS_READ,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> list[AdminOrgMemberRead]:
+    rows = await AdminService(db, settings).org_members(org_id)
+    return [
+        AdminOrgMemberRead(
+            user_id=u.id,
+            email=u.email,
+            name=u.name,
+            role=m.role.value,
+            joined_at=m.joined_at,
+            status=u.status,
+            last_login_at=u.last_login_at,
+            mfa_enabled=u.mfa_enabled,
+        )
+        for m, u in rows
+    ]
+
+
+@router.get("/organizations/{org_id}/projects", response_model=list[AdminOrgProjectRead])
+async def org_projects(
+    org_id: uuid.UUID,
+    _: Principal = NEEDS_PROJECTS_READ,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> list[AdminOrgProjectRead]:
+    rows = await AdminService(db, settings).org_projects(org_id)
+    return [
+        AdminOrgProjectRead(
+            id=p.id,
+            name=p.name,
+            slug=p.slug,
+            created_at=p.created_at,
+            updated_at=p.updated_at,
+            entity_count=n,
+        )
+        for p, n in rows
+    ]
+
+
+# -- billing tab and insights (§7) -------------------------------------------------------
+
+
+@router.get("/subscriptions", response_model=Page[AdminSubscriptionRead])
+async def list_subscriptions(
+    page: Pagination = Depends(pagination),
+    status_filter: SubscriptionStatus | None = STATUS_FILTER,
+    q: str | None = QUERY_TEXT,
+    _: Principal = NEEDS_PROJECTS_READ,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Page[AdminSubscriptionRead]:
+    rows, total = await AdminService(db, settings).list_subscriptions(
+        limit=page.limit, offset=page.offset, status=status_filter, query=q
+    )
+    return Page[AdminSubscriptionRead](
+        items=[
+            AdminSubscriptionRead(
+                organization_id=org.id,
+                organization_slug=org.slug,
+                organization_name=org.name,
+                plan_id=sub.plan_id,
+                status=sub.status.value,
+                current_period_end=sub.current_period_end,
+                trial_ends_at=sub.trial_ends_at,
+                stripe_customer_id=sub.stripe_customer_id,
+                stripe_subscription_id=sub.stripe_subscription_id,
+                seat_override=sub.seat_override,
+                updated_at=sub.updated_at,
+            )
+            for sub, org in rows
+        ],
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+@router.get("/insights", response_model=AdminInsights)
+async def insights(
+    _: Principal = NEEDS_STATS_READ,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AdminInsights:
+    return AdminInsights.model_validate(await AdminService(db, settings).insights())
+
+
+@router.post("/billing/reconcile")
+async def run_billing_reconcile(
+    _: Principal = NEEDS_USERS_WRITE,
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, int]:
+    """Re-read every Stripe subscription and expire due trials (also runs from cron)."""
+    from app.services.billing_reconcile import reconcile
+
+    return (await reconcile(db)).as_dict()
 
 
 # -- plans tab -------------------------------------------------------------------------

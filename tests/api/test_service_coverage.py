@@ -22,6 +22,7 @@ import uuid
 from httpx import AsyncClient
 from app.core import platform_security as sec
 from app.core.enums import PlatformRole
+from tests.api.conftest import add_to_project_org
 
 # Shorthands used throughout
 ADMIN = PlatformRole.platform_admin
@@ -232,6 +233,7 @@ async def test_member_add_unknown_email_returns_404(
     client: AsyncClient, make_user: object
 ) -> None:
     pid = await _project(client, "Members1")
+    await add_to_project_org(pid, "nobody@example.com")
     r = await client.post(
         f"/projects/{pid}/members",
         json={"email": "nobody@example.com", "role": "editor"},
@@ -246,12 +248,14 @@ async def test_member_add_duplicate_returns_conflict(
     pid = await _project(client, "Members2")
     # create a second user
     other = await client_for("other@example.com")  # type: ignore[operator]
+    await add_to_project_org(pid, "other@example.com")
     r = await client.post(
         f"/projects/{pid}/members",
         json={"email": "other@example.com", "role": "editor"},
     )
     assert r.status_code == 201
     # add again → conflict
+    await add_to_project_org(pid, "other@example.com")
     r2 = await client.post(
         f"/projects/{pid}/members",
         json={"email": "other@example.com", "role": "editor"},
@@ -271,6 +275,7 @@ async def test_member_remove_only_owner_returns_conflict(client: AsyncClient) ->
 async def test_member_set_role_and_remove(client: AsyncClient, client_for: object) -> None:
     pid = await _project(client, "Members4")
     other = await client_for("editor@example.com")  # type: ignore[operator]
+    await add_to_project_org(pid, "editor@example.com")
     await client.post(
         f"/projects/{pid}/members",
         json={"email": "editor@example.com", "role": "editor"},

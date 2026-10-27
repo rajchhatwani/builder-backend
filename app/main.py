@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 import structlog
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -30,10 +30,13 @@ from app.api import (
     payments,
     projects,
     relations,
+    scim,
     spec,
+    sso,
     storage,
     wellknown,
 )
+from app.api.input_guard import reject_nul_characters
 from app.api.security import guard
 from app.config import Settings, get_settings
 from app.core.platform_security import check_secret_strength
@@ -41,6 +44,7 @@ from app.db import get_session_factory
 from app.errors import register_exception_handlers
 from app.exceptions import AppError
 from app.services.platform_auth_service import PlatformAuthService
+from app.services.scim_protocol import ScimError
 
 log = structlog.get_logger()
 
@@ -131,7 +135,7 @@ class SecurityMiddleware:
         try:
             await self.app(scope, limited_receive, send_with_headers)
         finally:
-            structlog.contextvars.unbind_contextvars("request_id")
+            structlog.contextvars.unbind_contextvars("request_id", "organization_id")
         if too_large:
             log.warning("request_body_too_large", limit=self.max_bytes)
 
@@ -212,6 +216,7 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.docs_enabled else None,
         redoc_url="/redoc" if settings.docs_enabled else None,
         openapi_url="/openapi.json" if settings.docs_enabled else None,
+        dependencies=[Depends(reject_nul_characters)],
     )
     app.add_middleware(
         CORSMiddleware,
@@ -224,6 +229,10 @@ def create_app() -> FastAPI:
     app.add_middleware(SecurityMiddleware, settings=settings)
     register_exception_handlers(app)
 
+    @app.exception_handler(ScimError)
+    async def handle_scim_error(request: Request, exc: ScimError) -> Response:
+        return scim.scim_error_response(exc)
+
     # Open on purpose: liveness, and the sign-in endpoints (which carry their own protections).
     app.include_router(health.router)
     app.include_router(account.router)
@@ -231,6 +240,10 @@ def create_app() -> FastAPI:
     app.include_router(orgs.router)  # organization routes authenticate via current_principal
     app.include_router(wellknown.router)  # RFC 9728 discovery, no auth
     app.include_router(billing.router)  # Stripe webhook: authenticated by its signature
+    app.include_router(sso.public_router)  # SSO sign-in: the IdP's signature + one-time state
+    app.include_router(sso.org_router)  # SSO settings: org_context like every /orgs route
+    app.include_router(scim.router)  # SCIM 2.0: authenticated by the org's SCIM bearer token
+    app.include_router(scim.org_router)  # SCIM settings: org_context like every /orgs route
 
     # Everything else sits behind the request guard (authentication + project membership).
     guarded = [Depends(guard)]

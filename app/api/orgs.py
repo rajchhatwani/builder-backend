@@ -1,39 +1,69 @@
-"""Customer-facing organizations API — Phase A.
+"""Customer-facing organizations API (PLATFORM_SAAS_PLAN §8).
 
 Routes:
-    GET    /orgs                            list the signed-in user's orgs
-    POST   /orgs                            create a team org
-    GET    /orgs/{slug}                     one org (member-only)
-    GET    /orgs/{slug}/members             list members (member-only)
-    PATCH  /orgs/{slug}/members/{user_id}   change role (admin/owner only)
-    DELETE /orgs/{slug}/members/{user_id}   remove member (admin/owner only)
-    POST   /orgs/{slug}/transfer            transfer ownership (owner only)
-    DELETE /orgs/{slug}                     soft-delete a team org (owner only)
-    GET    /orgs/{slug}/invitations         list invites (admin/owner only)
-    POST   /orgs/{slug}/invitations         create invite (admin/owner only)
-    DELETE /orgs/{slug}/invitations/{id}    revoke invite (admin/owner only)
-    GET    /orgs/invitations/pending        the signed-in user's open invites
-    POST   /orgs/invitations/accept         accept an invite by token
-    GET    /orgs/{slug}/projects            list the org's projects
-    GET    /orgs/{slug}/plan                plan + usage
-    POST   /orgs/{slug}/billing/checkout    start a Stripe Checkout (admin/owner only)
+    GET    /orgs                                      the signed-in user's orgs
+    POST   /orgs                                      create a team org
+    GET    /orgs/invitations/pending                  the signed-in user's open invites
+    POST   /orgs/invitations/accept                   accept an invite by token (the link)
+    POST   /orgs/invitations/{id}/accept              accept one of my pending invites
+    GET    /orgs/{slug}                               one org
+    PATCH  /orgs/{slug}                               rename
+    DELETE /orgs/{slug}                               request deletion (locks; grace period)
+    POST   /orgs/{slug}/deletion/cancel               revoke the request (unlocks)
+    GET    /orgs/{slug}/members                       members
+    PATCH  /orgs/{slug}/members/{user_id}             change role
+    DELETE /orgs/{slug}/members/{user_id}             remove a member, or leave
+    POST   /orgs/{slug}/transfer                      transfer ownership
+    GET    /orgs/{slug}/invitations                   invites
+    POST   /orgs/{slug}/invitations                   invite (e-mailed when SMTP is set up)
+    POST   /orgs/{slug}/invitations/{id}/resend       new link, new expiry, e-mailed again
+    DELETE /orgs/{slug}/invitations/{id}              revoke
+    GET    /orgs/{slug}/projects                      projects (members: only their own)
+    POST   /orgs/{slug}/projects/{project_id}/join    an admin adds themselves to a project
+    POST   /orgs/{slug}/projects/{project_id}/transfer  move a project to another owned org
+    GET    /orgs/{slug}/plan                          plan + usage
+    POST   /orgs/{slug}/billing/checkout              start a Stripe Checkout
+    POST   /orgs/{slug}/billing/portal                open the Stripe Billing Portal
+    GET    /orgs/{slug}/audit                         the org's slice of the audit log
+    GET    /orgs/{slug}/policies                      security policies (§8)
+    PATCH  /orgs/{slug}/policies                      require MFA, session TTL (session only)
+
+Every /orgs/{slug} route resolves the org and checks the caller's role through `org_context`,
+from the flat table `platform_authz.ORG_ROUTE_ROLES` (§5). Handlers only add the rules a flat
+table can't express (owners are made and unmade by owners; anyone may leave).
 """
 
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, Depends, Path, status
+from fastapi import APIRouter, Depends, Path, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
-from app.api.security import current_principal, forbidden, not_found, request_info
+from app.api.security import (
+    OrgContext,
+    current_principal,
+    forbidden,
+    not_found,
+    org_context,
+    require_write_scope,
+)
+from app.config import Settings, get_settings
+from app.core import platform_authz as authz
 from app.db import get_session
 from app.exceptions import AppError
 from app.models.enums import OrgRole
+from app.models.platform import (
+    Organization,
+    OrganizationInvitation,
+    OrganizationMember,
+    PlatformUser,
+)
 from app.schemas.common import Page
 from app.schemas.organization import (
     CheckoutCreate,
     CheckoutRead,
-    PortalRead,
     InvitationAccept,
     InvitationCreate,
     InvitationCreated,
@@ -42,31 +72,31 @@ from app.schemas.organization import (
     OrganizationMemberRead,
     OrganizationMemberUpdate,
     OrganizationRead,
+    OrganizationUpdate,
+    OrgAuditRead,
     OrgPlanRead,
+    OrgPoliciesRead,
+    OrgPoliciesUpdate,
+    OrgProjectJoin,
     OrgUsage,
     PlanRead,
+    PortalRead,
+    ProjectTransfer,
     SubscriptionRead,
 )
 from app.schemas.project import ProjectRead
-from app.services import audit_service
+from app.services import audit_service, mail_service
 from app.services.access_service import Principal
-from app.services.billing_service import (
-    BillingService,
-    checkout_available,
-    portal_available,
-)
-from app.services.organization_service import OrgSummary, OrganizationService
+from app.services.billing_service import BillingService, checkout_available, portal_available
+from app.services.organization_service import OrganizationService, OrgSummary
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
 
-ORG_ROLE_LEVEL = {OrgRole.member: 1, OrgRole.admin: 2, OrgRole.owner: 3}
-
-
-def _require_role(summary: OrgSummary, needed: OrgRole) -> None:
-    if ORG_ROLE_LEVEL[summary.role] < ORG_ROLE_LEVEL[needed]:
-        raise forbidden(
-            f"this needs the organization role '{needed.value}'", "org_role_required"
-        )
+SLUG = Path(min_length=1, max_length=100)
+USER_ID = Path()
+INVITATION_ID = Path()
+PROJECT_ID = Path()
+ACTION_PREFIX = Query(default=None, max_length=64)
 
 
 def _org_read(summary: OrgSummary) -> OrganizationRead:
@@ -79,6 +109,52 @@ def _org_read(summary: OrgSummary) -> OrganizationRead:
         created_at=org.created_at,
         my_role=summary.role,
         member_count=summary.member_count,
+        deletion_requested_at=org.deletion_requested_at,
+        deletion_scheduled_for=org.deletion_scheduled_for,
+        require_mfa=org.require_mfa,
+        session_ttl_hours=org.session_ttl_hours,
+    )
+
+
+def _invitation_read(inv: OrganizationInvitation, slug: str, name: str) -> InvitationRead:
+    return InvitationRead(
+        id=inv.id,
+        organization_id=inv.organization_id,
+        organization_slug=slug,
+        organization_name=name,
+        email=inv.email,
+        role=inv.role,
+        status=OrganizationService._invitation_status(inv),  # noqa: SLF001
+        created_at=inv.created_at,
+        expires_at=inv.expires_at,
+    )
+
+
+def _invite_url(raw_token: str) -> str:
+    return f"{get_settings().public_app_url.rstrip('/')}/#/invite/{raw_token}"
+
+
+async def _audit(
+    db: AsyncSession,
+    ctx: OrgContext,
+    action: str,
+    *,
+    target_type: str = "organization",
+    target_id: object = None,
+    project_id: uuid.UUID | None = None,
+    detail: dict[str, object] | None = None,
+) -> None:
+    await audit_service.record(
+        db,
+        action=action,
+        actor_id=ctx.principal.user.id,
+        actor_email=ctx.principal.user.email,
+        via=ctx.principal.via,
+        organization_id=ctx.org.id,
+        project_id=project_id,
+        target_type=target_type,
+        target_id=target_id if target_id is not None else ctx.org.id,  # type: ignore[arg-type]
+        detail=detail,
     )
 
 
@@ -92,11 +168,10 @@ async def list_my_orgs(
     db: AsyncSession = Depends(get_session),
 ) -> Page[OrganizationRead]:
     summaries = await OrganizationService(db).list_for_user(principal.user.id)
-    total = len(summaries)
-    items = [
-        _org_read(s) for s in summaries[page.offset : page.offset + page.limit]
-    ]
-    return Page[OrganizationRead](items=items, total=total, limit=page.limit, offset=page.offset)
+    items = [_org_read(s) for s in summaries[page.offset : page.offset + page.limit]]
+    return Page[OrganizationRead](
+        items=items, total=len(summaries), limit=page.limit, offset=page.offset
+    )
 
 
 @router.post("", response_model=OrganizationRead, status_code=status.HTTP_201_CREATED)
@@ -105,8 +180,8 @@ async def create_org(
     principal: Principal = Depends(current_principal),
     db: AsyncSession = Depends(get_session),
 ) -> OrganizationRead:
-    service = OrganizationService(db)
-    org = await service.create_team_org(
+    require_write_scope(principal)
+    org = await OrganizationService(db).create_team_org(
         principal.user, name=body.name, slug=body.slug
     )
     await audit_service.record(
@@ -123,7 +198,7 @@ async def create_org(
     return _org_read(OrgSummary(organization=org, role=OrgRole.owner, member_count=1))
 
 
-# -- pending invitations list (bare /orgs/invitations/…) comes BEFORE /orgs/{slug} ----
+# -- my invitations (bare /orgs/invitations/… must come BEFORE /orgs/{slug}) -------------
 
 
 @router.get("/invitations/pending", response_model=Page[InvitationRead])
@@ -131,32 +206,20 @@ async def list_my_pending_invitations(
     principal: Principal = Depends(current_principal),
     db: AsyncSession = Depends(get_session),
 ) -> Page[InvitationRead]:
+    if principal.user.email_verified_at is None:
+        return Page[InvitationRead](items=[], total=0, limit=0, offset=0)
     rows = await OrganizationService(db).list_pending_for_email(principal.user.email)
-    items = [
-        InvitationRead(
-            id=r.invitation.id,
-            organization_id=r.invitation.organization_id,
-            organization_slug=r.organization.slug,
-            organization_name=r.organization.name,
-            email=r.invitation.email,
-            role=r.invitation.role,
-            status=r.status,
-            created_at=r.invitation.created_at,
-            expires_at=r.invitation.expires_at,
-        )
-        for r in rows
-    ]
+    items = [_invitation_read(r.invitation, r.organization.slug, r.organization.name) for r in rows]
     return Page[InvitationRead](items=items, total=len(items), limit=len(items), offset=0)
 
 
-@router.post("/invitations/accept", response_model=OrganizationRead)
-async def accept_invitation(
-    body: InvitationAccept,
-    principal: Principal = Depends(current_principal),
-    db: AsyncSession = Depends(get_session),
+async def _accepted(
+    db: AsyncSession,
+    principal: Principal,
+    service: OrganizationService,
+    org,
+    role,  # noqa: ANN001
 ) -> OrganizationRead:
-    service = OrganizationService(db)
-    org, role = await service.accept_invitation(principal.user, body.token)
     count = len(await service.list_members(org.id))
     await audit_service.record(
         db,
@@ -173,56 +236,114 @@ async def accept_invitation(
     return _org_read(OrgSummary(organization=org, role=role, member_count=count))
 
 
+@router.post("/invitations/accept", response_model=OrganizationRead)
+async def accept_invitation(
+    body: InvitationAccept,
+    principal: Principal = Depends(current_principal),
+    db: AsyncSession = Depends(get_session),
+) -> OrganizationRead:
+    service = OrganizationService(db)
+    require_write_scope(principal)
+    org, role = await service.accept_invitation(principal.user, body.token)
+    return await _accepted(db, principal, service, org, role)
+
+
+@router.post("/invitations/{invitation_id}/accept", response_model=OrganizationRead)
+async def accept_invitation_by_id(
+    invitation_id: uuid.UUID,
+    principal: Principal = Depends(current_principal),
+    db: AsyncSession = Depends(get_session),
+) -> OrganizationRead:
+    require_write_scope(principal)
+    service = OrganizationService(db)
+    org, role = await service.accept_invitation_by_id(principal.user, invitation_id)
+    return await _accepted(db, principal, service, org, role)
+
+
 # -- one org ----------------------------------------------------------------------------
 
 
 @router.get("/{slug}", response_model=OrganizationRead)
-async def get_org(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+async def get_org(slug: str = SLUG, ctx: OrgContext = Depends(org_context)) -> OrganizationRead:
+    return _org_read(ctx.summary)
+
+
+@router.patch("/{slug}", response_model=OrganizationRead)
+async def rename_org(
+    body: OrganizationUpdate,
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> OrganizationRead:
-    summary = await OrganizationService(db).get_by_slug(principal.user.id, slug)
-    return _org_read(summary)
+    if body.name is not None and body.name.strip() != ctx.org.name:
+        old = ctx.org.name
+        await OrganizationService(db).rename(ctx.org.id, body.name)
+        await _audit(db, ctx, "org.renamed", detail={"from": old, "to": body.name.strip()})
+        await db.commit()
+    return _org_read(ctx.summary)
 
 
-@router.delete("/{slug}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_org(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+@router.delete("/{slug}", response_model=OrganizationRead, status_code=status.HTTP_202_ACCEPTED)
+async def request_org_deletion(
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
-) -> None:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.owner)
-    await service.delete_organization(summary.organization.id)
-    await audit_service.record(
-        db,
-        action="org.deleted",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
-        target_type="organization",
-        target_id=summary.organization.id,
+) -> OrganizationRead:
+    """Request deletion: the org is locked now and deleted when the grace period ends
+    (`BUILDER_ORG_DELETION_GRACE_DAYS`, default 7). An owner can revoke it until then."""
+    org = await OrganizationService(db).request_deletion(
+        ctx.org.id,
+        actor_id=ctx.principal.user.id,
+        grace_days=get_settings().org_deletion_grace_days,
     )
+    scheduled = org.deletion_scheduled_for.isoformat() if org.deletion_scheduled_for else None
+    await _audit(db, ctx, "org.deletion_requested", detail={"scheduled_for": scheduled})
     await db.commit()
+    return _org_read(ctx.summary)
+
+
+@router.post("/{slug}/deletion/cancel", response_model=OrganizationRead)
+async def cancel_org_deletion(
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> OrganizationRead:
+    await OrganizationService(db).cancel_deletion(ctx.org.id)
+    await _audit(db, ctx, "org.deletion_canceled")
+    await db.commit()
+    return _org_read(ctx.summary)
 
 
 # -- members ----------------------------------------------------------------------------
 
 
-@router.get("/{slug}/members", response_model=Page[OrganizationMemberRead])
+@router.get(
+    "/{slug}/members",
+    response_model=Page[OrganizationMemberRead],
+    response_model_exclude_unset=True,
+)
 async def list_members(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> Page[OrganizationMemberRead]:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    rows = await service.list_members(summary.organization.id)
+    rows = await OrganizationService(db).list_members(ctx.org.id)
+    # §8: the People columns for last sign-in and 2FA belong to admins (and to each person's
+    # own row). For a plain member they are left out of the response, not sent as false/null.
+    see_all = authz.org_role_allows(ctx.role, OrgRole.admin)
+
+    def private(u: PlatformUser) -> dict[str, Any]:
+        return {"last_login_at": u.last_login_at, "mfa_enabled": u.mfa_enabled}
+
     items = [
         OrganizationMemberRead(
-            user_id=u.id, email=u.email, name=u.name, role=m.role, joined_at=m.joined_at
+            user_id=u.id,
+            email=u.email,
+            name=u.name,
+            role=m.role,
+            joined_at=m.joined_at,
+            status=u.status,
+            **(private(u) if see_all or u.id == ctx.principal.user.id else {}),
         )
         for m, u in rows
     ]
@@ -232,82 +353,72 @@ async def list_members(
 @router.patch("/{slug}/members/{user_id}", response_model=OrganizationMemberRead)
 async def update_member_role(
     body: OrganizationMemberUpdate,
-    slug: str = Path(min_length=1, max_length=100),
-    user_id: uuid.UUID = Path(...),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    user_id: uuid.UUID = USER_ID,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> OrganizationMemberRead:
     service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
-    member = await service.set_member_role(summary.organization.id, user_id, body.role)
-    rows = await service.list_members(summary.organization.id)
+    member = await service.set_member_role(ctx.org.id, user_id, body.role, actor_role=ctx.role)
+    rows = await service.list_members(ctx.org.id)
     user = next((u for m, u in rows if m.user_id == user_id), None)
     if user is None:
         raise not_found()
-    await audit_service.record(
+    await _audit(
         db,
-        action="org.member_role_changed",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
+        ctx,
+        "org.member_role_changed",
         target_type="user",
         target_id=user_id,
         detail={"new_role": member.role.value},
     )
     await db.commit()
     return OrganizationMemberRead(
-        user_id=user.id, email=user.email, name=user.name, role=member.role, joined_at=member.joined_at
+        user_id=user.id,
+        email=user.email,
+        name=user.name,
+        role=member.role,
+        joined_at=member.joined_at,
+        status=user.status,
+        last_login_at=user.last_login_at,
+        mfa_enabled=user.mfa_enabled,
     )
 
 
 @router.delete("/{slug}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_member(
-    slug: str = Path(min_length=1, max_length=100),
-    user_id: uuid.UUID = Path(...),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    user_id: uuid.UUID = USER_ID,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> None:
     service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    # Members can remove themselves; otherwise admin+.
-    if user_id != principal.user.id:
-        _require_role(summary, OrgRole.admin)
-    await service.remove_member(summary.organization.id, user_id)
-    await audit_service.record(
+    leaving = user_id == ctx.principal.user.id
+    if not leaving:  # anyone may leave; removing someone else is an admin's job
+        ctx.require(OrgRole.admin, await service.owner_emails(ctx.org.id))
+    await service.remove_member(
+        ctx.org.id, user_id, actor_id=ctx.principal.user.id, actor_role=ctx.role
+    )
+    await _audit(
         db,
-        action="org.member_removed",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
+        ctx,
+        "org.member_left" if leaving else "org.member_removed",
         target_type="user",
         target_id=user_id,
     )
     await db.commit()
+    await BillingService(db).sync_seats(ctx.org.id)
 
 
 @router.post("/{slug}/transfer", status_code=status.HTTP_204_NO_CONTENT)
 async def transfer_ownership(
     to_user_id: uuid.UUID,
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> None:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.owner)
-    await service.transfer_ownership(
-        summary.organization.id, principal.user.id, to_user_id
-    )
-    await audit_service.record(
-        db,
-        action="org.ownership_transferred",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
-        target_type="user",
-        target_id=to_user_id,
-    )
+    await OrganizationService(db).transfer_ownership(ctx.org.id, ctx.principal.user.id, to_user_id)
+    await _audit(db, ctx, "org.ownership_transferred", target_type="user", target_id=to_user_id)
     await db.commit()
 
 
@@ -316,29 +427,27 @@ async def transfer_ownership(
 
 @router.get("/{slug}/invitations", response_model=Page[InvitationRead])
 async def list_invitations(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> Page[InvitationRead]:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
-    rows = await service.list_invitations(summary.organization.id)
-    items = [
-        InvitationRead(
-            id=inv.id,
-            organization_id=inv.organization_id,
-            organization_slug=summary.organization.slug,
-            organization_name=summary.organization.name,
-            email=inv.email,
-            role=inv.role,
-            status=OrganizationService._invitation_status(inv),  # noqa: SLF001
-            created_at=inv.created_at,
-            expires_at=inv.expires_at,
-        )
-        for inv in rows
-    ]
+    rows = await OrganizationService(db).list_invitations(ctx.org.id)
+    items = [_invitation_read(inv, ctx.org.slug, ctx.org.name) for inv in rows]
     return Page[InvitationRead](items=items, total=len(items), limit=len(items), offset=0)
+
+
+async def _created(
+    ctx: OrgContext, invitation: OrganizationInvitation, raw: str
+) -> InvitationCreated:
+    url = _invite_url(raw)
+    emailed = await mail_service.send_invitation(
+        to=invitation.email,
+        org_name=ctx.org.name,
+        inviter=ctx.principal.user.name or ctx.principal.user.email,
+        url=url,
+    )
+    base = _invitation_read(invitation, ctx.org.slug, ctx.org.name)
+    return InvitationCreated(**base.model_dump(), token=raw, invite_url=url, emailed=emailed)
 
 
 @router.post(
@@ -346,95 +455,144 @@ async def list_invitations(
 )
 async def create_invitation(
     body: InvitationCreate,
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> InvitationCreated:
     service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
+    if body.role is OrgRole.owner:  # owners are made by owners (§2.2)
+        ctx.require(OrgRole.owner, await service.owner_emails(ctx.org.id))
     invitation, raw = await service.create_invitation(
-        summary.organization.id,
-        email=body.email,
-        role=body.role,
-        invited_by=principal.user.id,
+        ctx.org.id, email=body.email, role=body.role, invited_by=ctx.principal.user.id
     )
-    await audit_service.record(
+    await _audit(
         db,
-        action="org.invitation_created",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
-        target_type="organization",
-        target_id=summary.organization.id,
+        ctx,
+        "org.invitation_created",
         detail={"email": invitation.email, "role": invitation.role.value},
     )
     await db.commit()
-    return InvitationCreated(
-        id=invitation.id,
-        organization_id=invitation.organization_id,
-        organization_slug=summary.organization.slug,
-        organization_name=summary.organization.name,
-        email=invitation.email,
-        role=invitation.role,
-        status=OrganizationService._invitation_status(invitation),  # noqa: SLF001
-        created_at=invitation.created_at,
-        expires_at=invitation.expires_at,
-        token=raw,
+    return await _created(ctx, invitation, raw)
+
+
+@router.post("/{slug}/invitations/{invitation_id}/resend", response_model=InvitationCreated)
+async def resend_invitation(
+    slug: str = SLUG,
+    invitation_id: uuid.UUID = INVITATION_ID,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> InvitationCreated:
+    service = OrganizationService(db)
+    existing = await db.get(OrganizationInvitation, invitation_id)
+    if existing is not None and existing.role is OrgRole.owner:
+        ctx.require(OrgRole.owner, await service.owner_emails(ctx.org.id))
+    invitation, raw = await service.resend_invitation(
+        ctx.org.id, invitation_id, actor_id=ctx.principal.user.id
     )
+    await _audit(
+        db, ctx, "org.invitation_resent", target_type="invitation", target_id=invitation_id
+    )
+    await db.commit()
+    return await _created(ctx, invitation, raw)
 
 
-@router.delete(
-    "/{slug}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{slug}/invitations/{invitation_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def revoke_invitation(
-    slug: str = Path(min_length=1, max_length=100),
-    invitation_id: uuid.UUID = Path(...),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    invitation_id: uuid.UUID = INVITATION_ID,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> None:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
-    await service.revoke_invitation(summary.organization.id, invitation_id)
-    await audit_service.record(
-        db,
-        action="org.invitation_revoked",
-        actor_id=principal.user.id,
-        actor_email=principal.user.email,
-        organization_id=summary.organization.id,
-        target_type="invitation",
-        target_id=invitation_id,
+    await OrganizationService(db).revoke_invitation(ctx.org.id, invitation_id)
+    await _audit(
+        db, ctx, "org.invitation_revoked", target_type="invitation", target_id=invitation_id
     )
     await db.commit()
 
 
-# -- projects list and plan ------------------------------------------------------------
+# -- projects ---------------------------------------------------------------------------
 
 
 @router.get("/{slug}/projects", response_model=Page[ProjectRead])
 async def list_org_projects(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> Page[ProjectRead]:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    projects = await service.list_projects(summary.organization.id)
+    # §8: members see the org's projects they're on; admins and owners see all of them.
+    only = None if ctx.role in (OrgRole.admin, OrgRole.owner) else ctx.principal.user.id
+    projects = await OrganizationService(db).list_projects(ctx.org.id, only_for_user=only)
     items = [ProjectRead.model_validate(p) for p in projects]
     return Page[ProjectRead](items=items, total=len(items), limit=len(items), offset=0)
 
 
+@router.post("/{slug}/projects/{project_id}/join", status_code=status.HTTP_201_CREATED)
+async def join_org_project(
+    body: OrgProjectJoin,
+    slug: str = SLUG,
+    project_id: uuid.UUID = PROJECT_ID,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> dict[str, str]:
+    member = await OrganizationService(db).join_project(
+        ctx.org.id, project_id, ctx.principal.user.id, body.role
+    )
+    await _audit(
+        db,
+        ctx,
+        "org.project_joined",
+        target_type="project",
+        target_id=project_id,
+        project_id=project_id,
+        detail={"role": member.role.value},
+    )
+    await db.commit()
+    return {"project_id": str(project_id), "role": member.role.value}
+
+
+@router.post("/{slug}/projects/{project_id}/transfer", response_model=ProjectRead)
+async def transfer_org_project(
+    body: ProjectTransfer,
+    slug: str = SLUG,
+    project_id: uuid.UUID = PROJECT_ID,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> ProjectRead:
+    from_org_id = ctx.org.id
+    project, to_org = await OrganizationService(db).transfer_project(
+        project_id, from_org_id=from_org_id, to_slug=body.to_slug, actor=ctx.principal.user
+    )
+    for org_id in (from_org_id, to_org.id):  # both orgs' audit logs show the move
+        await audit_service.record(
+            db,
+            action="org.project_transferred",
+            actor_id=ctx.principal.user.id,
+            actor_email=ctx.principal.user.email,
+            organization_id=org_id,
+            project_id=project_id,
+            target_type="project",
+            target_id=project_id,
+            detail={"from": str(from_org_id), "to": str(to_org.id)},
+        )
+    await db.commit()
+    return ProjectRead.model_validate(project)
+
+
+# -- plan and billing -------------------------------------------------------------------
+
+
 @router.get("/{slug}/plan", response_model=OrgPlanRead)
 async def get_org_plan(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> OrgPlanRead:
     service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    plan, sub = await service.plan_and_subscription(summary.organization.id)
-    usage = await service.usage(summary.organization.id, viewer_id=principal.user.id)
+    _plan, sub = await service.plan_and_subscription(ctx.org.id)
+    if await service.expire_trial_if_due(sub):
+        await db.commit()
+    plan, sub = await service.plan_and_subscription(ctx.org.id)
+    usage = await service.usage(ctx.org.id, viewer_id=ctx.principal.user.id)
     return OrgPlanRead(
         plan=PlanRead.model_validate(plan),
         subscription=SubscriptionRead.model_validate(sub),
@@ -447,43 +605,124 @@ async def get_org_plan(
     )
 
 
-# -- billing (Phase B: Checkout only — the webhook that applies the plan is Phase C) ------
-
-
 @router.post(
-    "/{slug}/billing/checkout",
-    response_model=CheckoutRead,
-    status_code=status.HTTP_201_CREATED,
+    "/{slug}/billing/checkout", response_model=CheckoutRead, status_code=status.HTTP_201_CREATED
 )
 async def start_checkout(
     body: CheckoutCreate,
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> CheckoutRead:
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
     session = await BillingService(db).start_checkout(
-        summary.organization, plan_id=body.plan_id, actor=principal.user
+        ctx.org, plan_id=body.plan_id, actor=ctx.principal.user
     )
     return CheckoutRead(id=session.id, url=session.url)
 
 
 @router.post(
-    "/{slug}/billing/portal",
-    response_model=PortalRead,
-    status_code=status.HTTP_201_CREATED,
+    "/{slug}/billing/portal", response_model=PortalRead, status_code=status.HTTP_201_CREATED
 )
 async def open_billing_portal(
-    slug: str = Path(min_length=1, max_length=100),
-    principal: Principal = Depends(current_principal),
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
     db: AsyncSession = Depends(get_session),
 ) -> PortalRead:
     """Stripe Billing Portal for a paying org: change plan, update the card, cancel. The
     resulting changes reach the platform through the webhook, not through this call."""
-    service = OrganizationService(db)
-    summary = await service.get_by_slug(principal.user.id, slug)
-    _require_role(summary, OrgRole.admin)
-    url = await BillingService(db).start_portal(summary.organization, actor=principal.user)
+    url = await BillingService(db).start_portal(ctx.org, actor=ctx.principal.user)
     return PortalRead(url=url)
+
+
+# -- audit (§8: org-scoped, unconditional organization_id filter) -------------------------
+
+
+@router.get("/{slug}/audit", response_model=Page[OrgAuditRead])
+async def org_audit(
+    slug: str = SLUG,
+    page: Pagination = Depends(pagination),
+    action: str | None = ACTION_PREFIX,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> Page[OrgAuditRead]:
+    rows, total = await audit_service.search(
+        db, limit=page.limit, offset=page.offset, action=action, organization_id=ctx.org.id
+    )
+    return Page[OrgAuditRead](
+        items=[OrgAuditRead.model_validate(r) for r in rows],
+        total=total,
+        limit=page.limit,
+        offset=page.offset,
+    )
+
+
+# -- security policies (§8, §4.4, §12.D.7) -------------------------------------------------
+
+
+async def _policies_read(
+    db: AsyncSession, org: Organization, settings: Settings
+) -> OrgPoliciesRead:
+    without = (
+        await db.execute(
+            select(func.count())
+            .select_from(OrganizationMember)
+            .join(PlatformUser, PlatformUser.id == OrganizationMember.user_id)
+            .where(
+                OrganizationMember.organization_id == org.id,
+                PlatformUser.totp_enabled_at.is_(None),
+            )
+        )
+    ).scalar_one()
+    return OrgPoliciesRead(
+        require_mfa=org.require_mfa,
+        session_ttl_hours=org.session_ttl_hours,
+        members_without_mfa=int(without),
+        default_session_hours=settings.refresh_token_days * 24,
+    )
+
+
+@router.get("/{slug}/policies", response_model=OrgPoliciesRead)
+async def get_policies(
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> OrgPoliciesRead:
+    return await _policies_read(db, ctx.org, settings)
+
+
+@router.patch("/{slug}/policies", response_model=OrgPoliciesRead)
+async def update_policies(
+    body: OrgPoliciesUpdate,
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> OrgPoliciesRead:
+    """Require MFA for every member, and/or cap how long a sign-in lasts. Turning MFA on needs
+    the admin's own session to have used MFA, so nobody locks themselves out."""
+    if ctx.principal.via != "session":
+        raise forbidden("security policies need a signed-in session", "session_required")
+    org = ctx.org
+    changed: dict[str, object] = {}
+    sent = body.model_fields_set
+    if "require_mfa" in sent and body.require_mfa is not None:
+        if body.require_mfa and not org.require_mfa and not ctx.principal.mfa_satisfied:
+            raise AppError(
+                code="enable_mfa_first",
+                message=(
+                    "turn on two-factor authentication for your own account and sign in with "
+                    "it before requiring it for everyone"
+                ),
+                status_code=409,
+            )
+        if body.require_mfa != org.require_mfa:
+            org.require_mfa = body.require_mfa
+            changed["require_mfa"] = body.require_mfa
+    if "session_ttl_hours" in sent and body.session_ttl_hours != org.session_ttl_hours:
+        org.session_ttl_hours = body.session_ttl_hours
+        changed["session_ttl_hours"] = body.session_ttl_hours
+    if changed:
+        await _audit(db, ctx, "org.policy_changed", detail=changed)
+        await db.commit()
+    return await _policies_read(db, org, settings)

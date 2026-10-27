@@ -1,0 +1,2304 @@
+[
+ {
+  "method": "GET",
+  "path": "/health",
+  "guard": "public",
+  "deps": [
+   "health"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/ready",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "ready"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/register",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "register"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/login",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "login",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/login/discover",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "login_discover",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/refresh",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "refresh",
+   "require_same_origin"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/logout",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "logout",
+   "require_same_origin"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/logout-all",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "logout_all",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/account/me",
+  "guard": "principal",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "me"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/account/me/default-organization",
+  "guard": "principal",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "set_default_organization"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/password",
+  "guard": "principal",
+  "deps": [
+   "change_password",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/login/mfa",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "login_mfa",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/login/mfa/setup",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "login_mfa_setup",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/login/mfa/enable",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "login_mfa_enable",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/account/mfa",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "mfa_status",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/mfa/totp/setup",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "session_principal",
+   "totp_setup"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/mfa/totp/enable",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "session_principal",
+   "totp_enable"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/mfa/totp/disable",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "session_principal",
+   "totp_disable"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/mfa/recovery-codes",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "regenerate_recovery_codes",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/account/tokens",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "list_tokens",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/account/tokens",
+  "guard": "principal",
+  "deps": [
+   "create_token",
+   "get_session",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/account/tokens/{token_id}",
+  "guard": "principal",
+  "deps": [
+   "get_session",
+   "revoke_token",
+   "session_principal"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/login",
+  "guard": "public",
+  "deps": [
+   "admin_login",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/login/mfa",
+  "guard": "public",
+  "deps": [
+   "admin_login_mfa",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/login/mfa/setup",
+  "guard": "public",
+  "deps": [
+   "admin_login_mfa_setup",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/login/mfa/enable",
+  "guard": "public",
+  "deps": [
+   "admin_login_mfa_enable",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/refresh",
+  "guard": "public",
+  "deps": [
+   "admin_refresh",
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "require_same_origin"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/logout",
+  "guard": "public",
+  "deps": [
+   "admin_logout",
+   "get_session",
+   "get_settings",
+   "require_same_origin"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/me",
+  "guard": "admin",
+  "deps": [
+   "admin_me",
+   "get_session",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/users",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_users",
+   "pagination",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/users",
+  "guard": "admin",
+  "deps": [
+   "create_user",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/users/{user_id}",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "get_user",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/admin/users/{user_id}",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "update_user"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/users/{user_id}/revoke-sessions",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "revoke_sessions"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/users/{user_id}/reset-password",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "reset_password"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/users/{user_id}/reset-mfa",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "reset_mfa"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/projects",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_projects",
+   "pagination",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/audit",
+  "guard": "admin",
+  "deps": [
+   "audit",
+   "get_session",
+   "pagination",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/stats",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "stats"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/settings",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "platform_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/users/{user_id}/tokens",
+  "guard": "admin",
+  "deps": [
+   "admin_list_user_tokens",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/admin/users/{user_id}/tokens/{token_id}",
+  "guard": "admin",
+  "deps": [
+   "admin_revoke_user_token",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/organizations",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_organizations",
+   "pagination",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/organizations/{org_id}",
+  "guard": "admin",
+  "deps": [
+   "get_organization",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/admin/organizations/{org_id}/overrides",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "set_org_overrides"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/admin/organizations/{org_id}/plan",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "set_org_plan"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/admin/organizations/{org_id}/deletion",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "reschedule_org_deletion"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/organizations/{org_id}/deletion/execute",
+  "guard": "admin",
+  "deps": [
+   "execute_org_deletion",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/organizations/{org_id}/sso/check",
+  "guard": "admin",
+  "deps": [
+   "check_org_sso",
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/organizations/{org_id}/scim/rotate",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "rotate_org_scim_token"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/organizations/{org_id}/members",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "org_members",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/organizations/{org_id}/projects",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "org_projects",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/subscriptions",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_subscriptions",
+   "pagination",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/insights",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "insights",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/admin/billing/reconcile",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "require_admin.<locals>.dependency",
+   "run_billing_reconcile"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/admin/plans",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_plans",
+   "require_admin.<locals>.dependency"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/admin/plans/{plan_id}",
+  "guard": "admin",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "require_admin.<locals>.dependency",
+   "upsert_plan"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs",
+  "guard": "principal",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "list_my_orgs",
+   "pagination"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs",
+  "guard": "principal",
+  "deps": [
+   "create_org",
+   "current_principal",
+   "get_session"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/invitations/pending",
+  "guard": "principal",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "list_my_pending_invitations"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/invitations/accept",
+  "guard": "principal",
+  "deps": [
+   "accept_invitation",
+   "current_principal",
+   "get_session"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/invitations/{invitation_id}/accept",
+  "guard": "principal",
+  "deps": [
+   "accept_invitation_by_id",
+   "current_principal",
+   "get_session"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_org",
+   "get_session",
+   "org_context"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/orgs/{slug}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "rename_org"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "request_org_deletion"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/deletion/cancel",
+  "guard": "org_context",
+  "deps": [
+   "cancel_org_deletion",
+   "current_principal",
+   "get_session",
+   "org_context"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/members",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "list_members",
+   "org_context"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/orgs/{slug}/members/{user_id}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "update_member_role"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}/members/{user_id}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "remove_member"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/transfer",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "transfer_ownership"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/invitations",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "list_invitations",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/invitations",
+  "guard": "org_context",
+  "deps": [
+   "create_invitation",
+   "current_principal",
+   "get_session",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/invitations/{invitation_id}/resend",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "resend_invitation"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}/invitations/{invitation_id}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "revoke_invitation"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/projects",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "list_org_projects",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/projects/{project_id}/join",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "join_org_project",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/projects/{project_id}/transfer",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "transfer_org_project"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/plan",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_org_plan",
+   "get_session",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/billing/checkout",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_context",
+   "start_checkout"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/billing/portal",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "open_billing_portal",
+   "org_context"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/audit",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "org_audit",
+   "org_context",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/policies",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_policies",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/orgs/{slug}/policies",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "update_policies"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/.well-known/oauth-protected-resource",
+  "guard": "NONE",
+  "deps": [
+   "oauth_protected_resource"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/billing/stripe/webhook",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "stripe_webhook"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sso/metadata/{slug}",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "sp_metadata"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sso/{slug}/login",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "start_login"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sso/saml/{slug}/acs",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "rate_limit_auth",
+   "saml_acs"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sso/oidc/{slug}/callback",
+  "guard": "public",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "oidc_callback",
+   "rate_limit_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/sso",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "get_sso",
+   "org_context"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/orgs/{slug}/sso",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "put_sso"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}/sso",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "delete_sso",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/activate",
+  "guard": "org_context",
+  "deps": [
+   "activate_sso",
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/deactivate",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "deactivate_sso",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/domains",
+  "guard": "org_context",
+  "deps": [
+   "add_domain",
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/domains/{domain}/verify",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "verify_domain"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}/sso/domains/{domain}",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "remove_domain"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/test",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "start_sso_test"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/sso/check",
+  "guard": "org_context",
+  "deps": [
+   "check_sso",
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/ServiceProviderConfig",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "scim_auth",
+   "service_provider_config"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/ResourceTypes",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "resource_types",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/ResourceTypes/{type_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "resource_type",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Schemas",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "schemas",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Schemas/{schema_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "schema",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Users",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_users",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/scim/v2/Users",
+  "guard": "scim",
+  "deps": [
+   "create_user",
+   "get_session",
+   "get_settings",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Users/{user_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "get_user",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/scim/v2/Users/{user_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "replace_user",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/scim/v2/Users/{user_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "patch_user",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/scim/v2/Users/{user_id}",
+  "guard": "scim",
+  "deps": [
+   "delete_user",
+   "get_session",
+   "get_settings",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Groups",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "list_groups",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/scim/v2/Groups",
+  "guard": "scim",
+  "deps": [
+   "create_group",
+   "get_session",
+   "get_settings",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/scim/v2/Groups/{group_id}",
+  "guard": "scim",
+  "deps": [
+   "get_group",
+   "get_session",
+   "get_settings",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/scim/v2/Groups/{group_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "replace_group",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/scim/v2/Groups/{group_id}",
+  "guard": "scim",
+  "deps": [
+   "get_session",
+   "get_settings",
+   "patch_group",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/scim/v2/Groups/{group_id}",
+  "guard": "scim",
+  "deps": [
+   "delete_group",
+   "get_session",
+   "get_settings",
+   "scim_auth"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/orgs/{slug}/scim",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_scim",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/orgs/{slug}/scim/token",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "issue_scim_token",
+   "org_context"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/orgs/{slug}/scim",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_settings",
+   "org_context",
+   "update_scim"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/orgs/{slug}/scim",
+  "guard": "org_context",
+  "deps": [
+   "current_principal",
+   "delete_scim",
+   "get_session",
+   "get_settings",
+   "org_context"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/auth",
+  "guard": "guard",
+  "deps": [
+   "create_auth_config",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/auth",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_auth_config",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/projects/{project_id}/auth",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_auth_config"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/auth/secrets",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "upsert_auth_secrets"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/auth/secrets/status",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_auth_secrets_status",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/roles",
+  "guard": "guard",
+  "deps": [
+   "create_role",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/roles",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_roles",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/roles/{role_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_role",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/roles/{role_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_role"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/roles/{role_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_role",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/permissions",
+  "guard": "guard",
+  "deps": [
+   "bulk_upsert_permissions",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/permissions",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_permissions",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/permissions/{permission_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_permission",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/permissions/{permission_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_permission"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/permissions/{permission_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_permission",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/auth/custom-fields",
+  "guard": "guard",
+  "deps": [
+   "create_custom_field",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/auth/custom-fields",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_custom_fields",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/custom-fields/{field_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_custom_field",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/auth/custom-fields/{field_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_custom_field"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/auth/custom-fields/{field_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_custom_field",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/authorization",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_authorization",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/authorization",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_authorization"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/authorization/issues",
+  "guard": "guard",
+  "deps": [
+   "authorization_issues",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/authorization/simulate",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "simulate_authorization"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/authorization/coverage",
+  "guard": "guard",
+  "deps": [
+   "authorization_coverage",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/authorization/recommendation",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "recommend_for_project"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/authorization/recommend",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "recommend_model"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/observability",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_observability",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/observability",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_observability"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/observability/issues",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "observability_issues"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/deployment",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_deployment",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/deployment",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_deployment"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/deployment/issues",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "deployment_issues",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/deployment/plan",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "deployment_plan",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/documents",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_documents",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/documents",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_documents"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/documents/issues",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "documents_issues",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/documents/library",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "documents_library",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/documents/preview",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "documents_preview",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/keycloak",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_keycloak",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/keycloak",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_keycloak"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/keycloak/impact",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "keycloak_impact"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/keycloak/enable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "enable_keycloak",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/keycloak/disable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "disable_keycloak",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/payments",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_payments",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/payments",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_payments"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/payments/sizing",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "payments_sizing"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/payments/impact",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "payments_impact"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/payments/enable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "enable_payments",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/payments/disable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "disable_payments",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/storage",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_storage",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/storage",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_storage"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/storage/issues",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "storage_issues"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/storage/impact",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "storage_impact"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/storage/enable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "enable_storage",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/storage/disable",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "disable_storage",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects",
+  "guard": "guard",
+  "deps": [
+   "create_project",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_projects",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_project",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/projects/{project_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_project"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/projects/{project_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_project",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/members",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_members"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/members",
+  "guard": "guard",
+  "deps": [
+   "add_member",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/projects/{project_id}/members/{user_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_member"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/projects/{project_id}/members/{user_id}/mcp",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "set_member_mcp"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/projects/{project_id}/members/{user_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "remove_member"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/tokens",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_project_tokens"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/projects/{project_id}/tokens/{token_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "revoke_project_token"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/entities",
+  "guard": "guard",
+  "deps": [
+   "create_entity",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/entities",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_entities",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/entities/{entity_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_entity",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/entities/{entity_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_entity"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/entities/{entity_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_entity",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/entities/{entity_id}/fields",
+  "guard": "guard",
+  "deps": [
+   "create_field",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/entities/{entity_id}/fields",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_fields",
+   "pagination"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/fields/{field_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_field"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/fields/{field_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_field",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/relations",
+  "guard": "guard",
+  "deps": [
+   "create_relation",
+   "current_principal",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/relations",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_relations",
+   "pagination"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/relations/{relation_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "update_relation"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/relations/{relation_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "delete_relation",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/spec",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "get_spec",
+   "guard"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/projects/{project_id}/spec",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "put_spec"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/validate",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "validate_project"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/projects/{project_id}/generate/preview",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "preview"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/generate/download",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "download",
+   "get_session",
+   "guard"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/projects/{project_id}/generations",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_session",
+   "guard",
+   "list_generations",
+   "pagination"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/generations/{generation_id}",
+  "guard": "guard",
+  "deps": [
+   "current_principal",
+   "get_generation",
+   "get_session",
+   "guard"
+  ]
+ }
+]

@@ -1,5 +1,6 @@
 import os
 from collections.abc import AsyncGenerator, Awaitable, Callable, Iterator
+from datetime import UTC, datetime
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -60,9 +61,14 @@ async def engine(database_url: str) -> AsyncGenerator[AsyncEngine, None]:
     await eng.dispose()
 
 
+_FACTORY: list[async_sessionmaker[AsyncSession]] = []
+
+
 @pytest.fixture(scope="session")
 def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
-    return async_sessionmaker(engine, expire_on_commit=False)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    _FACTORY[:] = [factory]  # for add_to_project_org(), which helpers call without fixtures
+    return factory
 
 
 @pytest.fixture(autouse=True)
@@ -93,6 +99,9 @@ def _unlimited_personal_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     from app.services import organization_service
 
     monkeypatch.setattr(organization_service, "DEFAULT_PERSONAL_PLAN_ID", "enterprise")
+    # New team orgs start on 'free' (1 seat) in production; feature tests that build a team
+    # and invite people get the paid 'team' plan unless they set one themselves.
+    monkeypatch.setattr(organization_service, "DEFAULT_TEAM_PLAN_ID", "team")
 
 
 @pytest.fixture(autouse=True)
@@ -135,6 +144,8 @@ def make_user(session_factory: async_sessionmaker[AsyncSession]) -> MakeUser:
         password: str = TEST_PASSWORD,
         **fields: object,
     ) -> PlatformUser:
+        # Fixture accounts count as having proved their mailbox; sign-up through the API doesn't.
+        fields.setdefault("email_verified_at", datetime.now(UTC))
         async with session_factory() as session:
             user = PlatformUser(
                 email=email,
@@ -154,13 +165,17 @@ def make_user(session_factory: async_sessionmaker[AsyncSession]) -> MakeUser:
     return make
 
 
-def bearer_for(user: PlatformUser, audience: str = sec.AUDIENCE_APP) -> dict[str, str]:
+def bearer_for(
+    user: PlatformUser, audience: str = sec.AUDIENCE_APP, amr: list[str] | None = None
+) -> dict[str, str]:
+    """A session token. `amr` = how it was signed in, e.g. ["pwd", "otp"] (§4.4)."""
     token = sec.encode_jwt(
         sec.access_claims(
             user_id=str(user.id),
             audience=audience,
             token_version=user.token_version,
             ttl_seconds=600,
+            amr=amr,
         )
     )
     return {"Authorization": f"Bearer {token}"}
@@ -183,10 +198,12 @@ async def client_for(
         **fields: object,
     ) -> AsyncClient:
         user = await make_user(email, role, **fields)
+        # Staff sessions carry a second factor (§4.4); the admin guard checks it.
+        amr = ["pwd", "otp"] if audience == sec.AUDIENCE_ADMIN else None
         c = AsyncClient(
             transport=ASGITransport(app=app),
             base_url="http://testserver",
-            headers=bearer_for(user, audience),
+            headers=bearer_for(user, audience, amr=amr),
         )
         c.user = user  # type: ignore[attr-defined]
         opened.append(c)
@@ -216,3 +233,58 @@ def _secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("SECRET_KEY", "api-test-secret-key")
     monkeypatch.setattr(crypto, "_fernet", None)
+
+
+async def add_to_project_org(project_id: object, email: str) -> None:
+    """§3.2: a project member must belong to the project's org. Tests that share a project
+    with another person put them in its org first (test orgs have uncapped seats)."""
+    import uuid as _uuid
+
+    from sqlalchemy import select as _select
+
+    from app.models.enums import OrgRole
+    from app.models.platform import OrganizationMember
+    from app.models.project import Project
+
+    async with _FACTORY[0]() as session:
+        project = await session.get(Project, _uuid.UUID(str(project_id)))
+        user = (
+            await session.execute(_select(PlatformUser).where(PlatformUser.email == email.lower()))
+        ).scalar_one_or_none()
+        if project is None or user is None:
+            return  # the test is about a missing project/user; let the API answer that
+        if await session.get(OrganizationMember, (project.organization_id, user.id)) is None:
+            session.add(
+                OrganizationMember(
+                    organization_id=project.organization_id, user_id=user.id, role=OrgRole.member
+                )
+            )
+            await session.commit()
+
+
+class TotpClock:
+    """A frozen clock for TOTP checks. `code(secret)` steps 30 s forward first, so every call
+    returns a code for a step the account has not used yet (codes are never accepted twice)."""
+
+    def __init__(self) -> None:
+        self.now = 1_800_000_000.0
+
+    def time(self) -> float:
+        return self.now
+
+    def code(self, secret: str) -> str:
+        from app.core import totp
+
+        self.now += totp.PERIOD
+        return totp.code_at(secret, self.now)
+
+
+@pytest.fixture
+def totp_clock(monkeypatch: pytest.MonkeyPatch) -> TotpClock:
+    from types import SimpleNamespace
+
+    from app.core import totp
+
+    clock = TotpClock()
+    monkeypatch.setattr(totp, "time", SimpleNamespace(time=clock.time))
+    return clock

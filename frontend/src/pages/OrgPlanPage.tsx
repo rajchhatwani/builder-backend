@@ -49,8 +49,11 @@ function UpgradeOption({ plan, busy, onChoose }: { plan: PlanInfo; busy: boolean
   )
 }
 
-/** `#/org/<slug>/plan` — current plan, usage counters and upgrade options. */
-export function OrgPlanPage({ slug }: { slug: string }) {
+/**
+ * `#/org/<slug>/plan` — current plan, usage counters and upgrade options. `embedded`: shown as
+ * a tab inside the org console, so the title is a section heading rather than the page title.
+ */
+export function OrgPlanPage({ slug, embedded = false }: { slug: string; embedded?: boolean }) {
   const { toast } = useUi()
   const [data, setData] = useState<OrgPlan | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -121,7 +124,7 @@ export function OrgPlanPage({ slug }: { slug: string }) {
     <>
       <div className="page-header">
         <div>
-          <h1>Plan & usage</h1>
+          {embedded ? <h2>Plan & usage</h2> : <h1>Plan & usage</h1>}
           <p>
             <strong>{plan.display_name}</strong> · {money(plan.monthly_price_usd)} ·{' '}
             <span className={subscription.status === 'active' ? 'status-ok' : 'status-warn'}>{subscription.status}</span>

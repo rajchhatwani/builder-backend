@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import type {
+  AdminInsights,
   AdminOrg,
+  AdminOrgMember,
+  AdminOrgProject,
+  AdminSubscription,
   AdminProject,
   AdminStats,
   AdminUser,
@@ -9,11 +13,15 @@ import type {
   AuditEntry,
   Page,
   PlatformRole,
+  PlanInfo,
+  PlanWrite,
   PlatformSettings,
+  SsoCheck,
   UserAccount,
 } from '../../api/types'
 import { Modal } from '../../components/Modal'
 import { useUi } from '../../components/Ui'
+import { SsoChecklist } from '../OrgSsoTab'
 
 const ROLE_LABEL: Record<PlatformRole, string> = {
   customer: 'Customer',
@@ -282,6 +290,60 @@ function UserTokensDialog({
   )
 }
 
+/** Platform admins only (§4.4): clears TOTP + recovery codes and ends every session. */
+function ResetMfaDialog({ user, onClose, onDone }: { user: AdminUser; onClose: () => void; onDone: (u: AdminUser) => void }) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(await api.adminResetMfa(user.id, reason.trim()))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>Reset two-factor for {user.email}?</h3>
+          <p>
+            Their authenticator and recovery codes stop working and they are signed out everywhere.
+            {user.platform_role !== 'customer' && ' As platform staff, they set up two-factor again at their next sign-in.'} Only
+            do this after confirming who is asking.
+          </p>
+        </header>
+        <div className="stack">
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          <label>
+            Reason (recorded in the audit log)
+            <input required maxLength={255} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Lost phone, identity checked by video call" />
+          </label>
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" data-variant="danger" disabled={busy || !reason.trim()}>
+            {busy ? 'Resetting…' : 'Reset two-factor'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
 export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolean }) {
   const { confirm, toast } = useUi()
   const [page, setPage] = useState<Page<AdminUser> | null>(null)
@@ -292,6 +354,7 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
   const [creating, setCreating] = useState(false)
   const [secret, setSecret] = useState<{ email: string; password: string } | null>(null)
   const [tokensUser, setTokensUser] = useState<AdminUser | null>(null)
+  const [resetting, setResetting] = useState<AdminUser | null>(null)
 
   const load = useCallback(async () => {
     setPage(await api.adminUsers({ q, status, role, limit: 25, offset }))
@@ -390,6 +453,7 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
                 <th>Person</th>
                 <th>Role</th>
                 <th>Status</th>
+                <th>2FA</th>
                 <th>Projects</th>
                 <th>Last sign-in</th>
                 {!readOnly && <th />}
@@ -427,6 +491,9 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
                       {u.locked_until && new Date(u.locked_until) > new Date() && <span className="badge status-warn">locked</span>}
                       {u.must_change_password && <span className="badge">temp password</span>}
                     </td>
+                    <td>
+                      <span className={`badge ${u.mfa_enabled ? 'status-ok' : 'badge-muted'}`}>{u.mfa_enabled ? 'on' : 'off'}</span>
+                    </td>
                     <td>{u.project_count}</td>
                     <td>{when(u.last_login_at)}</td>
                     {!readOnly && (
@@ -445,6 +512,11 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
                             <button className="ghost small" data-variant="danger" onClick={() => resetPassword(u)}>
                               Reset password
                             </button>
+                            {u.mfa_enabled && (
+                              <button className="ghost small" data-variant="danger" onClick={() => setResetting(u)}>
+                                Reset 2FA
+                              </button>
+                            )}
                           </>
                         )}
                       </td>
@@ -456,6 +528,18 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
           </table>
           <Pager page={page} onPage={setOffset} />
         </>
+      )}
+
+      {resetting && (
+        <ResetMfaDialog
+          user={resetting}
+          onClose={() => setResetting(null)}
+          onDone={(u) => {
+            setResetting(null)
+            toast(`Two-factor reset for ${u.email}. They were signed out everywhere.`)
+            load().catch(() => undefined)
+          }}
+        />
       )}
 
       <UserTokensDialog
@@ -627,6 +711,10 @@ export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
                 <th>Plan</th>
                 <th>Members</th>
                 <th>Projects</th>
+                <th>MRR</th>
+                <th>Last activity</th>
+                <th>SSO</th>
+                <th>SCIM</th>
                 <th>Overrides</th>
                 <th />
               </tr>
@@ -635,13 +723,25 @@ export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
               {page.items.map((o) => (
                 <tr key={o.id}>
                   <td>
-                    {o.name} <span className="muted small-text">{o.slug}{o.kind === 'personal' ? ' · personal' : ''}</span>
+                    <a href={`#/admin/organizations/${o.id}`}>{o.name}</a>{' '}
+                    <span className="muted small-text">{o.slug}{o.kind === 'personal' ? ' · personal' : ''}</span>
+                    {o.deletion_scheduled_for && (
+                      <div className="small-text status-warn">Deletion requested · deletes {when(o.deletion_scheduled_for)}</div>
+                    )}
                   </td>
                   <td>
                     {o.plan_id} <span className="muted small-text">{o.status}</span>
                   </td>
                   <td>{o.member_count}</td>
                   <td>{o.project_count}</td>
+                  <td>{o.mrr_cents ? `$${(o.mrr_cents / 100).toFixed(0)}` : <span className="muted">—</span>}</td>
+                  <td className="small-text">{when(o.last_activity_at)}</td>
+                  <td className="small-text">
+                    <SsoStatus org={o} />
+                  </td>
+                  <td className="small-text">
+                    <ScimStatus org={o} />
+                  </td>
                   <td className="small-text">
                     {o.seat_override === null && o.project_override === null ? (
                       <span className="muted">none</span>
@@ -670,25 +770,954 @@ export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
   )
 }
 
+// ── Organization detail (§7): plan change, limits, audit tail ───────────────
+
+/** "SAML · on", "OIDC · off", or a dash when the org has no SSO connection. */
+function SsoStatus({ org }: { org: AdminOrg }) {
+  if (!org.sso_protocol) return <span className="muted">—</span>
+  return (
+    <span title={org.sso_last_test_result ? `Last test: ${org.sso_last_test_result} (${when(org.sso_last_test_at ?? null)})` : 'Never tested'}>
+      {org.sso_protocol.toUpperCase()} · {org.sso_active ? 'on' : 'off'}
+    </span>
+  )
+}
+
+/** "on · 12 users", "off", or a dash when the org has no SCIM directory. */
+function ScimStatus({ org }: { org: AdminOrg }) {
+  if (!org.scim_configured) return <span className="muted">—</span>
+  const users = org.scim_users ?? 0
+  return (
+    <span title={org.scim_last_sync_at ? `Last sync: ${when(org.scim_last_sync_at)}` : 'The IdP has not synced yet'}>
+      {org.scim_active ? `on · ${users} user${users === 1 ? '' : 's'}` : 'off'}
+    </span>
+  )
+}
+
+/** Audit "who": the IdP writes SCIM rows without an actor. */
+function auditActor(e: AuditEntry) {
+  return e.actor_email ?? <span className="muted">{e.via === 'scim' ? 'SCIM' : 'system'}</span>
+}
+
+function AuditTable({ items }: { items: AuditEntry[] }) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th>When</th>
+          <th>Who</th>
+          <th>What</th>
+          <th>Outcome</th>
+        </tr>
+      </thead>
+      <tbody>
+        {items.map((e) => (
+          <tr key={e.id}>
+            <td>{when(e.at)}</td>
+            <td>{auditActor(e)}</td>
+            <td>
+              {e.action}
+              {e.detail && <div className="muted small-text">{Object.entries(e.detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}</div>}
+            </td>
+            <td>
+              <span className={`badge ${e.result === 'ok' ? 'status-ok' : 'status-warn'}`}>{e.result}</span>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+/** Operator actions on a pending deletion request: a new grace period, or delete right away. */
+function DeletionDialog({
+  org,
+  mode,
+  onClose,
+  onDone,
+}: {
+  org: AdminOrg
+  mode: 'reschedule' | 'execute'
+  onClose: () => void
+  onDone: (org: AdminOrg) => void
+}) {
+  const [days, setDays] = useState('7')
+  const [reason, setReason] = useState('')
+  const [confirmName, setConfirmName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+  const execute = mode === 'execute'
+  const daysValid = /^\d+$/.test(days) && Number(days) <= 3650
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(
+        execute
+          ? await api.adminExecuteOrgDeletion(org.id, reason.trim())
+          : await api.adminRescheduleOrgDeletion(org.id, Number(days), reason.trim()),
+      )
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>{execute ? `Delete ${org.name} now?` : `Change the deletion date of ${org.name}`}</h3>
+          <p>
+            {execute
+              ? `This deletes the organization and all ${org.project_count} of its projects immediately, instead of on ${when(org.deletion_scheduled_for ?? null)}. It cannot be undone.`
+              : 'The new grace period counts from now. 0 days means it is deleted the next time the deletion job runs.'}
+          </p>
+        </header>
+        <div>
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          {!execute && (
+            <label>
+              Grace period (days from now)
+              <input type="number" min={0} max={3650} required value={days} onChange={(e) => setDays(e.target.value)} />
+            </label>
+          )}
+          <label>
+            Reason (recorded in the audit log)
+            <input required maxLength={255} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+          {execute && (
+            <label>
+              Type the organization's slug, <code>{org.slug}</code>, to confirm
+              <input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} autoComplete="off" />
+            </label>
+          )}
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            data-variant={execute ? 'danger' : undefined}
+            disabled={busy || !reason.trim() || (execute ? confirmName !== org.slug : !daysValid)}
+          >
+            {busy ? 'Saving…' : execute ? 'Delete now' : 'Change date'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
+/** §12.E.4: replace a (possibly leaked) SCIM token with one nobody sees (§7.1). */
+function RotateScimDialog({ org, onClose, onDone }: { org: AdminOrg; onClose: () => void; onDone: (org: AdminOrg) => void }) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      onDone(await api.adminRotateScim(org.id, reason.trim()))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>Rotate the SCIM token of {org.name}?</h3>
+          <p>
+            The current token stops working immediately. The new token is not shown to anyone. SCIM is switched off until
+            an org admin generates a new token, which switches it back on.
+          </p>
+        </header>
+        <div>
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          <label>
+            Reason (recorded in the audit log)
+            <input required maxLength={255} value={reason} onChange={(e) => setReason(e.target.value)} />
+          </label>
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" data-variant="danger" disabled={busy || !reason.trim()}>
+            {busy ? 'Rotating…' : 'Rotate token'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
+export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean }) {
+  const { confirm, toast } = useUi()
+  const [org, setOrg] = useState<AdminOrg | null>(null)
+  const [plans, setPlans] = useState<PlanInfo[]>([])
+  const [audit, setAudit] = useState<Page<AuditEntry> | null>(null)
+  const [auditOffset, setAuditOffset] = useState(0)
+  const [error, setError] = useState<string | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [planId, setPlanId] = useState('')
+  const [planReason, setPlanReason] = useState('')
+  const [members, setMembers] = useState<AdminOrgMember[]>([])
+  const [projects, setProjects] = useState<AdminOrgProject[]>([])
+  const [deletion, setDeletion] = useState<'reschedule' | 'execute' | null>(null)
+  const [ssoCheck, setSsoCheck] = useState<SsoCheck | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [rotatingScim, setRotatingScim] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([api.adminOrganization(id), api.adminPlans(), api.adminOrgMembers(id), api.adminOrgProjects(id)])
+      .then(([o, p, m, pr]) => {
+        if (cancelled) return
+        setOrg(o)
+        setPlanId(o.plan_id)
+        setPlans(p)
+        setMembers(m)
+        setProjects(pr)
+      })
+      .catch((err) => !cancelled && setError(err instanceof ApiError ? err.message : "Can't reach the server."))
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  useEffect(() => {
+    let cancelled = false
+    api
+      .adminAudit({ organization_id: id, limit: 25, offset: auditOffset })
+      .then((page) => !cancelled && setAudit(page))
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [id, auditOffset])
+
+  if (error) return <div role="alert" data-variant="danger">{error}</div>
+  if (!org) return <p className="empty-state">Loading…</p>
+
+  async function changePlan() {
+    if (!org || planId === org.plan_id || !planReason.trim()) return
+    const ok = await confirm({
+      title: `Move ${org.name} to ${planId}?`,
+      message: 'The new caps apply immediately. The reason is recorded in the audit log.',
+      confirmLabel: 'Change plan',
+      danger: true,
+    })
+    if (!ok) {
+      setPlanId(org.plan_id)
+      return
+    }
+    try {
+      const updated = await api.adminSetOrgPlan(org.id, planId, planReason.trim())
+      setPlanReason('')
+      setOrg(updated)
+      setAuditOffset(0)
+      setAudit(null)
+      api.adminAudit({ organization_id: id, limit: 25, offset: 0 }).then(setAudit).catch(() => undefined)
+      toast(`${updated.name} is now on ${updated.plan_id}.`)
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+      setPlanId(org.plan_id)
+    }
+  }
+
+  async function runSsoCheck() {
+    setChecking(true)
+    try {
+      setSsoCheck(await api.adminCheckSso(id))
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+    } finally {
+      setChecking(false)
+    }
+  }
+
+  return (
+    <>
+      <a className="breadcrumb-back" href="#/admin/organizations">
+        ← All organizations
+      </a>
+      <div className="page-header">
+        <div>
+          <h1>{org.name}</h1>
+          <p>
+            {org.slug} · {org.kind} · created {when(org.created_at)}
+            {org.deleted_at && <span className="status-warn"> · deleted {when(org.deleted_at)}</span>}
+          </p>
+        </div>
+      </div>
+
+      {org.deletion_scheduled_for && !org.deleted_at && (
+        <div role="alert" data-variant="warning" className="stack">
+          <strong>
+            The owner asked to delete this organization on {when(org.deletion_requested_at ?? null)}. It is locked and
+            will be deleted, with its {org.project_count} project{org.project_count === 1 ? '' : 's'}, on{' '}
+            {when(org.deletion_scheduled_for)}.
+          </strong>
+          <span className="small-text">Only the owner can cancel the request.</span>
+          {!readOnly && (
+            <div className="hstack">
+              <button className="outline small" onClick={() => setDeletion('reschedule')}>
+                Change period
+              </button>
+              <button className="small" data-variant="danger" onClick={() => setDeletion('execute')}>
+                Delete now
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="stat-grid">
+        <div className="card stat-card">
+          <div className="stat-value">{org.plan_id || '—'}</div>
+          <div className="stat-label">Plan · {org.status || 'no subscription'}</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-value">{org.member_count}</div>
+          <div className="stat-label">Members{org.seat_override !== null ? ` · ${org.seat_override} seat override` : ''}</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-value">{org.project_count}</div>
+          <div className="stat-label">Projects{org.project_override !== null ? ` · ${org.project_override} project override` : ''}</div>
+        </div>
+        <div className="card stat-card">
+          <div className="stat-value">${(org.mrr_cents / 100).toFixed(0)}</div>
+          <div className="stat-label">MRR · last activity {when(org.last_activity_at)}</div>
+        </div>
+      </div>
+
+      {org.stripe_customer_id && (
+        <p className="small-text">
+          Billed through Stripe:{' '}
+          <a href={`https://dashboard.stripe.com/customers/${org.stripe_customer_id}`} target="_blank" rel="noreferrer">
+            customer {org.stripe_customer_id}
+          </a>
+          {org.stripe_subscription_id && (
+            <>
+              {' · '}
+              <a href={`https://dashboard.stripe.com/subscriptions/${org.stripe_subscription_id}`} target="_blank" rel="noreferrer">
+                subscription
+              </a>
+            </>
+          )}
+          {org.current_period_end && <> · renews {when(org.current_period_end)}</>}
+        </p>
+      )}
+
+      {!readOnly && (
+        <section className="card stack">
+          <h3>Plan and limits</h3>
+          <div className="hstack">
+            <select
+              aria-label="Plan"
+              value={planId}
+              disabled={!!org.stripe_subscription_id}
+              onChange={(e) => setPlanId(e.target.value)}
+            >
+              {plans.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.display_name} ({p.id})
+                </option>
+              ))}
+            </select>
+            {!org.stripe_subscription_id && planId !== org.plan_id && (
+              <input
+                aria-label="Reason for the plan change"
+                placeholder="Reason (audited)"
+                maxLength={255}
+                value={planReason}
+                onChange={(e) => setPlanReason(e.target.value)}
+              />
+            )}
+            <button disabled={planId === org.plan_id || !planReason.trim()} onClick={changePlan}>
+              Change plan
+            </button>
+            <button className="outline" onClick={() => setEditing(true)}>
+              Seat / project limits
+            </button>
+          </div>
+          <p className="muted small-text">
+            {org.stripe_subscription_id
+              ? 'This organization pays through Stripe, so its plan follows Stripe. Change it in the Stripe Dashboard.'
+              : 'Both changes are recorded in the audit log below.'}
+          </p>
+        </section>
+      )}
+
+      <section className="card stack">
+        <div className="table-toolbar">
+          <h3>Single sign-on and security</h3>
+          {org.kind === 'team' && (
+            <button className="outline small" disabled={checking} onClick={runSsoCheck}>
+              {checking ? 'Checking…' : 'Check SSO'}
+            </button>
+          )}
+        </div>
+        <p className="small-text">
+          SSO: <SsoStatus org={org} />
+          {org.sso_protocol && (
+            <>
+              {' '}
+              · {org.sso_verified_domains ?? 0} verified domain{org.sso_verified_domains === 1 ? '' : 's'} · last test{' '}
+              {org.sso_last_test_result ? `${org.sso_last_test_result} (${when(org.sso_last_test_at ?? null)})` : 'never'}
+            </>
+          )}
+        </p>
+        <div className="table-toolbar small-text">
+          <span>
+            SCIM: <ScimStatus org={org} />
+            {org.scim_configured && (
+              <>
+                {' '}
+                · last sync {when(org.scim_last_sync_at ?? null)} · token created {when(org.scim_token_created_at ?? null)}
+              </>
+            )}
+          </span>
+          {org.scim_configured && !readOnly && (
+            <button className="outline small" data-variant="danger" onClick={() => setRotatingScim(true)}>
+              Rotate SCIM token
+            </button>
+          )}
+        </div>
+        <p className="small-text">
+          Two-factor required: {org.require_mfa ? 'yes' : 'no'} · Session length:{' '}
+          {org.session_ttl_hours ? `${org.session_ttl_hours} h` : 'platform default'}
+        </p>
+        <p className="muted small-text">
+          The check reads the configuration and fetches the identity provider's public documents. It can't sign anyone
+          in; the customer runs a real test from their SSO settings.
+        </p>
+        {ssoCheck && <SsoChecklist check={ssoCheck} />}
+      </section>
+
+      <h2>Members</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Member</th>
+            <th>Role</th>
+            <th>Status</th>
+            <th>2FA</th>
+            <th>Last sign-in</th>
+          </tr>
+        </thead>
+        <tbody>
+          {members.map((m) => (
+            <tr key={m.user_id}>
+              <td>
+                {m.name || m.email} {m.name && <span className="muted small-text">{m.email}</span>}
+              </td>
+              <td>{m.role}</td>
+              <td>{m.status}</td>
+              <td>{m.mfa_enabled ? 'on' : 'off'}</td>
+              <td>{when(m.last_login_at)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h2>Projects</h2>
+      <p className="muted small-text">Metadata only. Project contents are not visible here.</p>
+      {projects.length === 0 ? (
+        <p className="muted">No projects.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Project</th>
+              <th>Entities</th>
+              <th>Updated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {projects.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  {p.name} <span className="muted small-text">{p.slug}</span>
+                </td>
+                <td>{p.entity_count}</td>
+                <td>{when(p.updated_at)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+
+      <h2>Audit trail</h2>
+      {audit === null ? (
+        <p className="empty-state">Loading…</p>
+      ) : audit.items.length === 0 ? (
+        <p className="muted">No events recorded for this organization.</p>
+      ) : (
+        <>
+          <AuditTable items={audit.items} />
+          <Pager page={audit} onPage={setAuditOffset} />
+        </>
+      )}
+
+      {rotatingScim && (
+        <RotateScimDialog
+          org={org}
+          onClose={() => setRotatingScim(false)}
+          onDone={(updated) => {
+            setRotatingScim(false)
+            setOrg(updated)
+            setAuditOffset(0)
+            api.adminAudit({ organization_id: id, limit: 25, offset: 0 }).then(setAudit).catch(() => undefined)
+            toast(`SCIM token of ${updated.name} rotated. SCIM is off until an org admin generates a new token.`)
+          }}
+        />
+      )}
+
+      {deletion && (
+        <DeletionDialog
+          org={org}
+          mode={deletion}
+          onClose={() => setDeletion(null)}
+          onDone={(updated) => {
+            if (deletion === 'execute') {
+              // Members, invitations and projects are gone with the organization.
+              setMembers([])
+              setProjects([])
+            }
+            setDeletion(null)
+            setOrg(updated)
+            toast(
+              deletion === 'execute'
+                ? `${updated.name} was deleted.`
+                : `${updated.name} will now be deleted on ${when(updated.deletion_scheduled_for ?? null)}.`,
+            )
+          }}
+        />
+      )}
+
+      {editing && (
+        <OverrideDialog
+          org={org}
+          onClose={() => setEditing(false)}
+          onSaved={(updated) => {
+            setEditing(false)
+            setOrg(updated)
+            toast(`Limits updated for ${updated.name}.`)
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+// ── Plans catalog (§7) ───────────────────────────────────────────────────────
+
+const PLAN_ID_RE = /^[a-z][a-z0-9_-]*$/
+
+const EMPTY_PLAN: PlanWrite = {
+  display_name: '',
+  max_seats: null,
+  max_projects: null,
+  max_api_tokens: null,
+  max_mcp_tokens: null,
+  allow_sso: false,
+  allow_scim: false,
+  allow_mcp: false,
+  monthly_price_usd: 0,
+  is_public: true,
+}
+
+function capText(cap: number | null): string {
+  return cap === null ? 'unlimited' : String(cap)
+}
+
+function PlanDialog({ plan, onClose, onSaved }: { plan: PlanInfo | null; onClose: () => void; onSaved: (p: PlanInfo) => void }) {
+  const isNew = plan === null
+  const [id, setId] = useState(plan?.id ?? '')
+  const [form, setForm] = useState<PlanWrite>(() => {
+    if (!plan) return EMPTY_PLAN
+    const { id: _ignored, ...rest } = plan
+    void _ignored
+    return rest
+  })
+  const [price, setPrice] = useState(plan ? (plan.monthly_price_usd / 100).toString() : '0')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const idInvalid = isNew && id !== '' && !PLAN_ID_RE.test(id)
+
+  function cap(key: 'max_seats' | 'max_projects' | 'max_api_tokens' | 'max_mcp_tokens', label: string) {
+    return (
+      <label>
+        {label}
+        <input
+          type="number"
+          min={0}
+          placeholder="unlimited"
+          value={form[key] ?? ''}
+          onChange={(e) => setForm({ ...form, [key]: numberOrNull(e.target.value) })}
+        />
+      </label>
+    )
+  }
+
+  function flag(key: 'allow_sso' | 'allow_scim' | 'allow_mcp' | 'is_public', label: string) {
+    return (
+      <label className="toggle-field">
+        <input type="checkbox" checked={form[key]} onChange={(e) => setForm({ ...form, [key]: e.target.checked })} />
+        {label}
+      </label>
+    )
+  }
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      onSaved(await api.adminSavePlan(id, { ...form, monthly_price_usd: Math.round(Number(price) * 100) }))
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>{isNew ? 'New plan' : `Edit ${plan.display_name}`}</h3>
+          <p>
+            {isNew
+              ? 'The id is permanent. To sell it online, also map it to a Stripe Price in BUILDER_STRIPE_PRICE_IDS.'
+              : 'Changes apply immediately to every organization on this plan. The Stripe price is not changed.'}
+          </p>
+        </header>
+        <div>
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          <div className="field-grid">
+            {isNew && (
+              <label>
+                Id
+                <input required maxLength={40} value={id} onChange={(e) => setId(e.target.value.toLowerCase())} aria-invalid={idInvalid || undefined} placeholder="startup" />
+              </label>
+            )}
+            <label>
+              Display name
+              <input required maxLength={100} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} />
+            </label>
+            <label>
+              Price (USD / month)
+              <input type="number" min={0} step="0.01" value={price} onChange={(e) => setPrice(e.target.value)} />
+            </label>
+            {cap('max_seats', 'Seats')}
+            {cap('max_projects', 'Projects')}
+            {cap('max_api_tokens', 'API tokens per member')}
+            {cap('max_mcp_tokens', 'MCP tokens')}
+          </div>
+          <div className="stack">
+            {flag('allow_mcp', 'MCP access')}
+            {flag('allow_sso', 'Single sign-on')}
+            {flag('allow_scim', 'SCIM provisioning')}
+            {flag('is_public', 'Shown to customers as an upgrade option')}
+          </div>
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy || !id || idInvalid || !form.display_name.trim()}>
+            {busy ? 'Saving…' : 'Save plan'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
+export function AdminPlans({ readOnly }: { readOnly: boolean }) {
+  const { toast } = useUi()
+  const [plans, setPlans] = useState<PlanInfo[] | null>(null)
+  const [editing, setEditing] = useState<PlanInfo | 'new' | null>(null)
+  useEffect(() => {
+    api.adminPlans().then(setPlans).catch(() => setPlans([]))
+  }, [])
+
+  function saved(plan: PlanInfo) {
+    setEditing(null)
+    setPlans((list) => {
+      const rest = (list ?? []).filter((p) => p.id !== plan.id)
+      return [...rest, plan].sort((a, b) => a.monthly_price_usd - b.monthly_price_usd)
+    })
+    toast(`Saved the ${plan.display_name} plan.`)
+  }
+
+  return (
+    <>
+      <div className="page-header">
+        <div>
+          <h1>Plans</h1>
+          <p>The catalog of plans and their caps. Empty caps mean unlimited.</p>
+        </div>
+        {!readOnly && <button onClick={() => setEditing('new')}>New plan</button>}
+      </div>
+      {plans === null ? (
+        <p className="empty-state">Loading…</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>Plan</th>
+              <th>Price</th>
+              <th>Seats</th>
+              <th>Projects</th>
+              <th>API tokens</th>
+              <th>MCP tokens</th>
+              <th>Features</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {plans.map((p) => (
+              <tr key={p.id}>
+                <td>
+                  {p.display_name} <span className="muted small-text">{p.id}{p.is_public ? '' : ' · hidden'}</span>
+                </td>
+                <td>{p.monthly_price_usd ? `$${(p.monthly_price_usd / 100).toFixed(2)}` : 'Free'}</td>
+                <td>{capText(p.max_seats)}</td>
+                <td>{capText(p.max_projects)}</td>
+                <td>{capText(p.max_api_tokens)}</td>
+                <td>{p.allow_mcp ? capText(p.max_mcp_tokens) : <span className="muted">off</span>}</td>
+                <td className="small-text">
+                  {[p.allow_sso && 'SSO', p.allow_scim && 'SCIM'].filter(Boolean).join(', ') || <span className="muted">none</span>}
+                </td>
+                <td>
+                  {!readOnly && (
+                    <button className="outline small" onClick={() => setEditing(p)}>
+                      Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {editing && <PlanDialog plan={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={saved} />}
+    </>
+  )
+}
+
+// ── Billing (§7: subscriptions, overdue, trials; Stripe stays the source) ─────
+
+const BILLING_FILTERS: { id: string; label: string }[] = [
+  { id: '', label: 'All' },
+  { id: 'past_due', label: 'Overdue' },
+  { id: 'trial', label: 'Trials' },
+  { id: 'active', label: 'Active' },
+  { id: 'canceled', label: 'Canceled' },
+]
+
+export function AdminBilling({ readOnly }: { readOnly: boolean }) {
+  const { toast } = useUi()
+  const [page, setPage] = useState<Page<AdminSubscription> | null>(null)
+  const [status, setStatus] = useState('')
+  const [q, setQ] = useState('')
+  const [offset, setOffset] = useState(0)
+  const [busy, setBusy] = useState(false)
+  const [version, setVersion] = useState(0)
+  useEffect(() => {
+    const timer = setTimeout(
+      () => api.adminSubscriptions({ status, q, limit: 25, offset }).then(setPage).catch(() => undefined),
+      200,
+    )
+    return () => clearTimeout(timer)
+  }, [status, q, offset, version])
+
+  async function reconcile() {
+    setBusy(true)
+    try {
+      const r = await api.adminReconcileBilling()
+      toast(`Checked ${r.checked} Stripe subscription(s): ${r.changed} updated, ${r.failed} failed, ${r.trials_expired} trial(s) ended.`)
+      setVersion((v) => v + 1)
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Header title="Billing">Subscriptions by status. Stripe is the source of truth for money; open it for invoices.</Header>
+      <div className="table-toolbar">
+        <span className="hstack">
+          {BILLING_FILTERS.map((f) => (
+            <button
+              key={f.id}
+              className={status === f.id ? 'small' : 'outline small'}
+              onClick={() => {
+                setOffset(0)
+                setStatus(f.id)
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
+        </span>
+        <span className="hstack">
+          <input type="search" placeholder="Search organization" value={q} onChange={(e) => { setOffset(0); setQ(e.target.value) }} />
+          {!readOnly && (
+            <button className="outline small" disabled={busy} onClick={reconcile} title="Re-read every Stripe subscription and end due trials">
+              {busy ? 'Syncing…' : 'Sync with Stripe'}
+            </button>
+          )}
+        </span>
+      </div>
+      {page && (
+        <>
+          <table>
+            <thead>
+              <tr>
+                <th>Organization</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Period end / trial end</th>
+                <th>Stripe</th>
+              </tr>
+            </thead>
+            <tbody>
+              {page.items.map((s) => (
+                <tr key={s.organization_id}>
+                  <td>
+                    <a href={`#/admin/organizations/${s.organization_id}`}>{s.organization_name}</a>{' '}
+                    <span className="muted small-text">{s.organization_slug}</span>
+                  </td>
+                  <td>{s.plan_id}</td>
+                  <td>
+                    <span className={s.status === 'active' ? 'status-ok' : 'status-warn'}>{s.status}</span>
+                  </td>
+                  <td className="small-text">{s.status === 'trial' ? `trial ends ${when(s.trial_ends_at)}` : when(s.current_period_end)}</td>
+                  <td className="small-text">
+                    {s.stripe_subscription_id ? (
+                      <a href={`https://dashboard.stripe.com/subscriptions/${s.stripe_subscription_id}`} target="_blank" rel="noreferrer">
+                        open
+                      </a>
+                    ) : (
+                      <span className="muted">not on Stripe</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <Pager page={page} onPage={setOffset} />
+        </>
+      )}
+    </>
+  )
+}
+
+// ── Insights (§7: reporting over the audit log, no new tracking) ─────────────
+
+function Sparkbars({ series, label }: { series: { day: string; count: number }[]; label: string }) {
+  const max = Math.max(1, ...series.map((d) => d.count))
+  const total = series.reduce((sum, d) => sum + d.count, 0)
+  return (
+    <div className="card stack">
+      <div className="hstack justify-between">
+        <strong>{label}</strong>
+        <span className="muted small-text">{total} in 30 days</span>
+      </div>
+      <div className="sparkbars" role="img" aria-label={`${label}: ${total} in the last 30 days`}>
+        {series.map((d) => (
+          <span key={d.day} title={`${d.day}: ${d.count}`} style={{ height: `${(d.count / max) * 100}%` }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+export function AdminInsightsPage() {
+  const [data, setData] = useState<AdminInsights | null>(null)
+  useEffect(() => {
+    api.adminInsights().then(setData).catch(() => undefined)
+  }, [])
+  if (!data) return <p className="empty-state">Loading…</p>
+  const tiles: [string, number][] = [
+    ['Organizations', data.total_orgs],
+    ['Active orgs (7 days)', data.active_orgs_7d],
+    ['Projects', data.total_projects],
+    ['MCP calls (24 h)', data.mcp_calls_24h],
+    ['Denied by quota (7 days)', data.denied_by_quota_7d],
+  ]
+  return (
+    <>
+      <Header title="Insights">Counts from the audit log and account records. No per-user behaviour tracking.</Header>
+      <div className="stat-grid">
+        {tiles.map(([label, value]) => (
+          <div key={label} className="card stat-card">
+            <div className="stat-value">{value}</div>
+            <div className="stat-label">{label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="stat-grid">
+        <Sparkbars series={data.signups_per_day} label="Sign-ups per day" />
+        <Sparkbars series={data.orgs_per_day} label="Team organizations per day" />
+      </div>
+    </>
+  )
+}
+
 // ── Audit log ────────────────────────────────────────────────────────────────
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function AdminAudit() {
   const [page, setPage] = useState<Page<AuditEntry> | null>(null)
   const [action, setAction] = useState('')
   const [result, setResult] = useState('')
   const [via, setVia] = useState('')
+  // #/admin/audit?organization_id=<uuid> opens the log filtered to one organization.
+  const [orgId, setOrgId] = useState(() => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('organization_id') ?? '')
   const [offset, setOffset] = useState(0)
+  const orgFilter = UUID_RE.test(orgId.trim()) ? orgId.trim() : undefined
   useEffect(() => {
     const timer = setTimeout(
       () =>
         api
-          .adminAudit({ action, result, via, limit: 50, offset })
+          .adminAudit({ action, result, via, organization_id: orgFilter, limit: 50, offset })
           .then(setPage)
           .catch(() => undefined),
       200,
     )
     return () => clearTimeout(timer)
-  }, [action, result, via, offset])
+  }, [action, result, via, orgFilter, offset])
   return (
     <>
       <Header title="Audit log">An append-only record of sign-ins, changes and refused attempts.</Header>
@@ -702,6 +1731,12 @@ export function AdminAudit() {
             <option value="access.">Refused access</option>
             <option value="token.">API tokens</option>
             <option value="mcp.">MCP tool calls</option>
+            <option value="org.">Organizations</option>
+            <option value="plan.">Plans and checkout</option>
+            <option value="billing.">Billing (Stripe)</option>
+            <option value="quota.">Refused by plan limits</option>
+            <option value="sso.">Single sign-on</option>
+            <option value="scim.">SCIM provisioning</option>
           </select>
           <select aria-label="Outcome" value={result} onChange={(e) => { setOffset(0); setResult(e.target.value) }}>
             <option value="">Any outcome</option>
@@ -713,7 +1748,20 @@ export function AdminAudit() {
             <option value="session">Browser session</option>
             <option value="api_token">API / MCP token</option>
             <option value="admin">Admin console</option>
+            <option value="sso">SSO sign-in</option>
+            <option value="scim">SCIM (identity provider)</option>
           </select>
+          <input
+            type="search"
+            aria-label="Organization ID"
+            placeholder="Organization ID"
+            aria-invalid={orgId.trim() !== '' && !orgFilter}
+            value={orgId}
+            onChange={(e) => {
+              setOffset(0)
+              setOrgId(e.target.value)
+            }}
+          />
         </div>
       </div>
       {page && (
@@ -732,7 +1780,7 @@ export function AdminAudit() {
               {page.items.map((e) => (
                 <tr key={e.id}>
                   <td>{when(e.at)}</td>
-                  <td>{e.actor_email ?? <span className="muted">system</span>}</td>
+                  <td>{auditActor(e)}</td>
                   <td>
                     {e.action}
                     {e.detail && <div className="muted small-text">{Object.entries(e.detail).map(([k, v]) => `${k}: ${String(v)}`).join(' · ')}</div>}

@@ -6,7 +6,14 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.models.enums import OrgKind, OrgRole, SubscriptionStatus
+from app.models.enums import (
+    AccountStatus,
+    AuditResult,
+    MemberRole,
+    OrgKind,
+    OrgRole,
+    SubscriptionStatus,
+)
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 
@@ -39,6 +46,12 @@ class OrganizationRead(BaseModel):
     created_at: datetime
     my_role: OrgRole
     member_count: int = 0
+    # Set while a deletion request waits for its grace period to end (access is blocked).
+    deletion_requested_at: datetime | None = None
+    deletion_scheduled_for: datetime | None = None
+    # §8 Security policies (visible to every member, so the UI can explain a 403).
+    require_mfa: bool = False
+    session_ttl_hours: int | None = None
 
 
 class OrganizationMemberRead(BaseModel):
@@ -47,6 +60,27 @@ class OrganizationMemberRead(BaseModel):
     name: str
     role: OrgRole
     joined_at: datetime
+    # §8 People table: status, 2FA on/off (built-in TOTP, §4.4), last sign-in.
+    status: AccountStatus = AccountStatus.active
+    last_login_at: datetime | None = None
+    mfa_enabled: bool | None = None
+
+
+class OrgPoliciesRead(BaseModel):
+    """§8 Security policies. `session_ttl_hours` None = the platform default
+    (`default_session_hours`)."""
+
+    require_mfa: bool
+    session_ttl_hours: int | None
+    members_without_mfa: int
+    default_session_hours: int
+
+
+class OrgPoliciesUpdate(BaseModel):
+    """Only the fields sent change. `session_ttl_hours: null` goes back to the default."""
+
+    require_mfa: bool | None = None
+    session_ttl_hours: int | None = Field(default=None, ge=1, le=720)
 
 
 class OrganizationMemberUpdate(BaseModel):
@@ -74,6 +108,33 @@ class InvitationRead(BaseModel):
 
 class InvitationCreated(InvitationRead):
     token: str  # shown exactly once
+    invite_url: str = ""  # <public_app_url>/#/invite/<token>
+    emailed: bool = False  # False when the platform has no SMTP configured
+
+
+class OrgProjectJoin(BaseModel):
+    role: MemberRole = MemberRole.editor
+
+
+class ProjectTransfer(BaseModel):
+    to_slug: str = Field(min_length=1, max_length=100)
+
+
+class OrgAuditRead(BaseModel):
+    """An org admin's view of the audit log (§8). No `detail` and no client IP: §7.1 keeps
+    request details that can contain customer data out of shared views."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    at: datetime
+    actor_email: str | None
+    via: str
+    action: str
+    target_type: str | None
+    target_id: str | None
+    project_id: uuid.UUID | None
+    result: AuditResult
 
 
 class InvitationAccept(BaseModel):

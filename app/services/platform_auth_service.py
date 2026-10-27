@@ -8,6 +8,11 @@ Security behaviour worth knowing (each one has a test):
     two tabs racing) revokes the whole login family and every access token of that person.
   - Changing a password or suspending an account bumps `token_version`, which kills access tokens
     immediately instead of at their natural expiry.
+  - MFA (§4.4): with TOTP on (or for platform staff, always) a correct password answers an
+    `MfaChallenge`, not a session; `mfa_service` finishes the sign-in. The failure counter is
+    only reset by a complete sign-in, so re-entering the password never buys more code guesses.
+  - Every login family records how it was authenticated (`auth_methods`, the `amr` claim) and
+    when it started; an org's session-TTL policy caps the family from that start (§8).
 """
 
 import re
@@ -15,7 +20,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +34,15 @@ from app.models.enums import (
     PlatformRole,
     TokenAudience,
 )
-from app.models.platform import PlatformUser, ProjectMember, RefreshToken
+from app.models.platform import (
+    ApiToken,
+    MfaRecoveryCode,
+    Organization,
+    OrganizationMember,
+    PlatformUser,
+    ProjectMember,
+    RefreshToken,
+)
 from app.models.project import Project
 from app.services import audit_service
 
@@ -74,6 +87,24 @@ class Session:
     expires_in: int
     refresh_max_age: int
     user: PlatformUser
+
+
+@dataclass(frozen=True)
+class MfaChallenge:
+    """Password accepted; the second step is still to come. `enrollment`: set up TOTP first."""
+
+    token: str
+    expires_in: int
+    enrollment: bool
+    user: PlatformUser
+
+
+MFA_VERIFY = "verify"
+MFA_ENROLL = "enroll"
+
+
+def is_staff(user: PlatformUser) -> bool:
+    return user.platform_role is not PlatformRole.customer
 
 
 class PlatformAuthService:
@@ -160,7 +191,7 @@ class PlatformAuthService:
 
     async def login(
         self, *, email: str, password: str, audience: TokenAudience, info: RequestInfo
-    ) -> Session:
+    ) -> Session | MfaChallenge:
         email = normalize_email(email)
         user = (
             await self.db.execute(select(PlatformUser).where(PlatformUser.email == email))
@@ -191,10 +222,41 @@ class PlatformAuthService:
                     reason = "locked_now"
             await self._login_failed(user, email, info, reason)
             raise invalid_credentials()
+        enroll = not user.mfa_enabled and is_staff(user) and self.settings.admin_mfa_required
+        if user.mfa_enabled or enroll:
+            purpose = MFA_ENROLL if enroll else MFA_VERIFY
+            challenge = self.mfa_challenge(user, audience, purpose)
+            await audit_service.record(
+                self.db,
+                action="account.mfa_challenge",
+                actor_id=user.id,
+                actor_email=user.email,
+                target_type="user",
+                target_id=user.id,
+                client_ip=info.client_ip,
+                request_id=info.request_id,
+                detail={"audience": audience.value, "purpose": purpose},
+            )
+            await self.db.commit()
+            return challenge
+        return await self.finish_login(user, audience, info, methods="pwd")
+
+    async def finish_login(
+        self,
+        user: PlatformUser,
+        audience: TokenAudience,
+        info: RequestInfo,
+        *,
+        methods: str,
+        detail: dict[str, object] | None = None,
+    ) -> Session:
+        """Every factor checked: reset the failure counter, start a login family, audit, commit."""
         user.failed_logins = 0
         user.locked_until = None
-        user.last_login_at = now
-        session = await self._start_session(user, audience, info, family_id=uuid.uuid4())
+        user.last_login_at = _now()
+        session = await self._start_session(
+            user, audience, info, family_id=uuid.uuid4(), methods=methods
+        )
         await audit_service.record(
             self.db,
             action="admin.login" if audience is TokenAudience.admin else "account.login",
@@ -204,9 +266,24 @@ class PlatformAuthService:
             target_id=user.id,
             client_ip=info.client_ip,
             request_id=info.request_id,
+            detail=detail,
         )
         await self.db.commit()
         return session
+
+    def mfa_challenge(
+        self, user: PlatformUser, audience: TokenAudience, purpose: str
+    ) -> MfaChallenge:
+        ttl = self.settings.mfa_challenge_seconds
+        claims = sec.access_claims(
+            user_id=str(user.id),
+            audience=sec.AUDIENCE_MFA,
+            token_version=user.token_version,
+            ttl_seconds=ttl,
+        )
+        claims["pur"] = purpose
+        claims["for"] = audience.value
+        return MfaChallenge(sec.encode_jwt(claims), ttl, purpose == MFA_ENROLL, user)
 
     async def _login_failed(
         self, user: PlatformUser | None, email: str, info: RequestInfo, reason: str
@@ -224,6 +301,30 @@ class PlatformAuthService:
         )
         await self.db.commit()
 
+    async def issue_session(
+        self, user: PlatformUser, info: RequestInfo, *, methods: str = "sso"
+    ) -> Session:
+        """A new customer-audience login family for a person authenticated elsewhere (SSO,
+        §4.2 step 4: the same JWT a password login gets). No commit."""
+        return await self._start_session(
+            user, TokenAudience.app, info, family_id=uuid.uuid4(), methods=methods
+        )
+
+    async def org_session_cap(self, user: PlatformUser) -> timedelta | None:
+        """The strictest session-TTL policy among the person's orgs (§8), or None."""
+        hours = (
+            await self.db.execute(
+                select(func.min(Organization.session_ttl_hours))
+                .join(OrganizationMember, OrganizationMember.organization_id == Organization.id)
+                .where(
+                    OrganizationMember.user_id == user.id,
+                    Organization.deleted_at.is_(None),
+                    Organization.session_ttl_hours.is_not(None),
+                )
+            )
+        ).scalar_one_or_none()
+        return timedelta(hours=hours) if hours else None
+
     async def _start_session(
         self,
         user: PlatformUser,
@@ -231,13 +332,23 @@ class PlatformAuthService:
         info: RequestInfo,
         *,
         family_id: uuid.UUID,
+        methods: str = "pwd",
+        family_started_at: datetime | None = None,
     ) -> Session:
         s = self.settings
-        refresh_ttl = (
+        now = _now()
+        started = family_started_at or now
+        expires_at = now + (
             timedelta(hours=s.admin_refresh_token_hours)
             if audience is TokenAudience.admin
             else timedelta(days=s.refresh_token_days)
         )
+        if audience is TokenAudience.app:
+            cap = await self.org_session_cap(user)
+            if cap is not None:
+                expires_at = min(expires_at, started + cap)
+        if expires_at <= now:
+            raise invalid_session()  # the org's session TTL has run out: sign in again
         raw, digest = sec.new_refresh_token()
         self.db.add(
             RefreshToken(
@@ -245,9 +356,11 @@ class PlatformAuthService:
                 family_id=family_id,
                 audience=audience,
                 token_hash=digest,
-                expires_at=_now() + refresh_ttl,
+                expires_at=expires_at,
                 client_ip=info.client_ip,
                 user_agent=(info.user_agent or "")[:200] or None,
+                auth_methods=methods,
+                family_started_at=started,
             )
         )
         ttl = s.access_token_minutes * 60
@@ -259,9 +372,10 @@ class PlatformAuthService:
                 else sec.AUDIENCE_APP,
                 token_version=user.token_version,
                 ttl_seconds=ttl,
+                amr=methods.split(),
             )
         )
-        return Session(access, raw, ttl, int(refresh_ttl.total_seconds()), user)
+        return Session(access, raw, ttl, max(1, int((expires_at - now).total_seconds())), user)
 
     # -- refresh / logout ----------------------------------------------------------------
 
@@ -286,6 +400,13 @@ class PlatformAuthService:
             raise invalid_session()
         if audience is TokenAudience.admin and user.platform_role is PlatformRole.customer:
             raise invalid_session()
+        methods = row.auth_methods or "pwd"
+        if (
+            is_staff(user)
+            and self.settings.admin_mfa_required
+            and not set(methods.split()) & sec.MFA_METHODS
+        ):
+            raise invalid_session()  # §4.4: staff sessions always carry a second factor
         # Claim the token atomically: of two racing requests exactly one gets the row back.
         claimed = (
             await self.db.execute(
@@ -301,7 +422,14 @@ class PlatformAuthService:
                 raise invalid_session()  # two tabs racing: refuse the loser, keep the session
             await self._revoke_family(row.family_id, user, info, "refresh_reuse")
             raise invalid_session()
-        session = await self._start_session(user, audience, info, family_id=row.family_id)
+        session = await self._start_session(
+            user,
+            audience,
+            info,
+            family_id=row.family_id,
+            methods=methods,
+            family_started_at=row.family_started_at or row.created_at,
+        )
         await self.db.commit()
         return session
 
@@ -364,6 +492,33 @@ class PlatformAuthService:
         )
         user.token_version += 1
 
+    async def claim_by_idp(self, user: PlatformUser) -> bool:
+        """An IdP vouched for this address (SCIM link, SSO sign-in). Returns True if it had to
+        take the account back (no commit).
+
+        Sign-up never proves the mailbox, so if the account was never verified whoever typed the
+        address in first may hold its password, TOTP and tokens: all of that is dropped and every
+        session ends. A verified account keeps its credentials and is just marked verified."""
+        if user.email_verified_at is not None:
+            return False
+        reclaimed = user.password_hash != sec.SSO_ONLY_PASSWORD_HASH or user.totp_secret_enc
+        if reclaimed:
+            user.password_hash = sec.SSO_ONLY_PASSWORD_HASH
+            user.password_changed_at = _now()
+            user.must_change_password = False
+            user.totp_secret_enc = None
+            user.totp_enabled_at = None
+            user.totp_last_step = None
+            await self.db.execute(delete(MfaRecoveryCode).where(MfaRecoveryCode.user_id == user.id))
+            await self.db.execute(
+                update(ApiToken)
+                .where(ApiToken.user_id == user.id, ApiToken.revoked_at.is_(None))
+                .values(revoked_at=_now())
+            )
+            await self.revoke_all_sessions(user)
+        user.email_verified_at = _now()
+        return bool(reclaimed)
+
     # -- password ------------------------------------------------------------------------
 
     async def change_password(
@@ -374,6 +529,7 @@ class PlatformAuthService:
         new_password: str,
         audience: TokenAudience,
         info: RequestInfo,
+        methods: str = "pwd",
     ) -> Session:
         if not sec.verify_password(current_password, user.password_hash):
             await audit_service.record(
@@ -405,7 +561,10 @@ class PlatformAuthService:
         user.password_changed_at = _now()
         user.must_change_password = False
         await self.revoke_all_sessions(user)  # every other device signs out
-        session = await self._start_session(user, audience, info, family_id=uuid.uuid4())
+        # The new family keeps the factors of the session that changed the password.
+        session = await self._start_session(
+            user, audience, info, family_id=uuid.uuid4(), methods=methods
+        )
         await audit_service.record(
             self.db,
             action="account.password_change",
@@ -473,12 +632,19 @@ class PlatformAuthService:
 
         admin_org = await OrganizationService(self.db).ensure_personal_org(admin)
         adopted = await self.adopt_unclaimed_projects(admin)
-        # Any newly-adopted project also lands in the admin's personal org so it has a tenant.
+        # Adopted projects move from the "unclaimed" holding org into the admin's personal org.
         from sqlalchemy import update as sa_update
+
+        from app.models.platform import Organization
+        from app.services.organization_service import UNCLAIMED_ORG_SLUG
 
         await self.db.execute(
             sa_update(Project)
-            .where(Project.organization_id.is_(None))
+            .where(
+                Project.organization_id.in_(
+                    select(Organization.id).where(Organization.slug == UNCLAIMED_ORG_SLUG)
+                )
+            )
             .values(organization_id=admin_org.id)
         )
         await audit_service.record(

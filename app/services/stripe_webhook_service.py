@@ -97,6 +97,14 @@ def _first_item(subscription: dict[str, Any]) -> dict[str, Any]:
     return items[0] if items else {}
 
 
+def _expected_livemode() -> bool | None:
+    """True for an sk_live_/rk_live_ key, False for test keys, None when no key is set."""
+    key = get_settings().stripe_secret_key
+    if key is None:
+        return None
+    return key.get_secret_value().startswith(("sk_live_", "rk_live_"))
+
+
 class StripeWebhookService:
     def __init__(self, session: AsyncSession) -> None:
         self.db = session
@@ -105,7 +113,13 @@ class StripeWebhookService:
         event_type = str(event.get("type", ""))
         if event_type not in HANDLED_EVENTS:
             return WebhookResult("ignored")
-        obj = (event.get("data") or {}).get("object") or {}
+        data = event.get("data")
+        obj = data.get("object") if isinstance(data, dict) else None
+        if not isinstance(obj, dict) or not isinstance(event.get("id"), str):
+            # Signed but not shaped like a Stripe event: acknowledge it (a 5xx makes Stripe retry
+            # for days) and do nothing.
+            log.warning("stripe event %s (%s) is malformed; ignored", event.get("id"), event_type)
+            return WebhookResult("ignored")
         org_id = await self._resolve_org(event_type, obj)
         sub = await self._lock(org_id) if org_id is not None else None
         if org_id is None or sub is None:
@@ -115,6 +129,19 @@ class StripeWebhookService:
         if await self._seen(event["id"]):
             await self.db.rollback()
             return WebhookResult("duplicate", org_id)
+
+        expected_live = _expected_livemode()
+        if expected_live is not None and bool(event.get("livemode")) != expected_live:
+            # A test-mode platform must never act on live events, or the other way round
+            # (e.g. one webhook endpoint registered in both modes).
+            await self._record(
+                event,
+                org_id,
+                int(event.get("created") or 0),
+                "livemode_mismatch",
+                AuditResult.denied,
+            )
+            return WebhookResult("livemode_mismatch", org_id)
 
         created = int(event.get("created") or 0)
         customer = obj.get("customer")

@@ -13,7 +13,8 @@ from app.models.platform import AuditLog, PlatformUser, ProjectMember
 from app.models.project import Project
 from app.services.platform_auth_service import PlatformAuthService
 from tests.api._auth_helpers import make_project
-from tests.api.conftest import TEST_PASSWORD, ClientFor, MakeUser
+from tests.api._mfa_helpers import admin_sign_in
+from tests.api.conftest import TEST_PASSWORD, ClientFor, MakeUser, TotpClock
 
 ADMIN = PlatformRole.platform_admin
 SUPPORT = PlatformRole.platform_support
@@ -28,7 +29,7 @@ async def admin_client(client_for: ClientFor, email: str = "root@example.com") -
 
 
 async def test_customers_cannot_sign_in_to_the_admin_console(
-    anon_client: AsyncClient, make_user: MakeUser
+    anon_client: AsyncClient, make_user: MakeUser, totp_clock: TotpClock
 ) -> None:
     await make_user("cust@example.com")
     await make_user("root@example.com", ADMIN)
@@ -36,8 +37,17 @@ async def test_customers_cannot_sign_in_to_the_admin_console(
         "/admin/login", json={"email": "cust@example.com", "password": TEST_PASSWORD}
     )
     assert bad.status_code == 401 and bad.json()["code"] == "invalid_credentials"
-    good = await anon_client.post(
+    # Staff get a session only after the second factor (§4.4); see test_mfa.py.
+    first = await anon_client.post(
         "/admin/login", json={"email": "root@example.com", "password": TEST_PASSWORD}
+    )
+    assert first.status_code == 200 and "set-cookie" not in first.headers
+    token = first.json()["mfa_token"]
+    secret = (await anon_client.post("/admin/login/mfa/setup", json={"mfa_token": token})).json()[
+        "secret"
+    ]
+    good = await anon_client.post(
+        "/admin/login/mfa/enable", json={"mfa_token": token, "code": totp_clock.code(secret)}
     )
     assert good.status_code == 200
     cookie = good.headers["set-cookie"].lower()
@@ -45,25 +55,21 @@ async def test_customers_cannot_sign_in_to_the_admin_console(
 
 
 async def test_admin_session_works_on_admin_routes_only(
-    anon_client: AsyncClient, make_user: MakeUser
+    anon_client: AsyncClient, make_user: MakeUser, totp_clock: TotpClock
 ) -> None:
     await make_user("root@example.com", ADMIN)
-    token = (
-        await anon_client.post(
-            "/admin/login", json={"email": "root@example.com", "password": TEST_PASSWORD}
-        )
-    ).json()["access_token"]
+    token, _ = await admin_sign_in(anon_client, totp_clock, "root@example.com")
     h = {"Authorization": f"Bearer {token}"}
     assert (await anon_client.get("/admin/stats", headers=h)).status_code == 200
     assert (await anon_client.get("/projects", headers=h)).status_code == 401
     assert (await anon_client.get("/account/me", headers=h)).status_code == 401
 
 
-async def test_admin_refresh_cycle(anon_client: AsyncClient, make_user: MakeUser) -> None:
+async def test_admin_refresh_cycle(
+    anon_client: AsyncClient, make_user: MakeUser, totp_clock: TotpClock
+) -> None:
     await make_user("root@example.com", ADMIN)
-    await anon_client.post(
-        "/admin/login", json={"email": "root@example.com", "password": TEST_PASSWORD}
-    )
+    await admin_sign_in(anon_client, totp_clock, "root@example.com")
     assert (
         await anon_client.post("/admin/refresh", headers={"X-Requested-With": "builder"})
     ).status_code == 200
@@ -301,8 +307,16 @@ async def test_settings_are_read_only_and_expose_no_secrets(client_for: ClientFo
 async def test_bootstrap_creates_one_admin_and_adopts_unclaimed_projects(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    from app.services.organization_service import OrganizationService
+
     async with session_factory() as s:
-        s.add_all([Project(name="Old", slug="old"), Project(name="Older", slug="older")])
+        holding = await OrganizationService(s).ensure_unclaimed_org()
+        s.add_all(
+            [
+                Project(name="Old", slug="old", organization_id=holding.id),
+                Project(name="Older", slug="older", organization_id=holding.id),
+            ]
+        )
         await s.commit()
     settings = Settings(
         bootstrap_admin_email="Boss@Example.com", bootstrap_admin_password="a-long-bootstrap-pass"
@@ -314,6 +328,9 @@ async def test_bootstrap_creates_one_admin_and_adopts_unclaimed_projects(
         members = list((await s.execute(select(ProjectMember))).scalars())
         assert len(members) == 2 and {m.role.value for m in members} == {"owner"}
         assert {m.user_id for m in members} == {created.id}
+        # ...and they moved out of the holding org into the admin's own org.
+        orgs = {p.organization_id for p in (await s.execute(select(Project))).scalars()}
+        assert orgs == {created.default_organization_id}
         # idempotent: a second start changes nothing
         assert await PlatformAuthService(s, settings).bootstrap_admin() is None
         assert len(list((await s.execute(select(PlatformUser))).scalars())) == 1

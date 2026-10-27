@@ -4,6 +4,7 @@ import type { ApiTokenCreated, ApiTokenInfo, Project } from '../api/types'
 import { useUser } from '../components/AuthProvider'
 import { Modal } from '../components/Modal'
 import { PasswordForm } from '../components/PasswordForm'
+import { TwoFactorSection } from '../components/TwoFactorSection'
 import { useUi } from '../components/Ui'
 
 interface ScopeDef {
@@ -221,6 +222,8 @@ export function AccountPage() {
         <h3>Password</h3>
         <PasswordForm />
       </section>
+
+      <TwoFactorSection />
 
       <section className="card stack">
         <div className="table-toolbar">
