@@ -1,0 +1,10 @@
+{
+  "note": "run against http://127.0.0.1:8000/mcp/ directly, bypassing the Host-header issue documented separately in mcp_host_header_bug.txt, to isolate and test the auth/scope/membership logic on its own",
+  "1_no_auth_list_projects": {"result": "error (no bearer token supplied)"},
+  "2_read_a_list_projects": {"result": "ok", "preview": "returned project MCP A only, your_role=owner"},
+  "3_read_a_get_spec_own_project_A": {"result": "ok", "preview": "returned the full spec for project A (its own pinned project)"},
+  "4_read_a_get_spec_B_cross_project_escape_attempt": {"result": "error", "note": "token pinned to project A was refused when asked for project B's spec -- cross-project escape blocked"},
+  "5_read_only_token_write_attempt": {"result": "error", "note": "an mcp:read-only token calling create_entity (a write tool) was refused -- insufficient_scope enforced"},
+  "6_write_token_create_entity_on_own_project": {"result": "ok", "preview": "created entity 'LegitEntity' / table legit_entities in project A"},
+  "7_token_valid_scope_and_pin_but_mcp_disabled_for_member": {"result": "error", "note": "token pinned to project B with mcp:read scope was still refused, because project_members.mcp_enabled=False for this member on B -- the per-member mcp_enabled gate is enforced even when the token's own scope/pin checks out"}
+}

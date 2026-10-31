@@ -22,6 +22,8 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
   const canAdmin = org.my_role === 'owner' || org.my_role === 'admin'
   const [policies, setPolicies] = useState<OrgPolicies | null>(null)
   const [requireMfa, setRequireMfa] = useState(false)
+  const [allowSupport, setAllowSupport] = useState(true)
+  const [exporting, setExporting] = useState(false)
   const [customTtl, setCustomTtl] = useState(false)
   const [ttl, setTtl] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -30,6 +32,7 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
   function adopt(p: OrgPolicies) {
     setPolicies(p)
     setRequireMfa(p.require_mfa)
+    setAllowSupport(p.allow_impersonation)
     setCustomTtl(p.session_ttl_hours !== null)
     setTtl(p.session_ttl_hours === null ? '' : String(p.session_ttl_hours))
   }
@@ -64,6 +67,7 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
   const changes: OrgPoliciesUpdate = {}
   if (requireMfa !== policies.require_mfa) changes.require_mfa = requireMfa
   if (ttlValue !== policies.session_ttl_hours) changes.session_ttl_hours = ttlValue
+  if (allowSupport !== policies.allow_impersonation) changes.allow_impersonation = allowSupport
   const dirty = Object.keys(changes).length > 0
 
   async function save(event: FormEvent) {
@@ -79,6 +83,16 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
       })
       if (!ok) return
     }
+    if (changes.allow_impersonation === false) {
+      const ok = await confirm({
+        title: 'Stop platform support from viewing as your members?',
+        message:
+          'Support sessions that are running right now end immediately, and support will not be able to see what your members see when they help with a problem.',
+        confirmLabel: 'Turn off',
+        danger: true,
+      })
+      if (!ok) return
+    }
     setBusy(true)
     setError(null)
     try {
@@ -89,6 +103,24 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
       setError(message(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function exportData() {
+    setExporting(true)
+    try {
+      const { blob, filename } = await api.exportOrg(org.slug)
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      link.click()
+      URL.revokeObjectURL(url)
+      toast('Export downloaded.')
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+    } finally {
+      setExporting(false)
     }
   }
 
@@ -155,11 +187,42 @@ export function OrgPoliciesTab({ org, members, onChanged }: { org: Organization;
         )}
       </section>
 
+      <section className="card stack">
+        <h3>Platform support access</h3>
+        <label className="check-row">
+          <input type="checkbox" checked={allowSupport} onChange={(e) => setAllowSupport(e.target.checked)} />
+          <span>
+            <strong>Allow platform support to view as a member when helping with a problem</strong>{' '}
+            <span className="muted small-text">
+              A support session lasts ten minutes, starts read-only, needs a written reason, and every request is in
+              your audit log. Support can never see credentials, tokens, billing or export your data. Turn this off and
+              support cannot start a session at all.
+            </span>
+          </span>
+        </label>
+      </section>
+
       <div>
         <button type="submit" disabled={busy || !dirty || !ttlValid}>
           {busy ? 'Saving…' : 'Save policies'}
         </button>
       </div>
+
+      {org.my_role === 'owner' && (
+        <section className="card stack">
+          <h3>Export your data</h3>
+          <p className="muted small-text">
+            Download everything held about {org.name} as one JSON file: people, projects with their specifications,
+            policies, plan and audit log. It never contains passwords, tokens, or the credentials stored for your projects.
+            Available even while the organization is scheduled for deletion.
+          </p>
+          <div>
+            <button type="button" className="outline" disabled={exporting} onClick={exportData}>
+              {exporting ? 'Preparing…' : 'Download export'}
+            </button>
+          </div>
+        </section>
+      )}
     </form>
   )
 }

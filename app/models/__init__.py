@@ -14,6 +14,7 @@ from app.models.payments_config import ProjectPaymentsConfig
 from app.models.platform import (
     ApiToken,
     AuditLog,
+    ImpersonationSession,
     MfaRecoveryCode,
     PlatformUser,
     ProjectMember,
@@ -30,6 +31,7 @@ from app.models.storage_config import ProjectStorageConfig
 __all__ = [
     "ApiToken",
     "AuditLog",
+    "ImpersonationSession",
     "MfaRecoveryCode",
     "AuthCustomField",
     "Base",

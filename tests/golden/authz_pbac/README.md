@@ -73,7 +73,7 @@ Set the secrets from `.env.example` in `.env` before starting: `AUTH_JWT_SECRET`
 Send `Authorization: Bearer <access_token>` to authenticated routes. Protect your own routes with
 `CurrentUser` and `require_roles("...")` from `app/auth/deps.py`.
 
-Limits: sign-in 50/minute, registration 10/hour, email / SMS requests 3/hour per client address.
+Limits per client address: failed sign-ins 50/minute (successful ones are not counted), registration 10/hour, email / SMS requests 3/hour.
 They are counted in process memory, so they are per worker.
 
 The CRUD endpoints above are **not** protected; add `Depends(require_roles(...))` where you need it.

@@ -293,9 +293,7 @@ async def list_custom_fields(
     page: Pagination = Depends(pagination),
     session: AsyncSession = Depends(get_session),
 ) -> Page[AuthCustomFieldRead]:
-    fields, total = await AuthCustomFieldService(session).list(
-        project_id, page.limit, page.offset
-    )
+    fields, total = await AuthCustomFieldService(session).list(project_id, page.limit, page.offset)
     return Page[AuthCustomFieldRead](
         items=[AuthCustomFieldRead.model_validate(f) for f in fields],
         total=total,

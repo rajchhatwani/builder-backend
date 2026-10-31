@@ -1,0 +1,78 @@
+[
+  {
+    "case": "A_valid",
+    "status": 302,
+    "outcome": "ACCEPTED",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/sso/complete",
+    "expect": "ACCEPTED"
+  },
+  {
+    "case": "B_wrong_nonce",
+    "status": 302,
+    "outcome": "REFUSED:wrong_nonce",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=wrong_nonce",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "C_wrong_audience",
+    "status": 302,
+    "outcome": "REFUSED:bad_id_token",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=bad_id_token",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "D_expired",
+    "status": 302,
+    "outcome": "REFUSED:bad_id_token",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=bad_id_token",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "E_wrong_issuer",
+    "status": 302,
+    "outcome": "REFUSED:bad_id_token",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=bad_id_token",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "F_foreign_signed_key",
+    "status": 302,
+    "outcome": "REFUSED:bad_id_token",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=bad_id_token",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "G_email_verified_false",
+    "status": 302,
+    "outcome": "REFUSED:email_not_verified",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=email_not_verified",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "H_alg_confusion_HS256_with_public_key",
+    "status": 302,
+    "outcome": "REFUSED:unsupported_alg",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=unsupported_alg",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "I_alg_none",
+    "status": 302,
+    "outcome": "REFUSED:unsupported_alg",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=unsupported_alg",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "J_replay_same_state_and_code",
+    "first": {
+      "status": 302,
+      "outcome": "ACCEPTED"
+    },
+    "second": {
+      "status": 302,
+      "outcome": "REFUSED:invalid_request_state",
+      "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=invalid_request_state"
+    },
+    "expect": "second=REFUSED"
+  }
+]

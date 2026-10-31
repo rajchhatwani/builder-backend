@@ -314,7 +314,13 @@ async def test_operator_sees_sso_status_and_can_run_the_check(
     assert row["require_mfa"] is False
     detail = (await support.get(f"/admin/organizations/{org}")).json()
     assert detail["sso_protocol"] == "saml"
-    r = await support.post(f"/admin/organizations/{org}/sso/check")
+    # SEC L-1: read-only support must not trigger the outbound check.
+    denied = await support.post(f"/admin/organizations/{org}/sso/check")
+    assert denied.status_code == 403
+    admin = await client_for(
+        "root@example.com", PlatformRole.platform_admin, audience=sec.AUDIENCE_ADMIN
+    )
+    r = await admin.post(f"/admin/organizations/{org}/sso/check")
     assert r.status_code == 200 and r.json()["ok"] is True
     async with session_factory() as s:
         audit = (

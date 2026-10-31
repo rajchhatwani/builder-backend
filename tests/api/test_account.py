@@ -122,10 +122,15 @@ async def test_lockout_after_repeated_failures_then_expiry(
         assert (
             await login(anon_client, "real@example.com", "wrong-password-123")
         ).status_code == 401
-    # Locked: even the right password is refused, with the same generic answer.
+    # Locked: even the right password is refused. A wrong password still gets the generic
+    # answer (no oracle); the right one is told why and for how long (FEAT F-6).
+    still_generic = await login(anon_client, "real@example.com", "wrong-password-123")
+    assert still_generic.status_code == 401
+    assert still_generic.json()["code"] == "invalid_credentials"
     locked = await login(anon_client, "real@example.com", TEST_PASSWORD)
-    assert locked.status_code == 401
-    assert locked.json()["code"] == "invalid_credentials"
+    assert locked.status_code == 429
+    assert locked.json()["code"] == "account_locked"
+    assert int(locked.headers["Retry-After"]) > 0
     async with session_factory() as s:
         row = await s.get(PlatformUser, user.id)
         assert row is not None and row.locked_until is not None

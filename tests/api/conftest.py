@@ -227,6 +227,16 @@ async def anon_client(override_session: None) -> AsyncGenerator[AsyncClient, Non
 
 
 @pytest.fixture(autouse=True)
+def _no_dev_rls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A developer's .env may switch RLS binding on for the local database; the suite runs
+    without it unless a test asks (tests/api/test_rls.py)."""
+    from app.config import get_settings
+
+    monkeypatch.setenv("BUILDER_RLS_ENABLED", "false")
+    get_settings.cache_clear()
+
+
+@pytest.fixture(autouse=True)
 def _secret_key(monkeypatch: pytest.MonkeyPatch) -> None:
     """Credentials are encrypted with SECRET_KEY, so every API test gets a fixed one."""
     import app.core.crypto as crypto

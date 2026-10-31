@@ -390,3 +390,28 @@ async def test_trust_unverified_email_is_off_by_default_and_kept_when_omitted(
             .all()
         )
         assert any(a.detail.get("trust_unverified_email") is True for a in row)  # type: ignore[union-attr]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://127.0.0.1/x",
+        "https://localhost/sso",
+        "https://10.0.0.5/sso",
+        "https://metadata.google.internal/sso",
+        "https://internal.local/sso",
+        "https://intranet/sso",
+        "https://[::1]/sso",
+        "https://169.254.169.254/latest",
+        "https://127.1/sso",
+        "https://0x7f.1/sso",
+        "https://2130706433/sso",
+    ],
+)
+async def test_internal_idp_urls_are_refused_at_save(
+    client: AsyncClient, session_factory: Factory, url: str
+) -> None:
+    """FEAT F-4: private/loopback/internal IdP URLs never get saved (so never activated)."""
+    await business_org(client, session_factory)
+    r = await client.put("/orgs/acme/sso", json={**saml_config(), "idp_sso_url": url})
+    assert r.status_code == 422 and r.json()["code"] == "private_address", r.text

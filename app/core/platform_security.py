@@ -253,6 +253,7 @@ def access_claims(
     ttl_seconds: int,
     now: float | None = None,
     amr: list[str] | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     issued = int(time.time() if now is None else now)
     claims: dict[str, Any] = {
@@ -266,6 +267,8 @@ def access_claims(
     }
     if amr:
         claims["amr"] = amr
+    if extra:
+        claims.update(extra)
     return claims
 
 

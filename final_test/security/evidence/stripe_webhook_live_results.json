@@ -1,0 +1,30 @@
+{
+  "1_checkout_completed": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"applied\"}'"
+  },
+  "2_replay_same_event_id": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"duplicate\"}'"
+  },
+  "3_livemode_mismatch": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"livemode_mismatch\"}'"
+  },
+  "4_customer_mismatch": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"customer_mismatch\"}'"
+  },
+  "5_other_subscription": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"other_subscription\"}'"
+  },
+  "6_stale_event": {
+    "status": 400,
+    "body": "b'{\"code\":\"invalid_webhook\",\"message\":\"the webhook could not be accepted\",\"details\":[]}'"
+  },
+  "7_bad_signature": {
+    "status": 400,
+    "body": "b'{\"code\":\"invalid_webhook\",\"message\":\"the webhook could not be accepted\",\"details\":[]}'"
+  }
+}

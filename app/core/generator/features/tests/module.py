@@ -5,7 +5,7 @@ search / sort, patch, replace, delete) against a real database."""
 
 from pathlib import Path
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
@@ -44,6 +44,7 @@ def _skip_reason(entity: EntityCtx, project: ProjectCtx) -> str | None:
 
 class TestsModule:
     name = "tests"
+    manifest = ModuleManifest(id="tests", version="1", depends_on=('crud',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

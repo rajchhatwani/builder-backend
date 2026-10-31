@@ -8,7 +8,7 @@ tests/api/test_access_matrix.py walks the OpenAPI schema to make sure none exist
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from fastapi import Depends, Request
@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.core import platform_authz as authz
+from app.core import rls
 from app.core.ratelimit import SlidingWindowLimiter
 from app.db import get_session
 from app.exceptions import AppError
@@ -153,9 +154,90 @@ async def _principal(request: Request, db: AsyncSession, audience: TokenAudience
     return principal
 
 
-async def current_principal(request: Request, db: AsyncSession = Depends(get_session)) -> Principal:
-    """Any valid customer-surface credential: a session token or an API token."""
+async def acting_principal(request: Request, db: AsyncSession = Depends(get_session)) -> Principal:
+    """Any valid customer-surface credential, including an operator's "view as" token. Only
+    `guard` and `org_context` use this: they apply the impersonation rules themselves."""
     return await _principal(request, db, TokenAudience.app)
+
+
+async def current_principal(
+    request: Request, principal: Principal = Depends(acting_principal)
+) -> Principal:
+    """A customer-surface credential: a session token or an API token. A "view as" token gets
+    through only to the few routes listed in IMPERSONATION_OPEN_ROUTES (default deny)."""
+    if principal.impersonation is not None:
+        route = request.scope.get("route")
+        template: str = getattr(route, "path", request.url.path)
+        if (request.method.upper(), template) not in authz.IMPERSONATION_OPEN_ROUTES:
+            raise forbidden(
+                "this isn't available while viewing as another person", "impersonation_blocked"
+            )
+    return principal
+
+
+async def _check_impersonation(
+    db: AsyncSession,
+    request: Request,
+    principal: Principal,
+    template: str,
+    organization_id: object,
+) -> None:
+    """§4.5: a "view as" token acts inside its one org, may not do what the switch and the
+    never-list refuse, and leaves a trail. Called by guard and org_context."""
+    info = principal.impersonation
+    if info is None:
+        return
+    if organization_id != info.organization_id:
+        raise not_found()
+    method = request.method.upper()
+    code = authz.impersonation_denial(method, template, writes_allowed=info.writes_allowed())
+    detail: dict[str, object] = {
+        "method": method,
+        "route": template,
+        "impersonator_id": str(info.operator_id),
+        "session_id": str(info.session_id),
+    }
+    if code is not None:
+        await audit_service.record(
+            db,
+            action="impersonation.denied",
+            result=AuditResult.denied,
+            via="impersonation",
+            actor_id=principal.user.id,
+            actor_email=principal.user.email,
+            organization_id=info.organization_id,
+            client_ip=client_ip(request),
+            request_id=getattr(request.state, "request_id", None),
+            detail={**detail, "why": code},
+        )
+        await db.commit()
+        message = (
+            "this session is read-only; switch writes on first"
+            if code == "impersonation_read_only"
+            else "this isn't available while viewing as another person"
+        )
+        raise forbidden(message, code)
+    if method in ("GET", "HEAD", "OPTIONS") or required_read_only_post(method, template):
+        await audit_service.record(
+            db,
+            action="impersonation.request",
+            via="impersonation",
+            actor_id=principal.user.id,
+            actor_email=principal.user.email,
+            organization_id=info.organization_id,
+            client_ip=client_ip(request),
+            request_id=getattr(request.state, "request_id", None),
+            detail=detail,
+        )
+        await db.commit()
+
+
+def required_read_only_post(method: str, template: str) -> bool:
+    return authz.required_scope(method, template) == authz.SCOPE_READ and method not in (
+        "GET",
+        "HEAD",
+        "OPTIONS",
+    )
 
 
 async def session_principal(request: Request, db: AsyncSession = Depends(get_session)) -> Principal:
@@ -168,7 +250,7 @@ async def session_principal(request: Request, db: AsyncSession = Depends(get_ses
 
 async def guard(
     request: Request,
-    principal: Principal = Depends(current_principal),
+    principal: Principal = Depends(acting_principal),
     db: AsyncSession = Depends(get_session),
 ) -> Principal:
     """Authenticate, then authorise the request against the project it is about."""
@@ -192,6 +274,10 @@ async def guard(
         # A pinned token may list (the list is cut down to its project) but never create projects.
         if principal.token_project_id is not None and method != "GET":
             raise forbidden("this API token is limited to one project", "insufficient_scope")
+        if principal.impersonation is not None:
+            await _check_impersonation(
+                db, request, principal, template, principal.impersonation.organization_id
+            )
         return principal
 
     project_id = await access_service.project_of(db, template, dict(request.path_params))
@@ -219,12 +305,14 @@ async def guard(
         raise not_found()
     if organization_id is not None:
         structlog.contextvars.bind_contextvars(organization_id=str(organization_id))
+        await rls.bind(db, organization_id)  # §3.3: the rest of the request sees this org only
         org = await db.get(Organization, organization_id)
         if org is not None and org.deletion_requested_at is not None:
             raise org_deletion_pending(org)
         if org is not None and org.require_mfa and not principal.mfa_satisfied:
             await _deny(db, request, principal, "org_mfa", project_id=project_id)
             raise org_mfa_required(org, principal)
+    await _check_impersonation(db, request, principal, template, organization_id)
     needed = authz.required_member_role(method, template)
     if ROLE_LEVEL[role] < ROLE_LEVEL[needed]:
         await _deny(
@@ -247,7 +335,15 @@ async def guard(
             organization_id=organization_id,
             client_ip=client_ip(request),
             request_id=getattr(request.state, "request_id", None),
-            detail={"method": method, "route": template},
+            detail={
+                "method": method,
+                "route": template,
+                **(
+                    {"impersonator_id": str(principal.impersonation.operator_id)}
+                    if principal.impersonation is not None
+                    else {}
+                ),
+            },
         )
     return principal
 
@@ -268,7 +364,7 @@ class OrgContext:
 
     @property
     def role(self) -> OrgRole:
-        return self.summary.role
+        return cast(OrgRole, self.summary.role)
 
     def require(self, needed: OrgRole, owner_emails: list[str]) -> None:
         if not authz.org_role_allows(self.role, needed):
@@ -332,9 +428,7 @@ def org_forbidden(needed: OrgRole, owner_emails: list[str]) -> AppError:
 def require_write_scope(principal: Principal) -> None:
     """Account-level writes (create an org, ...) aren't under `/orgs/{slug}`, so `org_context`
     doesn't see them: an API token needs the `write` scope for them."""
-    if principal.via == "api_token" and not authz.scopes_allow(
-        principal.scopes, authz.SCOPE_WRITE
-    ):
+    if principal.via == "api_token" and not authz.scopes_allow(principal.scopes, authz.SCOPE_WRITE):
         raise forbidden(
             f"this API token lacks the '{authz.SCOPE_WRITE}' scope", "insufficient_scope"
         )
@@ -342,7 +436,7 @@ def require_write_scope(principal: Principal) -> None:
 
 async def org_context(
     request: Request,
-    principal: Principal = Depends(current_principal),
+    principal: Principal = Depends(acting_principal),
     db: AsyncSession = Depends(get_session),
 ) -> OrgContext:
     """Resolve `{slug}`, check membership (404 otherwise) and the role the route needs."""
@@ -372,6 +466,8 @@ async def org_context(
     summary = await service.get_by_slug(principal.user.id, request.path_params["slug"])
     ctx = OrgContext(principal=principal, summary=summary)
     structlog.contextvars.bind_contextvars(organization_id=str(summary.organization.id))
+    await _check_impersonation(db, request, principal, template, summary.organization.id)
+    await rls.bind(db, summary.organization.id)  # §3.3
     if (
         summary.organization.deletion_requested_at is not None
         and (method, template) not in authz.ORG_ROUTES_OPEN_DURING_DELETION

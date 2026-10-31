@@ -325,3 +325,79 @@ async def test_backfill_puts_project_members_into_the_projects_org(fresh_db: str
         assert await conn.fetchval("SELECT count(*) FROM project_members") == 3
     finally:
         await conn.close()
+
+
+async def test_phase_f_impersonation_columns_and_rls_policies_are_installed_but_off(
+    fresh_db: str,
+) -> None:
+    """Phase F: consent defaults to on, the session table exists, the audit `via` fits
+    "impersonation", and the RLS policies exist on every org-scoped table without RLS being
+    enabled anywhere."""
+    from app.core import rls
+
+    _alembic(fresh_db, "upgrade", "head")
+    conn = await _connect(fresh_db)
+    try:
+        default = await conn.fetchval(
+            "SELECT column_default FROM information_schema.columns "
+            "WHERE table_name = 'organizations' AND column_name = 'allow_impersonation'"
+        )
+        assert default == "true"
+        assert await conn.fetchval("SELECT to_regclass('impersonation_sessions')") is not None
+        width = await conn.fetchval(
+            "SELECT character_maximum_length FROM information_schema.columns "
+            "WHERE table_name = 'platform_audit_log' AND column_name = 'via'"
+        )
+        assert width == 20
+        policies = {
+            r["tablename"]
+            for r in await conn.fetch(
+                "SELECT tablename FROM pg_policies WHERE policyname = 'tenant_isolation'"
+            )
+        }
+        assert policies == set(rls.ALL_TABLES)
+        on = await conn.fetch(
+            "SELECT relname FROM pg_class WHERE relrowsecurity OR relforcerowsecurity"
+        )
+        assert on == []  # nothing is switched on by a migration
+    finally:
+        await conn.close()
+    _alembic(fresh_db, "downgrade", "d1f5a7c3e9b2")
+    _alembic(fresh_db, "upgrade", "head")
+
+
+async def test_project_slug_per_org_migration_is_reversible_on_populated_data(
+    fresh_db: str,
+) -> None:
+    """FEAT F-2: two orgs share a slug after the upgrade; downgrade must dedupe, not fail."""
+    _alembic(fresh_db, "upgrade", "head")
+    conn = await _connect(fresh_db)
+    try:
+        orgs = []
+        for slug in ("org-a", "org-b"):
+            orgs.append(
+                await conn.fetchval(
+                    "INSERT INTO organizations (id, name, slug, kind, created_at, updated_at) "
+                    "VALUES (gen_random_uuid(), $1, $1, 'team', now(), now()) RETURNING id",
+                    slug,
+                )
+            )
+        for org in orgs:
+            await conn.execute(
+                "INSERT INTO projects (id, name, slug, db_engine, version, organization_id, "
+                "created_at, updated_at) VALUES (gen_random_uuid(), 'Blog', 'blog', 'postgres', "
+                "1, $1, now(), now())",
+                org,
+            )
+        with_dupe = await conn.fetchval("SELECT count(*) FROM projects WHERE slug='blog'")
+        assert with_dupe == 2
+    finally:
+        await conn.close()
+    _alembic(fresh_db, "downgrade", "f2c8a4e6b1d9")
+    conn = await _connect(fresh_db)
+    try:
+        slugs = [r[0] for r in await conn.fetch("SELECT slug FROM projects")]
+        assert len(set(slugs)) == 2 and "blog" in slugs
+    finally:
+        await conn.close()
+    _alembic(fresh_db, "upgrade", "head")

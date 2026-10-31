@@ -1,0 +1,5 @@
+=== 08_operator_privacy against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[    Info] SOLID        opconsole/8.1: a brand-new org's allow_impersonation defaults to True (opt-out), not False (opt-in)
+[    Info] SOLID        opconsole/8.2: impersonation hard-blocks tokens/export/billing regardless of the writes switch, and the org console stays look-only even with writes on
+[    Info] SOLID        opconsole/8.3: platform_support has no write permission, including impersonate:write
+[    Info] SOLID        opconsole/8.4: the owner can export their org's data; an outsider gets 404 (not 403)

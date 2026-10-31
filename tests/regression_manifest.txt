@@ -1,0 +1,18 @@
+# Tests that must always pass (one pytest path/node id per line). Added when a WP ships.
+# Cycle 0 baseline: the whole suites are run by gate.sh; entries below are the per-finding tests.
+tests/unit/test_mcp_host_allowlist.py
+tests/api/test_sso_test_and_check.py::test_operator_sees_sso_status_and_can_run_the_check
+tests/api/test_projects.py::test_parallel_updates_with_same_version_have_one_winner
+tests/api/test_projects.py
+tests/api/test_rls_app_role.py
+tests/api/test_migrations.py::test_project_slug_per_org_migration_is_reversible_on_populated_data
+tests/api/test_organizations.py::test_invitation_rejects_malformed_email_and_consumes_no_seat
+tests/api/test_account.py::test_lockout_after_repeated_failures_then_expiry
+tests/api/test_mfa.py
+tests/api/test_sso_config.py
+tests/unit/test_openapi_snapshot.py
+tests/unit/test_module_manifest.py
+tests/unit/test_zones.py
+tests/unit/test_expr.py
+tests/unit/test_lifecycle_generated.py
+tests/api/test_expr_parity.py

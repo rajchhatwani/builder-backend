@@ -10,16 +10,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import platform_security as sec
 from app.models.auth_custom_field import AuthCustomField
 from app.models.entity import Entity
-from app.models.enums import AccountStatus, MemberRole, TokenAudience
+from app.models.enums import AccountStatus, MemberRole, PlatformRole, TokenAudience
 from app.models.field import Field
 from app.models.generation import Generation
-from app.models.platform import ApiToken, PlatformUser, ProjectMember
+from app.models.platform import (
+    ApiToken,
+    ImpersonationSession,
+    Organization,
+    OrganizationMember,
+    PlatformUser,
+    ProjectMember,
+)
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
 
 ROLE_LEVEL = {MemberRole.viewer: 1, MemberRole.editor: 2, MemberRole.owner: 3}
 _LAST_USED_RESOLUTION = timedelta(minutes=1)  # do not write on every API-token request
+
+
+@dataclass(frozen=True)
+class ImpersonationInfo:
+    """An operator "viewing as" a member (§4.5). Read from the session row on every request."""
+
+    session_id: uuid.UUID
+    operator_id: uuid.UUID
+    operator_email: str
+    operator_name: str
+    organization_id: uuid.UUID
+    organization_slug: str
+    organization_name: str
+    expires_at: datetime
+    writes_until: datetime | None
+
+    def writes_allowed(self, now: datetime | None = None) -> bool:
+        return self.writes_until is not None and self.writes_until > (now or _now())
 
 
 @dataclass(frozen=True)
@@ -32,13 +57,15 @@ class Principal:
     # How the session was signed in (`amr` claim): {'pwd'}, {'pwd', 'otp'}, {'sso'}, ...
     # Empty for API tokens.
     auth_methods: frozenset[str] = frozenset()
+    # Set when an operator is viewing as this user: `via` is then "impersonation".
+    impersonation: ImpersonationInfo | None = None
 
     @property
     def mfa_satisfied(self) -> bool:
         """For an org that requires MFA (§4.4): a session must have used a second factor (or
         SSO, where the IdP owns MFA); an API token's owner must have MFA set up or be an
         SSO-only account."""
-        if self.via == "session":
+        if self.via in ("session", "impersonation"):
             return bool(self.auth_methods & sec.MFA_METHODS)
         return self.user.mfa_enabled or self.user.password_hash == sec.SSO_ONLY_PASSWORD_HASH
 
@@ -68,7 +95,67 @@ async def principal_from_jwt(
         return None
     amr = claims.get("amr")
     methods = frozenset(m for m in amr if isinstance(m, str)) if isinstance(amr, list) else None
+    if "imp_sid" in claims:
+        # A "view as" token: only ever a customer-surface token, and only while its session
+        # row, the operator, the member and the org's consent all still hold.
+        if audience is not TokenAudience.app:
+            return None
+        info = await _impersonation_info(db, claims, user)
+        if info is None:
+            return None
+        return Principal(
+            user,
+            "impersonation",
+            audience,
+            frozenset(),
+            auth_methods=methods or frozenset(),
+            impersonation=info,
+        )
     return Principal(user, "session", audience, frozenset(), auth_methods=methods or frozenset())
+
+
+async def _impersonation_info(
+    db: AsyncSession, claims: dict[str, object], target: PlatformUser
+) -> ImpersonationInfo | None:
+    try:
+        session_id = uuid.UUID(str(claims["imp_sid"]))
+    except ValueError:
+        return None
+    row = await db.get(ImpersonationSession, session_id)
+    now = _now()
+    if (
+        row is None
+        or row.ended_at is not None
+        or row.expires_at <= now
+        or row.target_user_id != target.id
+        or str(claims.get("imp_by")) != str(row.operator_id)
+    ):
+        return None
+    operator = await db.get(PlatformUser, row.operator_id)
+    if (
+        operator is None
+        or operator.status is not AccountStatus.active
+        or operator.platform_role is not PlatformRole.platform_admin
+    ):
+        return None
+    org = await db.get(Organization, row.organization_id)
+    if (
+        org is None
+        or not org.allow_impersonation
+        or await db.get(OrganizationMember, (org.id, target.id)) is None
+    ):
+        return None
+    return ImpersonationInfo(
+        session_id=row.id,
+        operator_id=operator.id,
+        operator_email=operator.email,
+        operator_name=operator.name,
+        organization_id=org.id,
+        organization_slug=org.slug,
+        organization_name=org.name,
+        expires_at=row.expires_at,
+        writes_until=row.writes_until,
+    )
 
 
 async def principal_from_api_token(db: AsyncSession, token: str) -> Principal | None:

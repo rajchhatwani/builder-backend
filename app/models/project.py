@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,7 +14,7 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "projects"
 
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    slug: Mapped[str] = mapped_column(String(100), nullable=False, unique=True)
+    slug: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     db_engine: Mapped[DbEngine] = mapped_column(
         SAEnum(DbEngine, name="db_engine", native_enum=False, length=20),
@@ -30,4 +30,7 @@ class Project(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
     )
 
-    __table_args__ = (Index("ix_projects_org", "organization_id"),)
+    __table_args__ = (
+        Index("ix_projects_org", "organization_id"),
+        UniqueConstraint("organization_id", "slug", name="uq_projects_org_slug"),
+    )

@@ -9,6 +9,10 @@ import {
 } from './session'
 import type {
   AdminInsights,
+  ImpersonationDigest,
+  ImpersonationSessionRow,
+  ImpersonationStarted,
+  ImpersonationState,
   AdminOrg,
   AdminOrgMember,
   AdminOrgProject,
@@ -347,6 +351,32 @@ export const api = {
     }),
   orgProjects: (slug: string) => request<Page<Project>>(`/orgs/${encodeURIComponent(slug)}/projects`),
   orgPlan: (slug: string) => request<OrgPlan>(`/orgs/${encodeURIComponent(slug)}/plan`),
+
+  // ── "View as" banner side (§4.5): only a viewing token has any of this ─────
+  impersonationState: () => request<ImpersonationState>('/account/impersonation'),
+  setImpersonationWrites: (enabled: boolean) =>
+    request<ImpersonationState>('/account/impersonation/writes', {
+      method: 'POST',
+      body: json({ enabled }),
+    }),
+  endImpersonation: () => request<void>('/account/impersonation/end', { method: 'POST' }),
+  /** The viewing tab learns who it is from the token it was handed; there is no refresh cookie. */
+  me: () => request<UserAccount>('/account/me'),
+
+  // ── Org data export (§9): the file the owner downloads ────────────────────
+  async exportOrg(slug: string): Promise<{ blob: Blob; filename: string }> {
+    const response = await fetch(`${BASE_URL}/orgs/${encodeURIComponent(slug)}/export`, {
+      credentials: 'include',
+      headers: authHeader('app'),
+    })
+    if (!response.ok) {
+      const body = (await response.json().catch(() => null)) as ApiErrorBody | null
+      throw new ApiError(response.status, body ?? { code: 'http_error', message: 'Export failed', details: [] })
+    }
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const filename = /filename="([^"]+)"/.exec(disposition)?.[1] ?? `${slug}-export.json`
+    return { blob: await response.blob(), filename }
+  },
 
   // ── Org security policies (§8) ───────────────────────────────────────────
   orgPolicies: (slug: string) => request<OrgPolicies>(`/orgs/${encodeURIComponent(slug)}/policies`),
@@ -899,6 +929,24 @@ export const api = {
     ),
   adminOrganization: (id: string) =>
     request<AdminOrg>(`/admin/organizations/${id}`, undefined, admin),
+  /** §4.5: mint a ten-minute "view as" token. Platform admins only; needs the org's consent. */
+  adminImpersonate: (orgId: string, userId: string, reason: string) =>
+    request<ImpersonationStarted>(
+      `/admin/organizations/${orgId}/members/${userId}/impersonate`,
+      { method: 'POST', body: json({ reason }) },
+      admin,
+    ),
+  adminImpersonationSessions: (params: { organization_id?: string; limit?: number; offset?: number }) =>
+    request<Page<ImpersonationSessionRow>>(
+      `/admin/impersonation/sessions?${queryString(params)}`,
+      undefined,
+      admin,
+    ),
+  /** What the daily support-access digest would say (nothing is sent). Platform admins only. */
+  adminImpersonationDigest: (hours = 24) =>
+    request<ImpersonationDigest>(`/admin/impersonation/digest?hours=${hours}`, undefined, admin),
+  adminEndImpersonation: (sessionId: string) =>
+    request<void>(`/admin/impersonation/sessions/${sessionId}/end`, { method: 'POST' }, admin),
   adminOrgMembers: (id: string) =>
     request<AdminOrgMember[]>(`/admin/organizations/${id}/members`, undefined, admin),
   adminOrgProjects: (id: string) =>

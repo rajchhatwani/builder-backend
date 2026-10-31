@@ -12,7 +12,7 @@ export function AskAdmin({ members, what }: { members: OrgMember[]; what: string
           {owners.map((o, i) => (
             <span key={o.user_id}>
               {i > 0 && (i === owners.length - 1 ? ' or ' : ', ')}
-              <a href={`mailto:${o.email}`}>{o.name || o.email}</a>
+              <a href={`mailto:${o.email}`}>{o.name && o.name !== o.email ? `${o.name} (${o.email})` : o.email}</a>
             </span>
           ))}
           .

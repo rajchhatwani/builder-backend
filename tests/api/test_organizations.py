@@ -214,3 +214,15 @@ async def test_owner_cannot_be_removed_if_last(
     r = await client.delete(f"/orgs/acme/members/{owner_id}")
     assert r.status_code == 409
     assert r.json()["code"] == "last_owner"
+
+
+async def test_invitation_rejects_malformed_email_and_consumes_no_seat(
+    client: AsyncClient,
+) -> None:
+    """FEAT F-3."""
+    assert (await client.post("/orgs", json={"name": "Acme", "slug": "acme"})).status_code == 201
+    for bad in ["not-an-email", "a@b", "two@@x.com", "sp ace@x.com", "x@y.z", "a@b.com,c@d.com"]:
+        r = await client.post("/orgs/acme/invitations", json={"email": bad, "role": "member"})
+        assert r.status_code == 422, (bad, r.status_code)
+    pending = (await client.get("/orgs/acme/invitations")).json()
+    assert (pending["total"] if isinstance(pending, dict) else len(pending)) == 0

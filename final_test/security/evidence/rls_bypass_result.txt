@@ -1,0 +1,37 @@
+Checkpoint 4 — Postgres RLS live test, 2026-10-29
+
+1. Installed policies: `python -m app.core.rls install` -> "install: 58 statements applied" (29 tables x 2 statements)
+2. Enabled + forced RLS: `python -m app.core.rls enable --yes` -> "enable: 58 statements applied"
+3. `python -m app.core.rls status` confirmed policy=True, on=True, forced=True for all 29 tables.
+
+4. Checked the app's own DB role:
+   docker exec bb-final-pg psql -U builder -d builder -tAc
+     "select rolname, rolsuper, rolbypassrls from pg_roles where rolname='builder';"
+   -> builder | t | t        (rolsuper=true, rolbypassrls=true)
+
+5. Direct proof of bypass (same role the app itself connects as):
+   BEGIN;
+   SELECT set_config('app.organization_id', '11111111-1111-1111-1111-111111111111', true);  -- an org id that matches NO row
+   SELECT slug FROM organizations;
+   COMMIT;
+   -> returned ALL 10 organizations in the database (raj-deb23add, bb-owner-84a436ae, bb-sso,
+      bb-sso1-42730554, bb-sso2-28276b6d, sectest-lockout-*, sectest-caselock-*, bb-acme,
+      bb-outsider-91221e93, bb-member-81c5917b), not zero, even though app.organization_id
+      matched none of them. PostgreSQL superusers (and any role with BYPASSRLS) ignore RLS
+      policies unconditionally -- FORCE ROW LEVEL SECURITY has no effect on them (FORCE only
+      binds the table OWNER when that owner is not a superuser/bypassrls role).
+
+6. Reverted: `python -m app.core.rls disable` -> RLS disabled again (on=False, forced=False);
+   policy objects remain installed but inert, as designed. No other data was changed; the
+   `bb-acme` org created for the billing checkpoint was left in place (useful for session 2).
+
+CONCLUSION: in this environment, turning on RLS exactly as `app/core/rls.py` and its own
+--help text instruct (`install`, `enable --yes`, `BUILDER_RLS_ENABLED=true`) would have given
+ZERO additional protection, because the application's own database credentials
+(`builder`/`builder`) are a Postgres superuser with BYPASSRLS. This is a deployment/ops gap,
+not a bug in app/core/rls.py itself -- the module's design (SET LOCAL app.organization_id,
+per-table USING clauses) is correct; it simply has no effect while the connecting role can
+bypass it. Before relying on RLS as the "second wall" for real customer data, the production
+database role the API connects as must be a NON-superuser role with BYPASSRLS explicitly off
+(the normal recommendation for any RLS deployment: the app role should be as unprivileged as
+migrations allow, with a separate, more privileged role reserved for Alembic/admin tooling).

@@ -74,6 +74,8 @@ class OrgPoliciesRead(BaseModel):
     session_ttl_hours: int | None
     members_without_mfa: int
     default_session_hours: int
+    # §7.1: platform staff may "view as" a member only while this is on (default on).
+    allow_impersonation: bool = True
 
 
 class OrgPoliciesUpdate(BaseModel):
@@ -81,15 +83,27 @@ class OrgPoliciesUpdate(BaseModel):
 
     require_mfa: bool | None = None
     session_ttl_hours: int | None = Field(default=None, ge=1, le=720)
+    allow_impersonation: bool | None = None
 
 
 class OrganizationMemberUpdate(BaseModel):
     role: OrgRole
 
 
+_EMAIL_SHAPE = re.compile(r"[^@\s<>,;]+@[^@\s<>,;]+\.[^@\s<>,;]{2,}")
+
+
 class InvitationCreate(BaseModel):
     email: str = Field(min_length=3, max_length=254)
     role: OrgRole = OrgRole.member
+
+    @field_validator("email")
+    @classmethod
+    def _looks_like_an_email(cls, value: str) -> str:
+        value = value.strip()
+        if not _EMAIL_SHAPE.fullmatch(value):
+            raise ValueError("must be a valid e-mail address")
+        return value
 
 
 class InvitationRead(BaseModel):

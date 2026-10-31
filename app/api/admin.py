@@ -8,7 +8,7 @@
 """
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -57,6 +57,10 @@ from app.schemas.account import (
     AdminUserUpdate,
     ApiTokenRead,
     AuditRead,
+    ImpersonationDigestRead,
+    ImpersonationRequest,
+    ImpersonationSessionRead,
+    ImpersonationStarted,
     LoginRequest,
     MfaChallengeRead,
     MfaLoginRequest,
@@ -71,9 +75,10 @@ from app.schemas.account import (
 from app.schemas.common import Page
 from app.schemas.organization import PlanRead
 from app.schemas.sso import SsoCheckRead
-from app.services import audit_service
+from app.services import audit_service, impersonation_digest
 from app.services.access_service import Principal
 from app.services.admin_service import AdminService
+from app.services.impersonation_service import ImpersonationService
 from app.services.mfa_service import MfaService
 from app.services.platform_auth_service import PlatformAuthService
 
@@ -85,6 +90,7 @@ NEEDS_SETTINGS_READ = Depends(require_admin("settings:read"))
 NEEDS_STATS_READ = Depends(require_admin("stats:read"))
 NEEDS_USERS_READ = Depends(require_admin("users:read"))
 NEEDS_USERS_WRITE = Depends(require_admin("users:write"))
+NEEDS_SSO_CHECK = Depends(require_admin("sso:check"))
 QUERY_TEXT = Query(default=None, max_length=100)
 STATUS_FILTER = Query(default=None, alias="status")
 QUERY_ACTION = Query(default=None, max_length=60)
@@ -516,6 +522,7 @@ def _org_row(
         **(sso or {}),  # type: ignore[arg-type]
         require_mfa=getattr(org, "require_mfa", False),
         session_ttl_hours=getattr(org, "session_ttl_hours", None),
+        allow_impersonation=getattr(org, "allow_impersonation", True),
         stripe_customer_id=getattr(sub, "stripe_customer_id", None),
         stripe_subscription_id=getattr(sub, "stripe_subscription_id", None),
         current_period_end=getattr(sub, "current_period_end", None),
@@ -686,7 +693,7 @@ async def execute_org_deletion(
 async def check_org_sso(
     org_id: uuid.UUID,
     request: Request,
-    principal: Principal = NEEDS_PROJECTS_READ,
+    principal: Principal = NEEDS_SSO_CHECK,
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> SsoCheckRead:
@@ -804,6 +811,102 @@ async def org_projects(
         )
         for p, n in rows
     ]
+
+
+# -- impersonation (§4.5, §7.1): platform admins only, with their own permission ----------------
+
+NEEDS_IMPERSONATE = Depends(require_admin("impersonate:write"))
+
+
+@router.post(
+    "/organizations/{org_id}/members/{user_id}/impersonate",
+    response_model=ImpersonationStarted,
+    status_code=status.HTTP_201_CREATED,
+)
+async def impersonate(
+    org_id: uuid.UUID,
+    user_id: uuid.UUID,
+    body: ImpersonationRequest,
+    request: Request,
+    principal: Principal = NEEDS_IMPERSONATE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> ImpersonationStarted:
+    """Mint a ten-minute "view as" token for one member of an org that allows it. Read-only
+    until the viewer switches writes on; every request is audited; staff are never viewed."""
+    started = await ImpersonationService(db, settings).start(
+        principal, org_id, user_id, body.reason, request_info(request)
+    )
+    return ImpersonationStarted(
+        session_id=started.session.id,
+        access_token=started.access_token,
+        expires_in=started.expires_in,
+        expires_at=started.session.expires_at,
+        user_email=started.user.email,
+        organization_id=started.organization.id,
+        organization_slug=started.organization.slug,
+    )
+
+
+@router.get("/impersonation/sessions", response_model=Page[ImpersonationSessionRead])
+async def impersonation_sessions(
+    page: Pagination = Depends(pagination),
+    organization_id: uuid.UUID | None = None,
+    _: Principal = NEEDS_IMPERSONATE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Page[ImpersonationSessionRead]:
+    rows, total = await ImpersonationService(db, settings).sessions(
+        limit=page.limit, offset=page.offset, organization_id=organization_id
+    )
+    now = datetime.now(UTC)
+    items = [
+        ImpersonationSessionRead(
+            id=r.id,
+            operator_email=op,
+            user_email=target,
+            organization_id=r.organization_id,
+            organization_slug=slug,
+            reason=r.reason,
+            created_at=r.created_at,
+            expires_at=r.expires_at,
+            ended_at=r.ended_at,
+            writes_until=r.writes_until,
+            active=r.ended_at is None and r.expires_at > now,
+        )
+        for r, op, target, slug in rows
+    ]
+    return Page[ImpersonationSessionRead](
+        items=items, total=total, limit=page.limit, offset=page.offset
+    )
+
+
+@router.get("/impersonation/digest", response_model=ImpersonationDigestRead)
+async def impersonation_digest_preview(
+    hours: int = Query(default=24, ge=1, le=168),
+    _: Principal = NEEDS_IMPERSONATE,
+    db: AsyncSession = Depends(get_session),
+) -> ImpersonationDigestRead:
+    """What the daily digest would say for the last `hours` hours (nothing is sent)."""
+    until = datetime.now(UTC)
+    d = await impersonation_digest.build(db, until - timedelta(hours=hours), until)
+    return ImpersonationDigestRead(
+        since=d.since, until=d.until, sessions=d.sessions, refused=d.refused, text=d.text
+    )
+
+
+@router.post("/impersonation/sessions/{session_id}/end", status_code=status.HTTP_204_NO_CONTENT)
+async def end_impersonation(
+    session_id: uuid.UUID,
+    request: Request,
+    principal: Principal = NEEDS_IMPERSONATE,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> Response:
+    await ImpersonationService(db, settings).end(
+        session_id, by=principal, why="ended_by_operator", info=request_info(request)
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # -- billing tab and insights (§7) -------------------------------------------------------

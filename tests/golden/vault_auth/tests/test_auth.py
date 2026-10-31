@@ -292,3 +292,16 @@ async def test_refresh_tokens_live_in_redis_not_in_the_database(
         "/auth/refresh", json={"refresh_token": rotated.json()["refresh_token"]}
     )
     assert successor.status_code == 401
+
+
+async def test_successful_logins_do_not_use_up_the_rate_limit(
+    client: AsyncClient, outbox: Outbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowed, _ = parse_limit(config.LOGIN_RATE_LIMIT)
+    if allowed > 25:
+        pytest.skip(f"login limit {config.LOGIN_RATE_LIMIT} is too high to exhaust in a smoke test")
+    monkeypatch.setattr(_login_limit, "count", allowed)
+    await _register_and_verify(client, outbox)
+
+    for _ in range(allowed + 2):
+        await _login(client)

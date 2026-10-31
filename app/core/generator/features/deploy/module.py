@@ -20,7 +20,7 @@ from pathlib import Path
 
 from app.core import deploy_pins as pins
 from app.core import deploy_sizing as sizing
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.spec_models import SpecDeployment
@@ -139,6 +139,7 @@ def fill_tokens(text: str, values: dict[str, str]) -> str:
 
 class DeployModule:
     name = "deploy"
+    manifest = ModuleManifest(id="deploy", version="1", depends_on=('auth',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

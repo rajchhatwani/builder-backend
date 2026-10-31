@@ -18,7 +18,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import httpx
 
@@ -83,7 +83,7 @@ async def _call(
             message = ""
         raise StripeError(f"stripe {response.status_code}: {message}")
     try:
-        return response.json()
+        return cast(dict[str, Any], response.json())
     except ValueError as exc:
         raise StripeError("stripe returned a non-JSON body") from exc
 

@@ -41,9 +41,7 @@ class GenerationService:
         # spec.auth.secrets has exclude=True so they never reach the DB
         # snapshot or any HTTP response body.
         if spec.auth is not None:
-            raw_secrets = await AuthSecretsService(self.session).get_for_generator(
-                project_id
-            )
+            raw_secrets = await AuthSecretsService(self.session).get_for_generator(project_id)
             spec.auth.secrets = SpecAuthSecrets(**raw_secrets)
 
         try:

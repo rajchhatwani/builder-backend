@@ -47,9 +47,19 @@ export function authHeader(surface: Surface): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
 }
 
+/** A "view as" tab (§4.5) never refreshes: its token is the viewed member's, for a few minutes. */
+let viewingOnly = false
+export function setViewingOnly(value: boolean): void {
+  viewingOnly = value
+}
+
 /** Exchange the refresh cookie for a new access token. One call at a time per surface. */
 export function refreshSession(surface: Surface): Promise<boolean> {
   const state = surfaces[surface]
+  if (viewingOnly && surface === 'app') {
+    state.token = null
+    return Promise.resolve(false)
+  }
   if (state.inflight) return state.inflight
   state.inflight = (async () => {
     try {

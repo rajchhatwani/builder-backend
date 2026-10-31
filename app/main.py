@@ -23,6 +23,7 @@ from app.api import (
     fields,
     generate,
     health,
+    impersonation,
     keycloak,
     members,
     observability,
@@ -39,6 +40,7 @@ from app.api import (
 from app.api.input_guard import reject_nul_characters
 from app.api.security import guard
 from app.config import Settings, get_settings
+from app.core import rls
 from app.core.platform_security import check_secret_strength
 from app.db import get_session_factory
 from app.errors import register_exception_handlers
@@ -136,6 +138,7 @@ class SecurityMiddleware:
             await self.app(scope, limited_receive, send_with_headers)
         finally:
             structlog.contextvars.unbind_contextvars("request_id", "organization_id")
+            rls.clear()
         if too_large:
             log.warning("request_body_too_large", limit=self.max_bytes)
 
@@ -186,6 +189,11 @@ def check_startup(settings: Settings) -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     check_startup(settings)
+    if settings.rls_enabled:
+        from app.core import rls as _rls
+        from app.db import get_engine
+
+        await _rls.assert_role_enforces_rls(get_engine())
     async with get_session_factory()() as session:
         try:
             admin_user = await PlatformAuthService(session, settings).bootstrap_admin()
@@ -236,6 +244,7 @@ def create_app() -> FastAPI:
     # Open on purpose: liveness, and the sign-in endpoints (which carry their own protections).
     app.include_router(health.router)
     app.include_router(account.router)
+    app.include_router(impersonation.router)  # "view as" banner, writes switch, end
     app.include_router(admin.router)
     app.include_router(orgs.router)  # organization routes authenticate via current_principal
     app.include_router(wellknown.router)  # RFC 9728 discovery, no auth
@@ -269,6 +278,7 @@ def create_app() -> FastAPI:
     # MCP server (Streamable HTTP, own auth middleware, NOT behind the REST guard).
     from app.api.mcp import build_mcp_app
     from app.db import get_session_factory as _gsf
+
     mcp_starlette = build_mcp_app(_gsf())
     app.state.mcp_app = mcp_starlette
     app.mount("/mcp", mcp_starlette)

@@ -57,6 +57,7 @@ Red → Green → Refactor, **per unit**:
 ### Agent 8 — DONE (Phase E backend). Report: `platform_implementation_agents/agent_8.md`
 ### Agent 9 — DONE (Phase E frontend). Report: `platform_implementation_agents/agent_9.md`
 ### Agent 10 — DONE (review fixes). Report: `platform_implementation_agents/agent_10.md`
+### Agent 11 — DONE (Phase F code + docs). Report: `platform_implementation_agents/agent_11.md`
 
 ## Work queue — the FIRST unchecked row is yours
 
@@ -75,7 +76,7 @@ Red → Green → Refactor, **per unit**:
 | 8 | **Backend** for Phase E — SCIM 2.0 (agent 8, report `agent_8.md`; the owner moved the UI to row 9): migration, `/scim/v2` Users/Groups/discovery, group → role mapping, bearer issue/rotation, offboarding, operator status + rotation | §4.3, §12.E | [x] |
 | 9 | **Frontend for row 8** (frontend-only): SCIM section on `#/org/<slug>/sso`, operator SCIM column + Rotate SCIM token, `scim.` audit filter — everything in `agent-orch/frontend_scim_phase_E.md` (done by agent 9, report `agent_9.md`) | §4.3, §7, §8, §12.E.4–5 | [x] |
 | 10 | **Review fixes** (agent 10, report `agent_10.md`): findings F-001…F-017 from `review/review_PLATFORM_SAAS_PLAN.md`, test-first, in the review's §8 order | review §3, §8 | [x] |
-| 11 | Phase F (code) — Postgres RLS behind a flag, impersonation, per-org export, `docs/` (MULTITENANT_ARCHITECTURE, SSO_SETUP, SCIM_SETUP). Pen test + SOC 2: prep docs only. Make the RLS tests part of the repaired route walker (`tests/api/_routes.py`) | §3.3, §4.5, §9, §11, §12.F | [ ] |
+| 11 | Phase F (code) — Postgres RLS behind a flag, impersonation, per-org export, `docs/` (MULTITENANT_ARCHITECTURE, SSO_SETUP, SCIM_SETUP). Pen test + SOC 2: prep docs only. Make the RLS tests part of the repaired route walker (`tests/api/_routes.py`) | §3.3, §4.5, §9, §11, §12.F | [x] |
 
 Rules for the queue:
 - Take **only** the first unchecked row. Never start while another agent's report lacks its
@@ -160,7 +161,7 @@ off to row 8 (SCIM).
 5. Work test-first; write `platform_implementation_agents/agent_<N>.md` as you go.
 
 ### Conventions learned so far
-- Alembic head is `d1f5a7c3e9b2` (row 10: `sso_connections.trust_unverified_email`; before it `c8a4e6b2d9f1`, project members backfilled into their org). Previous: `b3d7f1a9c5e2`
+- Alembic head is `f2c8a4e6b1d9` (row 11: RLS policies, installed but NOT enabled; before it `e7d3b9a1c5f2`: impersonation sessions + `organizations.allow_impersonation` + audit `via` 20 wide). Before: `d1f5a7c3e9b2` (row 10: `sso_connections.trust_unverified_email`; before it `c8a4e6b2d9f1`, project members backfilled into their org). Previous: `b3d7f1a9c5e2`
   (`email_verified_at`), `a9c4e2f7b1d3` (row 8: SCIM directories/users/groups), then `f5c3a8e1b7d9`
   (row 6: MFA + security policies + SSO test results),
   `e4b9c2d7a1f5` (row 5: SSO), `d8f2a4b6c1e3` (row 4c: org deletion requests).
@@ -184,6 +185,17 @@ off to row 8 (SCIM).
   `unclaimed-projects` until the bootstrap admin adopts them.
 - SCIM routes (`/scim/v2/...`) authenticate with the org's SCIM bearer (`app.api.scim.scim_auth`);
   the access-matrix walker accepts that dependency. SCIM errors are `ScimError` → SCIM error JSON.
+- Phase F: `guard` and `org_context` depend on `acting_principal` (may be an operator's "view as" token,
+  `Principal.via == "impersonation"`); every other customer route uses `current_principal`, which
+  refuses a viewing token unless the route is in `platform_authz.IMPERSONATION_OPEN_ROUTES`. What a
+  viewing token may do is `platform_authz.impersonation_denial` (a test walks every route). A new
+  route that hands out a credential, a token, billing or a whole-project download must have
+  `/tokens`, `/auth/secrets`, `/export`, `/billing/` or the generate scope in its path (or be added
+  to `_IMPERSONATION_NEVER`).
+- Phase F RLS: `app/core/rls.py` lists the tables (a test fails for a new table with
+  `organization_id` or a non-null `project_id`; add it there AND in a new migration). New code that
+  reads two orgs inside one org-scoped request must call `rls.release(db)` first (see project
+  transfer). Never run `python -m app.core.rls enable` without the owner's go-ahead.
 - Agent 3's handoff notes for Phase D (allow_sso gate, `app.core.crypto` for client secrets,
   never audit IdP certs/secrets) apply to row 5 — read them in `agent_3.md`.
 
@@ -330,3 +342,10 @@ off to row 8 (SCIM).
   actions), F-001 (route walker `tests/api/_routes.py`), F-014, F-003, F-013, F-012 (migration
   `c8a4e6b2d9f1`), F-009, F-008 operator domain release, F-004/006/010/011/015. Skipped with reasons:
   F-007, F-008 re-check, sign-up e-mail verification, rest of F-016. 2047 passed. → Row 11 (Phase F).
+- **Agent 11 → owner** (2026-10-28, sonnet-5-5, row 11 — Phase F code + docs): Postgres RLS (policies
+  installed by migration `f2c8a4e6b1d9`, **not enabled**; `BUILDER_RLS_ENABLED` off; `SET LOCAL
+  app.organization_id` bound in `guard`/`org_context`; CLI `python -m app.core.rls`), impersonation
+  ("view as": per-org consent, 10-minute DB-backed session, read-only unless a 5-minute audited switch,
+  banner, org-scoped, never tokens/secrets/export/billing/generate, full audit), `GET /orgs/{slug}/export`,
+  `docs/` (3 setup/architecture docs + pen-test and SOC 2 prep). Details, decisions and open items in
+  `agent_11.md`. → owner decisions listed there (RLS rollout, digest, etc.).

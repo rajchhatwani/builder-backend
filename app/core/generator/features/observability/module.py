@@ -11,7 +11,7 @@ Emitted only when the spec has an enabled `observability` block:
 from pathlib import Path
 
 from app.core import observability as obs
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, render_template
 from app.core.spec_models import SpecObservability
@@ -47,6 +47,7 @@ def template_context(project: ProjectCtx, block: SpecObservability) -> dict[str,
 
 class ObservabilityModule:
     name = "observability"
+    manifest = ModuleManifest(id="observability", version="1", depends_on=())
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

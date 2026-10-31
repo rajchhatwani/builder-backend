@@ -9,6 +9,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates the non-superuser API role `builder_app` (first start of a fresh volume only).
+      - ./scripts/db/10-app-role.sql:/docker-entrypoint-initdb.d/10-app-role.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U builder -d builder"]
       interval: 5s
@@ -18,7 +20,9 @@ services:
   api:
     build: .
     environment:
-      BUILDER_DATABASE_URL: postgresql+asyncpg://builder:builder@postgres:5432/builder
+      # The API runs as the plain role; only Alembic uses the owner (SEC M-1).
+      BUILDER_DATABASE_URL: postgresql+asyncpg://builder_app:builder_app@postgres:5432/builder
+      BUILDER_MIGRATIONS_DATABASE_URL: postgresql+asyncpg://builder:builder@postgres:5432/builder
       # Signs sign-in tokens and encrypts stored credentials. The default below is for this laptop
       # setup only: the app refuses it unless BUILDER_ENVIRONMENT is `local`. Set a real one
       # (`openssl rand -base64 48`) anywhere else.

@@ -1050,6 +1050,8 @@ export interface QuotaDetail {
 }
 
 export interface AdminOrg {
+  /** The org's consent to "view as" (Security policies); default true. */
+  allow_impersonation: boolean
   id: string
   name: string
   slug: string
@@ -1241,11 +1243,62 @@ export interface OrgPolicies {
   session_ttl_hours: number | null
   members_without_mfa: number
   default_session_hours: number
+  /** §7.1: platform support may "view as" members while this is on (default on). */
+  allow_impersonation: boolean
 }
 
 export interface OrgPoliciesUpdate {
   require_mfa?: boolean
   session_ttl_hours?: number | null
+  allow_impersonation?: boolean
+}
+
+// ── Impersonation, "view as" (§4.5, §7.1) ───────────────────────────────────
+
+/** The only answer that carries the viewing token; the operator's tab hands it over and drops it. */
+export interface ImpersonationStarted {
+  session_id: string
+  access_token: string
+  expires_in: number
+  expires_at: string
+  user_email: string
+  organization_id: string
+  organization_slug: string
+}
+
+/** What the "You are viewing as …" banner shows. */
+export interface ImpersonationState {
+  session_id: string
+  operator_email: string
+  user_email: string
+  organization_id: string
+  organization_slug: string
+  organization_name: string
+  expires_at: string
+  writes_allowed: boolean
+  writes_until: string | null
+}
+
+export interface ImpersonationDigest {
+  since: string
+  until: string
+  sessions: Record<string, unknown>[]
+  refused: number
+  text: string
+}
+
+export interface ImpersonationSessionRow {
+  id: string
+  operator_email: string
+  user_email: string
+  organization_id: string
+  organization_slug: string
+  reason: string
+  created_at: string
+  expires_at: string
+  ended_at: string | null
+  writes_until: string | null
+  active: boolean
 }
 
 // ── Single sign-on (§4.2) ──────────────────────────────────────────────────

@@ -39,9 +39,7 @@ class AuthCustomField(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "auth_custom_fields"
     __table_args__ = (
-        UniqueConstraint(
-            "project_id", "name", name="uq_auth_custom_fields_project_name"
-        ),
+        UniqueConstraint("project_id", "name", name="uq_auth_custom_fields_project_name"),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(

@@ -804,3 +804,40 @@ dialog:has(.policy-form) {
   border-radius: 6px;
   border: 1px solid var(--border, #ddd);
 }
+
+/* "View as" support session (§4.5): a bar nobody can miss, fixed to the bottom of the page. */
+.viewing-banner {
+  position: fixed;
+  inset-inline: 0;
+  inset-block-end: 0;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3, 0.75rem);
+  padding: var(--space-2, 0.5rem) var(--space-4, 1rem);
+  background: var(--warning);
+  color: var(--warning-foreground, #000);
+  border-block-start: 3px solid var(--danger);
+}
+
+body.is-viewing {
+  padding-block-end: 4.5rem;
+}
+
+/* Wide tables (org People: role selects, dates) scroll inside their own box on phones
+   instead of clipping their cells (FEAT F-8). */
+.table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+.table-scroll table {
+  min-width: 640px;
+}
+.table-scroll select {
+  min-width: 6.5rem;
+}
+.table-scroll td {
+  white-space: nowrap;
+}

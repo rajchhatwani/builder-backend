@@ -221,6 +221,16 @@ class PlatformAuthService:
                     user.failed_logins = 0
                     reason = "locked_now"
             await self._login_failed(user, email, info, reason)
+            if locked and password_ok and user.locked_until is not None:
+                # F-6: only someone who proved they know the password is told why it fails and
+                # for how long, so this is not an account-existence oracle for guessers.
+                wait = max(1, int((user.locked_until - now).total_seconds()))
+                raise AppError(
+                    code="account_locked",
+                    message=f"too many failed sign-ins; try again in {-(-wait // 60)} minute(s)",
+                    status_code=429,
+                    headers={"Retry-After": str(wait)},
+                )
             raise invalid_credentials()
         enroll = not user.mfa_enabled and is_staff(user) and self.settings.admin_mfa_required
         if user.mfa_enabled or enroll:

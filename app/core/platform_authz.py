@@ -116,6 +116,8 @@ ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
     ("POST", "/orgs/{slug}/billing/checkout"): OrgRole.admin,
     ("POST", "/orgs/{slug}/billing/portal"): OrgRole.admin,
     ("GET", "/orgs/{slug}/audit"): OrgRole.admin,
+    # §9 per-org data export: owners, from a session (see ORG_ROUTES_SESSION_ONLY).
+    ("GET", "/orgs/{slug}/export"): OrgRole.owner,
     # Enterprise SSO (§8 "SSO & SCIM", admins). Handlers also refuse API tokens.
     ("GET", "/orgs/{slug}/sso"): OrgRole.admin,
     ("PUT", "/orgs/{slug}/sso"): OrgRole.admin,
@@ -152,6 +154,7 @@ ORG_ROUTES_SESSION_ONLY: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/orgs/{slug}/projects/{project_id}/transfer"),
         ("POST", "/orgs/{slug}/billing/checkout"),
         ("POST", "/orgs/{slug}/billing/portal"),
+        ("GET", "/orgs/{slug}/export"),
     }
 )
 
@@ -159,7 +162,12 @@ ORG_ROUTES_SESSION_ONLY: frozenset[tuple[str, str]] = frozenset(
 # While an org waits for deletion, every route is blocked (423) except these, so members can
 # see what's happening and an owner can revoke the request.
 ORG_ROUTES_OPEN_DURING_DELETION: frozenset[tuple[str, str]] = frozenset(
-    {("GET", "/orgs/{slug}"), ("POST", "/orgs/{slug}/deletion/cancel")}
+    {
+        ("GET", "/orgs/{slug}"),
+        ("POST", "/orgs/{slug}/deletion/cancel"),
+        # An org about to be deleted can still take its data with it.
+        ("GET", "/orgs/{slug}/export"),
+    }
 )
 
 
@@ -180,6 +188,53 @@ def org_role_allows(role: OrgRole, needed: OrgRole) -> bool:
     return ORG_ROLE_LEVEL[role] >= ORG_ROLE_LEVEL[needed]
 
 
+# -- impersonation (§4.5) ----------------------------------------------------------------
+#
+# A "view as" token is the member's identity inside ONE org and nothing else. Routes that act on
+# the account itself (`session_principal`) refuse it by their `via`; the rest decide here.
+
+IMPERSONATION_OPEN_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/account/me"),
+        ("GET", "/orgs"),  # the handler cuts the list down to the one org
+        ("GET", "/account/impersonation"),
+        ("POST", "/account/impersonation/writes"),
+        ("POST", "/account/impersonation/end"),
+    }
+)
+
+# Never reachable while viewing, writes switched on or not: anything that mints, shows or sends
+# out a credential or the whole project, or changes who can reach it.
+_IMPERSONATION_NEVER: tuple[str, ...] = ("/tokens", "/auth/secrets", "/export", "/billing/")
+_IMPERSONATION_NEVER_WRITES: tuple[tuple[str, str], ...] = (
+    ("POST", "/projects"),
+    ("DELETE", "/projects/{project_id}"),
+    ("POST", "/projects/{project_id}/members"),
+    ("PATCH", "/projects/{project_id}/members/"),
+    ("DELETE", "/projects/{project_id}/members/"),
+)
+
+
+def impersonation_denial(method: str, template: str, *, writes_allowed: bool) -> str | None:
+    """None = a viewing session may make this request; else the error code to refuse it with
+    (`impersonation_blocked`: never; `impersonation_read_only`: needs the writes switch)."""
+    method = method.upper()
+    if (method, template) in IMPERSONATION_OPEN_ROUTES:
+        return None
+    if any(part in template for part in _IMPERSONATION_NEVER):
+        return "impersonation_blocked"
+    if required_scope(method, template) == SCOPE_GENERATE:
+        return "impersonation_blocked"
+    is_read = required_scope(method, template) == SCOPE_READ
+    if is_read:
+        return None
+    if template.startswith("/orgs/"):
+        return "impersonation_blocked"  # the org console is look-only, whatever the switch says
+    if any(_matches(method, template, rule) for rule in _IMPERSONATION_NEVER_WRITES):
+        return "impersonation_blocked"
+    return None if writes_allowed else "impersonation_read_only"
+
+
 # -- admin console ----------------------------------------------------------------------
 
 ADMIN_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
@@ -195,6 +250,10 @@ ADMIN_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
             "audit:read",
             "stats:read",
             "settings:read",
+            # §4.5: "view as" a customer member. Platform admins only, never support.
+            "impersonate:write",
+            # SEC L-1: the SSO "test" button makes an outbound fetch; read-only support may not.
+            "sso:check",
         }
     ),
 }

@@ -56,7 +56,18 @@ for path, methods, cs in contexts():
             g = "public"
         else:
             g = "NONE"
-        rows.append({"method": m, "path": path, "guard": g, "deps": sorted(names)})
+        # Phase F (§4.5): what a "view as" token (writes switched ON) may do on this route.
+        # "open" = the explicit open list; "reach" = may be called; otherwise the refusal code.
+        # Routes that never accept a customer token (admin, SCIM, public) are "n/a".
+        if g in ("admin", "scim", "public"):
+            viewing = "n/a"
+        elif (m, path) in authz.IMPERSONATION_OPEN_ROUTES:
+            viewing = "open"
+        elif g == "principal":
+            viewing = "impersonation_blocked"  # current_principal refuses it unless listed open
+        else:
+            viewing = authz.impersonation_denial(m, path, writes_allowed=True) or "reach"
+        rows.append({"method": m, "path": path, "guard": g, "viewing": viewing, "deps": sorted(names)})
 
 pathlib.Path("review/artifacts").mkdir(parents=True, exist_ok=True)
 pathlib.Path("review/artifacts/routes.json").write_text(json.dumps(rows, indent=1))
@@ -73,3 +84,14 @@ print("ORG ROUTES MISSING FROM ORG_ROUTE_ROLES:", missing)
 stale = [k for k in authz.ORG_ROUTE_ROLES if (k[0], k[1]) not in {(r["method"], r["path"]) for r in rows}]
 print("ORG_ROUTE_ROLES ENTRIES THAT MATCH NO ROUTE:", stale)
 print("public-list entries matching no route:", [p for p in PUBLIC if p not in {(r["method"], r["path"]) for r in rows}])
+
+from collections import Counter as _C  # noqa: E402
+
+print("VIEW-AS REACH (writes on):", dict(_C(r["viewing"] for r in rows)))
+print("view-as can reach these NON-GET routes:")
+for r in rows:
+    if r["viewing"] == "reach" and r["method"] != "GET":
+        print("  ", r["method"], r["path"])
+sens = [r for r in rows if r["viewing"] == "reach"
+        and any(x in r["path"] for x in ("/tokens", "/auth/secrets", "/export", "/billing/", "/generate/"))]
+print("SENSITIVE ROUTES REACHABLE WITH A VIEWING TOKEN (must be empty):", [(r["method"], r["path"]) for r in sens])

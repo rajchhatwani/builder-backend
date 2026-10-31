@@ -112,6 +112,7 @@ function PeopleTab({ org, members, onChanged }: PeopleTabProps) {
           {error}
         </div>
       )}
+      <div className="table-scroll">
       <table>
         <thead>
           <tr>
@@ -195,6 +196,7 @@ function PeopleTab({ org, members, onChanged }: PeopleTabProps) {
           })}
         </tbody>
       </table>
+      </div>
       {canAdmin ? (
         <p className="muted small-text">
           Admins invite and remove people. Owners can also make someone else owner or delete the organization. If your

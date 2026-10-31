@@ -3,7 +3,7 @@
 from pathlib import Path
 from typing import Any
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_documents import documents_active
@@ -25,6 +25,7 @@ _VERBATIM = (
     "app/core/redact.py.tpl",
     "app/crud/__init__.py.tpl",
     "app/crud/_base.py.tpl",
+    "app/crud/lifecycle.py.tpl",
     "app/custom_routers/__init__.py.tpl",
     "app/hooks/__init__.py.tpl",
     "app/models/_base.py.tpl",
@@ -47,6 +48,7 @@ _PER_ENTITY = (
 
 class CrudModule:
     name = "crud"
+    manifest = ModuleManifest(id="crud", version="1", depends_on=())
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

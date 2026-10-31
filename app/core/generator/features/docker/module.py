@@ -3,7 +3,7 @@ Makefile, dependency lists, tool config, README)."""
 
 from pathlib import Path
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.features.keycloak.module import (
     KEYCLOAK_IMAGE,
@@ -48,6 +48,7 @@ _RENDERED = (
 
 class DockerModule:
     name = "docker"
+    manifest = ModuleManifest(id="docker", version="1", depends_on=())
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

@@ -147,9 +147,7 @@ class ApiTokenService:
 
     # -- project-scoped token management (project owners) --------------------------------
 
-    async def list_for_project(
-        self, project_id: uuid.UUID
-    ) -> list[tuple[ApiToken, PlatformUser]]:
+    async def list_for_project(self, project_id: uuid.UUID) -> list[tuple[ApiToken, PlatformUser]]:
         """All active tokens explicitly pinned to this project. Owner-only endpoint."""
         from app.models.platform import PlatformUser as _User
 
@@ -196,9 +194,7 @@ class ApiTokenService:
     async def list_for_user_admin(self, user_id: uuid.UUID) -> list[ApiToken]:
         """Platform admins: list all tokens for any user."""
         rows = await self.db.execute(
-            select(ApiToken)
-            .where(ApiToken.user_id == user_id)
-            .order_by(ApiToken.created_at.desc())
+            select(ApiToken).where(ApiToken.user_id == user_id).order_by(ApiToken.created_at.desc())
         )
         return list(rows.scalars())
 

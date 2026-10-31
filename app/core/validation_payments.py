@@ -372,7 +372,12 @@ def _held(role: str, parents: dict[str, str | None]) -> set[str]:
 
 
 def _check_payers_cannot_write(
-    pay: SpecPayments, spec: Spec, entity: SpecEntity, ops: set[str], by_op: dict[str, Any], add: Add
+    pay: SpecPayments,
+    spec: Spec,
+    entity: SpecEntity,
+    ops: set[str],
+    by_op: dict[str, Any],
+    add: Add,
 ) -> None:
     """The amount charged is the amount on the payable row. If the people who pay may create or
     change that row, they set their own price. The platform has no read-only fields, so the only

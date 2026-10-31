@@ -229,6 +229,9 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # long (counted from sign-in, not from the last refresh); None = the platform default.
     require_mfa: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     session_ttl_hours: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # §7.1 / §4.5: platform operators may "view as" a member of this org only while this is on
+    # (default on, so support can help; an enterprise org can turn it off).
+    allow_impersonation: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     __table_args__ = (
         CheckConstraint(
@@ -374,7 +377,7 @@ class AuditLog(Base):
     at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
     actor_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     actor_email: Mapped[str | None] = mapped_column(String(254), nullable=True)
-    via: Mapped[str] = mapped_column(String(10), nullable=False, default="session")
+    via: Mapped[str] = mapped_column(String(20), nullable=False, default="session")
     action: Mapped[str] = mapped_column(String(60), nullable=False)
     target_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -394,4 +397,38 @@ class AuditLog(Base):
         Index("ix_platform_audit_org", "organization_id", "at"),
         # Stripe webhook dedupe looks events up by (action, target_id).
         Index("ix_platform_audit_action_target", "action", "target_id"),
+    )
+
+
+class ImpersonationSession(UUIDPrimaryKeyMixin, Base):
+    """One "view as this member" session of a platform operator (§4.5).
+
+    The access token only names this row (`imp_sid`); everything that matters - still running,
+    consent still given, writes switched on - is read from here on every request, so ending a
+    session or turning the org's consent off takes effect at once. Never holds a token.
+    """
+
+    __tablename__ = "impersonation_sessions"
+
+    operator_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="CASCADE"), nullable=False
+    )
+    target_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    reason: Mapped[str] = mapped_column(String(200), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    ended_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Writes are blocked unless this is in the future (a short, audited toggle).
+    writes_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index("ix_impersonation_org", "organization_id", "created_at"),
+        Index("ix_impersonation_operator", "operator_id", "created_at"),
     )

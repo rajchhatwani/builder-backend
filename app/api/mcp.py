@@ -31,18 +31,21 @@ from app.services.access_service import Principal, principal_from_api_token
 
 try:
     from mcp.server.mcpserver import Context, MCPServer
+
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MCP_AVAILABLE = False
     MCPServer = None  # type: ignore[assignment,misc]
-    Context = None    # type: ignore[assignment,misc]
+    Context = None  # type: ignore[assignment,misc]
 
 
 # ── Lifespan context ──────────────────────────────────────────────────────────────────
 
+
 @dataclass
 class McpLifespan:
     """Passed to every tool via ctx.request_context.lifespan_context."""
+
     session_factory: Any  # callable() -> AsyncContextManager[AsyncSession]
 
 
@@ -50,10 +53,12 @@ def _make_lifespan(session_factory: Any) -> Any:
     @asynccontextmanager
     async def lifespan(server: Any) -> Any:
         yield McpLifespan(session_factory=session_factory)
+
     return lifespan
 
 
 # ── Auth helper ───────────────────────────────────────────────────────────────────────
+
 
 def _extract_token(ctx: Any) -> str:
     """Pull Bearer token from Authorization header (case-insensitive)."""
@@ -106,8 +111,28 @@ async def _auth(ctx: Any, db: AsyncSession, required_scope: str) -> Principal:
 
 # ── App factory ───────────────────────────────────────────────────────────────────────
 
-def build_mcp_app(session_factory: Any) -> Any:
+
+def mcp_allowed_hosts(settings: Any) -> list[str]:
+    """Host header values /mcp accepts: localhost, the public API host, and configured extras."""
+    from urllib.parse import urlparse
+
+    hosts = ["127.0.0.1:*", "localhost:*", "[::1]:*"]
+    public = urlparse(str(settings.public_api_url)).hostname
+    if public:
+        hosts += [public, f"{public}:*"]
+    for extra in settings.mcp_allowed_hosts:
+        extra = extra.strip().lower()
+        if extra:
+            hosts += [extra] if ":" in extra else [extra, f"{extra}:*"]
+    return hosts
+
+
+def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
     """Build and return the MCP Starlette app. Called once at startup in app/main.py."""
+    if settings is None:
+        from app.config import get_settings
+
+        settings = get_settings()
     if not _MCP_AVAILABLE:  # pragma: no cover
         raise RuntimeError("mcp package not installed; run: uv add 'mcp>=2.0'")
 
@@ -156,8 +181,7 @@ def build_mcp_app(session_factory: Any) -> Any:
 
     @mcp.tool(
         description=(
-            "Get authentication configuration for a project "
-            "(provider, flows, token format)."
+            "Get authentication configuration for a project (provider, flows, token format)."
         )
     )
     async def get_auth_model(project_id: str, ctx: Context) -> dict[str, Any]:
@@ -196,10 +220,7 @@ def build_mcp_app(session_factory: Any) -> Any:
     # ── Write tools (scope: mcp:write, requires editor+ role) ────────────────────────
 
     @mcp.tool(
-        description=(
-            "Create a new entity in a project. "
-            "Requires mcp:write scope and editor+ role."
-        )
+        description=("Create a new entity in a project. Requires mcp:write scope and editor+ role.")
     )
     async def create_entity(
         project_id: str,
@@ -242,7 +263,9 @@ def build_mcp_app(session_factory: Any) -> Any:
         )
     )
     async def add_relation(
-        project_id: str, relation: dict[str, Any], ctx: Context = None  # type: ignore[assignment]
+        project_id: str,
+        relation: dict[str, Any],
+        ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
@@ -288,4 +311,13 @@ def build_mcp_app(session_factory: Any) -> Any:
     # Build and return the Starlette app (streamable HTTP transport).
     # The outer FastAPI app mounts this under `/mcp`, so the inner path is just `/`
     # — otherwise the real endpoint would be `/mcp/mcp`.
-    return mcp.streamable_http_app(streamable_http_path="/")
+    from mcp.server.transport_security import TransportSecuritySettings
+
+    return mcp.streamable_http_app(
+        streamable_http_path="/",
+        transport_security=TransportSecuritySettings(
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=mcp_allowed_hosts(settings),
+            allowed_origins=[],
+        ),
+    )

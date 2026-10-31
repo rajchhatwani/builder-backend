@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import AccountStatus, AuditResult, MemberRole, PlatformRole
 
@@ -303,6 +303,8 @@ class AdminOrgRead(BaseModel):
     scim_token_created_at: datetime | None = None
     require_mfa: bool = False
     session_ttl_hours: int | None = None
+    # §7.1: may platform staff "view as" this org's members? (the org's own policy)
+    allow_impersonation: bool = True
 
 
 class AdminOrgDeletionUpdate(BaseModel):
@@ -410,3 +412,76 @@ class PlatformSettingsRead(BaseModel):
     trust_proxy_headers: bool
     docs_enabled: bool
     cors_origins: list[str]
+
+
+# -- impersonation (§4.5) -------------------------------------------------------------------
+
+
+class ImpersonationRequest(BaseModel):
+    """Why the operator needs to see what the member sees. Kept in the audit trail."""
+
+    reason: str = Field(min_length=5, max_length=200)
+
+    @field_validator("reason")
+    @classmethod
+    def not_blank(cls, value: str) -> str:
+        value = value.strip()
+        if len(value) < 5:
+            raise ValueError("give a reason of at least 5 characters")
+        return value
+
+
+class ImpersonationStarted(BaseModel):
+    """The only response that ever carries the "view as" access token."""
+
+    session_id: uuid.UUID
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    expires_at: datetime
+    user_email: str
+    organization_id: uuid.UUID
+    organization_slug: str
+
+
+class ImpersonationState(BaseModel):
+    """What the "You are viewing as X" banner shows."""
+
+    active: bool = True
+    session_id: uuid.UUID
+    operator_email: str
+    user_email: str
+    organization_id: uuid.UUID
+    organization_slug: str
+    organization_name: str
+    expires_at: datetime
+    writes_allowed: bool
+    writes_until: datetime | None
+
+
+class ImpersonationWrites(BaseModel):
+    enabled: bool
+
+
+class ImpersonationSessionRead(BaseModel):
+    id: uuid.UUID
+    operator_email: str
+    user_email: str
+    organization_id: uuid.UUID
+    organization_slug: str
+    reason: str
+    created_at: datetime
+    expires_at: datetime
+    ended_at: datetime | None
+    writes_until: datetime | None
+    active: bool
+
+
+class ImpersonationDigestRead(BaseModel):
+    """Preview of the daily support-access digest (nothing is sent)."""
+
+    since: datetime
+    until: datetime
+    sessions: list[dict[str, object]]
+    refused: int
+    text: str

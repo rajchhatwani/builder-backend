@@ -1,0 +1,6 @@
+=== 05_injection against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[    Info] SOLID        injection/5.1: NUL bytes in path/query/JSON body never reach the database (422, not 500)
+[    Info] SOLID        injection/5.2: oversized and deeply-nested JSON bodies are refused without a 500
+[     Low] NOT_TESTABLE injection/test_request_id_header_injection: test_request_id_header_injection
+[    Info] SOLID        injection/5.4: baseline security headers on every response (nosniff/DENY/referrer/COOP/HSTS)
+[    Info] SOLID        injection/5.5: SSO start/callback redirects never reflect attacker-supplied URLs

@@ -228,3 +228,16 @@ async def test_password_reset_by_email(client: AsyncClient, outbox: Outbox) -> N
     assert (await _login(client, "reset password 1"))["access_token"]
     stale = await client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert stale.status_code == 401
+
+
+async def test_successful_logins_do_not_use_up_the_rate_limit(
+    client: AsyncClient, outbox: Outbox, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    allowed, _ = parse_limit(config.LOGIN_RATE_LIMIT)
+    if allowed > 25:
+        pytest.skip(f"login limit {config.LOGIN_RATE_LIMIT} is too high to exhaust in a smoke test")
+    monkeypatch.setattr(_login_limit, "count", allowed)
+    await _register_and_verify(client, outbox)
+
+    for _ in range(allowed + 2):
+        await _login(client)

@@ -379,3 +379,76 @@ async def test_surfaces_do_not_accept_each_others_tokens(client_for: ClientFor) 
     assert (
         await admin_token.get("/projects")
     ).status_code == 401  # admin token on the customer surface
+
+
+# -- Phase F: what the walker must say about the new routes -----------------------------------
+
+PHASE_F_ROUTES = {
+    # operator side (platform admin only, permission impersonate:write)
+    ("POST", "/admin/organizations/{org_id}/members/{user_id}/impersonate"),
+    ("GET", "/admin/impersonation/sessions"),
+    ("GET", "/admin/impersonation/digest"),
+    ("POST", "/admin/impersonation/sessions/{session_id}/end"),
+    # the viewed member's side, answers only to a "view as" token
+    ("GET", "/account/impersonation"),
+    ("POST", "/account/impersonation/writes"),
+    ("POST", "/account/impersonation/end"),
+    # owners
+    ("GET", "/orgs/{slug}/export"),
+}
+
+
+def test_phase_f_routes_exist_and_are_guarded_as_designed() -> None:
+    by_key = {(r.method, r.path): r for r in _routes()}
+    assert set(by_key) >= PHASE_F_ROUTES, PHASE_F_ROUTES - set(by_key)
+    for key in PHASE_F_ROUTES:
+        route = by_key[key]
+        if key[1].startswith("/admin/"):
+            assert any("require_admin" in n for n in route.names), key
+            assert security.current_principal not in route.calls, key
+        elif key[1].startswith("/account/impersonation"):
+            assert security.current_principal in route.calls, key
+        else:
+            assert security.org_context in route.calls, key
+    assert authz.ORG_ROUTE_ROLES[("GET", "/orgs/{slug}/export")].value == "owner"
+    assert ("GET", "/orgs/{slug}/export") in authz.ORG_ROUTES_SESSION_ONLY
+    assert authz.admin_can(PlatformRole.platform_admin, "impersonate:write")
+    assert not authz.admin_can(PlatformRole.platform_support, "impersonate:write")
+
+
+def test_a_viewing_token_cannot_reach_anything_that_moves_a_credential_or_the_whole_project() -> (
+    None
+):
+    """Pure walk over every real route: whatever the writes switch says, a "view as" token is
+    refused on token, secret, export, billing and generate routes, and the open list is real."""
+    routes = _routes()
+    existing = {(r.method, r.path) for r in routes}
+    assert sorted(authz.IMPERSONATION_OPEN_ROUTES - existing) == []
+    offenders = []
+    for r in routes:
+        key = (r.method, r.path)
+        if key in authz.IMPERSONATION_OPEN_ROUTES:
+            continue
+        sensitive = (
+            any(p in r.path for p in ("/tokens", "/auth/secrets", "/export", "/billing/"))
+            or authz.required_scope(r.method, r.path) == authz.SCOPE_GENERATE
+        )
+        if sensitive and authz.impersonation_denial(r.method, r.path, writes_allowed=True) is None:
+            offenders.append(f"{r.method} {r.path}")
+    assert offenders == []
+
+
+def test_every_org_route_is_look_only_for_a_viewing_token() -> None:
+    for r in _routes():
+        if r.path.startswith("/orgs/{slug}") and r.method != "GET":
+            code = authz.impersonation_denial(r.method, r.path, writes_allowed=True)
+            assert code == "impersonation_blocked", f"{r.method} {r.path} -> {code}"
+
+
+def test_both_request_resolvers_bind_the_rls_scope() -> None:
+    """§3.3: guard (project routes) and org_context (org routes) are the only places an org
+    becomes known, so both must bind it (tests/api/test_rls.py walks the behaviour)."""
+    import inspect
+
+    for resolver in (security.guard, security.org_context):
+        assert "rls.bind(" in inspect.getsource(resolver), resolver.__name__

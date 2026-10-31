@@ -180,12 +180,16 @@ async def test_wrong_codes_lock_the_account_like_wrong_passwords(
             "/account/login/mfa", json={"mfa_token": token, "code": "000000"}
         )
         assert r.status_code == 401
-    # Locked now: the password step answers the generic 401, and so does a correct code on a
-    # challenge issued before the lock.
+    # Locked now: the password step is refused. Someone who proves they know the password is told
+    # why (FEAT F-6, 429 account_locked); a wrong password still gets the generic 401.
     r = await anon_client.post(
         "/account/login", json={"email": "primary@example.com", "password": TEST_PASSWORD}
     )
-    assert r.status_code == 401 and r.json()["code"] == "invalid_credentials"
+    assert r.status_code == 429 and r.json()["code"] == "account_locked"
+    wrong = await anon_client.post(
+        "/account/login", json={"email": "primary@example.com", "password": "not-the-password-1"}
+    )
+    assert wrong.status_code == 401 and wrong.json()["code"] == "invalid_credentials"
 
 
 async def test_a_successful_password_does_not_reset_the_code_failure_count(
@@ -202,7 +206,7 @@ async def test_a_successful_password_does_not_reset_the_code_failure_count(
     r = await anon_client.post(
         "/account/login", json={"email": "primary@example.com", "password": TEST_PASSWORD}
     )
-    assert r.status_code == 401
+    assert r.status_code == 429  # locked (F-6): refused, with the reason shown
 
 
 async def test_bad_or_foreign_challenge_tokens_are_refused(

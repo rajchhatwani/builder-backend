@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.features.tests.module import creatable
 from app.core.generator.render import make_environment, pyrepr, read_verbatim, render_template
@@ -308,9 +308,7 @@ def _keycloak_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
             for f in fields
         ],
         "tenant_namespace": str(tenant_namespace(kc.realm)),
-        "sample_dict": "{"
-        + ", ".join(f"{pyrepr(c.name)}: {c.sample}" for c in columns)
-        + "}",
+        "sample_dict": "{" + ", ".join(f"{pyrepr(c.name)}: {c.sample}" for c in columns) + "}",
     }
 
 
@@ -388,6 +386,7 @@ def _gated_entities(project: ProjectCtx, auth: SpecAuth) -> list[dict[str, Any]]
 
 class AuthModule:
     name = "auth"
+    manifest = ModuleManifest(id="auth", version="1", depends_on=())
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

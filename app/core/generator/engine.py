@@ -1,6 +1,6 @@
 """generate(spec) -> {path: content}. Pure: no disk, no HTTP, no clock, no randomness."""
 
-from app.core.generator.base import FeatureModule, FileTree
+from app.core.generator.base import FeatureModule, FileTree, ModuleManifest
 from app.core.generator.context import build_context
 from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.authz.module import AuthzModule
@@ -13,6 +13,7 @@ from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.storage.module import StorageModule
 from app.core.generator.features.tests.module import TestsModule
+from app.core.generator.zones import ZONES_PATH, render_zones
 from app.core.spec_models import Spec
 from app.core.validation import ValidationIssue, validate
 
@@ -39,6 +40,22 @@ def default_modules() -> list[FeatureModule]:
     ]
 
 
+def module_registry(modules: list[FeatureModule] | None = None) -> dict[str, ModuleManifest]:
+    """Every block's manifest by id, in render order. Fails on a duplicate id, an id that differs
+    from the module name, or a dependency that is not registered."""
+    registry: dict[str, ModuleManifest] = {}
+    for module in modules if modules is not None else default_modules():
+        manifest = module.manifest
+        if manifest.id != module.name or manifest.id in registry:
+            raise RuntimeError(f"bad or duplicate manifest id {manifest.id!r} for module {module.name!r}")
+        registry[manifest.id] = manifest
+    for manifest in registry.values():
+        for dep in manifest.depends_on:
+            if dep not in registry:
+                raise RuntimeError(f"block {manifest.id!r} depends on unknown block {dep!r}")
+    return registry
+
+
 def generate(spec: Spec, modules: list[FeatureModule] | None = None) -> FileTree:
     """Render the project for a spec. Raises InvalidSpecError if the spec has any issue.
 
@@ -55,4 +72,5 @@ def generate(spec: Spec, modules: list[FeatureModule] | None = None) -> FileTree
             if path in files:
                 raise RuntimeError(f"feature module {module.name!r} redefines {path}")
             files[path] = content
+    files[ZONES_PATH] = render_zones(files)
     return dict(sorted(files.items()))

@@ -1,0 +1,21 @@
+Checkpoint: SCIM offboarding, live, 2026-10-29 (org bb-sso, acting as the IdP via bb.Scim)
+
+1. SCIM POST /Users created sectest-scimoffboard@dumbpotato.com (active=true).
+   DB check: platform_users.token_version=0, status=active.
+   Confirmed a member of bb-sso via GET /orgs/bb-sso/members (owner's session).
+
+2. SCIM PATCH /Users/{id} {"Operations":[{"op":"replace","value":{"active": false}}]} -> 200.
+
+3. DB after deactivation:
+   platform_users: token_version=1 (bumped from 0 -- kills any live session/access token for
+     this user, since `claims["tv"]` must equal `user.token_version` on every request).
+   organization_members: ZERO rows for this user + bb-sso (membership removed entirely, not
+     merely a role/flag change) -- the user has no path left to reach bb-sso's data: a normal
+     app route would 404 for them (not a member), and any previously-issued token dies on its
+     next use regardless.
+   platform_users.status remained 'active' (deactivation here is org-level deprovisioning, not
+   a platform-wide account suspension -- reasonable, since the same person could still hold a
+   personal org or another org's membership untouched).
+
+CONCLUSION: §4.3-2 of the plan ("deactivate: remove membership, bump token_version") holds
+live, exactly as the code and the 2026-10-27 review's "Done" status claimed.

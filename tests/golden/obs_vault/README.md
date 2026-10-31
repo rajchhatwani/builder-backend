@@ -66,7 +66,7 @@ Send `Authorization: Bearer <access_token>` to authenticated routes. Protect you
 Emailed links point at `https://vault.example.com` (`/verify-email`, `/magic-link`, `/reset-password`, each with `?token=`);
 your frontend should read the token and call the matching API route.
 
-Limits: sign-in 5/15minutes, registration 10/hour, email / SMS requests 3/hour per client address.
+Limits per client address: failed sign-ins 5/15minutes (successful ones are not counted), registration 10/hour, email / SMS requests 3/hour.
 They are counted in process memory, so they are per worker.
 
 Access to the CRUD endpoints follows the permissions in your spec (`app/routers/*.py`, see `_ACCESS`

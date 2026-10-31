@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { AuthProvider, useAuth } from './components/AuthProvider'
 import { Layout } from './components/Layout'
 import { PasswordForm } from './components/PasswordForm'
 import { OrgLockedPrompt } from './components/OrgLockedPrompt'
 import { OrgMfaPrompt } from './components/OrgMfaPrompt'
 import { QuotaPrompt } from './components/QuotaPrompt'
+import { ViewingBanner } from './components/ViewingBanner'
 import { ProjectsSidebar, SECTIONS, type Section } from './components/Sidebar'
 import { UiProvider } from './components/Ui'
 import { AccountPage } from './pages/AccountPage'
@@ -15,8 +16,11 @@ import { OrgConsole, type OrgTab } from './pages/OrgConsole'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { ProjectWorkspace } from './pages/ProjectWorkspace'
 
+const TailwindSpike = lazy(() => import('./spike/TailwindSpike'))
+
 type Route =
   | { page: 'projects' }
+  | { page: 'spike' }
   | { page: 'account' }
   | { page: 'org'; slug: string; tab: OrgTab }
   | { page: 'invitations'; token?: string }
@@ -27,7 +31,8 @@ type Route =
 const ORG_TABS: OrgTab[] = ['people', 'invites', 'projects', 'plan', 'audit', 'sso', 'policies']
 
 /** Routes live in the URL hash (#/p/<id>/<section>), so reloads and back/forward keep your place. */
-function parseHash(hash: string): Route {
+export function parseHash(hash: string): Route {
+  if (hash === '#/__spike') return { page: 'spike' } // hidden Tailwind coexistence spike (Cycle 0)
   if (hash.startsWith('#/admin')) return { page: 'admin', section: parseAdminSection(hash) }
   if (hash.startsWith('#/account')) return { page: 'account' }
   if (hash.startsWith('#/invitations')) return { page: 'invitations' }
@@ -68,10 +73,26 @@ function SsoComplete() {
   return <p className="empty-state">Signing you in…</p>
 }
 
+/** A "view as" tab whose session is over, or never got its token (§4.5). */
+function ViewingEnded() {
+  return (
+    <div className="auth-page">
+      <div className="card auth-card">
+        <h2>Viewing session ended</h2>
+        <p className="muted">
+          Support sessions last ten minutes and end when the member's organization withdraws consent. Start a new one
+          from the admin console, and close this tab.
+        </p>
+      </div>
+    </div>
+  )
+}
+
 /** Everything that needs a signed-in customer. */
 function CustomerApp({ route }: { route: Route }) {
   const { state } = useAuth()
   if (state.status === 'loading') return <p className="empty-state">Loading…</p>
+  if (state.status === 'viewing-ended') return <ViewingEnded />
   if (state.status === 'anon') return <LoginPage />
   if (state.user.must_change_password) return <MustChangePassword />
   if (route.page === 'sso-complete') return <SsoComplete />
@@ -79,6 +100,7 @@ function CustomerApp({ route }: { route: Route }) {
   if (route.page === 'project') {
     return (
       <>
+        <ViewingBanner />
         <ProjectWorkspace projectId={route.projectId} section={route.section} />
         <QuotaPrompt />
         <OrgLockedPrompt />
@@ -100,6 +122,7 @@ function CustomerApp({ route }: { route: Route }) {
       <QuotaPrompt />
       <OrgLockedPrompt />
       <OrgMfaPrompt />
+      <ViewingBanner />
     </Layout>
   )
 }
@@ -115,7 +138,11 @@ function App() {
 
   return (
     <UiProvider>
-      {route.page === 'admin' ? (
+      {route.page === 'spike' ? (
+        <Suspense fallback={null}>
+          <TailwindSpike />
+        </Suspense>
+      ) : route.page === 'admin' ? (
         <AdminApp section={route.section} />
       ) : (
         <AuthProvider>

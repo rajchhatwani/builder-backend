@@ -54,6 +54,7 @@ async def test_admins_read_the_policies_members_do_not(
         "session_ttl_hours": None,
         "members_without_mfa": 2,
         "default_session_hours": 14 * 24,
+        "allow_impersonation": True,  # Phase F (§7.1): on unless the org withdraws consent
     }
     r = await bob.get("/orgs/acme/policies")
     assert r.status_code == 403 and r.json()["code"] == "org_role_required"

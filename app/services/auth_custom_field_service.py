@@ -45,9 +45,7 @@ class AuthCustomFieldService:
     async def _get_field_or_404(self, field_id: uuid.UUID) -> AuthCustomField:
         field = await self.session.get(AuthCustomField, field_id)
         if field is None:
-            raise AppError(
-                code="not_found", message="custom field not found", status_code=404
-            )
+            raise AppError(code="not_found", message="custom field not found", status_code=404)
         return field
 
     def _assert_not_reserved(self, name: str) -> None:
@@ -63,9 +61,7 @@ class AuthCustomFieldService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def create(
-        self, project_id: uuid.UUID, data: AuthCustomFieldCreate
-    ) -> AuthCustomField:
+    async def create(self, project_id: uuid.UUID, data: AuthCustomFieldCreate) -> AuthCustomField:
         await self._get_project_or_404(project_id)
         self._assert_not_reserved(data.name)
 
@@ -113,9 +109,9 @@ class AuthCustomFieldService:
         await self._get_project_or_404(project_id)
         total = (
             await self.session.execute(
-                select(func.count()).select_from(AuthCustomField).where(
-                    AuthCustomField.project_id == project_id
-                )
+                select(func.count())
+                .select_from(AuthCustomField)
+                .where(AuthCustomField.project_id == project_id)
             )
         ).scalar_one()
         rows = (
@@ -132,9 +128,7 @@ class AuthCustomFieldService:
     async def get(self, field_id: uuid.UUID) -> AuthCustomField:
         return await self._get_field_or_404(field_id)
 
-    async def update(
-        self, field_id: uuid.UUID, data: AuthCustomFieldUpdate
-    ) -> AuthCustomField:
+    async def update(self, field_id: uuid.UUID, data: AuthCustomFieldUpdate) -> AuthCustomField:
         field = await self._get_field_or_404(field_id)
         updates = data.model_dump(exclude_unset=True)
         # type cannot be changed (would require a migration)

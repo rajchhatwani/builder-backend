@@ -10,6 +10,8 @@ import type {
   AdminStats,
   AdminUser,
   ApiTokenInfo,
+  ImpersonationDigest,
+  ImpersonationSessionRow,
   AuditEntry,
   Page,
   PlatformRole,
@@ -20,6 +22,7 @@ import type {
   UserAccount,
 } from '../../api/types'
 import { Modal } from '../../components/Modal'
+import { openViewingTab } from '../../api/viewing'
 import { useUi } from '../../components/Ui'
 import { SsoChecklist } from '../OrgSsoTab'
 
@@ -766,7 +769,43 @@ export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
         </>
       )}
       {editing && <OverrideDialog org={editing} onClose={() => setEditing(null)} onSaved={saved} />}
+      {!readOnly && <SupportDigest />}
     </>
+  )
+}
+
+/** §4.5: what the daily support-access digest would say (the cron job sends it; this only shows it). */
+function SupportDigest() {
+  const [hours, setHours] = useState(24)
+  const [digest, setDigest] = useState<ImpersonationDigest | null>(null)
+  const [failed, setFailed] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    api
+      .adminImpersonationDigest(hours)
+      .then((d) => !cancelled && (setDigest(d), setFailed(false)))
+      .catch(() => !cancelled && setFailed(true))
+    return () => {
+      cancelled = true
+    }
+  }, [hours])
+  return (
+    <section className="card stack" data-testid="support-digest">
+      <h3>Support access digest</h3>
+      <p className="muted small-text">
+        Every "view as" session in the period, as the daily security digest reports it. The digest is sent by the
+        scheduled job; this is a preview and sends nothing.
+      </p>
+      <label>
+        Period
+        <select value={hours} onChange={(e) => setHours(Number(e.target.value))}>
+          <option value={24}>Last 24 hours</option>
+          <option value={72}>Last 3 days</option>
+          <option value={168}>Last 7 days</option>
+        </select>
+      </label>
+      {failed ? <p className="muted">Can't load the digest.</p> : <pre className="small-text">{digest?.text ?? 'Loading…'}</pre>}
+    </section>
   )
 }
 
@@ -917,6 +956,83 @@ function DeletionDialog({
 }
 
 /** §12.E.4: replace a (possibly leaked) SCIM token with one nobody sees (§7.1). */
+/** §4.5: ask for a reason, mint the ten-minute token, hand it to a new tab. Platform admins only. */
+function ViewAsDialog({
+  org,
+  member,
+  onClose,
+  onStarted,
+}: {
+  org: AdminOrg
+  member: AdminOrgMember
+  onClose: () => void
+  onStarted: () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const started = await api.adminImpersonate(org.id, member.user_id, reason.trim())
+      const opened = await openViewingTab(started.access_token)
+      if (!opened) {
+        await api.adminEndImpersonation(started.session_id).catch(() => undefined)
+        setError('The browser blocked the new tab. Allow pop-ups for this site and try again.')
+        return
+      }
+      onStarted()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Modal open onClose={onClose}>
+      <form onSubmit={submit}>
+        <header>
+          <h3>View as {member.name || member.email}?</h3>
+          <p>
+            Opens a new tab that shows {org.name} as this person sees it. It lasts ten minutes, starts read-only, and every
+            request is recorded in {org.name}'s audit log. You will never see credentials, tokens or billing.
+          </p>
+        </header>
+        <div>
+          {error && (
+            <div role="alert" data-variant="danger">
+              {error}
+            </div>
+          )}
+          <label>
+            Reason (recorded; the customer can see it)
+            <input
+              required
+              minLength={5}
+              maxLength={200}
+              placeholder="Ticket number or what you are helping with"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+        </div>
+        <footer>
+          <button type="button" className="outline" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" disabled={busy || reason.trim().length < 5}>
+            {busy ? 'Starting…' : 'Start viewing'}
+          </button>
+        </footer>
+      </form>
+    </Modal>
+  )
+}
+
 function RotateScimDialog({ org, onClose, onDone }: { org: AdminOrg; onClose: () => void; onDone: (org: AdminOrg) => void }) {
   const [reason, setReason] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -985,6 +1101,8 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
   const [ssoCheck, setSsoCheck] = useState<SsoCheck | null>(null)
   const [checking, setChecking] = useState(false)
   const [rotatingScim, setRotatingScim] = useState(false)
+  const [viewAs, setViewAs] = useState<AdminOrgMember | null>(null)
+  const [sessions, setSessions] = useState<ImpersonationSessionRow[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -1002,6 +1120,17 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
       cancelled = true
     }
   }, [id])
+
+  const loadSessions = useCallback(() => {
+    api
+      .adminImpersonationSessions({ organization_id: id, limit: 10 })
+      .then((page) => setSessions(page.items))
+      .catch(() => undefined) // support staff can't list them; the section just stays hidden
+  }, [id])
+
+  useEffect(() => {
+    loadSessions()
+  }, [loadSessions])
 
   useEffect(() => {
     let cancelled = false
@@ -1214,6 +1343,11 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
       </section>
 
       <h2>Members</h2>
+      {!org.allow_impersonation && (
+        <p className="muted small-text">
+          This organization has turned off support access ("view as"). Only its admins can turn it back on.
+        </p>
+      )}
       <table>
         <thead>
           <tr>
@@ -1222,6 +1356,7 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
             <th>Status</th>
             <th>2FA</th>
             <th>Last sign-in</th>
+            {!readOnly && <th />}
           </tr>
         </thead>
         <tbody>
@@ -1234,10 +1369,71 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
               <td>{m.status}</td>
               <td>{m.mfa_enabled ? 'on' : 'off'}</td>
               <td>{when(m.last_login_at)}</td>
+              {!readOnly && (
+                <td>
+                  <button
+                    className="outline small"
+                    disabled={!org.allow_impersonation || m.status !== 'active'}
+                    title={org.allow_impersonation ? 'Open a read-only support session as this person' : 'The organization has not allowed this'}
+                    onClick={() => setViewAs(m)}
+                  >
+                    View as
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
       </table>
+
+      {sessions.length > 0 && (
+        <>
+          <h2>Support sessions</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Operator</th>
+                <th>Viewed as</th>
+                <th>Reason</th>
+                <th>State</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((x) => (
+                <tr key={x.id}>
+                  <td>{when(x.created_at)}</td>
+                  <td>{x.operator_email}</td>
+                  <td>{x.user_email}</td>
+                  <td>{x.reason}</td>
+                  <td>
+                    {x.active ? (
+                      <>
+                        active{' '}
+                        {!readOnly && (
+                          <button
+                            className="outline small"
+                            onClick={() =>
+                              api
+                                .adminEndImpersonation(x.id)
+                                .then(loadSessions)
+                                .catch(() => undefined)
+                            }
+                          >
+                            End
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      'ended'
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </>
+      )}
 
       <h2>Projects</h2>
       <p className="muted small-text">Metadata only. Project contents are not visible here.</p>
@@ -1276,6 +1472,21 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
           <AuditTable items={audit.items} />
           <Pager page={audit} onPage={setAuditOffset} />
         </>
+      )}
+
+      {viewAs && (
+        <ViewAsDialog
+          org={org}
+          member={viewAs}
+          onClose={() => setViewAs(null)}
+          onStarted={() => {
+            setViewAs(null)
+            loadSessions()
+            setAuditOffset(0)
+            api.adminAudit({ organization_id: id, limit: 25, offset: 0 }).then(setAudit).catch(() => undefined)
+            toast('Support session opened in a new tab.')
+          }}
+        />
       )}
 
       {rotatingScim && (

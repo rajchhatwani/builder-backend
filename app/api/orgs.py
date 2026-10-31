@@ -25,6 +25,8 @@ Routes:
     POST   /orgs/{slug}/billing/checkout              start a Stripe Checkout
     POST   /orgs/{slug}/billing/portal                open the Stripe Billing Portal
     GET    /orgs/{slug}/audit                         the org's slice of the audit log
+    GET    /orgs/{slug}/export                        every record of the org as one JSON file
+                                                      (owner, session only; works while locked)
     GET    /orgs/{slug}/policies                      security policies (§8)
     PATCH  /orgs/{slug}/policies                      require MFA, session TTL (session only)
 
@@ -33,10 +35,12 @@ from the flat table `platform_authz.ORG_ROUTE_ROLES` (§5). Handlers only add th
 table can't express (owners are made and unmade by owners; anyone may leave).
 """
 
+import json
 import uuid
+from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Path, Query, status
+from fastapi import APIRouter, Depends, Path, Query, Response, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -51,6 +55,7 @@ from app.api.security import (
 )
 from app.config import Settings, get_settings
 from app.core import platform_authz as authz
+from app.core import rls
 from app.db import get_session
 from app.exceptions import AppError
 from app.models.enums import OrgRole
@@ -88,6 +93,8 @@ from app.schemas.project import ProjectRead
 from app.services import audit_service, mail_service
 from app.services.access_service import Principal
 from app.services.billing_service import BillingService, checkout_available, portal_available
+from app.services.impersonation_service import ImpersonationService
+from app.services.org_export_service import OrgExportService
 from app.services.organization_service import OrganizationService, OrgSummary
 
 router = APIRouter(prefix="/orgs", tags=["organizations"])
@@ -168,6 +175,10 @@ async def list_my_orgs(
     db: AsyncSession = Depends(get_session),
 ) -> Page[OrganizationRead]:
     summaries = await OrganizationService(db).list_for_user(principal.user.id)
+    if principal.impersonation is not None:  # §4.5: a "view as" session sees its one org only
+        summaries = [
+            s for s in summaries if s.organization.id == principal.impersonation.organization_id
+        ]
     items = [_org_read(s) for s in summaries[page.offset : page.offset + page.limit]]
     return Page[OrganizationRead](
         items=items, total=len(summaries), limit=page.limit, offset=page.offset
@@ -217,8 +228,8 @@ async def _accepted(
     db: AsyncSession,
     principal: Principal,
     service: OrganizationService,
-    org,
-    role,  # noqa: ANN001
+    org: Organization,
+    role: OrgRole,
 ) -> OrganizationRead:
     count = len(await service.list_members(org.id))
     await audit_service.record(
@@ -559,6 +570,9 @@ async def transfer_org_project(
     db: AsyncSession = Depends(get_session),
 ) -> ProjectRead:
     from_org_id = ctx.org.id
+    # The one org-scoped action that reads a second org: lift the RLS confinement (§3.3). The
+    # caller was authorised for the source org above, and the service re-checks the destination.
+    await rls.release(db)
     project, to_org = await OrganizationService(db).transfer_project(
         project_id, from_org_id=from_org_id, to_slug=body.to_slug, actor=ctx.principal.user
     )
@@ -596,7 +610,7 @@ async def get_org_plan(
     return OrgPlanRead(
         plan=PlanRead.model_validate(plan),
         subscription=SubscriptionRead.model_validate(sub),
-        usage=OrgUsage(**usage),
+        usage=OrgUsage.model_validate(usage),
         checkout_available=checkout_available(),
         upgrades=[
             PlanRead.model_validate(p) for p in await BillingService(db).upgrade_options(plan.id)
@@ -656,6 +670,41 @@ async def org_audit(
     )
 
 
+# -- data export (§9, §11) ------------------------------------------------------------------
+
+
+@router.get("/{slug}/export")
+async def export_org(
+    slug: str = SLUG,
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+) -> Response:
+    """The org's records as one downloadable JSON file: people, projects with their specs,
+    policies, plan and the org's audit trail. Owners only, from a signed-in session; no
+    credentials, hashes or customer secrets are in it (see OrgExportService)."""
+    document = await OrgExportService(db).build(ctx.org)
+    await _audit(
+        db,
+        ctx,
+        "org.exported",
+        detail={
+            "members": len(document["members"]),
+            "projects": len(document["projects"]),
+            "audit_entries": len(document["audit"]),
+        },
+    )
+    await db.commit()
+    stamp = datetime.now(UTC).strftime("%Y%m%d")
+    return Response(
+        content=json.dumps(document, indent=2),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="{ctx.org.slug}-export-{stamp}.json"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
 # -- security policies (§8, §4.4, §12.D.7) -------------------------------------------------
 
 
@@ -678,6 +727,7 @@ async def _policies_read(
         session_ttl_hours=org.session_ttl_hours,
         members_without_mfa=int(without),
         default_session_hours=settings.refresh_token_days * 24,
+        allow_impersonation=org.allow_impersonation,
     )
 
 
@@ -722,6 +772,18 @@ async def update_policies(
     if "session_ttl_hours" in sent and body.session_ttl_hours != org.session_ttl_hours:
         org.session_ttl_hours = body.session_ttl_hours
         changed["session_ttl_hours"] = body.session_ttl_hours
+    if (
+        "allow_impersonation" in sent
+        and body.allow_impersonation is not None
+        and body.allow_impersonation != org.allow_impersonation
+    ):
+        org.allow_impersonation = body.allow_impersonation
+        changed["allow_impersonation"] = body.allow_impersonation
+        if not body.allow_impersonation:
+            # Consent withdrawn: any "view as" session of this org ends now, and says why.
+            await ImpersonationService(db, settings).end_all_for_org(
+                org.id, by=ctx.principal.user, why="consent_withdrawn"
+            )
     if changed:
         await _audit(db, ctx, "org.policy_changed", detail=changed)
         await db.commit()

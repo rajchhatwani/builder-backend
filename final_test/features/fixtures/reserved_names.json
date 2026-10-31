@@ -1,0 +1,267 @@
+{
+ "spec_version": 1,
+ "project": {
+  "name": "reserved",
+  "slug": "reserved",
+  "description": null,
+  "db_engine": "postgres"
+ },
+ "entities": [
+  {
+   "name": "Base",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "bases_t",
+   "plural_path": "bases"
+  },
+  {
+   "name": "Session",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "sessions_t",
+   "plural_path": "sessions"
+  },
+  {
+   "name": "Metadata",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "metadatas_t",
+   "plural_path": "metadatas"
+  },
+  {
+   "name": "Class",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "classs_t",
+   "plural_path": "classs"
+  },
+  {
+   "name": "Order",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "orders_t",
+   "plural_path": "orders"
+  },
+  {
+   "name": "Group",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "groups_t",
+   "plural_path": "groups"
+  },
+  {
+   "name": "Select",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "selects_t",
+   "plural_path": "selects"
+  },
+  {
+   "name": "Table",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "tables_t",
+   "plural_path": "tables"
+  },
+  {
+   "name": "User",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "users_t",
+   "plural_path": "users"
+  },
+  {
+   "name": "Settings",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "settingss_t",
+   "plural_path": "settingss"
+  },
+  {
+   "name": "Field",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "fields_t",
+   "plural_path": "fields"
+  },
+  {
+   "name": "Depends",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "dependss_t",
+   "plural_path": "dependss"
+  },
+  {
+   "name": "Request",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "requests_t",
+   "plural_path": "requests"
+  },
+  {
+   "name": "Alembic",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "alembics_t",
+   "plural_path": "alembics"
+  },
+  {
+   "name": "Health",
+   "options": {},
+   "fields": [
+    {
+     "name": "title",
+     "type": "string",
+     "required": true
+    },
+    {
+     "name": "count",
+     "type": "integer"
+    }
+   ],
+   "table_name": "healths_t",
+   "plural_path": "healths"
+  }
+ ],
+ "relations": []
+}

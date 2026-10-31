@@ -1,0 +1,6 @@
+/* Tailwind v4 spike: theme + utilities only, NO preflight, so the existing Oat styles are not
+   reset, and class scanning is limited to this folder so no other file gains generated rules. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "./";

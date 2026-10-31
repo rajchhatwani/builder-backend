@@ -116,7 +116,7 @@ Emailed links point at `{{ auth.app_url }}` (`/verify-email`, `/magic-link`, `/r
 your frontend should read the token and call the matching API route.
 {% endif %}
 
-Limits: sign-in {{ auth.login_rate_limit }}, registration {{ auth.register_rate_limit }}, email / SMS requests {{ auth.reset_rate_limit }} per client address.
+Limits per client address: failed sign-ins {{ auth.login_rate_limit }} (successful ones are not counted), registration {{ auth.register_rate_limit }}, email / SMS requests {{ auth.reset_rate_limit }}.
 They are counted in process memory, so they are per worker.
 
 {% if auth.permissions %}

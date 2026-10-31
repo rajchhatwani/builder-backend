@@ -16,7 +16,7 @@ from typing import Any
 
 from app.core import authz_engine as engine
 from app.core.enums import AuthorizationModel
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.features.authz.describe import describe
 from app.core.generator.render import make_environment, read_verbatim, render_template
@@ -119,6 +119,7 @@ def _rows_for_docs(data: dict[str, Any]) -> list[dict[str, Any]]:
 
 class AuthzModule:
     name = "authz"
+    manifest = ModuleManifest(id="authz", version="1", depends_on=('auth',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

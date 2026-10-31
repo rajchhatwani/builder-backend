@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from app.core import doc_engine
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, render_template
 from app.core.validation_documents import documents_active
@@ -40,6 +40,7 @@ def render_data(templates: list[dict[str, Any]]) -> str:
 
 class DocumentsModule:
     name = "documents"
+    manifest = ModuleManifest(id="documents", version="1", depends_on=('auth',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)
@@ -63,9 +64,7 @@ class DocumentsModule:
                     "template": t.template,
                 }
             )
-        bound = [
-            (t, by_name[t["entity"]]) for t in templates if t["entity"] is not None
-        ]
+        bound = [(t, by_name[t["entity"]]) for t in templates if t["entity"] is not None]
         entities_used = sorted({e.table: e for _, e in bound}.values(), key=lambda e: e.table)
         engine_text = engine_source()
         context = {

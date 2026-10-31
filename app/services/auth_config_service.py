@@ -45,9 +45,7 @@ class AuthConfigService:
 
     async def _get_config_or_404(self, project_id: uuid.UUID) -> ProjectAuthConfig:
         result = await self.session.execute(
-            select(ProjectAuthConfig).where(
-                ProjectAuthConfig.project_id == project_id
-            )
+            select(ProjectAuthConfig).where(ProjectAuthConfig.project_id == project_id)
         )
         config = result.scalar_one_or_none()
         if config is None:
@@ -56,17 +54,13 @@ class AuthConfigService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def create(
-        self, project_id: uuid.UUID, data: AuthConfigCreate
-    ) -> ProjectAuthConfig:
+    async def create(self, project_id: uuid.UUID, data: AuthConfigCreate) -> ProjectAuthConfig:
         await self._get_project_or_404(project_id)
 
         smtp_dict: dict[str, Any] | None = (
             data.smtp_config.model_dump() if data.smtp_config else None
         )
-        sms_dict: dict[str, Any] | None = (
-            data.sms_config.model_dump() if data.sms_config else None
-        )
+        sms_dict: dict[str, Any] | None = data.sms_config.model_dump() if data.sms_config else None
 
         config = ProjectAuthConfig(
             project_id=project_id,
@@ -105,9 +99,7 @@ class AuthConfigService:
         await self._get_project_or_404(project_id)
         return await self._get_config_or_404(project_id)
 
-    async def update(
-        self, project_id: uuid.UUID, data: AuthConfigUpdate
-    ) -> ProjectAuthConfig:
+    async def update(self, project_id: uuid.UUID, data: AuthConfigUpdate) -> ProjectAuthConfig:
         config = await self.get(project_id)
         updates = data.model_dump(exclude_unset=True)
 
@@ -139,13 +131,9 @@ class AuthConfigService:
                 message="smtp_config is required when email_magic_link_enabled is true",
                 status_code=422,
             )
-        if config.sms_otp_enabled and (
-            config.sms_provider is None or config.sms_config is None
-        ):
+        if config.sms_otp_enabled and (config.sms_provider is None or config.sms_config is None):
             raise AppError(
                 code="validation_error",
-                message=(
-                    "sms_provider and sms_config are required when sms_otp_enabled is true"
-                ),
+                message=("sms_provider and sms_config are required when sms_otp_enabled is true"),
                 status_code=422,
             )

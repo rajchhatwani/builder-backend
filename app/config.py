@@ -10,6 +10,9 @@ class Settings(BaseSettings):
 
     environment: str = "local"
     log_level: str = "INFO"
+    # Owner role used only by Alembic and `python -m app.core.rls`. Unset = same as database_url.
+    # In production database_url is the least-privilege API role (no superuser, no BYPASSRLS).
+    migrations_database_url: str | None = None
     database_url: str = "postgresql+asyncpg://builder:builder@localhost:5432/builder"
     cors_origins: list[str] = ["http://localhost:5173"]
 
@@ -63,6 +66,9 @@ class Settings(BaseSettings):
     # -- enterprise SSO (Phase D). The API's own public base URL: SAML entity IDs, the ACS URL
     # and the OIDC redirect URI are built from it, so it must be what the IdP can reach.
     public_api_url: str = "http://localhost:8000"
+    # Extra Host header values the /mcp endpoint accepts besides public_api_url's host and
+    # localhost (e.g. an internal service name). Anything else gets 421 (DNS-rebinding guard).
+    mcp_allowed_hosts: list[str] = []
     # Let org admins point OIDC at hosts on private networks (a self-hosted IdP inside the
     # same VPC). Off: such URLs are refused, which is what stops SSRF through the config form.
     sso_allow_private_idp: bool = False
@@ -78,6 +84,20 @@ class Settings(BaseSettings):
     mfa_challenge_seconds: int = 300
     # The name authenticator apps show next to the account.
     totp_issuer: str = "Builder"
+
+    # -- Phase F hardening. Impersonation (§4.5): how long a "view as" session lasts and how
+    # long one explicit "allow writes" switch-on lasts (capped by the session itself).
+    impersonation_minutes: int = 10
+    impersonation_write_minutes: int = 5
+    # Postgres row-level security (§3.3). Off by default. On = every org-scoped request binds
+    # `SET LOCAL app.organization_id` on its transaction. The policies themselves are enabled
+    # separately (`python -m app.rls enable`), so flipping this alone never changes visibility.
+    rls_enabled: bool = False
+    # Daily support-access digest (§4.5). Either or both; neither = "no destination".
+    # The webhook is Slack-compatible (`{"text": …}`); its URL is a secret and is never logged.
+    security_digest_webhook_url: SecretStr | None = None
+    security_digest_email: str | None = None
+    security_digest_hours: int = 24
 
     @property
     def sso_require_https(self) -> bool:

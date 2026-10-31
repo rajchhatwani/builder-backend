@@ -1,0 +1,10 @@
+{
+  "fresh_update": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"applied\"}'"
+  },
+  "stale_update": {
+    "status": 200,
+    "body": "b'{\"received\":\"true\",\"outcome\":\"stale\"}'"
+  }
+}

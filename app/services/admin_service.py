@@ -7,7 +7,7 @@ import string
 import uuid
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import Date, cast, func, or_, select
+from sqlalchemy import ColumnElement, Date, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -305,8 +305,8 @@ class AdminService:
 
     async def list_organizations(
         self, *, limit: int, offset: int, query: str | None
-    ) -> tuple[list[tuple[Organization, int, int, Subscription]], int]:
-        conditions = [Organization.deleted_at.is_(None)]
+    ) -> tuple[list[tuple[Organization, int, int, Subscription | None]], int]:
+        conditions: list[ColumnElement[bool]] = [Organization.deleted_at.is_(None)]
         if query:
             like = f"%{query.strip().lower()[:100]}%"
             conditions.append(
@@ -360,7 +360,7 @@ class AdminService:
             ):
                 subs[sub.organization_id] = sub
         return [
-            (o, members[o.id], projects[o.id], subs.get(o.id))  # type: ignore[misc]
+            (o, members[o.id], projects[o.id], subs.get(o.id))
             for o in orgs
         ], total
 
@@ -622,7 +622,11 @@ class AdminService:
                 and sub.stripe_subscription_id
                 and sub.status in (SubscriptionStatus.active, SubscriptionStatus.past_due)
             )
-            mrr = int(prices.get(sub.plan_id, 0) or 0) * max(members, 1) if paying else 0
+            mrr = (
+                int(prices.get(sub.plan_id, 0) or 0) * max(members, 1)
+                if sub is not None and paying
+                else 0
+            )
             out[org.id] = (mrr, last.get(org.id))
         return out
 
@@ -664,7 +668,7 @@ class AdminService:
         self, *, limit: int, offset: int, status: SubscriptionStatus | None, query: str | None
     ) -> tuple[list[tuple[Subscription, Organization]], int]:
         """§7 Billing tab. Deep links to Stripe are built from the ids by the UI."""
-        conditions = [Organization.deleted_at.is_(None)]
+        conditions: list[ColumnElement[bool]] = [Organization.deleted_at.is_(None)]
         if status is not None:
             conditions.append(Subscription.status == status)
         if query:
@@ -694,7 +698,7 @@ class AdminService:
     async def insights(self) -> dict[str, object]:
         now = datetime.now(UTC)
 
-        async def per_day(column: object, *where: object) -> list[dict[str, object]]:
+        async def per_day(column: object, *where: ColumnElement[bool]) -> list[dict[str, object]]:
             since = (now - timedelta(days=29)).date()
             day = cast(column, Date)
             counts = dict(

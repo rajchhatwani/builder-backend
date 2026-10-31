@@ -14,6 +14,7 @@ rules that keep one tenant's IdP from reaching anyone else:
 
 import hashlib
 import hmac
+import ipaddress
 import os
 import re
 import secrets
@@ -184,6 +185,25 @@ def dns_token_for(organization_id: uuid.UUID, domain: str) -> str:
     return mac.hexdigest()[:40]
 
 
+def _is_internal_host(host: str) -> bool:
+    """Syntactic check, no DNS: IP literals that are not globally routable, `localhost`,
+    single-label names and the usual internal suffixes. The fetch-time guard still resolves
+    names; this stops obviously internal URLs from being saved at all."""
+    host = host.lower().rstrip(".")
+    try:
+        ip = ipaddress.ip_address(host.strip("[]"))
+    except ValueError:
+        # Shorthand IPv4 (127.1, 0x7f.1, 017.0.0.1) is not a name anyone legitimately uses.
+        if all(re.fullmatch(r"0x[0-9a-f]+|\d+", label) for label in host.split(".")):
+            return True
+        return (
+            "." not in host
+            or host == "localhost"
+            or host.endswith((".localhost", ".local", ".internal", ".intranet", ".lan", ".home"))
+        )
+    return not ip.is_global or ip.is_multicast
+
+
 class SsoService:
     def __init__(self, session: AsyncSession, settings: Settings) -> None:
         self.db = session
@@ -277,6 +297,12 @@ class SsoService:
             raise AppError(code="invalid_url", message=f"{field} must be a URL", status_code=422)
         if parts.scheme != "https" and self.settings.sso_require_https:
             raise AppError(code="insecure_url", message=f"{field} must use https", status_code=422)
+        if not self.settings.sso_allow_private_idp and _is_internal_host(parts.hostname):
+            raise AppError(
+                code="private_address",
+                message=f"{field} must point to a public host, not a private or internal one",
+                status_code=422,
+            )
         return url
 
     async def save_config(
@@ -331,6 +357,8 @@ class SsoService:
                     status_code=422,
                 )
             conn.idp_entity_id = conn.idp_sso_url = conn.idp_cert_pem = None
+        # A changed configuration invalidates the last test result shown to admins (F-4).
+        conn.last_test_at = conn.last_test_result = conn.last_tested_by = None
         conn.jit_enabled = body.jit_enabled
         conn.jit_role = body.jit_role
         if body.trust_unverified_email is not None:
@@ -370,6 +398,14 @@ class SsoService:
                 message="save the SSO configuration first",
                 status_code=409,
             )
+        if active:
+            # Configs saved before save-time validation existed must not go live (F-4).
+            for field, url in (
+                ("idp_sso_url", conn.idp_sso_url),
+                ("oidc_discovery_url", conn.oidc_discovery_url),
+            ):
+                if url:
+                    self._check_url(url, field)
         if active and not any(d.verified_at for d in await self.domains(org.id)):
             raise AppError(
                 code="no_verified_domain",

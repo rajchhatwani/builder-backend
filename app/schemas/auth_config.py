@@ -91,15 +91,9 @@ class AuthConfigCreate(BaseModel):
     sms_config: SmsConfig | None = None
 
     # Rate limiting
-    login_rate_limit: str = Field(
-        default="5/15minutes", pattern=_RATE_PATTERN, max_length=50
-    )
-    register_rate_limit: str = Field(
-        default="10/hour", pattern=_RATE_PATTERN, max_length=50
-    )
-    reset_rate_limit: str = Field(
-        default="3/hour", pattern=_RATE_PATTERN, max_length=50
-    )
+    login_rate_limit: str = Field(default="5/15minutes", pattern=_RATE_PATTERN, max_length=50)
+    register_rate_limit: str = Field(default="10/hour", pattern=_RATE_PATTERN, max_length=50)
+    reset_rate_limit: str = Field(default="3/hour", pattern=_RATE_PATTERN, max_length=50)
 
     # Branding
     security_headers_enabled: bool = True
@@ -112,21 +106,16 @@ class AuthConfigCreate(BaseModel):
     @model_validator(mode="after")
     def check_smtp_when_email_enabled(self) -> "AuthConfigCreate":
         if self.email_magic_link_enabled and self.smtp_config is None:
-            raise ValueError(
-                "smtp_config is required when email_magic_link_enabled is true"
-            )
+            raise ValueError("smtp_config is required when email_magic_link_enabled is true")
         return self
 
     @model_validator(mode="after")
     def check_sms_when_otp_enabled(self) -> "AuthConfigCreate":
-        if self.sms_otp_enabled and (
-            self.sms_provider is None or self.sms_config is None
-        ):
+        if self.sms_otp_enabled and (self.sms_provider is None or self.sms_config is None):
             raise ValueError(
                 "sms_provider and sms_config are required when sms_otp_enabled is true"
             )
         return self
-
 
 
 class AuthConfigUpdate(BaseModel):
@@ -151,15 +140,9 @@ class AuthConfigUpdate(BaseModel):
     smtp_config: SmtpConfig | None = None
     sms_provider: SmsProvider | None = None
     sms_config: SmsConfig | None = None
-    login_rate_limit: str | None = Field(
-        default=None, pattern=_RATE_PATTERN, max_length=50
-    )
-    register_rate_limit: str | None = Field(
-        default=None, pattern=_RATE_PATTERN, max_length=50
-    )
-    reset_rate_limit: str | None = Field(
-        default=None, pattern=_RATE_PATTERN, max_length=50
-    )
+    login_rate_limit: str | None = Field(default=None, pattern=_RATE_PATTERN, max_length=50)
+    register_rate_limit: str | None = Field(default=None, pattern=_RATE_PATTERN, max_length=50)
+    reset_rate_limit: str | None = Field(default=None, pattern=_RATE_PATTERN, max_length=50)
     security_headers_enabled: bool | None = None
     app_name: str | None = Field(default=None, max_length=100)
     app_url: str | None = Field(default=None, max_length=2000)

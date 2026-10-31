@@ -36,6 +36,7 @@ def recommended_sample_ratio(expected_rps: int | None) -> float:
     ratio = SPAN_BUDGET_PER_SECOND / (expected_rps * SPANS_PER_REQUEST)
     return max(0.01, min(1.0, math.floor(ratio * 100) / 100))
 
+
 # What app/core/redact.py of a generated project hides by key name (shown in the dashboard).
 BUILTIN_REDACT_KEYS = (
     "password",

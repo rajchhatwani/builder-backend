@@ -35,7 +35,11 @@ async def list_projects(
     session: AsyncSession = Depends(get_session),
 ) -> Page[ProjectRead]:
     projects, total = await ProjectService(session).list(
-        principal.user.id, page.limit, page.offset, principal.token_project_id
+        principal.user.id,
+        page.limit,
+        page.offset,
+        principal.token_project_id,
+        principal.impersonation.organization_id if principal.impersonation else None,
     )
     org_ids = {p.organization_id for p in projects}
     rows = await session.execute(

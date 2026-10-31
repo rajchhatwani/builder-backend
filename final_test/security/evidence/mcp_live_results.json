@@ -1,0 +1,30 @@
+{
+  "1_no_auth": {
+    "ok": true,
+    "preview": "Error executing tool list_projects"
+  },
+  "2_read_a_list_projects": {
+    "ok": true,
+    "preview": "{\n  \"id\": \"74d0452c-8705-4c4d-acb6-1f1c473b0fcf\",\n  \"name\": \"MCP A\",\n  \"slug\": \"mcp-a\",\n  \"description\": \"\",\n  \"your_role\": \"owner\"\n}"
+  },
+  "3_read_a_get_spec_A": {
+    "ok": true,
+    "preview": "{\n  \"spec_version\": 1,\n  \"project\": {\n    \"name\": \"MCP A\",\n    \"slug\": \"mcp-a\",\n    \"description\": null,\n    \"db_engine\": \"postgres\"\n  },\n  \"entities\": [],\n  \"relations\": [],\n  \"features\": [],\n  \"auth"
+  },
+  "4_read_a_get_spec_B_escape_attempt": {
+    "ok": true,
+    "preview": "Error executing tool get_project_spec"
+  },
+  "5_read_only_write_attempt": {
+    "ok": true,
+    "preview": "Error executing tool create_entity"
+  },
+  "6_write_token_create_entity_A": {
+    "ok": true,
+    "preview": "{\n  \"id\": \"aaf7657c-1ec5-48bb-a365-ce79f26fac6c\",\n  \"name\": \"LegitEntity\",\n  \"table_name\": \"legit_entities\"\n}"
+  },
+  "7_mcp_disabled_on_project": {
+    "ok": true,
+    "preview": "Error executing tool get_project_spec"
+  }
+}
