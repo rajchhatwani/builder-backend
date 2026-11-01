@@ -57,9 +57,21 @@ NAMES = [
     "runtime_config",
     "history_notes",
     "hooks_invoice",
+    "hooks_access",
+    "hooks_access_abac",
     "seed_demo",
     "demo_invoice",
     "demo_leave",
+    "numbering",
+    "events_orders",
+    "providers_notify",
+    "notifications_orders",
+    "jobs_invoices",
+    "workflows_orders",
+    "api_edge_orders",
+    "combined_async",
+    "webhooks_orders",
+    "hooks_effects",
 ]
 
 

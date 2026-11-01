@@ -15,9 +15,11 @@ from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import object_session
 
 from app.core.errors import AppError, NotFoundError
 from app.hooks_gen import registry as guard_hooks
+from app.runtime_config import settings as runtime_settings
 from app.state_machines.definitions import MACHINES
 from app.state_machines.expr.pyeval import compile_python
 from app.state_machines.models import StateTransition
@@ -38,13 +40,19 @@ def machine(entity: str) -> dict[str, Any]:
 
 
 def row_values(item: Any) -> dict[str, Any]:
-    return {c.key: getattr(item, c.key, None) for c in sa.inspect(type(item)).column_attrs}
+    values = {c.key: getattr(item, c.key, None) for c in sa.inspect(type(item)).column_attrs}
+    session = object_session(item)
+    if session is not None:
+        values.update(session.info.get(SETTINGS_KEY) or {})
+    return values
 
 
 def guard_holds(entity: str, transition: dict[str, Any], values: dict[str, Any]) -> bool:
     guard = _GUARDS.get((entity, transition["name"]))
     if guard is None:
         return True
+    if not _NEEDS.get((entity, transition["name"]), frozenset()) <= values.keys():
+        return False  # the settings this guard reads were not loaded: refuse
     try:
         return guard(values) is True
     except Exception:
@@ -148,6 +156,7 @@ async def apply(
         .execution_options(populate_existing=True)
     )
     item = locked.scalar_one()
+    await prime_settings(session, item)
     state = current_state(entity, item)
     if state not in t["from"]:
         raise AppError(
@@ -177,3 +186,52 @@ async def history(session: AsyncSession, entity: str, item_id: uuid.UUID) -> lis
         .order_by(StateTransition.created_at, StateTransition.id)
     )
     return list(rows.scalars())
+
+
+# --- settings in guards (`settings.<key>`) --------------------------------------------------------
+# A guard reads the settings as the pseudo-fields `_setting_<key>`. They are filled from the SAME read
+# path as GET /config/settings (stored value for the record's tenant, else the default) every time
+# `prime_settings` runs: before a transition is applied, before automatic moves settle, before the list
+# of available transitions. The values live on the request's session, so nothing survives the request,
+# and a guard whose settings were not loaded is refused (fail closed).
+SETTINGS_KEY = "sm_settings"
+NIL_TENANT = uuid.UUID(int=0)
+USED_SETTINGS = ['approval_threshold']
+
+
+def _setting_fields(node: Any) -> frozenset[str]:
+    if isinstance(node, dict):
+        found: set[str] = set()
+        if node.get("k") == "field" and str(node.get("name", "")).startswith("_setting_"):
+            found.add(node["name"])
+        for value in node.values():
+            found |= _setting_fields(value)
+        return frozenset(found)
+    if isinstance(node, list):
+        return frozenset().union(*[_setting_fields(v) for v in node]) if node else frozenset()
+    return frozenset()
+
+
+_NEEDS: dict[tuple[str, str], frozenset[str]] = {
+    (entity, t["name"]): _setting_fields(t["guard"])
+    for entity, machine in MACHINES.items()
+    for t in machine["transitions"]
+    if t["guard"] is not None
+}
+
+
+async def prime_settings(session: AsyncSession | None, item: Any) -> None:
+    """Load the current value of every setting the guards use, for the tenant the record belongs to."""
+    if session is None:
+        return  # not attached to a session: guards that need settings are refused
+    session.info.pop(SETTINGS_KEY, None)
+    tenant = getattr(item, "tenant_id", NIL_TENANT)
+    if tenant is None:
+        return  # no tenant, no settings: guards that need them are refused
+    stored = await runtime_settings.stored_values(session, tenant)
+    session.info[SETTINGS_KEY] = {
+        f"_setting_{key}": runtime_settings.typed(
+            key, stored[key].value if key in stored else runtime_settings.SETTINGS[key]["default"]
+        )
+        for key in USED_SETTINGS
+    }

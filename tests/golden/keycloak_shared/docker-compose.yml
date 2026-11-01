@@ -20,7 +20,7 @@ services:
       # Where people reach Keycloak, and where this service fetches its signing keys from.
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL in .env (see .env.example)}
       KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       AUTH_ALLOW_PROVIDER_SWITCH: ${AUTH_ALLOW_PROVIDER_SWITCH:-false}
     depends_on:
       db:

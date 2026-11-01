@@ -13,10 +13,10 @@ export interface RailGroup {
 export const RAIL_GROUPS: RailGroup[] = [
   { id: 'home', label: 'Home', sections: ['overview'] },
   { id: 'map', label: 'Map', sections: [], soon: true },
-  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'hooks', 'settings', 'history', 'seed', 'documents'] },
+  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'hooks', 'settings', 'history', 'timeline', 'seed', 'documents'] },
   { id: 'secure', label: 'Secure', sections: ['auth', 'keycloak', 'access'] },
-  { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations'] },
-  { id: 'operate', label: 'Operate', sections: ['observability'] },
+  { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'webhooks', 'providers'] },
+  { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows'] },
   { id: 'ship', label: 'Ship', sections: ['deployment', 'generate'] },
 ]
 

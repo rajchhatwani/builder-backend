@@ -1585,3 +1585,19 @@ export interface ExpressionCheckRead {
   error?: ExpressionError | null
   fields: ExpressionField[]
 }
+
+/** Spec op-log (B2-8): one recorded change of the project spec. */
+export interface SpecOp {
+  id: string
+  project_id: string
+  seq: number
+  op_type: string
+  origin: string
+  ref_seq: number | null
+  actor: { kind: string; user_id: string | null; email?: string | null }
+  payload: Record<string, unknown>
+  inverse: { op_type: string; payload: Record<string, unknown> }
+  spec_hash_before: string
+  spec_hash_after: string
+  created_at: string
+}

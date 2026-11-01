@@ -9,6 +9,7 @@ import {
 } from './session'
 import type {
   BehaviorIssues,
+  SpecOp,
   ExpressionCheckRead,
   ProjectStatus,
   StateMachinesRead,
@@ -115,6 +116,7 @@ import type {
   ValidationReport,
 } from './types'
 import { isMfaChallenge } from './types'
+import type { SpecBlocks } from '../shell/connect/specTypes'
 
 export class ApiError extends Error {
   code: string
@@ -318,6 +320,7 @@ export const api = {
     }),
   getBehaviorIssues: (projectId: string) =>
     request<BehaviorIssues>(`/projects/${projectId}/behavior/issues`),
+  getBehaviorRoles: (projectId: string) => request<{ roles: { name: string; label: string }[] }>(`/projects/${projectId}/behavior/roles`),
   getSettings: (projectId: string) => request<SettingsRead>(`/projects/${projectId}/behavior/settings`),
   putSettings: (projectId: string, settings: SettingBody[], expectedVersion: number) =>
     request<SettingsRead>(`/projects/${projectId}/behavior/settings`, {
@@ -336,6 +339,12 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify({ lists, expected_version: expectedVersion }),
     }),
+  listSpecOps: (projectId: string, limit = 200, offset = 0) =>
+    request<Page<SpecOp>>(`/projects/${projectId}/spec/ops?limit=${limit}&offset=${offset}`),
+  undoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/undo`, { method: 'POST' }),
+  redoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/redo`, { method: 'POST' }),
+  restoreSpec: (projectId: string, toSeq: number) =>
+    request<SpecOp>(`/projects/${projectId}/spec/restore`, { method: 'POST', body: JSON.stringify({ to_seq: toSeq }) }),
   getHistory: (projectId: string) => request<HistoryRead>(`/projects/${projectId}/behavior/history`),
   putHistory: (projectId: string, history: HistoryBody[], expectedVersion: number) =>
     request<HistoryRead>(`/projects/${projectId}/behavior/history`, {
@@ -686,8 +695,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  /** The whole assembled spec as loose JSON (F2-6 reads only its `notifications` block). */
+  getSpecJson: (projectId: string) => request<Record<string, unknown>>(`/projects/${projectId}/spec`),
   getSpecForPolicies: (projectId: string) =>
     request<SpecForPolicies>(`/projects/${projectId}/spec`),
+  /** The spec blocks the Connect/Operate pages show read-only (webhooks, providers, jobs, workflows). */
+  getSpecBlocks: (projectId: string) => request<SpecBlocks>(`/projects/${projectId}/spec`),
 
   getAuthConfig: (projectId: string) =>
     request<AuthConfig>(`/projects/${projectId}/auth`),

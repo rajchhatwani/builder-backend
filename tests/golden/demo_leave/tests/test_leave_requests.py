@@ -52,10 +52,10 @@ async def test_leave_requests_crud_flow(client: AsyncClient) -> None:
     assert too_big.status_code == 422, too_big.text
     assert too_big.json()["code"] == "validation_error"
 
-    new_value = _factories.sample_leave_requests()["request_no"]
-    patched = await client.patch(f"/leave_requests/{item_id}", json={"request_no": new_value})
+    new_value = _factories.sample_leave_requests()["days"]
+    patched = await client.patch(f"/leave_requests/{item_id}", json={"days": new_value})
     assert patched.status_code == 200, patched.text
-    assert patched.json()["request_no"] == new_value
+    assert patched.json()["days"] == new_value
 
     replacement = await _factories.payload_leave_requests(client, employee_id=created["employee_id"])
     replaced = await client.put(f"/leave_requests/{item_id}", json=replacement)

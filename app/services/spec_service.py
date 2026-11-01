@@ -67,6 +67,7 @@ from app.models.storage_config import ProjectStorageConfig
 from app.services.authorization_service import apply_spec as apply_authorization_spec
 from app.services.authorization_service import config_to_spec as authorization_config_to_spec
 from app.services.behavior_service import (
+    BLOCKS,
     HISTORY,
     HOOKS,
     LISTS,
@@ -299,6 +300,7 @@ class SpecService:
             history=await BehaviorService(self.session).history(project_id),
             hooks=await BehaviorService(self.session).hooks(project_id),
             seed=await BehaviorService(self.session).seed(project_id),
+            **{key: await BehaviorService(self.session).block(project_id, key) for key in BLOCKS},
             deployment=await self._deployment_spec(project_id),
             documents=await self._documents_spec(project_id),
         )
@@ -354,7 +356,9 @@ class SpecService:
     async def validate(self, project_id: uuid.UUID) -> list[ValidationIssue]:
         return validate(await self.assemble(project_id))
 
-    async def replace(self, project_id: uuid.UUID, spec: Spec) -> Spec:
+    async def replace(
+        self, project_id: uuid.UUID, spec: Spec, *, validate_spec: bool = True
+    ) -> Spec:
         """Replace the project's entities, fields and relations with the spec's.
 
         The project's own identity (name, slug, description) is left alone: a spec
@@ -362,10 +366,11 @@ class SpecService:
         The `auth` block is replaced as a whole when the spec has one. A spec without it
         leaves the project's auth settings as they are (permissions are re-attached to the
         re-created entities by name). Credentials are never part of a spec.
-        All-or-nothing: an invalid spec changes nothing.
+        All-or-nothing: an invalid spec changes nothing. The op-log passes `validate_spec=False`
+        only to return to a state the project already had (undo, redo, restore).
         """
         project = await self._get_project_or_404(project_id)
-        issues = validate(spec)
+        issues = validate(spec) if validate_spec else []
         if issues:
             raise AppError(
                 code="spec_invalid",
@@ -457,6 +462,9 @@ class SpecService:
         ):
             if items:
                 await self._replace_behavior_section(project_id, key, items)
+        for block in BLOCKS:
+            if getattr(spec, block) is not None:
+                await self._replace_behavior_section(project_id, block, getattr(spec, block))
         if spec.deployment is not None:
             await self._replace_deployment(project_id, spec.deployment)
         if spec.documents is not None:

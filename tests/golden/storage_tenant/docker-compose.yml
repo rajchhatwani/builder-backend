@@ -18,7 +18,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       # File storage: the bucket, the malware scanner (see deploy/storage/STORAGE.md).
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-http://objectstore:8333}
       STORAGE_PUBLIC_ENDPOINT_URL: ${STORAGE_PUBLIC_ENDPOINT_URL:-http://localhost:8333}
       STORAGE_REGION: ${STORAGE_REGION:-}

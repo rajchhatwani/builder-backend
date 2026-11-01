@@ -9,6 +9,13 @@ from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
+from app.core.validation_api_edge import api_edge_tables
+from app.core.validation_events import EV_TABLES, events_active
+from app.core.validation_notifications import NOTIFICATION_TABLES, notifications_active
+from app.core.validation_providers import PROVIDER_TABLES, providers_active
+from app.core.validation_jobs import JOB_TABLES, jobs_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, webhooks_active
+from app.core.validation_workflows import WORKFLOW_TABLES, workflows_active
 from app.core.validation_history import CH_TABLES, history_active
 from app.core.validation_payments import PAYMENTS_TABLES, payments_active
 from app.core.validation_runtime import RC_TABLES, runtime_config_active
@@ -81,6 +88,19 @@ class TestsModule:
             tables |= set(CH_TABLES)
         if seed_active(project.spec):
             tables |= set(SEED_TABLES)
+        if events_active(project.spec):
+            tables |= set(EV_TABLES)
+        tables |= set(api_edge_tables(project.spec))
+        if providers_active(project.spec) and project.auth is not None:
+            tables |= set(PROVIDER_TABLES)
+        if jobs_active(project.spec):
+            tables |= set(JOB_TABLES)
+        if webhooks_active(project.spec) and project.auth is not None:
+            tables |= set(WEBHOOK_TABLES)
+        if notifications_active(project.spec) and providers_active(project.spec) and project.auth is not None:
+            tables |= set(NOTIFICATION_TABLES)
+        if workflows_active(project.spec) and project.auth is not None:
+            tables |= set(WORKFLOW_TABLES)
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",

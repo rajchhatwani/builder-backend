@@ -6,6 +6,7 @@ import { Icon, link, orgLabel, type Section } from '../components/Sidebar'
 import { CommandPalette } from './CommandPalette'
 import { RAIL_GROUPS, type Command } from './groups'
 import { findSection, type AnySection } from './pages'
+import { WorkbenchDrawer } from './workbench/WorkbenchDrawer'
 
 interface Props {
   project: Project
@@ -31,6 +32,7 @@ export function ShellV2({ project, section, problems, on = {}, onShare, org, chi
   const { state, signOut } = useAuth()
   const user = state.status === 'user' ? state.user : null
   const [paletteOpen, setPaletteOpen] = useState(false)
+  const [workbenchOpen, setWorkbenchOpen] = useState(false)
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -58,6 +60,7 @@ export function ShellV2({ project, section, problems, on = {}, onShare, org, chi
     if (org) list.push({ id: 'org', label: orgLabel(org), hint: 'Organization', run: go(`/org/${encodeURIComponent(org.slug)}`) })
     list.push({ id: 'account', label: 'Account', hint: 'Go to', run: go('/account') })
     if (user && user.platform_role !== 'customer') list.push({ id: 'admin', label: 'Admin console', hint: 'Go to', run: go('/admin') })
+    list.push({ id: 'workbench', label: 'Workbench: API reference and request console', hint: 'Action', run: () => setWorkbenchOpen(true) })
     if (onShare) list.push({ id: 'share', label: 'Share project', hint: 'Action', run: onShare })
     list.push({ id: 'theme', label: 'Toggle color theme', hint: 'Action', run: toggle })
     list.push({ id: 'signout', label: 'Sign out', hint: 'Action', run: () => void signOut() })
@@ -92,6 +95,9 @@ export function ShellV2({ project, section, problems, on = {}, onShare, org, chi
             )}
           </div>
           <div className="col-6 justify-end hstack">
+            <button className="outline small" onClick={() => setWorkbenchOpen((o) => !o)} aria-expanded={workbenchOpen} aria-controls="workbench-drawer" data-testid="workbench-toggle">
+              Workbench
+            </button>
             <button className="outline small" onClick={() => setPaletteOpen(true)} aria-haspopup="dialog">
               Search or jump to… <kbd>Ctrl+K</kbd>
             </button>
@@ -153,6 +159,7 @@ export function ShellV2({ project, section, problems, on = {}, onShare, org, chi
       <main>
         <div className="container">{children}</div>
       </main>
+      <WorkbenchDrawer key={project.id} projectId={project.id} open={workbenchOpen} onClose={() => setWorkbenchOpen(false)} />
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
     </>
   )

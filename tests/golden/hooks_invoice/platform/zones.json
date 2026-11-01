@@ -49,6 +49,7 @@
     "app/db.py": "generated",
     "app/hooks/__init__.py": "custom",
     "app/hooks_gen/__init__.py": "generated",
+    "app/hooks_gen/access.py": "generated",
     "app/hooks_gen/contracts.py": "generated",
     "app/hooks_gen/registry.py": "generated",
     "app/hooks_gen/runtime.py": "generated",

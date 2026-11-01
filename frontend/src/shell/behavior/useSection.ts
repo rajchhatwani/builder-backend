@@ -33,13 +33,11 @@ export interface SectionState<Row, Body> {
   clientErrs: FieldErrors
 }
 
-/** Load / edit / save one behaviour section: whole-section PUT with expected_version, 409 handling,
+/** Load / edit / save one behaviour section (each section has its own independent version): whole-section PUT with expected_version, 409 handling,
  *  and the backend's /behavior/issues messages mapped by path. */
 export function useSection<Row, Body>(
   projectId: string,
   cfg: SectionConfig<Row, Body>,
-  /** The API keeps ONE version for all behaviour sections of a project: tell sibling editors about a save. */
-  onSaved?: (oldVersion: number, newVersion: number) => void,
 ) {
   const [s, setS] = useState<SectionState<Row, Body>>({
     status: 'loading', loadError: '', rows: [], saved: [], version: 0, dirty: false, saving: false,
@@ -47,8 +45,6 @@ export function useSection<Row, Body>(
   })
   const cfgRef = useRef(cfg)
   cfgRef.current = cfg
-  const onSavedRef = useRef(onSaved)
-  onSavedRef.current = onSaved
   const latest = useRef(s)
   latest.current = s
 
@@ -104,7 +100,6 @@ export function useSection<Row, Body>(
     try {
       const read = await cfgRef.current.save(projectId, cur.rows.map(cfgRef.current.toBody), cur.version)
       const issues = await fetchIssues()
-      onSavedRef.current?.(cur.version, read.version)
       setS((p) => ({
         ...p, saving: false, saved: read.items, version: read.version, dirty: false, issues,
         savedNote: `Saved (version ${read.version}).`,
@@ -116,10 +111,5 @@ export function useSection<Row, Body>(
     }
   }, [projectId, fetchIssues])
 
-  /** A sibling section saved: if nothing else happened since our version, follow it (our edits stay). */
-  const adopt = useCallback((from: number, to: number) => {
-    setS((p) => (p.version === from ? { ...p, version: to } : p))
-  }, [])
-
-  return { state: s, change, save, reload: load, adopt }
+  return { state: s, change, save, reload: load }
 }

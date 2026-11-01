@@ -82,7 +82,7 @@ test('state machines: screenshots and axe (invoice approval)', async ({ page, re
   await importFixture(api, id, 'flow_invoices.json')
   await page.goto(`/#/p/${id}/machines`)
   const diagram = page.getByTestId('machine-diagram')
-  await expect(diagram.locator('.react-flow__node')).toHaveCount(6)
+  await expect(diagram.locator('.react-flow__node')).toHaveCount(7) // 6 + `withdrawn` (CO-7 fixture)
   await diagram.locator('button[data-transition="approve_large"]').click()
   await expect(page.getByTestId('transition-detail').getByRole('heading', { name: 'approve_large' })).toBeVisible()
   await page.waitForTimeout(800) // fitView settles

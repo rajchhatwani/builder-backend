@@ -1,0 +1,356 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Order Flow",
+    "slug": "order-flow",
+    "description": "Orders with a durable three-step saga (reserve stock, charge card, send receipt) and a job step",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "plural_path": "customers",
+      "options": {
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": false,
+          "max_length": 200
+        },
+        {
+          "name": "api_token",
+          "type": "string",
+          "required": false,
+          "max_length": 100
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "reference",
+          "type": "string",
+          "required": true,
+          "max_length": 60
+        },
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "submitted",
+            "approved"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Customer",
+      "to_entity": "Order",
+      "from_name": "orders",
+      "to_name": "customer",
+      "on_delete": "restrict",
+      "required": false
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://notify.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "manager",
+        "label": "Manager",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Customer",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@orders.example.com",
+      "from_name": "Order Desk"
+    }
+  },
+  "settings": [],
+  "sequences": [],
+  "lists": [],
+  "state_machines": [],
+  "seed": [],
+  "jobs": {
+    "enabled": true,
+    "queue": {
+      "backend": "postgres"
+    },
+    "worker_groups": [
+      {
+        "name": "default",
+        "concurrency": 2,
+        "queues": [
+          "default"
+        ],
+        "placement": "same_server"
+      }
+    ],
+    "jobs": [
+      {
+        "name": "send_receipt_email",
+        "queue": "default",
+        "handler": "send_receipt_email",
+        "retry": {
+          "max_attempts": 3,
+          "backoff_seconds": 5,
+          "backoff": "exponential"
+        },
+        "timeout_seconds": 60
+      }
+    ],
+    "schedules": [
+      {
+        "name": "weekly_receipts",
+        "job": "send_receipt_email",
+        "cron": "0 6 * * 1",
+        "timezone": "UTC",
+        "enabled": true,
+        "missed": "skip"
+      }
+    ]
+  },
+  "workflows": {
+    "enabled": true,
+    "runtime": "postgres",
+    "worker": {
+      "concurrency": 2
+    },
+    "workflows": [
+      {
+        "name": "order_flow",
+        "roles": [
+          "admin",
+          "manager"
+        ],
+        "on_failure": "compensate",
+        "timeout_seconds": 3600,
+        "steps": [
+          {
+            "name": "reserve_stock",
+            "kind": "hook",
+            "compensate": true,
+            "timeout_seconds": 30,
+            "retry": {
+              "max_attempts": 3,
+              "backoff_seconds": 5,
+              "backoff": "exponential"
+            }
+          },
+          {
+            "name": "charge_card",
+            "kind": "hook",
+            "compensate": true,
+            "timeout_seconds": 60,
+            "retry": {
+              "max_attempts": 3,
+              "backoff_seconds": 5,
+              "backoff": "exponential"
+            }
+          },
+          {
+            "name": "send_receipt",
+            "kind": "hook",
+            "compensate": false,
+            "timeout_seconds": 30,
+            "retry": {
+              "max_attempts": 3,
+              "backoff_seconds": 5,
+              "backoff": "exponential"
+            }
+          }
+        ]
+      },
+      {
+        "name": "receipt_flow",
+        "roles": [
+          "admin"
+        ],
+        "on_failure": "fail",
+        "timeout_seconds": 600,
+        "steps": [
+          {
+            "name": "prepare",
+            "kind": "hook",
+            "compensate": false,
+            "timeout_seconds": 30,
+            "retry": {
+              "max_attempts": 3,
+              "backoff_seconds": 5,
+              "backoff": "exponential"
+            }
+          },
+          {
+            "name": "email",
+            "kind": "job",
+            "job": "send_receipt_email",
+            "compensate": false,
+            "timeout_seconds": 30,
+            "retry": {
+              "max_attempts": 3,
+              "backoff_seconds": 5,
+              "backoff": "exponential"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -37,7 +37,6 @@ async def make_employees(client: AsyncClient, **overrides: _t.Any) -> dict[str, 
 
 def sample_leave_requests() -> dict[str, _t.Any]:
     return {
-        "request_no": _token(12),
         "start_date": (_dt.date(2026, 1, 1) + _dt.timedelta(days=_random.randint(0, 3000))).isoformat(),
         "end_date": (_dt.date(2026, 1, 1) + _dt.timedelta(days=_random.randint(0, 3000))).isoformat(),
         "days": _random.randint(1, 60),

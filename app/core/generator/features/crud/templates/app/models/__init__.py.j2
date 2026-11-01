@@ -1,18 +1,33 @@
 """Importing this package registers every table on `Base.metadata` (used by Alembic)."""
 
+{% if api_edge_tables %}
+from app.api_edge import models as _api_edge_models
+{% endif %}
 {% if auth %}
 from app.auth import models as _auth_models
 {% endif %}
 {% if change_history %}
 from app.change_history import models as _change_history_models
 {% endif %}
+{% if events %}
+from app.events import models as _event_models
+{% endif %}
+{% if jobs %}
+from app.jobs import models as _job_models
+{% endif %}
 from app.models import _associations
 from app.models._base import Base
 {% for e in entities %}
 from app.models.{{ e.table }} import {{ e.name }}
 {% endfor %}
+{% if notifications %}
+from app.notifications import models as _notification_models
+{% endif %}
 {% if payments %}
 from app.payments import models as _payments_models
+{% endif %}
+{% if providers %}
+from app.providers import models as _provider_models
 {% endif %}
 {% if storage %}
 from app.storage import models as _storage_models
@@ -25,6 +40,12 @@ from app.seed import models as _seed_models
 {% endif %}
 {% if state_machines %}
 from app.state_machines import models as _state_machine_models
+{% endif %}
+{% if webhooks %}
+from app.webhooks import models as _webhook_models
+{% endif %}
+{% if workflows %}
+from app.workflows import models as _workflow_models
 {% endif %}
 
 __all__ = [
@@ -53,5 +74,26 @@ __all__ = [
 {% endif %}
 {% if seed %}
     "_seed_models",
+{% endif %}
+{% if events %}
+    "_event_models",
+{% endif %}
+{% if providers %}
+    "_provider_models",
+{% endif %}
+{% if workflows %}
+    "_workflow_models",
+{% endif %}
+{% if jobs %}
+    "_job_models",
+{% endif %}
+{% if notifications %}
+    "_notification_models",
+{% endif %}
+{% if api_edge_tables %}
+    "_api_edge_models",
+{% endif %}
+{% if webhooks %}
+    "_webhook_models",
 {% endif %}
 ]

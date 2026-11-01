@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.auth import access as _access
+from app.auth.deps import CurrentUser
 from app.auth.service import effective_roles
+from app.core.errors import AppError
 from app.crud.leave_requests import LeaveRequestRepository
 from app.db import SessionDep
 from app.routers.leave_requests import _ACCESS as _ACCESS_leave_requests
@@ -37,6 +39,15 @@ class StateChange(BaseModel):
 _access_leave_requests = _ACCESS_leave_requests["get"]
 
 
+async def _can_update_leave_requests(user: CurrentUser) -> _access.Access | AppError:
+    """The entity's own update access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_leave_requests["update"](user)
+    except AppError as refused:
+        return refused
+
+
 def _roles_leave_requests(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -48,6 +59,7 @@ async def list_leave_requests_transitions(
     access: Annotated[_access.Access, Depends(_access_leave_requests)],
 ) -> list[dict[str, object]]:
     item = await LeaveRequestRepository(session, **access.repo_kwargs).get(item_id)
+    await engine.prime_settings(session, item)
     return engine.available("LeaveRequest", item, _roles_leave_requests(access))
 
 
@@ -57,7 +69,15 @@ async def apply_leave_requests_transition(
     name: str,
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_leave_requests)],
+    can_update: Annotated[_access.Access | AppError, Depends(_can_update_leave_requests)],
 ) -> LeaveRequestRead:
+    # No `roles` on the transition = anyone who may update this record: the entity's update access
+    # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
+    wanted = next((x for x in engine.machine("LeaveRequest")["transitions"] if x["name"] == name and not x["auto"]), None)
+    if wanted is not None and not wanted["roles"]:
+        if isinstance(can_update, AppError):
+            raise can_update
+        await LeaveRequestRepository(session, **can_update.repo_kwargs).get(item_id)
     repo = LeaveRequestRepository(session, **access.repo_kwargs)
     item = await engine.apply(
         repo,

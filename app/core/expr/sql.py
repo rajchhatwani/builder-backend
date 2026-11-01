@@ -8,6 +8,7 @@ import re
 
 from app.core.expr.errors import ExprError
 from app.core.expr.parser import Node
+from app.core.expr.scope import SETTING_PREFIX
 
 # Multiply by 0.0000000001, never divide by 10^10: numeric division keeps only ~16 significant digits.
 SQL_SCHEMA = """\
@@ -59,6 +60,10 @@ def to_sql(node: Node) -> str:
     if k == "lit":
         return _lit(node)
     if k == "field":
+        if node["name"].startswith(SETTING_PREFIX):
+            raise ExprError(
+                "settings cannot be used in SQL expressions: they are read at run time by the application"
+            )
         return quote_ident(node["name"])
     if k == "un":
         x = to_sql(node["x"])
@@ -67,8 +72,7 @@ def to_sql(node: Node) -> str:
         x = to_sql(node["x"])
         xt = node["x"]["t"]
         items = ", ".join(
-            _lit(i) if i["t"] == xt or xt == "string" or xt == "bool"
-            else f"({i['v']}::numeric)"
+            _lit(i) if i["t"] == xt or xt == "string" or xt == "bool" else f"({i['v']}::numeric)"
             for i in node["items"]
         )
         if xt == "int" and any(i["t"] == "decimal" for i in node["items"]):

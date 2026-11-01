@@ -26,7 +26,7 @@ test('new shell: grouped rail, deep links, Ctrl+K, flag off restores the old she
     await expect(rail.getByText('Map', { exact: false })).toBeVisible()
   }
   // every old section id (plus the v2-only State machines page) is reachable from the rail and keeps its deep link
-  expect(await rail.locator('a[href^="#/p/"]').count()).toBe(SECTION_IDS.length + 6) // + State machines (F1-4), Settings, Change history (F1-6A), Hooks (F1-5), Seed data (F1-6B), Rules (F1-3)
+  expect(await rail.locator('a[href^="#/p/"]').count()).toBe(SECTION_IDS.length + 14) // + Forms preview (F2-1), State machines (F1-4), Settings, Change history (F1-6A), Hooks (F1-5), Seed data (F1-6B), Rules (F1-3), History timeline (F2-4), Notifications (F2-6), Webhooks, Provider integrations, Jobs, Workers, Workflows (F2-2/F2-3)
 
   await page.goto(`/#/p/${id}/model`)
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()

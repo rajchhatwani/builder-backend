@@ -64,6 +64,16 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'forms',
+    label: 'Forms preview',
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M8 9h8M8 13h8M8 17h4" />
+      </>
+    ),
+  },
+  {
     id: 'history',
     label: 'Change history',
     icon: (
@@ -71,6 +81,85 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
         <path d="M3 12a9 9 0 1 0 3-6.7" />
         <path d="M3 4v5h5" />
         <path d="M12 8v4l3 2" />
+      </>
+    ),
+  },
+  {
+    id: 'timeline',
+    label: 'History timeline',
+    icon: (
+      <>
+        <path d="M6 4v16" />
+        <circle cx="6" cy="7" r="2" />
+        <circle cx="6" cy="17" r="2" />
+        <path d="M11 7h8M11 17h6" />
+      </>
+    ),
+  },
+  {
+    id: 'notifications',
+    label: 'Notifications',
+    icon: (
+      <>
+        <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+        <path d="M10 20a2 2 0 0 0 4 0" />
+      </>
+    ),
+  },
+  {
+    id: 'webhooks',
+    label: 'Webhooks',
+    icon: (
+      <>
+        <circle cx="6" cy="17" r="2.5" />
+        <circle cx="18" cy="17" r="2.5" />
+        <circle cx="12" cy="6" r="2.5" />
+        <path d="M12 8.5l-4.5 6.5M9 17h6M13.5 8.7l3.7 6.3" />
+      </>
+    ),
+  },
+  {
+    id: 'providers',
+    label: 'Provider integrations',
+    icon: (
+      <>
+        <path d="M9 3v5M15 3v5" />
+        <path d="M6 8h12v4a6 6 0 0 1-12 0z" />
+        <path d="M12 18v3" />
+      </>
+    ),
+  },
+  {
+    id: 'jobs',
+    label: 'Jobs and schedules',
+    icon: (
+      <>
+        <circle cx="12" cy="13" r="8" />
+        <path d="M12 9v4l3 2" />
+        <path d="M9 3h6" />
+      </>
+    ),
+  },
+  {
+    id: 'workers',
+    label: 'Workers and queues',
+    icon: (
+      <>
+        <rect x="3" y="4" width="18" height="6" rx="1.5" />
+        <rect x="3" y="14" width="18" height="6" rx="1.5" />
+        <path d="M7 7h.01M7 17h.01" />
+      </>
+    ),
+  },
+  {
+    id: 'workflows',
+    label: 'Workflows',
+    icon: (
+      <>
+        <rect x="3" y="3" width="6" height="5" rx="1" />
+        <rect x="15" y="9" width="6" height="5" rx="1" />
+        <rect x="3" y="16" width="6" height="5" rx="1" />
+        <path d="M9 5.5h3v6h3M6 8v8" />
       </>
     ),
   },

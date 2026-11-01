@@ -11,7 +11,7 @@ from typing import Any
 
 from app.core import naming
 from app.core.enums import OnDelete, RelationKind, RowRule
-from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation
+from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation, SpecSequence
 from app.core.validation_authorization import (
     authz_active,
     policies_for_entity,
@@ -179,7 +179,10 @@ class EntityCtx:
     policy: bool = False  # access is decided by abac / pbac policies, not role permissions
     machine: bool = False  # has a state machine (hooks, transition routes, state log)
     history: bool = False  # has change history (hooks, history route, ch_changes rows)
+    events: bool = False  # publishes created / updated / deleted events through the outbox
     custom_hooks: bool = False  # has custom hooks declared in the spec (lifecycle stages)
+    # (field, sequence, per_tenant, as_int) of fields the platform numbers from a sequence on create
+    numbered: tuple[tuple[str, str, bool, bool], ...] = ()
 
     @property
     def file_fields(self) -> tuple[FieldCtx, ...]:
@@ -714,8 +717,11 @@ def build_context(spec: Spec) -> ProjectCtx:
     joins.sort(key=lambda j: j.name)
     entity_ctxs = _attach_access(spec, entity_ctxs)
     entity_ctxs = _attach_machines(spec, entity_ctxs)
+    entity_ctxs = _attach_numbering(spec, entity_ctxs)
     entity_ctxs = _attach_history(spec, entity_ctxs)
     entity_ctxs = _attach_hooks(spec, entity_ctxs)
+    if spec.events is not None and spec.events.enabled:
+        entity_ctxs = tuple(replace(e, events=True) for e in entity_ctxs)
     all_tables = sorted({e.table for e in entity_ctxs} | {j.name for j in joins})
     return ProjectCtx(
         spec=spec,
@@ -749,6 +755,37 @@ def _attach_machines(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[Entit
                 fields=fields,
                 machine=True,
                 non_nullable=tuple(n for n in e.non_nullable if n != name),
+            )
+        )
+    return tuple(out)
+
+
+def _attach_numbering(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Mark the fields numbered by a sequence as platform-managed (not in the create / update schemas)."""
+    by_entity: dict[str, dict[str, SpecSequence]] = {}
+    for q in spec.sequences:
+        if q.entity is not None and q.field is not None:
+            by_entity.setdefault(q.entity, {})[q.field] = q
+    out: list[EntityCtx] = []
+    for e in entities:
+        mine = by_entity.get(e.name) or {}
+        if not mine:
+            out.append(e)
+            continue
+        fields = tuple(
+            replace(f, managed=True, patchable=False) if f.name in mine else f for f in e.fields
+        )
+        numbered = tuple(
+            (f.name, mine[f.name].name, mine[f.name].per_tenant, f.type == "bigint")
+            for f in e.fields
+            if f.name in mine
+        )
+        out.append(
+            replace(
+                e,
+                fields=fields,
+                numbered=numbered,
+                non_nullable=tuple(n for n in e.non_nullable if n not in mine),
             )
         )
     return tuple(out)

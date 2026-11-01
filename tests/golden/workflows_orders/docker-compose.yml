@@ -1,0 +1,89 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      # Copy .env.example to .env and fill these in; compose reads .env automatically.
+      AUTH_JWT_SECRET: ${AUTH_JWT_SECRET:?set AUTH_JWT_SECRET in .env (see .env.example)}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    ports:
+      - "${API_PORT:-8000}:8000"
+
+  # Job worker group "default" (2 job(s) at a time per process). Scale with
+  # `docker compose up --scale worker-default=N`. Your handlers (app/hooks/jobs.py) may need more settings here.
+  worker-default:
+    build: .
+    command: ["python", "-m", "app.jobs.worker", "--group", "default"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      APP_ENV: ${APP_ENV:-production}
+      JOBS_CONCURRENCY: ${JOBS_CONCURRENCY_DEFAULT:-2}
+      DB_POOL_SIZE: ${DB_POOL_SIZE_DEFAULT:-4}
+      DB_MAX_OVERFLOW: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+  # Durable workflow worker. Scale with `docker compose up --scale workflow-worker=N`: a run is driven by one
+  # worker at a time and survives this process being killed. Your step functions (app/hooks/workflows.py)
+  # may need more settings here.
+  workflow-worker:
+    build: .
+    command: ["python", "-m", "app.workflows.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      APP_ENV: ${APP_ENV:-production}
+      WORKFLOWS_CONCURRENCY: ${WORKFLOWS_CONCURRENCY:-2}
+      DB_POOL_SIZE: ${DB_POOL_SIZE_WORKFLOWS:-4}
+      DB_MAX_OVERFLOW: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+
+volumes:
+  db_data:

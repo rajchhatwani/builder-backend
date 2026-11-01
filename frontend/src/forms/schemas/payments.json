@@ -1,0 +1,486 @@
+{
+  "description": "Body of PUT /projects/{id}/payments.",
+  "properties": {
+    "cancel_urls": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Cancel Urls",
+      "type": "array",
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "currencies": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Currencies",
+      "type": "array",
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "max_amount_minor": {
+      "default": 10000000,
+      "maximum": 9000000000000000,
+      "minimum": 1,
+      "title": "Max Amount Minor",
+      "type": "integer"
+    },
+    "payable": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Payable"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider": {
+      "$ref": "#/$defs/PaymentProvider",
+      "default": "stripe"
+    },
+    "refund_approval_threshold_minor": {
+      "anyOf": [
+        {
+          "maximum": 9000000000000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Refund Approval Threshold Minor"
+    },
+    "roles": {
+      "$ref": "#/$defs/PaymentsRoles"
+    },
+    "scale": {
+      "$ref": "#/$defs/PaymentsScale"
+    },
+    "security": {
+      "$ref": "#/$defs/PaymentsSecurity"
+    },
+    "success_urls": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Success Urls",
+      "type": "array",
+      "x-ui": {
+        "widget": "csv"
+      }
+    }
+  },
+  "title": "Payments",
+  "type": "object",
+  "$defs": {
+    "Payable": {
+      "properties": {
+        "amount_field": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Amount Field",
+          "type": "string"
+        },
+        "currency": {
+          "anyOf": [
+            {
+              "maxLength": 3,
+              "minLength": 3,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Currency"
+        },
+        "currency_field": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Currency Field"
+        },
+        "entity": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Entity",
+          "type": "string"
+        },
+        "status_field": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status Field",
+          "type": "string"
+        },
+        "status_paid": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status Paid",
+          "type": "string"
+        },
+        "status_partially_refunded": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status Partially Refunded",
+          "type": "string"
+        },
+        "status_pending": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status Pending",
+          "type": "string"
+        },
+        "status_refunded": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Status Refunded",
+          "type": "string"
+        }
+      },
+      "required": [
+        "entity",
+        "amount_field",
+        "status_field",
+        "status_pending",
+        "status_paid",
+        "status_partially_refunded",
+        "status_refunded"
+      ],
+      "title": "Payable",
+      "type": "object"
+    },
+    "PaymentProvider": {
+      "description": "Payment service providers the generated payments module can talk to.",
+      "enum": [
+        "stripe",
+        "razorpay"
+      ],
+      "title": "PaymentProvider",
+      "type": "string"
+    },
+    "PaymentsRoles": {
+      "properties": {
+        "approve_refund": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Approve Refund",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "create": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Create",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "operate": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Operate",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Read",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read_all": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Read All",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "refund": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Refund",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "title": "PaymentsRoles",
+      "type": "object"
+    },
+    "PaymentsScale": {
+      "properties": {
+        "api_replicas": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Api Replicas"
+        },
+        "availability": {
+          "$ref": "#/$defs/PaymentsAvailability",
+          "default": "single"
+        },
+        "db_max_connections": {
+          "default": 100,
+          "maximum": 100000,
+          "minimum": 10,
+          "title": "Db Max Connections",
+          "type": "integer"
+        },
+        "jobs_retention_days": {
+          "default": 30,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Jobs Retention Days",
+          "type": "integer"
+        },
+        "kubernetes": {
+          "default": false,
+          "title": "Kubernetes",
+          "type": "boolean"
+        },
+        "peak_payments_per_minute": {
+          "anyOf": [
+            {
+              "maximum": 10000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peak Payments Per Minute"
+        },
+        "peak_webhooks_per_minute": {
+          "anyOf": [
+            {
+              "maximum": 100000000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Peak Webhooks Per Minute"
+        },
+        "pgbouncer": {
+          "default": false,
+          "title": "Pgbouncer",
+          "type": "boolean"
+        },
+        "pool_size": {
+          "anyOf": [
+            {
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Pool Size"
+        },
+        "profile": {
+          "$ref": "#/$defs/PaymentsProfile",
+          "default": "small"
+        },
+        "server_workers": {
+          "anyOf": [
+            {
+              "maximum": 64,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Server Workers"
+        },
+        "webhook_events_retention_days": {
+          "default": 90,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Webhook Events Retention Days",
+          "type": "integer"
+        },
+        "webhook_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/WebhookMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "worker_concurrency": {
+          "anyOf": [
+            {
+              "maximum": 256,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Worker Concurrency"
+        },
+        "worker_replicas": {
+          "anyOf": [
+            {
+              "maximum": 1000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Worker Replicas"
+        }
+      },
+      "title": "PaymentsScale",
+      "type": "object"
+    },
+    "PaymentsAvailability": {
+      "description": "single: one of everything is acceptable. ha: no single process may be a point of failure.",
+      "enum": [
+        "single",
+        "ha"
+      ],
+      "title": "PaymentsAvailability",
+      "type": "string"
+    },
+    "PaymentsProfile": {
+      "description": "Starting point for the sizing numbers; any number the user sets wins.",
+      "enum": [
+        "small",
+        "medium",
+        "large"
+      ],
+      "title": "PaymentsProfile",
+      "type": "string"
+    },
+    "WebhookMode": {
+      "description": "inline: a webhook is processed inside the request. queued: stored and handed to workers.",
+      "enum": [
+        "inline",
+        "queued"
+      ],
+      "title": "WebhookMode",
+      "type": "string"
+    },
+    "PaymentsSecurity": {
+      "properties": {
+        "allow_payer_edits": {
+          "default": false,
+          "title": "Allow Payer Edits",
+          "type": "boolean"
+        },
+        "audit_retention_days": {
+          "default": 2555,
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Audit Retention Days",
+          "type": "integer"
+        },
+        "idempotency_ttl_hours": {
+          "default": 48,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Idempotency Ttl Hours",
+          "type": "integer"
+        },
+        "secrets_from_files": {
+          "default": true,
+          "title": "Secrets From Files",
+          "type": "boolean"
+        },
+        "webhook_ip_allowlist_enabled": {
+          "default": false,
+          "title": "Webhook Ip Allowlist Enabled",
+          "type": "boolean"
+        },
+        "webhook_max_body_bytes": {
+          "default": 262144,
+          "maximum": 100000000,
+          "minimum": 1,
+          "title": "Webhook Max Body Bytes",
+          "type": "integer"
+        },
+        "webhook_tolerance_seconds": {
+          "default": 300,
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Webhook Tolerance Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "PaymentsSecurity",
+      "type": "object"
+    }
+  },
+  "x-ui": {
+    "order": [
+      "provider",
+      "payable",
+      "currencies",
+      "max_amount_minor",
+      "success_urls",
+      "cancel_urls",
+      "roles",
+      "refund_approval_threshold_minor",
+      "scale",
+      "security"
+    ]
+  }
+}

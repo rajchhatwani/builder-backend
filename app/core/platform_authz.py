@@ -37,6 +37,8 @@ _OWNER_ONLY: tuple[tuple[str, str], ...] = (
     ("DELETE", "/projects/{project_id}/tokens/"),
     # Credentials for e-mail / SMS providers: the most sensitive thing the builder stores.
     ("PUT", "/projects/{project_id}/auth/secrets"),
+    # Effectful hooks (CO-3): only an owner may switch them on or change their allow-lists.
+    ("PUT", "/projects/{project_id}/behavior/hook-effects"),
 )
 
 # Routes that are about no project at all: any signed-in, active person may call them.

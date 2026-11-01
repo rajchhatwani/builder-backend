@@ -26,6 +26,7 @@ from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
 from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
+from app.models.spec_op import SpecOp
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
 
@@ -60,6 +61,7 @@ __all__ = [
     "ScimGroupMember",
     "ScimUser",
     "Relation",
+    "SpecOp",
     "SsoConnection",
     "SsoDomain",
     "SsoLoginRequest",

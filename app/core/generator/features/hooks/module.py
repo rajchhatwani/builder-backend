@@ -5,7 +5,9 @@ Emitted only when the spec declares at least one hook:
   app/hooks_gen/contracts.py   the input and output Pydantic models, generated from the field lists
   app/hooks_gen/registry.py    wires every hook into its entity's lifecycle stage or transition guard
   app/hooks_gen/runtime.py     typed call, wall-clock limit, failure policy
-  app/platform_sdk/            the only part of the platform a hook body may import
+  app/hooks_gen/access.py      the access rules `find_rows` applies: the same as the entity's own list endpoint
+  app/platform_sdk/            the only part of the platform a hook body may import. `reads` contract: the
+                               rows `find_rows` returns are filtered by the access policies of the acting user
   app/platform_gate.py         gates G0-G7, gate_version 2 (a byte-for-byte copy of app/core/hook_gates.py)
   app/custom/hooks/<name>.py   one stub per hook (zone custom): fixed header and signature, free body
   platform/hooks.json          what the gate checks against: signatures, stub frames, file hashes
@@ -16,6 +18,7 @@ The stubs are in the `custom` zone: `platform/zones.json` says so, and
 a later generation cannot replace a body somebody wrote.
 """
 
+import ast
 import json
 import pprint
 import re
@@ -28,7 +31,10 @@ from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.generator.zones import custom_prefixes, zone_for
-from app.core.spec_models import Spec, SpecHook, SpecHookField
+from app.core.spec_models import Spec, SpecHook, SpecHookEffectBudget, SpecHookField
+from app.core.validation_notifications import notifications_active
+from app.core.validation_providers import providers_active
+from app.core.validation_webhooks import webhooks_active
 from app.core.validation_hooks import (
     STAGES,
     ceilings_for,
@@ -69,9 +75,17 @@ _SAMPLE = {
 }
 # What a hook body may import from the SDK, and which of those do I/O or read the clock.
 SDK_BASE_EXPORTS = (
-    "clamp", "current_principal", "find_rows", "is_blank", "log", "now", "pct_diff", "slugify"
+    "clamp",
+    "current_principal",
+    "find_rows",
+    "is_blank",
+    "log",
+    "now",
+    "pct_diff",
+    "slugify",
 )
 SDK_IO = ("find_rows", "now")
+EFFECT_FUNCTIONS = ("notify", "post_webhook", "send_email", "send_sms")  # opt-in effectful tier (H2/H3)
 HOOK_INIT_FILES = ("app/custom/__init__.py", "app/custom/hooks/__init__.py")
 
 
@@ -128,15 +142,16 @@ def _check_ident(value: str) -> str:
 
 
 def _model_source(name: str, fields: list[SpecHookField]) -> str:
-    lines = [f"class {_check_ident(name)}(BaseModel):", '    model_config = ConfigDict(extra="forbid", frozen=True)']
+    lines = [
+        f"class {_check_ident(name)}(BaseModel):",
+        '    model_config = ConfigDict(extra="forbid", frozen=True)',
+    ]
     if fields:
         lines.append("")
     for f in fields:
         annotation = _PY_TYPE[f.type]
         field_name = _check_ident(f.name)
-        lines.append(
-            f"    {field_name}: {annotation}" + ("" if f.required else " | None = None")
-        )
+        lines.append(f"    {field_name}: {annotation}" + ("" if f.required else " | None = None"))
     return "\n".join(lines)
 
 
@@ -179,11 +194,101 @@ def _sample(fields: list[SpecHookField]) -> dict[str, Any]:
     return {f.name: _SAMPLE[f.type] for f in fields}
 
 
+def effects_on(spec: Spec) -> bool:
+    """The effectful tier is generated only for an explicit opt-in that at least one hook uses."""
+    fx = spec.hook_effects
+    return fx is not None and fx.enabled and any(h.effects for h in spec.hooks)
+
+
+def effect_functions(spec: Spec) -> list[str]:
+    """The effect functions of the SDK: one per platform block the project has switched on."""
+    out: list[str] = []
+    if webhooks_active(spec):
+        out.append("post_webhook")
+    if notifications_active(spec):
+        out.append("notify")
+    if providers_active(spec):
+        out += ["send_email", "send_sms"]
+    return sorted(out)
+
+
+def _limits(hooks: list["HookView"]) -> list[dict[str, Any]]:
+    out = []
+    for h in hooks:
+        if not h.spec.effects:
+            continue
+        eb = h.spec.effect_budget or SpecHookEffectBudget()
+        out.append(
+            {
+                "name": h.name,
+                "effects": sorted(h.spec.effects),
+                "wall_seconds": h.spec.budget.cpu_ms / 1000 + 0.1,
+                "calls_per_effect": eb.calls_per_effect,
+                "payload_bytes": eb.payload_bytes,
+                "outbound_per_minute": eb.outbound_per_minute,
+            }
+        )
+    return out
+
+
 def sdk_exports(project: ProjectCtx) -> list[str]:
     names = list(SDK_BASE_EXPORTS)
+    if effects_on(project.spec):
+        names += effect_functions(project.spec)
     if project.auth is not None:
         names.append("Principal")
     return sorted(names)
+
+
+def _read_op(entity: Any) -> str | None:
+    """The operation whose access rules a hook's read follows: the entity's own list, else its get."""
+    for op in ("list", "get"):
+        if op in entity.ops:
+            return op
+    return None
+
+
+def access_rules(project: ProjectCtx, hooks: list[HookView]) -> dict[str, dict[str, Any]]:
+    """Per entity a hook may read: how the entity's own list endpoint is guarded, as pure data.
+
+    mode "roles": the role permissions (`build_access`); "policy": the abac / pbac engine;
+    "open": the endpoint is public; "deny": no read endpoint exists, so a hook gets no rows either.
+    The generated app/hooks_gen/access.py turns this into the very `Access` the route builds."""
+    out: dict[str, dict[str, Any]] = {}
+    for name in sorted({n for h in hooks for n in h.spec.reads}):
+        entity = project.entity_by_name[name]
+        op = _read_op(entity)
+        rule: dict[str, Any] = {
+            "repo": (f"app.crud.{entity.table}", f"{name}Repository"),
+            "read": (f"app.schemas.{entity.table}", f"{name}Read"),
+            "op": op,
+            "mode": "deny" if op is None else "open",
+            "needs_user": False,
+            "tenant": False,
+            "build": {},
+        }
+        ctx = next((a for a in entity.access if a.op == op), None)
+        if op is not None and ctx is not None:
+            rule["needs_user"] = ctx.needs_user or ctx.policy
+            rule["tenant"] = ctx.tenant
+            if ctx.policy:
+                rule["mode"] = "policy"
+            else:
+                rule["mode"] = "roles"
+                build: dict[str, Any] = {}
+                if ctx.roles:
+                    build["roles"] = tuple(ctx.roles)
+                if ctx.owner:
+                    build["owner"] = True
+                if ctx.admin_sees_all:
+                    build["admin_sees_all"] = True
+                if ctx.match is not None:
+                    build["match"] = (ctx.match[0], ast.literal_eval(ctx.match[1]))
+                if ctx.tenant:
+                    build["tenant"] = True
+                rule["build"] = build
+        out[name] = rule
+    return out
 
 
 def definitions(project: ProjectCtx, hooks: list[HookView]) -> dict[str, dict[str, Any]]:
@@ -195,10 +300,6 @@ def definitions(project: ProjectCtx, hooks: list[HookView]) -> dict[str, dict[st
         for f in entities[h.entity].fields:
             if f.type == "enum" and f.name in {o.name for o in h.spec.output.fields}:
                 enums[f.name] = list(f.enum_values or [])
-        models = {
-            name: (f"app.models.{project.entity_by_name[name].table}", name)
-            for name in sorted(h.spec.reads)
-        }
         out[h.name] = {
             "name": h.name,
             "point": h.spec.point,
@@ -211,10 +312,11 @@ def definitions(project: ProjectCtx, hooks: list[HookView]) -> dict[str, dict[st
             "rows": h.spec.budget.rows,
             "outbound_calls": h.spec.budget.outbound_calls,
             "reads": sorted(h.spec.reads),
-            "models": models,
             "input_fields": [f.name for f in h.spec.input.fields],
             "output_fields": [f.name for f in h.spec.output.fields],
-            "fallback": dict(h.spec.fallback) if h.policy == "fallback" and h.spec.fallback else None,
+            "fallback": dict(h.spec.fallback)
+            if h.policy == "fallback" and h.spec.fallback
+            else None,
             "enums": enums,
         }
     return out
@@ -261,6 +363,9 @@ def build_manifest(project: ProjectCtx, files: FileTree) -> str:
                 "frame_sha256": digest,
             }
         )
+        if effects_on(project.spec):
+            entries[-1]["effects"] = sorted(h.spec.effects)
+            entries[-1]["effect_budget"] = (h.spec.effect_budget or SpecHookEffectBudget()).model_dump()
     manifest = {
         "version": 1,
         "contract": CONTRACT,
@@ -269,13 +374,20 @@ def build_manifest(project: ProjectCtx, files: FileTree) -> str:
         "ceilings": {kind: ceilings_for(kind) for kind in ("pure", "effect")},
         "custom_prefixes": custom_prefixes(),
         "sdk_exports": sdk_exports(project),
-        "sdk_io": sorted(SDK_IO),
+        "sdk_io": sorted(SDK_IO + (tuple(effect_functions(project.spec)) if effects_on(project.spec) else ())),
         "contract_exports": sorted(m.name for h in hooks for m in (h.spec.input, h.spec.output)),
         "hooks": entries,
         "locked_sha256": locked,
         "generated_sha256": generated,
         "guarded_sha256": guarded,
     }
+    if effects_on(project.spec):
+        fx = project.spec.hook_effects
+        manifest["effects"] = {
+            "enabled": True,
+            "trusted_authors_only": True,
+            "webhook_hosts": sorted(fx.webhook_hosts) if fx is not None else [],
+        }
     return json.dumps(manifest, indent=2, sort_keys=True) + "\n"
 
 
@@ -297,21 +409,51 @@ class HooksModule:
             return {}
         hooks = views(project.spec)
         auth = project.auth is not None
+        fx_on = effects_on(project.spec)
         files: FileTree = {
             "app/custom/__init__.py": "",
             "app/custom/hooks/__init__.py": "",
             "app/hooks_gen/__init__.py": "",
             "app/hooks_gen/contracts.py": contracts_source(hooks),
             "app/hooks_gen/runtime.py": read_verbatim(_TEMPLATES, "app/hooks_gen/runtime.py.tpl"),
-            "app/platform_gate.py": Path(hook_gates.__file__).read_text(encoding="utf-8").replace("\r\n", "\n"),
-            "app/platform_sdk/helpers.py": read_verbatim(_TEMPLATES, "app/platform_sdk/helpers.py.tpl"),
+            "app/platform_gate.py": Path(hook_gates.__file__)
+            .read_text(encoding="utf-8")
+            .replace("\r\n", "\n"),
+            "app/hooks_gen/access.py": render_template(
+                self._env,
+                "app/hooks_gen/access.py.j2",
+                auth=auth,
+                policy=any(e.policy for e in project.entity_by_name.values()),
+                rules=pprint.pformat(access_rules(project, hooks), width=96, sort_dicts=True),
+            ),
+            "app/platform_sdk/helpers.py": read_verbatim(
+                _TEMPLATES, "app/platform_sdk/helpers.py.tpl"
+            ),
             "app/platform_sdk/env.py": render_template(
-                self._env, "app/platform_sdk/env.py.j2", auth=auth
+                self._env, "app/platform_sdk/env.py.j2", auth=auth, effects=fx_on
             ),
             "app/platform_sdk/__init__.py": render_template(
-                self._env, "app/platform_sdk/__init__.py.j2", auth=auth, exports=sdk_exports(project)
+                self._env,
+                "app/platform_sdk/__init__.py.j2",
+                auth=auth,
+                exports=sdk_exports(project),
+                effects=fx_on,
+                effect_imports=", ".join(effect_functions(project.spec)),
             ),
         }
+        if fx_on:
+            spec = project.spec
+            fx = spec.hook_effects
+            files["app/platform_sdk/budget.py"] = read_verbatim(_TEMPLATES, "app/platform_sdk/budget.py.tpl")
+            files["app/platform_sdk/effects.py"] = render_template(
+                self._env,
+                "app/platform_sdk/effects.py.j2",
+                providers=providers_active(spec),
+                webhooks=webhooks_active(spec),
+                notifications=notifications_active(spec),
+                limits=_limits(hooks),
+                webhook_hosts=repr(sorted(fx.webhook_hosts)) if fx is not None else "[]",
+            )
         defs = definitions(project, hooks)
         files["app/hooks_gen/registry.py"] = render_template(
             self._env,
@@ -329,8 +471,12 @@ class HooksModule:
                 "output_model": h.output_model,
                 "input_fields": [f.name for f in h.spec.input.fields],
                 "required_input": [f.name for f in h.spec.input.fields if f.required],
-                "input_sample": pprint.pformat(_sample(list(h.spec.input.fields)), sort_dicts=False),
-                "output_sample": pprint.pformat(_sample(list(h.spec.output.fields)), sort_dicts=False),
+                "input_sample": pprint.pformat(
+                    _sample(list(h.spec.input.fields)), sort_dicts=False
+                ),
+                "output_sample": pprint.pformat(
+                    _sample(list(h.spec.output.fields)), sort_dicts=False
+                ),
                 "signature": h.signature,
                 "open_marker": h.open_marker,
             }

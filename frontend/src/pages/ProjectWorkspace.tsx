@@ -36,13 +36,27 @@ import { statusKey, useProjectStatus } from '../shell/home/useProjectStatus'
 import { ShellV2 } from '../shell/ShellV2'
 import { MachinesPage } from '../shell/machines/MachinesPage'
 import type { AnySection } from '../shell/pages'
+import { pageFlagOn } from '../shell/pageFlag'
 
 // F1-6A pages: own chunks, kept out of the main bundle
 const SettingsPage = lazy(() => import('../shell/behavior/SettingsPage').then((m) => ({ default: m.SettingsPage })))
 const SeedPage = lazy(() => import('../shell/behavior/SeedPage').then((m) => ({ default: m.SeedPage })))
+const FormsPreviewPage = lazy(() => import('../shell/forms/FormsPreviewPage').then((m) => ({ default: m.FormsPreviewPage })))
+const NotificationsPage = lazy(() => import('../shell/notifications/NotificationsPage').then((m) => ({ default: m.NotificationsPage })))
+const TimelinePage = lazy(() => import('../shell/timeline/TimelinePage').then((m) => ({ default: m.TimelinePage })))
 const HooksPage = lazy(() => import('../shell/behavior/HooksPage').then((m) => ({ default: m.HooksPage })))
 const HomePage = lazy(() => import('../shell/home/HomePage').then((m) => ({ default: m.HomePage })))
 const RulesPage = lazy(() => import('../shell/rules/RulesPage').then((m) => ({ default: m.RulesPage })))
+// F2-2 / F2-3 pages: own chunks. The first four replace an existing panel and sit behind their own flag (ui.<name>=v2).
+const PaymentsFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.PaymentsFormPage })))
+const StorageFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.StorageFormPage })))
+const ObservabilityFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.ObservabilityFormPage })))
+const DeploymentFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.DeploymentFormPage })))
+const WebhooksPage = lazy(() => import('../shell/connect/WebhooksPage').then((m) => ({ default: m.WebhooksPage })))
+const ProvidersPage = lazy(() => import('../shell/connect/ProvidersPage').then((m) => ({ default: m.ProvidersPage })))
+const JobsPage = lazy(() => import('../shell/operate/JobsPage').then((m) => ({ default: m.JobsPage })))
+const WorkersPage = lazy(() => import('../shell/operate/WorkersPage').then((m) => ({ default: m.WorkersPage })))
+const WorkflowsPage = lazy(() => import('../shell/operate/WorkflowsPage').then((m) => ({ default: m.WorkflowsPage })))
 const HistoryPage = lazy(() => import('../shell/behavior/HistoryPage').then((m) => ({ default: m.HistoryPage })))
 
 /** The organization that owns this project (one call: projects carry `organization_id`). */
@@ -329,6 +343,21 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <HooksPage projectId={project.id} />
         </Suspense>
       )}
+      {section === 'timeline' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <TimelinePage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'notifications' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <NotificationsPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'forms' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <FormsPreviewPage />
+        </Suspense>
+      )}
       {section === 'seed' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <SeedPage projectId={project.id} />
@@ -383,7 +412,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'payments' && (
+      {section === 'payments' && v2 && pageFlagOn('payments') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <PaymentsFormPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'payments' && !(v2 && pageFlagOn('payments')) && (
         <>
           <PageTitle title="Payments">
             Take card payments through a hosted checkout, with refunds, an audit trail and servers sized for your traffic.
@@ -399,7 +433,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'storage' && (
+      {section === 'storage' && v2 && pageFlagOn('storage') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <StorageFormPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'storage' && !(v2 && pageFlagOn('storage')) && (
         <>
           <PageTitle title="File uploads">
             Accept files of any type, scanned for malware before they are stored in S3 or a MinIO-compatible bucket, with
@@ -432,7 +471,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'observability' && (
+      {section === 'observability' && v2 && pageFlagOn('observability') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <ObservabilityFormPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'observability' && !(v2 && pageFlagOn('observability')) && (
         <>
           <PageTitle title="Observability">
             Traces, metrics and trace-correlated logs from your generated backend, through OpenTelemetry, with secrets kept out.
@@ -450,13 +494,28 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'deployment' && (
+      {section === 'deployment' && v2 && pageFlagOn('deployment') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <DeploymentFormPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'deployment' && !(v2 && pageFlagOn('deployment')) && (
         <>
           <PageTitle title="Deploy">
             GitHub Actions pipelines and Terraform that put your backend on AWS, Azure or Google Cloud, with no stored cloud credentials.
           </PageTitle>
           <DeploymentPanel projectId={project.id} onChanged={load} />
         </>
+      )}
+
+      {v2 && (section === 'webhooks' || section === 'providers' || section === 'jobs' || section === 'workers' || section === 'workflows') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          {section === 'webhooks' && <WebhooksPage projectId={project.id} />}
+          {section === 'providers' && <ProvidersPage projectId={project.id} />}
+          {section === 'jobs' && <JobsPage projectId={project.id} />}
+          {section === 'workers' && <WorkersPage projectId={project.id} />}
+          {section === 'workflows' && <WorkflowsPage projectId={project.id} />}
+        </Suspense>
       )}
 
       {section === 'integrations' && <IntegrationsPanel projectId={project.id} />}

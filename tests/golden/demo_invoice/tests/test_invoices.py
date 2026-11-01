@@ -52,10 +52,10 @@ async def test_invoices_crud_flow(client: AsyncClient) -> None:
     assert too_big.status_code == 422, too_big.text
     assert too_big.json()["code"] == "validation_error"
 
-    new_value = _factories.sample_invoices()["invoice_no"]
-    patched = await client.patch(f"/invoices/{item_id}", json={"invoice_no": new_value})
+    new_value = _factories.sample_invoices()["memo"]
+    patched = await client.patch(f"/invoices/{item_id}", json={"memo": new_value})
     assert patched.status_code == 200, patched.text
-    assert patched.json()["invoice_no"] == new_value
+    assert patched.json()["memo"] == new_value
 
     replacement = await _factories.payload_invoices(client, supplier_id=created["supplier_id"])
     replaced = await client.put(f"/invoices/{item_id}", json=replacement)

@@ -27,6 +27,7 @@ from app.api import (
     impersonation,
     keycloak,
     members,
+    migration_plan,
     observability,
     orgs,
     payments,
@@ -34,6 +35,7 @@ from app.api import (
     relations,
     scim,
     spec,
+    spec_ops,
     sso,
     status,
     storage,
@@ -274,8 +276,10 @@ def create_app() -> FastAPI:
         fields.router,
         relations.router,
         spec.router,
+        spec_ops.router,
         status.router,
         generate.router,
+        migration_plan.router,
     ):
         app.include_router(router, dependencies=guarded)
 

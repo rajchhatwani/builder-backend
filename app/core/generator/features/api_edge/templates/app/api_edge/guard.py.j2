@@ -1,0 +1,122 @@
+"""The guard every route passes through (generated): rate limit, then quota, then idempotency claim.
+
+It is an application-wide dependency, so custom routers are covered too. Replays and refusals raise an
+AppError; the middleware turns the stored response into the reply and adds the edge's headers.
+
+A replayed request still counts against the rate limit and the quota (it was a request); the claim comes
+last because it holds the request's connection until the response is committed."""
+
+import structlog
+from fastapi import Request
+{% if idempotency %}
+from sqlalchemy.ext.asyncio import AsyncSession
+{% endif %}
+
+from app.api_edge import caller{% if rate %}, definitions{% endif %}{% if idempotency %}, idempotency{% endif %}{% if quota %}, quota{% endif %}{% if rate %}, ratelimit{% endif %}{{ "" }}
+{% if idempotency %}
+from app.api_edge.state import EdgeState, Replay
+{% else %}
+from app.api_edge.state import EdgeState
+{% endif %}
+from app.core.errors import AppError
+from app.db import SessionDep
+
+logger = structlog.get_logger()
+
+SAFE_METHODS = ("GET", "HEAD", "OPTIONS")
+_EXEMPT = ("/docs", "/redoc", "/openapi.json", "/health")
+
+
+def exempt(path: str) -> bool:
+    return any(path == p or path.startswith(p + "/") for p in _EXEMPT)
+
+
+{% if rate %}
+async def _rate_limit(request: Request, edge: EdgeState, who: caller.Caller) -> None:
+    cfg = definitions.RATE_LIMITS
+    assert cfg is not None
+    group = ratelimit.select_group(request.url.path, request.method)
+    try:
+        decision = await ratelimit.take(ratelimit.limits_for(group, who), group["cost"])
+    except ratelimit.StoreError as exc:
+        reading = request.method in SAFE_METHODS
+        if reading and cfg["read_fail_open"]:
+            logger.warning("rate_limit_store_unavailable", error=str(exc), allowed=True)
+            return
+        logger.error("rate_limit_store_unavailable", error=str(exc), allowed=False)  # fail closed
+        raise AppError("rate_limit_unavailable", "Rate limiting is unavailable: try again shortly", 503) from None
+    edge.set_header("RateLimit-Limit", str(decision.limit))
+    edge.set_header("RateLimit-Remaining", str(decision.remaining))
+    edge.set_header("RateLimit-Reset", str(decision.reset_seconds))
+    if not decision.allowed:
+        edge.set_header("Retry-After", str(decision.retry_after))
+        raise AppError("rate_limited", "Too many requests: slow down", 429)
+
+
+{% endif %}
+{% if quota %}
+async def _quota(request: Request, edge: EdgeState, who: caller.Caller) -> None:
+    matched = quota.matching(request.url.path, request.method)
+    if not matched:
+        return
+    try:
+        exceeded = await quota.charge(who.tenant_key, matched)
+    except quota.StoreError as exc:
+        logger.error("quota_store_unavailable", error=str(exc))  # fail closed
+        raise AppError("quota_unavailable", "Quotas are unavailable: try again shortly", 503) from None
+    if exceeded is not None:
+        edge.set_header("Retry-After", str(exceeded.retry_after))
+        raise AppError(
+            "quota_exceeded",
+            f"The {exceeded.meter} quota ({exceeded.limit}) is used up for this period",
+            429,
+            [{"meter": exceeded.meter, "limit": exceeded.limit, "used": exceeded.used}],
+        )
+
+
+{% endif %}
+{% if idempotency %}
+async def _claim(
+    request: Request, edge: EdgeState, who: caller.Caller, session: AsyncSession
+) -> None:
+    assert edge.key is not None and edge.request_hash is not None
+    outcome = await idempotency.claim(
+        session, who, edge.key, request.method, request.url.path, edge.request_hash
+    )
+    if isinstance(outcome, Replay):
+        await session.rollback()
+        edge.replay = outcome
+        edge.set_header("Idempotent-Replayed", "true")
+        raise AppError("idempotent_replay", "replayed", outcome.status)
+    edge.claim_id = outcome
+    edge.after_commit = []  # after_commit hooks wait for the real commit (see deferral.py)
+    real_commit = session.commit
+
+    async def deferred_commit() -> None:
+        # The business write is part of the idempotent request: it commits with the stored response,
+        # and the middleware does the real commit. after_commit hooks are held back until then.
+        await session.flush()
+
+    edge.commit = real_commit
+    session.commit = deferred_commit  # type: ignore[method-assign]
+
+
+{% endif %}
+async def guard(request: Request, session: SessionDep) -> None:
+    edge: EdgeState | None = getattr(request.state, "edge", None)
+    if edge is None or request.method == "OPTIONS" or exempt(request.url.path):
+        return
+    who = await caller.resolve(request, session)
+    # The limiter and the quota use connections of their own: never wait for one while holding this
+    # request's connection, or enough parallel requests would starve the pool and wait for each other.
+    await session.rollback()
+{% if rate %}
+    await _rate_limit(request, edge, who)
+{% endif %}
+{% if quota %}
+    await _quota(request, edge, who)
+{% endif %}
+{% if idempotency %}
+    if edge.key is not None and edge.session is session:
+        await _claim(request, edge, who, session)
+{% endif %}

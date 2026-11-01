@@ -1,13 +1,15 @@
 """Routes for the declarative behaviour of a project (state machines, settings, sequences, lists)."""
 
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.validation_behavior import check_expression, expr_schema
+from app.core.validation_behavior import check_expression, expr_schema, settings_schema
 from app.db import get_session
 from app.exceptions import AppError
+from app.schemas import behavior as bs
 from app.schemas.behavior import (
     BehaviorIssues,
     ExpressionCheckBody,
@@ -20,6 +22,7 @@ from app.schemas.behavior import (
     HooksWrite,
     ListsRead,
     ListsWrite,
+    RolesRead,
     SeedRead,
     SeedWrite,
     SequencesRead,
@@ -86,7 +89,9 @@ async def put_sequences(
 
 
 @router.get("/lists", response_model=ListsRead, summary="Get the tenant-editable lists")
-async def get_lists(project_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> ListsRead:
+async def get_lists(
+    project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> ListsRead:
     return await BehaviorService(session).get_lists(project_id)
 
 
@@ -112,7 +117,9 @@ async def put_history(
 
 
 @router.get("/hooks", response_model=HooksRead, summary="Get the declared custom hooks")
-async def get_hooks(project_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> HooksRead:
+async def get_hooks(
+    project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> HooksRead:
     return await BehaviorService(session).get_hooks(project_id)
 
 
@@ -135,6 +142,77 @@ async def put_seed(
     return await BehaviorService(session).put_seed(project_id, body)
 
 
+def _block_routes() -> None:
+    """GET/PUT /behavior/<block> for each single-object block (B2-11)."""
+    names = {
+        "events": ("Events", "the event / outbox settings"),
+        "providers": ("Providers", "the provider adapters (no credentials)"),
+        "notifications": ("Notifications", "the notification settings"),
+        "jobs": ("Jobs", "background jobs, schedules and worker groups"),
+        "workflows": ("Workflows", "durable workflows"),
+        "api_edge": ("ApiEdge", "the API edge settings"),
+        "webhooks": ("Webhooks", "webhooks out and in"),
+        "hook_effects": ("HookEffects", "the effectful-hooks opt-in"),
+    }
+    for key, (cls, what) in names.items():
+        read, write = getattr(bs, cls + "Read"), getattr(bs, cls + "Write")
+
+        def make(key: str = key, read: type = read, write: type = write) -> None:
+            async def get_block(
+                project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+            ) -> Any:
+                return await BehaviorService(session).get_block(project_id, key)
+
+            async def put_block(
+                project_id: uuid.UUID,
+                body: write,  # type: ignore[valid-type]
+                session: AsyncSession = Depends(get_session),
+            ) -> Any:
+                if key not in body.model_fields_set:  # type: ignore[attr-defined]
+                    raise AppError(
+                        code="missing_block",
+                        message=f"send '{key}' (null removes it); an empty body changes nothing",
+                        status_code=422,
+                    )
+                return await BehaviorService(session).put_block(
+                    project_id, key, getattr(body, key), body.expected_version  # type: ignore[attr-defined]
+                )
+
+            path = "/" + key.replace("_", "-")
+            router.add_api_route(
+                path,
+                get_block,
+                methods=["GET"],
+                response_model=read,
+                summary=f"Get {what} (null when never saved)",
+                operation_id=f"get_{key}",
+            )
+            router.add_api_route(
+                path,
+                put_block,
+                methods=["PUT"],
+                response_model=read,
+                summary=f"Replace {what}",
+                operation_id=f"put_{key}",
+            )
+
+        make()
+
+
+_block_routes()
+
+
+@router.get(
+    "/roles",
+    response_model=RolesRead,
+    summary="Role names declared by the project's auth config (for pickers)",
+)
+async def get_roles(
+    project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> RolesRead:
+    return await BehaviorService(session).get_roles(project_id)
+
+
 @router.get(
     "/issues",
     response_model=BehaviorIssues,
@@ -145,9 +223,7 @@ async def behavior_issues(
 ) -> BehaviorIssues:
     await BehaviorService(session).get_state_machines(project_id)  # 404 for an unknown project
     found = await SpecService(session).validate(project_id)
-    return BehaviorIssues(
-        issues=[i.model_dump() for i in found if i.path.startswith(SECTIONS)]
-    )
+    return BehaviorIssues(issues=[i.model_dump() for i in found if i.path.startswith(SECTIONS)])
 
 
 @router.post(
@@ -165,7 +241,7 @@ async def check_expression_route(
     if entity is None:
         raise AppError(code="not_found", message="entity not found", status_code=404)
     schema = expr_schema(entity)
-    verdict = check_expression(body.expression, schema, body.expect)
+    verdict = check_expression(body.expression, schema, body.expect, settings_schema(spec))
     return ExpressionCheckRead(
         ok=verdict.ok,
         type=verdict.type,

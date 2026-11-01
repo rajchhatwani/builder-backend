@@ -1,0 +1,159 @@
+{
+  "description": "Body of PUT /projects/{id}/deployment. `expected_version` guards against lost updates.",
+  "properties": {
+    "cloud": {
+      "default": "aws",
+      "maxLength": 10,
+      "title": "Cloud",
+      "type": "string"
+    },
+    "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "environments": {
+      "items": {
+        "$ref": "#/$defs/DeployEnvironmentBody"
+      },
+      "maxItems": 50,
+      "title": "Environments",
+      "type": "array",
+      "x-ui": {
+        "itemLabel": "Environment"
+      }
+    },
+    "github_repo": {
+      "default": "",
+      "maxLength": 200,
+      "title": "Github Repo",
+      "type": "string"
+    },
+    "region": {
+      "default": "",
+      "maxLength": 60,
+      "title": "Region",
+      "type": "string"
+    }
+  },
+  "title": "Deployment",
+  "type": "object",
+  "$defs": {
+    "DeployEnvironmentBody": {
+      "properties": {
+        "cpu": {
+          "anyOf": [
+            {
+              "maximum": 1000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cpu"
+        },
+        "db_high_availability": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Db High Availability"
+        },
+        "db_storage_gb": {
+          "anyOf": [
+            {
+              "maximum": 100000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Db Storage Gb"
+        },
+        "deletion_protection": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Deletion Protection"
+        },
+        "max_instances": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Max Instances"
+        },
+        "memory": {
+          "anyOf": [
+            {
+              "maximum": 10000000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Memory"
+        },
+        "min_instances": {
+          "anyOf": [
+            {
+              "maximum": 100000,
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Min Instances"
+        },
+        "name": {
+          "maxLength": 40,
+          "title": "Name",
+          "type": "string"
+        },
+        "profile": {
+          "default": "small",
+          "maxLength": 10,
+          "title": "Profile",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "DeployEnvironmentBody",
+      "type": "object"
+    }
+  },
+  "x-ui": {
+    "order": [
+      "enabled",
+      "cloud",
+      "region",
+      "github_repo",
+      "environments"
+    ]
+  }
+}

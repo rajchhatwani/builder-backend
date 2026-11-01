@@ -15,6 +15,7 @@ from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.services.behavior_service import ACTOR_ROLE
 from app.config import Settings, get_settings
 from app.core import platform_authz as authz
 from app.core import rls
@@ -26,6 +27,7 @@ from app.models.platform import Organization, OrganizationMember
 from app.models.project import Project
 from app.services import access_service, audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
+from app.services.ops import scope as ops_scope
 from app.services.platform_auth_service import RequestInfo
 
 log = structlog.get_logger()
@@ -323,6 +325,7 @@ async def guard(
     request.state.project_id = project_id
     request.state.organization_id = organization_id
     request.state.member_role = role
+    ACTOR_ROLE.set(role.value)  # read by behavior_service.apply_section (CO-3 owner rule)
     if method not in ("GET", "HEAD", "OPTIONS"):
         # Rides on the handler's own commit, so only changes that actually happened are recorded.
         await audit_service.record(
@@ -345,6 +348,12 @@ async def guard(
                 ),
             },
         )
+        if (method, template) != ("DELETE", "/projects/{project_id}") and not (
+            required_read_only_post(method, template)
+        ):
+            # Spec op-log: from here on a commit of this request records any spec change as an
+            # op in the same transaction (app/services/ops/scope.py).
+            await ops_scope.install(db, project_id, ops_scope.Actor("user", user.id))
     return principal
 
 

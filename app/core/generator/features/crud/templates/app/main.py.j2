@@ -9,6 +9,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
+{% if api_edge %}
+from app.api_edge.install import install as install_api_edge
+{% endif %}
 {% if auth %}
 {% if auth.provider == "keycloak" %}
 from app.auth.config import DOCS_CLIENT_ID, get_auth_settings
@@ -34,9 +37,20 @@ from app.db import engine
 {% if documents %}
 from app.documents.router import router as _documents_router
 {% endif %}
+{% if events %}
+from app.events.relay import start_relay, stop_relay
+{% endif %}
+{% if notifications %}
+from app.notifications.dispatcher import start_dispatcher, stop_dispatcher
+from app.notifications.router import router as _notifications_router
+{% endif %}
 {% if payments %}
 from app.payments.lock import ensure_payments_lock
 from app.payments.router import router as _payments_router
+{% endif %}
+{% if providers %}
+from app.providers import config as _providers_config
+from app.providers.router import router as _providers_router
 {% endif %}
 from app.routers._health import router as _health_router
 {% for e in entities %}
@@ -54,6 +68,13 @@ from app.storage.backend import prepare_bucket
 from app.storage.limits import UploadSizeLimitMiddleware
 from app.storage.router import router as _storage_router
 {% endif %}
+{% if webhooks %}
+from app.webhooks.router import public_router as _webhooks_public_router
+from app.webhooks.router import router as _webhooks_router
+{% endif %}
+{% if workflows %}
+from app.workflows.router import router as _workflows_router
+{% endif %}
 
 
 @asynccontextmanager
@@ -65,11 +86,32 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% if payments %}
     await ensure_payments_lock()  # unsafe or missing payment settings stop the app here
 {% endif %}
+{% if providers %}
+    _providers_config.check_boot()  # production refuses a missing, short or placeholder PROVIDER_VAULT_KEY
+{% endif %}
 {% if storage %}
     _storage_config.get_storage_settings().check()  # unsafe or missing storage settings stop the app here
     await prepare_bucket()  # development only: create the bucket when asked to
 {% endif %}
+{% if events or notifications %}
+{% if events %}
+    relay = start_relay()  # delivers outbox events; EVENTS_RELAY_ENABLED=false leaves it to `python -m app.events.relay`
+{% endif %}
+{% if notifications %}
+    dispatcher = start_dispatcher()  # sends queued notifications; NOTIFICATIONS_DISPATCHER_ENABLED=false leaves it to `python -m app.notifications.dispatcher`
+{% endif %}
+    try:
+        yield
+    finally:
+{% if notifications %}
+        await stop_dispatcher(dispatcher)
+{% endif %}
+{% if events %}
+        await stop_relay(relay)
+{% endif %}
+{% else %}
     yield
+{% endif %}
 {% if observability %}
     telemetry.shutdown()  # flush what has not been exported yet
 {% endif %}
@@ -103,6 +145,9 @@ def create_app() -> FastAPI:
     )
 {% else %}
     app = FastAPI(title={{ name | pyrepr }}, version="0.1.0", lifespan=lifespan)
+{% endif %}
+{% if api_edge %}
+    install_api_edge(app)  # idempotency, rate limits, API versions: before any router is included
 {% endif %}
     app.add_middleware(
         CORSMiddleware,
@@ -142,6 +187,19 @@ def create_app() -> FastAPI:
 {% endfor %}
 {% if state_machines %}
     app.include_router(_state_machines_router)
+{% endif %}
+{% if providers %}
+    app.include_router(_providers_router)
+{% endif %}
+{% if webhooks %}
+    app.include_router(_webhooks_router)
+    app.include_router(_webhooks_public_router)
+{% endif %}
+{% if notifications %}
+    app.include_router(_notifications_router)
+{% endif %}
+{% if workflows %}
+    app.include_router(_workflows_router)
 {% endif %}
 {% if runtime_router %}
     app.include_router(_runtime_config_router)

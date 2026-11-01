@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests import _factories
+from tests._auth_support import client_for, sign_in
 
 
 @pytest.fixture
@@ -43,3 +44,18 @@ async def test_leave_requests_unknown_transition_and_record(client: AsyncClient)
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/leave_requests/{uuid.uuid4()}/transitions/manager_approve")
     assert missing.status_code == 404
+
+
+async def test_leave_requests_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
+    """A transition that lists no roles is open to whoever may update LeaveRequest, not to every reader
+    (role `employee` can read but not update); one that lists roles keeps its own role check."""
+    created = await _factories.make_leave_requests(client)
+    base = f"/leave_requests/{created['id']}"
+    async with client_for(await sign_in(client, "sm-reader@example.com", roles=['employee'])) as reader:
+        assert (await reader.get(base)).status_code == 200  # the reader sees the record...
+        moved = await reader.post(f"{base}/transitions/cancel")
+        assert moved.status_code == 200, moved.text  # listed role: unchanged, no update right needed
+        created = await _factories.make_leave_requests(client)
+        base = f"/leave_requests/{created['id']}"
+    async with client_for({}) as anonymous:
+        assert (await anonymous.post(f"{base}/transitions/cancel")).status_code in (401, 403)

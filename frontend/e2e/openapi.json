@@ -928,6 +928,81 @@
     "title": "AdminUserUpdate",
     "type": "object"
    },
+   "ApiEdgeRead": {
+    "properties": {
+     "api_edge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiEdge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ApiEdgeRead",
+    "type": "object"
+   },
+   "ApiEdgeWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "api_edge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiEdge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "ApiEdgeWrite",
+    "type": "object"
+   },
    "ApiTokenCreate": {
     "properties": {
      "description": {
@@ -3102,6 +3177,21 @@
     "title": "DeploymentWrite",
     "type": "object"
    },
+   "DismissBody": {
+    "description": "Body of POST /projects/{id}/status/dismiss. `step` must be a dismissable step id\n(today: `consider_auth`); anything else is a 422.",
+    "properties": {
+     "step": {
+      "maxLength": 40,
+      "title": "Step",
+      "type": "string"
+     }
+    },
+    "required": [
+     "step"
+    ],
+    "title": "DismissBody",
+    "type": "object"
+   },
    "DocTemplateBody": {
     "properties": {
      "compute": {
@@ -3480,6 +3570,81 @@
      }
     },
     "title": "EntityUpdate",
+    "type": "object"
+   },
+   "EventsRead": {
+    "properties": {
+     "events": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecEvents"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "EventsRead",
+    "type": "object"
+   },
+   "EventsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "events": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecEvents"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "EventsWrite",
     "type": "object"
    },
    "ExpressionCheckBody": {
@@ -4151,6 +4316,11 @@
       "title": "Project Id",
       "type": "string"
      },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
      "updated_at": {
       "anyOf": [
        {
@@ -4315,6 +4485,81 @@
     "title": "HookBudgetBody",
     "type": "object"
    },
+   "HookEffectsRead": {
+    "properties": {
+     "hook_effects": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecHookEffects"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "HookEffectsRead",
+    "type": "object"
+   },
+   "HookEffectsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "hook_effects": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecHookEffects"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "HookEffectsWrite",
+    "type": "object"
+   },
    "HookFieldBody": {
     "properties": {
      "name": {
@@ -4375,6 +4620,11 @@
       "format": "uuid",
       "title": "Project Id",
       "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
      },
      "updated_at": {
       "anyOf": [
@@ -4997,6 +5247,81 @@
     "title": "InvitationRead",
     "type": "object"
    },
+   "JobsRead": {
+    "properties": {
+     "jobs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecJobs"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "JobsRead",
+    "type": "object"
+   },
+   "JobsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "jobs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecJobs"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "JobsWrite",
+    "type": "object"
+   },
    "JwtAlgorithm": {
     "description": "Signing algorithm for access tokens in generated projects.",
     "enum": [
@@ -5448,6 +5773,11 @@
       "title": "Project Id",
       "type": "string"
      },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
      "updated_at": {
       "anyOf": [
        {
@@ -5876,8 +6206,251 @@
     "title": "MfaTokenRequest",
     "type": "object"
    },
+   "MigrationPlanBody": {
+    "properties": {
+     "highest_safety": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Highest Safety"
+     },
+     "ignored_sections": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Ignored Sections",
+      "type": "array"
+     },
+     "requires_backfill": {
+      "title": "Requires Backfill",
+      "type": "boolean"
+     },
+     "requires_confirmation": {
+      "title": "Requires Confirmation",
+      "type": "boolean"
+     },
+     "steps": {
+      "items": {
+       "$ref": "#/components/schemas/MigrationPlanStepOut"
+      },
+      "title": "Steps",
+      "type": "array"
+     }
+    },
+    "required": [
+     "steps",
+     "ignored_sections",
+     "requires_confirmation",
+     "requires_backfill",
+     "highest_safety"
+    ],
+    "title": "MigrationPlanBody",
+    "type": "object"
+   },
+   "MigrationPlanRequest": {
+    "additionalProperties": false,
+    "properties": {
+     "against_generation_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Against Generation Id"
+     },
+     "renames": {
+      "items": {
+       "$ref": "#/components/schemas/RenameHint"
+      },
+      "maxItems": 200,
+      "title": "Renames",
+      "type": "array"
+     }
+    },
+    "title": "MigrationPlanRequest",
+    "type": "object"
+   },
+   "MigrationPlanResponse": {
+    "properties": {
+     "against_generation_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Against Generation Id"
+     },
+     "allow_destructive_required": {
+      "title": "Allow Destructive Required",
+      "type": "boolean"
+     },
+     "first_generation": {
+      "title": "First Generation",
+      "type": "boolean"
+     },
+     "new_spec_hash": {
+      "title": "New Spec Hash",
+      "type": "string"
+     },
+     "old_snapshot_unusable": {
+      "default": false,
+      "title": "Old Snapshot Unusable",
+      "type": "boolean"
+     },
+     "old_spec_hash": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Old Spec Hash"
+     },
+     "plan": {
+      "$ref": "#/components/schemas/MigrationPlanBody"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "plan",
+     "text",
+     "old_spec_hash",
+     "new_spec_hash",
+     "against_generation_id",
+     "first_generation",
+     "allow_destructive_required"
+    ],
+    "title": "MigrationPlanResponse",
+    "type": "object"
+   },
+   "MigrationPlanStepOut": {
+    "properties": {
+     "backfill_strategy": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Backfill Strategy"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Field"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "phase": {
+      "title": "Phase",
+      "type": "integer"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     },
+     "safety": {
+      "title": "Safety",
+      "type": "string"
+     },
+     "seq": {
+      "title": "Seq",
+      "type": "integer"
+     },
+     "sql_hint": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sql Hint"
+     },
+     "suggested_action": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Suggested Action"
+     },
+     "table": {
+      "title": "Table",
+      "type": "string"
+     }
+    },
+    "required": [
+     "seq",
+     "phase",
+     "kind",
+     "entity",
+     "table",
+     "field",
+     "safety",
+     "reason",
+     "suggested_action",
+     "backfill_strategy",
+     "sql_hint",
+     "note"
+    ],
+    "title": "MigrationPlanStepOut",
+    "type": "object"
+   },
    "NextStep": {
     "properties": {
+     "dismissed": {
+      "default": false,
+      "title": "Dismissed",
+      "type": "boolean"
+     },
      "id": {
       "title": "Id",
       "type": "string"
@@ -5902,6 +6475,81 @@
      "section"
     ],
     "title": "NextStep",
+    "type": "object"
+   },
+   "NotificationsRead": {
+    "properties": {
+     "notifications": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecNotifications"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "NotificationsRead",
+    "type": "object"
+   },
+   "NotificationsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "notifications": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecNotifications"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "NotificationsWrite",
     "type": "object"
    },
    "ObservabilityIssues": {
@@ -7208,6 +7856,37 @@
     "title": "Page[RelationRead]",
     "type": "object"
    },
+   "Page_SpecOpRead_": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/SpecOpRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "Page[SpecOpRead]",
+    "type": "object"
+   },
    "PasswordChangeRequest": {
     "properties": {
      "current_password": {
@@ -8262,6 +8941,16 @@
       "title": "Files",
       "type": "array"
      },
+     "migration": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/MigrationPlanResponse"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "spec_hash": {
       "title": "Spec Hash",
       "type": "string"
@@ -8803,6 +9492,14 @@
       "title": "Counts",
       "type": "object"
      },
+     "dismissed_steps": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/NextStep"
+      },
+      "title": "Dismissed Steps",
+      "type": "array"
+     },
      "issues": {
       "items": {
        "$ref": "#/components/schemas/ValidationIssue"
@@ -9018,6 +9715,81 @@
      "version"
     ],
     "title": "ProjectUpdate",
+    "type": "object"
+   },
+   "ProvidersRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "providers": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ProvidersRead",
+    "type": "object"
+   },
+   "ProvidersWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "providers": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "ProvidersWrite",
     "type": "object"
    },
    "RecommendRequest": {
@@ -9344,6 +10116,53 @@
     "title": "RelationUpdate",
     "type": "object"
    },
+   "RenameHint": {
+    "additionalProperties": false,
+    "description": "A declared rename. Entity rename: `{from, to}`. Field rename: `{entity, from, to}`.",
+    "properties": {
+     "entity": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "from": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "From",
+      "type": "string"
+     },
+     "kind": {
+      "anyOf": [
+       {
+        "pattern": "^(entity|field)$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kind"
+     },
+     "to": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "To",
+      "type": "string"
+     }
+    },
+    "required": [
+     "from",
+     "to"
+    ],
+    "title": "RenameHint",
+    "type": "object"
+   },
    "ResolvedEnvironment": {
     "properties": {
      "cpu": {
@@ -9405,6 +10224,47 @@
      "tfvars"
     ],
     "title": "ResolvedEnvironment",
+    "type": "object"
+   },
+   "RoleOption": {
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "label"
+    ],
+    "title": "RoleOption",
+    "type": "object"
+   },
+   "RolesRead": {
+    "description": "GET /projects/{id}/behavior/roles: the role names declared by the project's auth config, for\nthe role pickers of the behaviour pages. Empty when sign-in has no roles (or is not set up).\nReadable by anyone who can read the project spec; carries names and labels only.",
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "$ref": "#/components/schemas/RoleOption"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "project_id",
+     "roles"
+    ],
+    "title": "RolesRead",
     "type": "object"
    },
    "RowRule": {
@@ -10017,6 +10877,11 @@
       "title": "Project Id",
       "type": "string"
      },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
      "seed": {
       "items": {
        "$ref": "#/components/schemas/SeedProfileBody"
@@ -10079,6 +10944,30 @@
    },
    "SequenceBody": {
     "properties": {
+     "entity": {
+      "anyOf": [
+       {
+        "maxLength": 80,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "field": {
+      "anyOf": [
+       {
+        "maxLength": 80,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Field"
+     },
      "name": {
       "maxLength": 80,
       "title": "Name",
@@ -10135,6 +11024,11 @@
       "format": "uuid",
       "title": "Project Id",
       "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
      },
      "sequences": {
       "items": {
@@ -10383,6 +11277,11 @@
       "format": "uuid",
       "title": "Project Id",
       "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
      },
      "settings": {
       "items": {
@@ -10669,6 +11568,16 @@
    "Spec-Input": {
     "additionalProperties": false,
     "properties": {
+     "api_edge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiEdge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "auth": {
       "anyOf": [
        {
@@ -10716,6 +11625,16 @@
       "title": "Entities",
       "type": "array"
      },
+     "events": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecEvents"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "features": {
       "items": {
        "type": "string"
@@ -10730,6 +11649,16 @@
       "title": "History",
       "type": "array"
      },
+     "hook_effects": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecHookEffects"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "hooks": {
       "items": {
        "$ref": "#/components/schemas/SpecHook"
@@ -10737,12 +11666,32 @@
       "title": "Hooks",
       "type": "array"
      },
+     "jobs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecJobs"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "lists": {
       "items": {
        "$ref": "#/components/schemas/SpecList"
       },
       "title": "Lists",
       "type": "array"
+     },
+     "notifications": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecNotifications"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "observability": {
       "anyOf": [
@@ -10766,6 +11715,16 @@
      },
      "project": {
       "$ref": "#/components/schemas/SpecProject"
+     },
+     "providers": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "relations": {
       "items": {
@@ -10816,6 +11775,26 @@
         "type": "null"
        }
       ]
+     },
+     "webhooks": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWebhooks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "workflows": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWorkflows"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
     "required": [
@@ -10827,6 +11806,16 @@
    "Spec-Output": {
     "additionalProperties": false,
     "properties": {
+     "api_edge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiEdge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "auth": {
       "anyOf": [
        {
@@ -10874,6 +11863,16 @@
       "title": "Entities",
       "type": "array"
      },
+     "events": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecEvents"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "features": {
       "items": {
        "type": "string"
@@ -10888,6 +11887,16 @@
       "title": "History",
       "type": "array"
      },
+     "hook_effects": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecHookEffects"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "hooks": {
       "items": {
        "$ref": "#/components/schemas/SpecHook"
@@ -10895,12 +11904,32 @@
       "title": "Hooks",
       "type": "array"
      },
+     "jobs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecJobs"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "lists": {
       "items": {
        "$ref": "#/components/schemas/SpecList"
       },
       "title": "Lists",
       "type": "array"
+     },
+     "notifications": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecNotifications"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "observability": {
       "anyOf": [
@@ -10924,6 +11953,16 @@
      },
      "project": {
       "$ref": "#/components/schemas/SpecProject"
+     },
+     "providers": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "relations": {
       "items": {
@@ -10974,12 +12013,124 @@
         "type": "null"
        }
       ]
+     },
+     "webhooks": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWebhooks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "workflows": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWorkflows"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
     "required": [
      "project"
     ],
     "title": "Spec",
+    "type": "object"
+   },
+   "SpecApiEdge": {
+    "additionalProperties": false,
+    "description": "The API edge (C14), off unless `enabled`: idempotency keys, rate limits and quotas, dated API\nversions. Each part is on when its section is present.",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "idempotency": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecIdempotency"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "quotas": {
+      "items": {
+       "$ref": "#/components/schemas/SpecQuota"
+      },
+      "title": "Quotas",
+      "type": "array"
+     },
+     "rate_limits": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRateLimits"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "versioning": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiVersioning"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecApiEdge",
+    "type": "object"
+   },
+   "SpecApiVersion": {
+    "additionalProperties": false,
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "note": {
+      "default": "",
+      "title": "Note",
+      "type": "string"
+     }
+    },
+    "required": [
+     "date"
+    ],
+    "title": "SpecApiVersion",
+    "type": "object"
+   },
+   "SpecApiVersioning": {
+    "additionalProperties": false,
+    "description": "Dated API versions. `default` is what a client without an `API-Version` header gets; the newest\nversion's shape is the one the code produces, older ones come from transformers in\napp/hooks/api_versions.py.",
+    "properties": {
+     "default": {
+      "title": "Default",
+      "type": "string"
+     },
+     "versions": {
+      "items": {
+       "$ref": "#/components/schemas/SpecApiVersion"
+      },
+      "title": "Versions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "default",
+     "versions"
+    ],
+    "title": "SpecApiVersioning",
     "type": "object"
    },
    "SpecAuth-Input": {
@@ -11849,6 +13000,29 @@
     "title": "SpecEntityOptions",
     "type": "object"
    },
+   "SpecEvents": {
+    "additionalProperties": false,
+    "description": "Transactional outbox and typed event bus (C10). Off unless `enabled`. Every entity gets\ncreated / updated / deleted events, and every state machine a `<entity>.transitioned` event; each\nis written to the outbox in the write's own transaction and delivered at least once, in order per\nrecord, by a relay. `adapter` is where events go: `in_process` (subscribers in the same app) or\n`redis_streams` (not implemented yet). Delivered rows are purged after `retention_days`.",
+    "properties": {
+     "adapter": {
+      "default": "in_process",
+      "title": "Adapter",
+      "type": "string"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "retention_days": {
+      "default": 14,
+      "title": "Retention Days",
+      "type": "integer"
+     }
+    },
+    "title": "SpecEvents",
+    "type": "object"
+   },
    "SpecField": {
     "additionalProperties": false,
     "properties": {
@@ -11977,8 +13151,36 @@
     "additionalProperties": false,
     "description": "A piece of custom logic under contract. The spec declares the name, where it runs (`point`),\nwhat goes in and what must come out; the platform generates the models, the stub file, the wiring\nand the gates. The body is free Python inside the marked region of the stub.\n\npoint: `<Entity>.before_save | validate | after_save | after_commit` or\n`<Entity>.transition_guard(<manual transition>)`. kind: `pure` (no I/O) or `effect` (only at\nafter_commit). failure_policy empty = the default for the point (guards and validate: fail_closed,\neffects: fail_open, other pure hooks: fail_closed). `fallback` gives the output values used by the\n`fallback` policy. `reads` lists the entities an effect hook may read through the SDK.",
     "properties": {
+     "author": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Author"
+     },
      "budget": {
       "$ref": "#/components/schemas/SpecHookBudget"
+     },
+     "effect_budget": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecHookEffectBudget"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "effects": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Effects",
+      "type": "array"
      },
      "failure_policy": {
       "anyOf": [
@@ -12062,6 +13264,54 @@
     "title": "SpecHookBudget",
     "type": "object"
    },
+   "SpecHookEffectBudget": {
+    "additionalProperties": false,
+    "description": "Limits of an effectful hook (H3): outbound calls per effect type in one invocation, the largest\npayload of one call in bytes, and outbound calls per minute for the hook (per API process).\nThe wall-clock limit is `budget.cpu_ms`. Breaking any limit aborts the hook (its failure policy applies).",
+    "properties": {
+     "calls_per_effect": {
+      "default": 1,
+      "title": "Calls Per Effect",
+      "type": "integer"
+     },
+     "outbound_per_minute": {
+      "default": 30,
+      "title": "Outbound Per Minute",
+      "type": "integer"
+     },
+     "payload_bytes": {
+      "default": 10000,
+      "title": "Payload Bytes",
+      "type": "integer"
+     }
+    },
+    "title": "SpecHookEffectBudget",
+    "type": "object"
+   },
+   "SpecHookEffects": {
+    "additionalProperties": false,
+    "description": "Per-project opt-in for effectful hooks (H2). OFF unless `enabled`. Hooks are written by TRUSTED\nauthors only until the Cycle 3 sandbox exists: `trusted_authors_only` must be true to turn this on.\n`webhook_hosts` is the allow-list of hosts a hook may post to (SSRF guard still applies).",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "trusted_authors_only": {
+      "default": false,
+      "title": "Trusted Authors Only",
+      "type": "boolean"
+     },
+     "webhook_hosts": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Webhook Hosts",
+      "type": "array"
+     }
+    },
+    "title": "SpecHookEffects",
+    "type": "object"
+   },
    "SpecHookField": {
     "additionalProperties": false,
     "description": "One scalar field of a hook's input or output model. The platform generates the Pydantic model\nfrom the list. `type` is string | int | float | decimal | bool | date | datetime | uuid.",
@@ -12106,6 +13356,31 @@
      "name"
     ],
     "title": "SpecHookModel",
+    "type": "object"
+   },
+   "SpecIdempotency": {
+    "additionalProperties": false,
+    "description": "`Idempotency-Key` on the listed methods: the same key and request replays the first response.",
+    "properties": {
+     "max_response_bytes": {
+      "default": 65536,
+      "title": "Max Response Bytes",
+      "type": "integer"
+     },
+     "methods": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Methods",
+      "type": "array"
+     },
+     "ttl_hours": {
+      "default": 24,
+      "title": "Ttl Hours",
+      "type": "integer"
+     }
+    },
+    "title": "SpecIdempotency",
     "type": "object"
    },
    "SpecIdentityProvider": {
@@ -12219,6 +13494,152 @@
      "client_id"
     ],
     "title": "SpecIdentityProvider",
+    "type": "object"
+   },
+   "SpecJob": {
+    "additionalProperties": false,
+    "description": "A kind of background job. `handler` is the name of a function you write in the custom file\napp/hooks/jobs.py (the platform generates only the registry and the stub).",
+    "properties": {
+     "handler": {
+      "title": "Handler",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "queue": {
+      "default": "default",
+      "title": "Queue",
+      "type": "string"
+     },
+     "retry": {
+      "$ref": "#/components/schemas/SpecJobRetry"
+     },
+     "timeout_seconds": {
+      "default": 300,
+      "title": "Timeout Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "handler"
+    ],
+    "title": "SpecJob",
+    "type": "object"
+   },
+   "SpecJobQueue": {
+    "additionalProperties": false,
+    "description": "Where jobs wait. Only `postgres` (the app's own database, FOR UPDATE SKIP LOCKED) is\nimplemented; `redis` and `rabbitmq` are accepted by the schema and refused by validation.",
+    "properties": {
+     "backend": {
+      "default": "postgres",
+      "title": "Backend",
+      "type": "string"
+     }
+    },
+    "title": "SpecJobQueue",
+    "type": "object"
+   },
+   "SpecJobRetry": {
+    "additionalProperties": false,
+    "description": "How a failing job is tried again: up to `max_attempts` runs in all, waiting `backoff_seconds`\n(`fixed`) or `backoff_seconds` doubling each time (`exponential`, capped at an hour) between runs.\nAfter the last failed run the job is parked as `dead` (visible, and it can be requeued).",
+    "properties": {
+     "backoff": {
+      "default": "exponential",
+      "title": "Backoff",
+      "type": "string"
+     },
+     "backoff_seconds": {
+      "default": 30,
+      "title": "Backoff Seconds",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     }
+    },
+    "title": "SpecJobRetry",
+    "type": "object"
+   },
+   "SpecJobSchedule": {
+    "additionalProperties": false,
+    "description": "Enqueue `job` on a 5-field `cron` in `timezone`. Exactly one job per tick, however many worker\nprocesses run. If ticks were missed (everything was down), `missed` decides: `catch_up_one` runs\nthe most recent missed tick once, `skip` drops them.",
+    "properties": {
+     "cron": {
+      "title": "Cron",
+      "type": "string"
+     },
+     "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "job": {
+      "title": "Job",
+      "type": "string"
+     },
+     "missed": {
+      "default": "catch_up_one",
+      "title": "Missed",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "timezone": {
+      "default": "UTC",
+      "title": "Timezone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "job",
+     "cron"
+    ],
+    "title": "SpecJobSchedule",
+    "type": "object"
+   },
+   "SpecJobs": {
+    "additionalProperties": false,
+    "description": "Background jobs, schedules and worker groups (C11). Off unless `enabled`.",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "jobs": {
+      "items": {
+       "$ref": "#/components/schemas/SpecJob"
+      },
+      "title": "Jobs",
+      "type": "array"
+     },
+     "queue": {
+      "$ref": "#/components/schemas/SpecJobQueue"
+     },
+     "schedules": {
+      "items": {
+       "$ref": "#/components/schemas/SpecJobSchedule"
+      },
+      "title": "Schedules",
+      "type": "array"
+     },
+     "worker_groups": {
+      "items": {
+       "$ref": "#/components/schemas/SpecWorkerGroup"
+      },
+      "title": "Worker Groups",
+      "type": "array"
+     }
+    },
+    "title": "SpecJobs",
     "type": "object"
    },
    "SpecKeycloak": {
@@ -12369,6 +13790,151 @@
     "title": "SpecListItem",
     "type": "object"
    },
+   "SpecNotificationTemplate": {
+    "additionalProperties": false,
+    "description": "The default template of one notification type for one channel. `{{ name }}` placeholders may\nonly name the type's declared `variables` (no expressions, no filters). For email, `html: true`\nmakes the body HTML: every variable is HTML-escaped. `subject` is the email subject / push title.",
+    "properties": {
+     "body": {
+      "title": "Body",
+      "type": "string"
+     },
+     "channel": {
+      "title": "Channel",
+      "type": "string"
+     },
+     "html": {
+      "default": false,
+      "title": "Html",
+      "type": "boolean"
+     },
+     "subject": {
+      "default": "",
+      "title": "Subject",
+      "type": "string"
+     }
+    },
+    "required": [
+     "channel",
+     "body"
+    ],
+    "title": "SpecNotificationTemplate",
+    "type": "object"
+   },
+   "SpecNotificationType": {
+    "additionalProperties": false,
+    "description": "One kind of notification. `category`: `transactional` (always sent) or `optional` (a user can opt\nout per channel). `on_event` (e.g. `order.created`) sends it when that event is delivered by the\noutbox: `recipient_key_field` is the event-data field naming the recipient (a user id, compared with\nthe preferences) and `address_fields` maps each channel to the data field holding the address.",
+    "properties": {
+     "address_fields": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Address Fields",
+      "type": "object"
+     },
+     "category": {
+      "default": "optional",
+      "title": "Category",
+      "type": "string"
+     },
+     "channels": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Channels",
+      "type": "array"
+     },
+     "default_enabled": {
+      "default": true,
+      "title": "Default Enabled",
+      "type": "boolean"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "on_event": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "On Event"
+     },
+     "recipient_key_field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Recipient Key Field"
+     },
+     "templates": {
+      "items": {
+       "$ref": "#/components/schemas/SpecNotificationTemplate"
+      },
+      "title": "Templates",
+      "type": "array"
+     },
+     "variables": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Variables",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecNotificationType",
+    "type": "object"
+   },
+   "SpecNotifications": {
+    "additionalProperties": false,
+    "description": "Notifications over the provider adapters (C17). Off unless `enabled`. Needs `providers` and auth.\nMessages are queued as delivery-log rows and sent by a dispatcher with retries and backoff.",
+    "properties": {
+     "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+     },
+     "backoff_seconds": {
+      "default": 30,
+      "title": "Backoff Seconds",
+      "type": "integer"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "max_attempts": {
+      "default": 5,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "retention_days": {
+      "default": 90,
+      "title": "Retention Days",
+      "type": "integer"
+     },
+     "types": {
+      "items": {
+       "$ref": "#/components/schemas/SpecNotificationType"
+      },
+      "title": "Types",
+      "type": "array"
+     }
+    },
+    "title": "SpecNotifications",
+    "type": "object"
+   },
    "SpecObservability": {
     "additionalProperties": false,
     "description": "OpenTelemetry in the generated service: traces and metrics over OTLP/HTTP, log correlation.\n\nEverything an operator tunes in production (endpoint, sampler, service name) stays an\nenvironment variable of the generated project; this block only sets the defaults and what is\ngenerated. No endpoint or header (they may hold credentials) is ever stored here.",
@@ -12436,6 +14002,160 @@
      }
     },
     "title": "SpecObservability",
+    "type": "object"
+   },
+   "SpecOpActor": {
+    "properties": {
+     "email": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "user_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "User Id"
+     }
+    },
+    "required": [
+     "kind",
+     "user_id"
+    ],
+    "title": "SpecOpActor",
+    "type": "object"
+   },
+   "SpecOpApply": {
+    "description": "`op_type` must be one of the registry's operations; `payload` is checked against that\noperation's own model.",
+    "properties": {
+     "op_type": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Op Type",
+      "type": "string"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+     }
+    },
+    "required": [
+     "op_type"
+    ],
+    "title": "SpecOpApply",
+    "type": "object"
+   },
+   "SpecOpInverse": {
+    "properties": {
+     "op_type": {
+      "title": "Op Type",
+      "type": "string"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+     }
+    },
+    "required": [
+     "op_type",
+     "payload"
+    ],
+    "title": "SpecOpInverse",
+    "type": "object"
+   },
+   "SpecOpRead": {
+    "properties": {
+     "actor": {
+      "$ref": "#/components/schemas/SpecOpActor"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "inverse": {
+      "$ref": "#/components/schemas/SpecOpInverse"
+     },
+     "op_type": {
+      "title": "Op Type",
+      "type": "string"
+     },
+     "origin": {
+      "title": "Origin",
+      "type": "string"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "ref_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ref Seq"
+     },
+     "seq": {
+      "title": "Seq",
+      "type": "integer"
+     },
+     "spec_hash_after": {
+      "title": "Spec Hash After",
+      "type": "string"
+     },
+     "spec_hash_before": {
+      "title": "Spec Hash Before",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "seq",
+     "op_type",
+     "origin",
+     "ref_seq",
+     "actor",
+     "payload",
+     "inverse",
+     "spec_hash_before",
+     "spec_hash_after",
+     "created_at"
+    ],
+    "title": "SpecOpRead",
     "type": "object"
    },
    "SpecPasswordReset": {
@@ -12964,6 +14684,246 @@
     "title": "SpecProject",
     "type": "object"
    },
+   "SpecProviderAdapter": {
+    "additionalProperties": false,
+    "description": "One adapter a project may use: its `kind` (email | sms | push | payments | storage | llm |\ngeneric), its `name` and NON-SECRET settings. Credentials are never part of the spec: each tenant\nwrites its own through the generated, admin-only vault API.",
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "settings": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "integer"
+        },
+        {
+         "type": "boolean"
+        }
+       ]
+      },
+      "title": "Settings",
+      "type": "object"
+     }
+    },
+    "required": [
+     "kind",
+     "name"
+    ],
+    "title": "SpecProviderAdapter",
+    "type": "object"
+   },
+   "SpecProviders": {
+    "additionalProperties": false,
+    "description": "Provider adapter framework and per-tenant credential vault (C15). Off unless `enabled`.\nEvery kind always has the in-process `emulator`; the adapters listed here are the ones a tenant\nmay select by storing credentials for them. Nothing secret lives in the spec (`secret_in_spec`).",
+    "properties": {
+     "adapters": {
+      "items": {
+       "$ref": "#/components/schemas/SpecProviderAdapter"
+      },
+      "title": "Adapters",
+      "type": "array"
+     },
+     "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+     },
+     "breaker_failures": {
+      "default": 5,
+      "title": "Breaker Failures",
+      "type": "integer"
+     },
+     "breaker_reset_seconds": {
+      "default": 30.0,
+      "title": "Breaker Reset Seconds",
+      "type": "number"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     },
+     "timeout_seconds": {
+      "default": 10.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+     }
+    },
+    "title": "SpecProviders",
+    "type": "object"
+   },
+   "SpecQuota": {
+    "additionalProperties": false,
+    "description": "A hard cap on a named meter per tenant and period (`day` or `month`, UTC). Requests whose method\nis in `methods` (empty = all) and whose path is under `path_prefix` use `cost` of the meter.",
+    "properties": {
+     "cost": {
+      "default": 1,
+      "title": "Cost",
+      "type": "integer"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "meter": {
+      "title": "Meter",
+      "type": "string"
+     },
+     "methods": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Methods",
+      "type": "array"
+     },
+     "path_prefix": {
+      "default": "/",
+      "title": "Path Prefix",
+      "type": "string"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     }
+    },
+    "required": [
+     "meter",
+     "period",
+     "limit"
+    ],
+    "title": "SpecQuota",
+    "type": "object"
+   },
+   "SpecRateBucket": {
+    "additionalProperties": false,
+    "description": "A token bucket: holds at most `capacity` tokens and gets `refill_per_second` back each second.",
+    "properties": {
+     "capacity": {
+      "title": "Capacity",
+      "type": "integer"
+     },
+     "refill_per_second": {
+      "title": "Refill Per Second",
+      "type": "number"
+     }
+    },
+    "required": [
+     "capacity",
+     "refill_per_second"
+    ],
+    "title": "SpecRateBucket",
+    "type": "object"
+   },
+   "SpecRateGroup": {
+    "additionalProperties": false,
+    "description": "Limits for a group of routes (first matching group wins; `methods` empty = every method).\n`user` / `tenant` replace the defaults for this group (callers without a valid token always use\n`anonymous`); `cost` is what one request takes out.",
+    "properties": {
+     "cost": {
+      "default": 1,
+      "title": "Cost",
+      "type": "integer"
+     },
+     "methods": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Methods",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "path_prefix": {
+      "title": "Path Prefix",
+      "type": "string"
+     },
+     "tenant": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRateBucket"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "user": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRateBucket"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "name",
+     "path_prefix"
+    ],
+    "title": "SpecRateGroup",
+    "type": "object"
+   },
+   "SpecRateLimits": {
+    "additionalProperties": false,
+    "description": "Rate limits per (tenant, caller) and per tenant, stored in Postgres so they hold across processes.\nCallers without a valid token are limited per client address (`anonymous`). A store error refuses\nwrites with 503; reads are refused too unless `read_fail_open`.",
+    "properties": {
+     "anonymous": {
+      "$ref": "#/components/schemas/SpecRateBucket",
+      "default": {
+       "capacity": 30,
+       "refill_per_second": 0.5
+      }
+     },
+     "groups": {
+      "items": {
+       "$ref": "#/components/schemas/SpecRateGroup"
+      },
+      "title": "Groups",
+      "type": "array"
+     },
+     "read_fail_open": {
+      "default": false,
+      "title": "Read Fail Open",
+      "type": "boolean"
+     },
+     "tenant": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRateBucket"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "user": {
+      "$ref": "#/components/schemas/SpecRateBucket",
+      "default": {
+       "capacity": 120,
+       "refill_per_second": 2.0
+      }
+     }
+    },
+    "title": "SpecRateLimits",
+    "type": "object"
+   },
    "SpecRegistration": {
     "additionalProperties": false,
     "properties": {
@@ -13030,6 +14990,20 @@
      "to_name"
     ],
     "title": "SpecRelation",
+    "type": "object"
+   },
+   "SpecRestore": {
+    "properties": {
+     "to_seq": {
+      "minimum": 0.0,
+      "title": "To Seq",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "to_seq"
+    ],
+    "title": "SpecRestore",
     "type": "object"
    },
    "SpecRole": {
@@ -13366,6 +15340,28 @@
     "additionalProperties": false,
     "description": "A gapless counter: a number is consumed only when the caller's transaction commits.\nNumbers look like `<prefix>[<year>-]<zero padded counter>`.",
     "properties": {
+     "entity": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Field"
+     },
      "name": {
       "title": "Name",
       "type": "string"
@@ -13806,7 +15802,7 @@
    },
    "SpecTransition": {
     "additionalProperties": false,
-    "description": "One allowed move of a state machine: from any of `from_states` to `to_state`.\n\n`when` is an expression (app/core/expr) over the record's own fields: the move is refused\nunless it is true (null counts as false). `roles` limits who may trigger it. With NO roles\nthe move is open to anyone who can read the record; on role-permission entities that does not need\nupdate rights (approvers can approve without edit rights), on abac / pbac entities the caller must\nalso pass the entity's update policy. `auto` moves are applied by the platform right after a write\nwhenever their guard holds, so they never have `roles`.",
+    "description": "One allowed move of a state machine: from any of `from_states` to `to_state`.\n\n`when` is an expression (app/core/expr) over the record's own fields: the move is refused\nunless it is true (null counts as false). `roles` limits who may trigger it. With NO roles\nthe move is open to anyone who may UPDATE the entity (default deny): the caller must pass the same\nupdate access as PATCH / PUT (roles, row rules or policies), so a read-only role cannot move a\nrecord. To let a role move records without edit rights, list that role here. `auto` moves are applied by the platform right after a write\nwhenever their guard holds, so they never have `roles`.",
     "properties": {
      "auto": {
       "default": false,
@@ -13852,6 +15848,279 @@
      "to_state"
     ],
     "title": "SpecTransition",
+    "type": "object"
+   },
+   "SpecWebhookInbound": {
+    "additionalProperties": false,
+    "description": "One incoming webhook receiver, served at POST /webhooks/in/<name>. Requests must carry a valid\nStandard Webhooks signature (raw body, HMAC-SHA256) made with a secret the admin stored for this\nendpoint; the handler is a function you write in app/hooks/webhooks.py.",
+    "properties": {
+     "dedupe_days": {
+      "default": 7,
+      "title": "Dedupe Days",
+      "type": "integer"
+     },
+     "max_body_bytes": {
+      "default": 262144,
+      "title": "Max Body Bytes",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "tolerance_seconds": {
+      "default": 300,
+      "title": "Tolerance Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecWebhookInbound",
+    "type": "object"
+   },
+   "SpecWebhooks": {
+    "additionalProperties": false,
+    "description": "Webhooks out and in (C13). Off unless `enabled`. Needs events (the source of outgoing webhooks),\njobs (retries with backoff: declare a job `webhook_delivery`) and providers (the vault that keeps\nthe signing secrets). Nothing secret lives in the spec. Only `events` listed here can be subscribed\nto (default deny); URLs must pass the SSRF guard (public addresses only, no redirects followed).",
+    "properties": {
+     "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+     },
+     "allow_http": {
+      "default": false,
+      "title": "Allow Http",
+      "type": "boolean"
+     },
+     "allowed_ports": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Allowed Ports",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "events": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Events",
+      "type": "array"
+     },
+     "inbound": {
+      "items": {
+       "$ref": "#/components/schemas/SpecWebhookInbound"
+      },
+      "title": "Inbound",
+      "type": "array"
+     },
+     "max_consecutive_failures": {
+      "default": 5,
+      "title": "Max Consecutive Failures",
+      "type": "integer"
+     },
+     "max_payload_bytes": {
+      "default": 262144,
+      "title": "Max Payload Bytes",
+      "type": "integer"
+     },
+     "secret_overlap_hours": {
+      "default": 24,
+      "title": "Secret Overlap Hours",
+      "type": "integer"
+     },
+     "timeout_seconds": {
+      "default": 10.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+     }
+    },
+    "title": "SpecWebhooks",
+    "type": "object"
+   },
+   "SpecWorkerGroup": {
+    "additionalProperties": false,
+    "description": "A set of worker processes that run jobs from the listed `queues`, `concurrency` jobs at a time\nper process. `same_server` adds a compose service to the project; `separate_server` writes a\nbundle under deploy/workers/<name>/ to run on another machine with its own DATABASE_URL.",
+    "properties": {
+     "concurrency": {
+      "default": 4,
+      "title": "Concurrency",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "placement": {
+      "default": "same_server",
+      "title": "Placement",
+      "type": "string"
+     },
+     "queues": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Queues",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecWorkerGroup",
+    "type": "object"
+   },
+   "SpecWorkflow": {
+    "additionalProperties": false,
+    "description": "A durable saga: ordered `steps` run one at a time and each completed step is recorded in Postgres,\nso a crashed or restarted worker resumes after the last completed step. `on_failure`: `compensate`\nundoes completed steps in reverse order, `fail` stops and leaves them. `roles` may start, inspect and\ncancel runs (default deny: at least one is required).",
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "on_failure": {
+      "default": "compensate",
+      "title": "On Failure",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     },
+     "steps": {
+      "items": {
+       "$ref": "#/components/schemas/SpecWorkflowStep"
+      },
+      "title": "Steps",
+      "type": "array"
+     },
+     "timeout_seconds": {
+      "default": 3600,
+      "title": "Timeout Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecWorkflow",
+    "type": "object"
+   },
+   "SpecWorkflowRetry": {
+    "additionalProperties": false,
+    "description": "How a failing workflow step is tried again before the workflow counts it as failed.",
+    "properties": {
+     "backoff": {
+      "default": "exponential",
+      "title": "Backoff",
+      "type": "string"
+     },
+     "backoff_seconds": {
+      "default": 5,
+      "title": "Backoff Seconds",
+      "type": "integer"
+     },
+     "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+     }
+    },
+    "title": "SpecWorkflowRetry",
+    "type": "object"
+   },
+   "SpecWorkflowStep": {
+    "additionalProperties": false,
+    "description": "One step. `kind: hook` runs the function you write in app/hooks/workflows.py for (workflow, step);\n`kind: job` enqueues the declared background job `job` (atomically with recording the step) and counts\nas done once enqueued. `compensate` says the step has an undo function (run in reverse order when a\nlater step fails or the run is cancelled); set it false only for a step that needs no undo.",
+    "properties": {
+     "compensate": {
+      "default": true,
+      "title": "Compensate",
+      "type": "boolean"
+     },
+     "job": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Job"
+     },
+     "kind": {
+      "default": "hook",
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "retry": {
+      "$ref": "#/components/schemas/SpecWorkflowRetry"
+     },
+     "timeout_seconds": {
+      "default": 60,
+      "title": "Timeout Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecWorkflowStep",
+    "type": "object"
+   },
+   "SpecWorkflowWorker": {
+    "additionalProperties": false,
+    "description": "The worker process that executes runs (`python -m app.workflows.worker`).",
+    "properties": {
+     "concurrency": {
+      "default": 2,
+      "title": "Concurrency",
+      "type": "integer"
+     }
+    },
+    "title": "SpecWorkflowWorker",
+    "type": "object"
+   },
+   "SpecWorkflows": {
+    "additionalProperties": false,
+    "description": "Durable workflows (C12), off unless `enabled`. `runtime`: `postgres` is the built-in durable\nrunner; `dbos` and `temporal` are accepted by the schema and refused by validation (not_yet_implemented).",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "runtime": {
+      "default": "postgres",
+      "title": "Runtime",
+      "type": "string"
+     },
+     "worker": {
+      "$ref": "#/components/schemas/SpecWorkflowWorker"
+     },
+     "workflows": {
+      "items": {
+       "$ref": "#/components/schemas/SpecWorkflow"
+      },
+      "title": "Workflows",
+      "type": "array"
+     }
+    },
+    "title": "SpecWorkflows",
     "type": "object"
    },
    "SsoCertificateRead": {
@@ -14392,6 +16661,11 @@
       "format": "uuid",
       "title": "Project Id",
       "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
      },
      "state_machines": {
       "items": {
@@ -15238,6 +17512,156 @@
     ],
     "title": "WebhookMode",
     "type": "string"
+   },
+   "WebhooksRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     },
+     "webhooks": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWebhooks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "WebhooksRead",
+    "type": "object"
+   },
+   "WebhooksWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "webhooks": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWebhooks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "WebhooksWrite",
+    "type": "object"
+   },
+   "WorkflowsRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     },
+     "workflows": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWorkflows"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "WorkflowsRead",
+    "type": "object"
+   },
+   "WorkflowsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "workflows": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecWorkflows"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "WorkflowsWrite",
+    "type": "object"
    }
   }
  },
@@ -21299,6 +23723,194 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/api-edge": {
+   "get": {
+    "operationId": "get_api_edge",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiEdgeRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the API edge settings (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_api_edge",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApiEdgeWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiEdgeRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the API edge settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/events": {
+   "get": {
+    "operationId": "get_events",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/EventsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the event / outbox settings (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_events",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/EventsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/EventsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the event / outbox settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/expressions/check": {
    "post": {
     "description": "Same judge as the validation report (`validation_behavior.check_expression`), so the error\ntext is identical. Nothing is evaluated or saved; `fields` is what the expression may read.",
@@ -21447,6 +24059,100 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/hook-effects": {
+   "get": {
+    "operationId": "get_hook_effects",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HookEffectsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the effectful-hooks opt-in (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_hook_effects",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/HookEffectsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HookEffectsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the effectful-hooks opt-in",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/hooks": {
    "get": {
     "operationId": "get_hooks_projects__project_id__behavior_hooks_get",
@@ -21584,6 +24290,100 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/jobs": {
+   "get": {
+    "operationId": "get_jobs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get background jobs, schedules and worker groups (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_jobs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/JobsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/JobsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace background jobs, schedules and worker groups",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/lists": {
    "get": {
     "operationId": "get_lists_projects__project_id__behavior_lists_get",
@@ -21673,6 +24473,237 @@
      }
     },
     "summary": "Replace every list",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/notifications": {
+   "get": {
+    "operationId": "get_notifications",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NotificationsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the notification settings (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_notifications",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/NotificationsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/NotificationsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the notification settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/providers": {
+   "get": {
+    "operationId": "get_providers",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProvidersRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the provider adapters (no credentials) (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_providers",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ProvidersWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProvidersRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the provider adapters (no credentials)",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/roles": {
+   "get": {
+    "operationId": "get_roles_projects__project_id__behavior_roles_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RolesRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Role names declared by the project's auth config (for pickers)",
     "tags": [
      "behavior"
     ]
@@ -22049,6 +25080,194 @@
      }
     },
     "summary": "Replace every state machine",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/webhooks": {
+   "get": {
+    "operationId": "get_webhooks",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WebhooksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get webhooks out and in (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_webhooks",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WebhooksWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WebhooksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace webhooks out and in",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/workflows": {
+   "get": {
+    "operationId": "get_workflows",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkflowsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get durable workflows (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_workflows",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WorkflowsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkflowsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace durable workflows",
     "tags": [
      "behavior"
     ]
@@ -22606,6 +25825,30 @@
        "format": "uuid",
        "title": "Project Id",
        "type": "string"
+      }
+     },
+     {
+      "description": "Generate even if the migration plan drops data (editor or owner only).",
+      "in": "query",
+      "name": "allow_destructive",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Generate even if the migration plan drops data (editor or owner only).",
+       "title": "Allow Destructive",
+       "type": "boolean"
+      }
+     },
+     {
+      "description": "Treat an unreadable previous generation snapshot as a first generation (editor or owner only).",
+      "in": "query",
+      "name": "accept_unreadable_baseline",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Treat an unreadable previous generation snapshot as a first generation (editor or owner only).",
+       "title": "Accept Unreadable Baseline",
+       "type": "boolean"
       }
      }
     ],
@@ -23260,6 +26503,79 @@
     "summary": "Set Member Mcp",
     "tags": [
      "members"
+    ]
+   }
+  },
+  "/projects/{project_id}/migration-plan": {
+   "post": {
+    "description": "Plan the database change from the last generation (or `against_generation_id`) to the\ncurrent spec. Read-only; needs the editor role (the default for a POST).",
+    "operationId": "migration_plan_projects__project_id__migration_plan_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "description": "Plan against an empty spec if the baseline snapshot is unreadable.",
+      "in": "query",
+      "name": "accept_unreadable_baseline",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Plan against an empty spec if the baseline snapshot is unreadable.",
+       "title": "Accept Unreadable Baseline",
+       "type": "boolean"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/MigrationPlanRequest"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MigrationPlanResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Migration Plan",
+    "tags": [
+     "generate"
     ]
    }
   },
@@ -24144,9 +27460,265 @@
     ]
    }
   },
+  "/projects/{project_id}/spec/ops": {
+   "get": {
+    "operationId": "list_ops_projects__project_id__spec_ops_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Page_SpecOpRead_"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Ops",
+    "tags": [
+     "spec-ops"
+    ]
+   },
+   "post": {
+    "operationId": "apply_op_projects__project_id__spec_ops_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SpecOpApply"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SpecOpRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Apply Op",
+    "tags": [
+     "spec-ops"
+    ]
+   }
+  },
+  "/projects/{project_id}/spec/redo": {
+   "post": {
+    "operationId": "redo_projects__project_id__spec_redo_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SpecOpRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Redo",
+    "tags": [
+     "spec-ops"
+    ]
+   }
+  },
+  "/projects/{project_id}/spec/restore": {
+   "post": {
+    "operationId": "restore_projects__project_id__spec_restore_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SpecRestore"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SpecOpRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Restore",
+    "tags": [
+     "spec-ops"
+    ]
+   }
+  },
+  "/projects/{project_id}/spec/undo": {
+   "post": {
+    "operationId": "undo_projects__project_id__spec_undo_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SpecOpRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Undo",
+    "tags": [
+     "spec-ops"
+    ]
+   }
+  },
   "/projects/{project_id}/status": {
    "get": {
-    "description": "One validate call over the current spec; no generation, nothing is written.\n\n`ready` = at least one entity and no validation issue. `issues` are the validation issues\n(path, code, message). `sections` lists 13 areas with `configured` and `issue_count` (issues\nare assigned to an area by path; auth.roles/auth.permissions and `authz.*` codes belong to\n`authorization`, sequences and lists to `settings`, anything else unknown to `model`).\n\n`next_step` (exactly one, first match wins):\n1. any issue -> `fix_issues`, section = area of the first issue in validation order;\n2. no entities -> `add_entity` (section `model`);\n3. sign-in not enabled -> `consider_auth` (section `auth`);\n4. otherwise `generate` (section `generate`).",
+    "description": "One validate call over the current spec; no generation, nothing is written.\n\n`ready` = at least one entity and no validation issue. `issues` are the validation issues\n(path, code, message). `sections` lists 13 areas with `configured` and `issue_count` (issues\nare assigned to an area by path; auth.roles/auth.permissions and `authz.*` codes belong to\n`authorization`, sequences and lists to `settings`, anything else unknown to `model`).\n\n`next_step` (exactly one, first match wins):\n1. any issue -> `fix_issues`, section = area of the first issue in validation order;\n2. no entities -> `add_entity` (section `model`);\n3. sign-in not enabled and `consider_auth` not dismissed -> `consider_auth` (section `auth`);\n4. otherwise `generate` (section `generate`).",
     "operationId": "project_status_projects__project_id__status_get",
     "parameters": [
      {
@@ -24183,6 +27755,113 @@
      }
     },
     "summary": "Readiness board: issues, counts, next step",
+    "tags": [
+     "status"
+    ]
+   }
+  },
+  "/projects/{project_id}/status/dismiss": {
+   "post": {
+    "description": "Stored per project. Only dismissable steps (`consider_auth`) are accepted; any other id is\na 422. Idempotent. The step then appears in `dismissed_steps` with `dismissed: true` and is\nnever `next_step`.",
+    "operationId": "dismiss_step_projects__project_id__status_dismiss_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DismissBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Skip an optional next step (project editor); returns the new board",
+    "tags": [
+     "status"
+    ]
+   }
+  },
+  "/projects/{project_id}/status/dismiss/{step}": {
+   "delete": {
+    "description": "Idempotent undo. Unknown or non-dismissable step ids are a 422.",
+    "operationId": "undo_dismiss_step_projects__project_id__status_dismiss__step__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "step",
+      "required": true,
+      "schema": {
+       "title": "Step",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Undo a dismissed next step (project editor); returns the new board",
     "tags": [
      "status"
     ]

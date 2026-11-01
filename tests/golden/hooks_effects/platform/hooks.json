@@ -1,0 +1,218 @@
+{
+  "ceilings": {
+    "effect": {
+      "cpu_ms": 4000,
+      "outbound_calls": 0,
+      "rows": 1000
+    },
+    "pure": {
+      "cpu_ms": 1000,
+      "outbound_calls": 0,
+      "rows": 0
+    }
+  },
+  "contract": "v1",
+  "contract_exports": [
+    "AnnounceInput",
+    "AnnounceResult"
+  ],
+  "custom_prefixes": [
+    "app/custom_routers/",
+    "app/hooks/",
+    "app/custom/",
+    "tests/custom/"
+  ],
+  "effects": {
+    "enabled": true,
+    "trusted_authors_only": true,
+    "webhook_hosts": []
+  },
+  "gate": "app/platform_gate.py",
+  "generated_sha256": {
+    "app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/auth/__init__.py": "c1c28c93bc301ce3bda45e99548b572b78cced27a7a3cb851aae571b4fc7c318",
+    "app/auth/access.py": "699e3de12a94c4f57d8ac5a179e485dcb6e77c514eb0ad71bf034109dee0fa4a",
+    "app/auth/config.py": "a523cb7cfa82448703ee278de6397db51b33bef8adf3a5c941b53207da3de0fb",
+    "app/auth/delivery.py": "703bd58bb600c73e73bd87814218ce5d685ca272f77862231be2c86ccb0ac1c9",
+    "app/auth/deps.py": "c82d284fbbce2c02197431ea1e88febf2891abc4a0b9ab88c2042fe531e4ee58",
+    "app/auth/export.py": "67f6ad852eb134827e38a8d2c561f548094cbe565c31907fe4f80750604a6974",
+    "app/auth/identity.py": "db0687206416c5e3e0ece3b283902130675ebffcfca8c6dcb1a9e9c0aa1e4383",
+    "app/auth/keys.py": "226266ba8f72763622a0f61bbd1d68e25915f96ae347a996f758655cd4bea7fd",
+    "app/auth/middleware.py": "157a2076f0144c7f9866052875b33b82433380dc6a98ceaaab6dbdd9937ce6aa",
+    "app/auth/models.py": "1c1cb0582ec7f46e01f08026e0aff691701b39d1aa123926a79c428ff315e9bf",
+    "app/auth/provider_lock.py": "a34c54ffac64f5982f5309c8d2dd427d07ca3b81dcf5efbfea2d9510489cbb60",
+    "app/auth/ratelimit.py": "cb152523fd8af7e97f8f86e90f1492c4fdc4ae2f6765797cdc1df865e36b79d4",
+    "app/auth/router.py": "36e16382163287f87c56b1ef7180c4ad8b39fe97da39dc65e19829d6c82626a0",
+    "app/auth/schemas.py": "96ec62c074fdb01602ad654c5fbe5cd3267ce963cc3c6c200a47a6d48f5f0137",
+    "app/auth/security.py": "7ce89dcd293fc84a8dee3d238164411a3b1f9dee36fe3b475b3fb1f69f4dc7e2",
+    "app/auth/service.py": "ee3e1aa0874803ec593cf9db16c4fb4eed4e2252b4a498b5e885e9f1f4aa44af",
+    "app/auth/tokens.py": "5a0b9ab11e791a362bc602b78281353a1a607d41c71a4558ac1f57971ce84d33",
+    "app/config.py": "4e5d6547f26331336e0d8f56d1f0d5facf28922a436ad420a684f026414f41f5",
+    "app/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/core/errors.py": "5482270e29cba24f629492cf49ce59e023b1cafa7de205f75746a80c067db92f",
+    "app/core/logging.py": "4c994070af4c7c24273eedfa51cec2f32ef89a5a7e9ce65dafbb9c3192459e49",
+    "app/core/pagination.py": "50c4e219b6ece56379c058618efe1c579b03b6852ced56d01251f4bcdf53b686",
+    "app/core/redact.py": "ad598dcf29bb50c06ed34d21949ab9b8fe7928fef7b1c991f902932925425e4d",
+    "app/crud/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/crud/_base.py": "df7634459f67f2505a57f3511c4fd9045211e6d9c1590bc4289154078aae8652",
+    "app/crud/customers.py": "8689b2d07e29bb4b7878e3a2eaaac74e9329a296425fe68c732425d5e5e2f0a0",
+    "app/crud/lifecycle.py": "b458b7eded78cb98c67ffa42d012db587fd2b2a3504eec0fe80f47770d7556e0",
+    "app/crud/orders.py": "cd350a32dae605f0bd8840d9fb8fe37e50767523b756706fc1dc4c2e5fde7be8",
+    "app/db.py": "9aa8e3bce269adff5928fb5523eed783fab7ed3e5a8d04378265f5c48499dd0a",
+    "app/events/__init__.py": "f26d887181212a5258665d40edf377d30c10478fb9ad102003e3b50d05fbbcdc",
+    "app/events/adapters.py": "d0239eea39aad85d82cb8653ab4819dd05053fb0e90a8e5a668359009b8f5eb9",
+    "app/events/bus.py": "7924242e2022c4c8c9e93e0af7e089e00f406fddc1b7f65cab4ea94d09668b45",
+    "app/events/config.py": "a8e6a93c24574c1737f955889550247ec896b2f2362fcbf105f6d6f7f90b3353",
+    "app/events/definitions.py": "1a3cb915027f400bb17985adf3b23ded0ce474e76d16e9a341ade8eb35674843",
+    "app/events/hooks.py": "680617e15c1eccfe4e043da0dae081ddfceabb3acccc79fc5c1e240b046df896",
+    "app/events/models.py": "fac7a88365aee9857bf16dfcb84bf3947d97582f109fff4ece1ee8a3ebc661e8",
+    "app/events/outbox.py": "8895d78b9bf30a9ae7b59377906b4059cdd0f6324db5ffc6cfb68787cc7784d2",
+    "app/events/relay.py": "95d6bd548f43973fba60d47c12b4f9108465132142758ffcf59b254d47e676db",
+    "app/events/types.py": "9d2788688ef8c0e66cf44c32ee77ca94408c061a7acf6ce2edbbe0fc34a92839",
+    "app/hooks_gen/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/hooks_gen/access.py": "ed34ef5cdfaf5190e9975e8a9b848011e4ddc4d79af92e96aeed74aa7e8b36a0",
+    "app/hooks_gen/contracts.py": "f0791a0479f4b2d9ae0127771eef1f9fc3a3ac04ae2208121eb0193e07f0fb31",
+    "app/hooks_gen/registry.py": "aa09486d57cf554bdaf6f8d0afa2e2b0ed95f1e0c940f9c19aad497b1f7df444",
+    "app/hooks_gen/runtime.py": "9c2b58f859e1406a58810ecb8cff5221e205fb87d2d36aff15af793a267cb386",
+    "app/main.py": "f40c5a9c35c57f662ef8cbfe8bd11123b0ba6e9db84542b358cf4d8c12a0a4fd",
+    "app/models/__init__.py": "a8c0f097a39150353bbf5be0122ede089b36160f79823f850ccf11a1b68bbe77",
+    "app/models/_associations.py": "e01dface66784e19c42edf5047cb2709668ee370b8800ad689786c3dbfe9386a",
+    "app/models/_base.py": "93717ae7c7f0bc758b104307008dafc4b90eb257633223686b140d1c8bdc45b0",
+    "app/models/customers.py": "177472d16280af41e8186758e4e6d139a2331e2fa803000b86385ee92ccf4a74",
+    "app/models/orders.py": "79cf65e228a87da4101c2dfa2c4d7de510eb74b6c8cf9e492a0f0fad5b3d23af",
+    "app/notifications/__init__.py": "530e06a909311c502ed60ffcace62bbc4d4d86c03509c6fa593c338fa4acf18a",
+    "app/notifications/config.py": "d6bcf929a2dbf77ca46220f4a84eba71ee51bc2e08df85e59f7b3c3cc84ada05",
+    "app/notifications/definitions.py": "609fd829aad99275f53670aa1f452e80833812b5160ca46538d25d2e94084207",
+    "app/notifications/dispatcher.py": "9859d76c561461c216da487d5608bc8db525595739aa8581cea4effe5b8f7101",
+    "app/notifications/models.py": "8d08a54c61bea9fae545f506961c02abf4bafbea8e047e175ddc5b76fced80cd",
+    "app/notifications/render.py": "bd859e9ab0641db6740dde50a2d4923486f4ca0d3172dd3ae3c545cf91b96683",
+    "app/notifications/router.py": "53803a3e546c2f236bf2fde18e28ecc9ef79b3082fd357e4d3e139d2c16606ad",
+    "app/notifications/service.py": "5496396bb5336852a0f1af198933bd7677415400dbcd948e1c3f5f782ab6ac7c",
+    "app/notifications/triggers.py": "4d4d7ce802cd9b73d9d6b2e183458688124ddfa48052ef0cea4593613c978528",
+    "app/platform_gate.py": "0b073ac99dbc8ddeb3aab5e6a1f54554a8b9aad74a0fa60219a37aac35aace0e",
+    "app/platform_sdk/__init__.py": "0670d5f922a7b623cd0d3af472c0bf7365e9f22af65e39883294a6828db07659",
+    "app/platform_sdk/budget.py": "edd21bf51a9325f96bf419eac9812b7a3ee6f8dc98bde76b8c385076ad22a151",
+    "app/platform_sdk/effects.py": "0f9403d357592da6e132ff61be94d738c7bb89310bf05756c11febad4aba3a0d",
+    "app/platform_sdk/env.py": "b778a955cdb5eed063dbfc3ee20e4b3ca18579489cc6adb462597f4509d6bd8b",
+    "app/platform_sdk/helpers.py": "47833db406bfdb1161597af0a7dbf40b2216d259aac22b47547e7e37022da544",
+    "app/providers/__init__.py": "eb930329faf0c0e0f1956bbcfd1596535a987990402013560ec7eb726aeedc61",
+    "app/providers/base.py": "55c3b68f77c4f6f264e220bcc775722faaf39e195583bd9adaeb0fe3d7d6beb5",
+    "app/providers/breaker.py": "6af1942fcd31e778a60cf9cddbea4b43a923c12b77e68bde703ac908355e268b",
+    "app/providers/client.py": "10279288594ce71d479b90bb270d1d8efbd470e828a28f9f956438965f75f07b",
+    "app/providers/config.py": "8522b45c38a6f7eec6e84d7ffa7b9914e7e347158c918a616964041c3d331cc9",
+    "app/providers/definitions.py": "283c2f5c27fd529e9e400c6987a5ef7633ed90144a2ac75f481b6a0a02675eb1",
+    "app/providers/emulator.py": "ee68a8b37b6e4dcf6aef2228b4f01ec18cc1e0cdfe1b6919af9ae837ab5eeec7",
+    "app/providers/errors.py": "79ea530605518ccfd24ca2132c1b997ebd373bbcd7307545d507e26c3baab23d",
+    "app/providers/logsafe.py": "edd0915ddee0e83bdb79e96f94c9185fe5569a1a59fd570a7ede2da51658e839",
+    "app/providers/models.py": "d9ad8a45a4d51685c68af7dab0ae0470028b98d0416c87368590514d57dba2c4",
+    "app/providers/reencrypt.py": "6b7521daf4fa58990967e26df63aec488e3ac48e446db7a11841d840b0ce0613",
+    "app/providers/registry.py": "a1fefebb26eab38e525ff83be1fc6a68c06469308046cb1b88bef7d0aa94590f",
+    "app/providers/router.py": "e86dc1e0af51b891d66d3b2e447b5963efc85e7188e46613a8fdd5eff8c738d2",
+    "app/providers/schemas.py": "25606dab26550e180e2e0c3274a7bd5389cc6b827f966f30f934272dc6377d44",
+    "app/providers/vault.py": "74bac320dbe59430b611a81343cf03efa4a2243e85caffff0c1e083aa86b6bb4",
+    "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
+    "app/routers/customers.py": "4afe3a8992d2d4090996b488c269866a73fd425e35986b431b16f47a01abeaf9",
+    "app/routers/orders.py": "17a6ed3b7ebd4c3dd62977b250c7d73fcb171f56d5b66685004595b85218143e",
+    "app/schemas/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/schemas/customers.py": "c11911e265a8740f66abc800b35613c49e940ce97b9b0278b872182db84b0ef4",
+    "app/schemas/orders.py": "c13637b741887f88656313af5d0de852cd3b7d1da7333b93a2ce207b050b0cb4"
+  },
+  "guarded_sha256": {
+    "Dockerfile": "cc7e28011233461a78472e4bc38ed5edd7f2e9ebb73bb043e261c9d4e06f2761",
+    "alembic.ini": "af41c19f1bd69aa268efa0be9782b2787387c7ccb723841e60ed30cdfeab2563",
+    "alembic/env.py": "538b9bc7c0992bbef24f98a76da020191775e0998d71a7ab673a49c999527d68",
+    "alembic/script.py.mako": "7883f9f4f59387bc303343ed2eac18f9a5376b46e252c476c6c47a8030fedede",
+    "alembic/versions/0001_initial.py": "41c98c7337cb945871009935b7c64c68a0a91c9738fb894d17e258db5d278bc1",
+    "alembic/versions/0002_auth.py": "a210043cc7efe20d20a46312925c4f5d6bddca35262597d7253d2f6a4d05e87e",
+    "alembic/versions/0009_events.py": "122c3bc73e5f8dec82669804776ecd24b584a95550be3e7872d17e989b60ac2a",
+    "alembic/versions/0016_providers.py": "f46b948fa94c9cc0a936efe8690d343fb6e1fd37b8d956aed100be133c09a7b6",
+    "alembic/versions/0021_notifications.py": "4d17e54943c00365a56a3ac329da399bf8aa2dce7ce674c98ab5f988ee22fc51",
+    "docker-compose.yml": "07e85823381aa66239feafd3c3fd641ad1aacccb04e06e52537ca432ec88f4e6",
+    "requirements-dev.txt": "19f18546389f41f7571e67802b7fde4a09e1cef00039792142cf6d6944a46780",
+    "requirements.txt": "56c448364cf42072c34c18556fabecaa7b13ad081fa8c3955ff7cd411c3bbf24",
+    "tests/conftest.py": "f3920f3ea83a971427855f27100611f8a3a7f061c5b73293183d343493820a74"
+  },
+  "hooks": [
+    {
+      "budget": {
+        "cpu_ms": 1000,
+        "outbound_calls": 0,
+        "rows": 0
+      },
+      "effect_budget": {
+        "calls_per_effect": 2,
+        "outbound_per_minute": 10,
+        "payload_bytes": 2000
+      },
+      "effects": [
+        "email",
+        "notification"
+      ],
+      "failure_policy": "fallback",
+      "file": "app/custom/hooks/announce_order.py",
+      "frame_sha256": "087a47ab5baf35eb41e79a78428610bd983e85f98e12d79bad97b38b4fbcb939",
+      "function": "announce_order",
+      "input_fields": [
+        {
+          "name": "id",
+          "required": true,
+          "type": "uuid"
+        },
+        {
+          "name": "reference",
+          "required": true,
+          "type": "string"
+        }
+      ],
+      "input_model": "AnnounceInput",
+      "kind": "effect",
+      "name": "announce_order",
+      "output_fields": [
+        {
+          "name": "sent",
+          "required": true,
+          "type": "bool"
+        }
+      ],
+      "output_model": "AnnounceResult",
+      "point": "Order.after_commit",
+      "signature": "def announce_order(data: AnnounceInput) -> AnnounceResult:  # platform:signature (fixed)"
+    }
+  ],
+  "limits": {
+    "max_ast_nodes": 1500,
+    "max_body_lines": 200,
+    "max_file_bytes": 65536,
+    "max_iterations": 1000000,
+    "max_loop_depth": 3,
+    "max_small": 100000,
+    "max_string": 2000
+  },
+  "locked_sha256": {
+    "app/custom/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/custom/hooks/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sdk_exports": [
+    "Principal",
+    "clamp",
+    "current_principal",
+    "find_rows",
+    "is_blank",
+    "log",
+    "notify",
+    "now",
+    "pct_diff",
+    "send_email",
+    "send_sms",
+    "slugify"
+  ],
+  "sdk_io": [
+    "find_rows",
+    "notify",
+    "now",
+    "send_email",
+    "send_sms"
+  ],
+  "version": 1
+}

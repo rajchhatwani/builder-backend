@@ -6,6 +6,7 @@ Emitted only when the spec has at least one seed profile:
   app/seed/definitions.py  entities, columns, foreign keys and state machines as plain data
   app/seed/plan.py         the seed plan: profiles, counts, per-column generators (data only)
   app/seed/guard.py        production guard (APP_ENV / ENVIRONMENT, explicit double override)
+  app/seed/numbering.py    only with numbered fields: draws their numbers from the live counter (and the seed contract)
   app/seed/runner.py       writes a profile in one transaction; reset removes exactly the seeded rows
   app/seed/invariants.py   checks run after every seed (foreign keys, uniques, tenants, states, history)
   app/seed/models.py       `seed_rows`: which rows the seed created
@@ -101,6 +102,41 @@ def definitions(project: ProjectCtx) -> dict[str, Any]:
     }
 
 
+_RUNNER_WRITE_ANCHOR = (
+    "async def _write(session: AsyncSession, data: engine.SeedData) -> None:\n"
+    "    pending: list[dict[str, Any]] = []\n"
+)
+_RUNNER_ROW_ANCHOR = '        pending.append({"id": row.id, **row.values})\n'
+_RUNNER_IMPORT_ANCHOR = "from app.seed import engine, guard, invariants\n"
+
+
+def with_numbering(runner_source: str) -> str:
+    """The runner with sequence numbers drawn for numbered fields. Used only by projects that have such
+    fields, so every other project keeps the runner byte for byte."""
+    for anchor in (_RUNNER_WRITE_ANCHOR, _RUNNER_ROW_ANCHOR, _RUNNER_IMPORT_ANCHOR):
+        if runner_source.count(anchor) != 1:
+            raise RuntimeError("runner template changed: update the numbering patch")
+    text = runner_source.replace(
+        _RUNNER_IMPORT_ANCHOR, "from app.seed import engine, guard, invariants, numbering\n"
+    )
+    text = text.replace(
+        _RUNNER_WRITE_ANCHOR,
+        _RUNNER_WRITE_ANCHOR
+        + "    try:\n"
+        + "        drawn = await numbering.draw_numbers(session, data)  # inside this transaction\n"
+        + "    except numbering.NumberingError as exc:\n"
+        + "        raise SeedError(str(exc)) from exc\n",
+    )
+    return text.replace(
+        _RUNNER_ROW_ANCHOR,
+        '        pending.append({"id": row.id, **row.values, **drawn.get(row.id, {})})\n',
+    )
+
+
+def numbered(project: ProjectCtx) -> dict[str, list[tuple[str, str, bool, bool]]]:
+    return {e.name: list(e.numbered) for e in project.entities if e.numbered}
+
+
 def plan_data(project: ProjectCtx) -> dict[str, Any]:
     return {
         p.name: p.model_dump(mode="json", exclude_none=True)
@@ -136,8 +172,19 @@ class SeedModule:
             'of randomness and `as_of` the only clock)."""\n\n'
             f"PROFILES = {pprint.pformat(plan_data(project), width=96, sort_dicts=True)}\n"
         )
+        numbered_fields = numbered(project)
+        if numbered_fields:
+            files["app/seed/runner.py"] = with_numbering(files["app/seed/runner.py"])
+            files["app/seed/numbering.py"] = (
+                read_verbatim(_TEMPLATES, "app/seed/numbering.py.tpl").rstrip("\n")
+                + "\n\n\nNUMBERED: dict[str, list[tuple[str, str, bool, bool]]] = "
+                + pprint.pformat(numbered_fields, width=96, sort_dicts=True)
+                + "\n"
+            )
         files["alembic/versions/0008_seed.py"] = render_template(
             self._env, "alembic/versions/0008_seed.py.j2", down_revision=migration_parent(project)
         )
-        files["tests/test_seed.py"] = render_template(self._env, "tests/test_seed.py.j2")
+        files["tests/test_seed.py"] = render_template(
+            self._env, "tests/test_seed.py.j2", numbered=numbered_fields
+        )
         return files

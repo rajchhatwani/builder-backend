@@ -38,8 +38,11 @@ class AuthTenant(_models_base.Base):
 class AuthUser(_models_base.Base):
     """The profile of a Keycloak user, created the first time they call the API.
 
-    `id` is the user's Keycloak id (the token's `sub`). Name, email, roles and the custom
-    attributes are refreshed from the token whenever they change; none of them is a credential."""
+    `id` is the app's own user id, NOT the token's `sub`. The `sub` (with its issuer) is kept in
+    `auth_identities` and maps to this id; a `sub` that happens to be a UUID is reused as the id
+    when that id is free, any other `sub` gets a stable id derived from issuer and `sub`. Name, email,
+    roles and the custom attributes are refreshed from the token whenever they change; none of them
+    is a credential."""
 
     __tablename__ = "auth_users"
 

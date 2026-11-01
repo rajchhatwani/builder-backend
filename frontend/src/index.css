@@ -1144,3 +1144,41 @@ body.is-viewing {
 .rules-badge-ok { border-inline-start-color: var(--success); }
 .rules-badge-broken { border-inline-start-color: var(--danger); font-weight: 600; }
 @media (max-width: 40rem) { .rules-guard-list li { flex-wrap: wrap; } }
+.bh-timeline { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.bh-timeline button { inline-size: 100%; text-align: start; display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: baseline; }
+
+/* ── Workbench drawer (F2-5, v2 shell) ────────────────────────────────────── */
+.wb-drawer { position: fixed; inset-inline: 0; inset-block-end: 0; z-index: 20; max-block-size: 60vh; display: flex; flex-direction: column; background: var(--background, #fff); border-block-start: 1px solid var(--border, #d0d5dd); box-shadow: 0 -4px 16px rgb(0 0 0 / 0.12); }
+.wb-drawer[hidden] { display: none; }
+.wb-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); border-block-end: 1px solid var(--border, #d0d5dd); }
+.wb-head .bh-tabs { margin: 0; flex: 1; }
+.wb-body { overflow: auto; padding: var(--space-3) var(--space-4); }
+.wb-pre { overflow: auto; max-block-size: 18rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wb-reference { min-block-size: 24rem; }
+.wb-history ul { list-style: none; padding: 0; margin-block-end: var(--space-2); }
+.wb-console textarea { font-family: var(--font-mono, monospace); inline-size: 100%; }
+.bh-timeline button small { color: inherit; opacity: 1; } /* .muted on the filled (selected) button failed contrast */
+.wb-drawer code { color: var(--foreground); }
+
+/* F2-6 Connect > Notifications (append-only) */
+.nt-var { margin-inline-end: var(--space-2); color: var(--foreground); }
+.nt-preview { border: 1px solid var(--border); border-radius: var(--radius-medium, 6px); padding: var(--space-3); color: var(--foreground); background: var(--card); margin-block-end: var(--space-3); }
+.nt-preview pre { white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; color: var(--foreground); background: transparent; }
+.nt-scroll { overflow-x: auto; }
+.nt-scroll td, .nt-scroll th { color: var(--foreground); }
+
+/* ── Connect / Operate pages (F2-2, F2-3, v2 shell) ───────────────────────── */
+.co-note { padding: var(--space-3) var(--space-4); margin-block-end: var(--space-3); }
+.co-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-3); }
+.co-kv dt { color: var(--muted-foreground); font-size: var(--text-7, 0.875rem); }
+.co-kv dd { margin: 0; overflow-wrap: anywhere; }
+.co-chips { list-style: none; padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.co-steps { padding-inline-start: var(--space-5, 1.5rem); display: flex; flex-direction: column; gap: var(--space-2); }
+.co-secret { border-inline-start: 4px solid var(--warning, #b54708); margin-block: var(--space-3); }
+.co-secret code { display: block; overflow-wrap: anywhere; user-select: all; }
+.bh-items td, .bh-items th { overflow-wrap: anywhere; }
+@media (max-width: 40rem) { .co-kv { grid-template-columns: 1fr; } }
+.co-page code, .co-page .card code { color: var(--foreground); } /* inline code on cards failed contrast (axe) in the Off state */
+.co-page { min-inline-size: 0; max-inline-size: 100%; }
+.co-scroll { overflow-x: auto; max-inline-size: 100%; }
+.co-scroll:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

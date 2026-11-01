@@ -1,0 +1,275 @@
+"""The API edge middleware (generated): API version, idempotency capture, response headers.
+
+It sits next to the router, so it sees every response (also errors and 429s). It holds a response back
+only when it has to: an idempotent request (so the stored response and the business write commit
+together) or a JSON response an older API version must reshape. Everything else streams through.
+
+An idempotent request: the business write, the stored response and the real COMMIT are one transaction;
+only after that commit do the held-back after_commit hooks run (never on a replay, never on a failure).
+A crash between the COMMIT and those hooks means they may not run: that is after_commit's own
+at-most-once rule, and events (the outbox) are for effects that must not be lost. A replay still
+counts against the rate limit and the quota."""
+
+import json
+from collections.abc import MutableMapping
+from typing import Any
+
+import structlog
+from starlette.datastructures import Headers
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
+
+from app.api_edge import deferral, definitions, idempotency, versioning
+from app.api_edge.state import EdgeState, Replay
+from app.core.errors import AppError
+from app.db import session_factory
+
+logger = structlog.get_logger()
+RawHeaders = list[tuple[bytes, bytes]]
+
+
+def _error_body(code: str, message: str, details: list[dict[str, Any]] | None = None) -> bytes:
+    return json.dumps({"code": code, "message": message, "details": details or []}).encode()
+
+
+def _merge(raw: RawHeaders, extra: list[tuple[str, str]], drop: tuple[str, ...] = ()) -> RawHeaders:
+    names = {n.lower().encode() for n, _ in extra} | {d.encode() for d in drop}
+    kept = [(n, v) for n, v in raw if n.lower() not in names]
+    return kept + [(n.lower().encode("latin-1"), v.encode("latin-1")) for n, v in extra]
+
+
+def _is_json(raw: RawHeaders) -> bool:
+    for name, value in raw:
+        if name.lower() == b"content-type":
+            return value.lower().startswith(b"application/json")
+    return False
+
+
+async def _send_all(send: Send, status: int, headers: RawHeaders, body: bytes) -> None:
+    headers = [(n, v) for n, v in headers if n.lower() != b"content-length"]
+    headers.append((b"content-length", str(len(body)).encode()))
+    await send({"type": "http.response.start", "status": status, "headers": headers})
+    await send({"type": "http.response.body", "body": body})
+
+
+async def _read_body(receive: Receive, limit: int) -> bytes | None:
+    """The whole request body, or None when it is longer than `limit`."""
+    chunks: list[bytes] = []
+    size = 0
+    while True:
+        message = await receive()
+        if message["type"] != "http.request":
+            raise ConnectionAbortedError("client disconnected")
+        chunk = message.get("body", b"")
+        size += len(chunk)
+        if size > limit:
+            return None
+        chunks.append(chunk)
+        if not message.get("more_body", False):
+            return b"".join(chunks)
+
+
+class ApiEdgeMiddleware:
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        edge = EdgeState()
+        state: MutableMapping[str, Any] = scope.setdefault("state", {})
+        state["edge"] = edge
+        headers = Headers(scope=scope)
+        path: str = scope["path"]
+        method: str = scope["method"]
+        try:
+            edge.version = versioning.resolve(headers.get("api-version"))
+        except AppError as exc:
+            edge.version = versioning.DEFAULT
+            edge.set_header("API-Version", edge.version)
+            await _send_all(
+                send,
+                exc.status_code,
+                _merge([(b"content-type", b"application/json")], edge.headers),
+                _error_body(exc.code, exc.message, exc.details),
+            )
+            return
+        edge.set_header("API-Version", edge.version)
+        raw_key = headers.get("idempotency-key")
+        cfg = definitions.IDEMPOTENCY
+        assert cfg is not None
+        if raw_key is not None and method in cfg["methods"]:
+            try:
+                edge.key = idempotency.parse_key(raw_key)
+                body = await _read_body(receive, idempotency.MAX_REQUEST_BYTES)
+            except AppError as exc:
+                await _send_all(
+                    send, exc.status_code, _merge([(b"content-type", b"application/json")], edge.headers),
+                    _error_body(exc.code, exc.message),
+                )
+                return
+            except ConnectionAbortedError:
+                return
+            if body is None:
+                await _send_all(
+                    send, 413, _merge([(b"content-type", b"application/json")], edge.headers),
+                    _error_body("request_too_large", "The request is too large to be made idempotent"),
+                )
+                return
+            query = scope.get("query_string", b"").decode("latin-1")
+            edge.request_hash = idempotency.request_hash(
+                method, f"{path}?{query}" if query else path, headers.get("content-type", ""), body
+            )
+            edge.session = session_factory()
+            deferral.current.set(edge)
+            sent = False
+
+            async def replay_receive() -> Message:
+                nonlocal sent
+                if not sent:
+                    sent = True
+                    return {"type": "http.request", "body": body, "more_body": False}
+                return await receive()
+
+            receive = replay_receive
+        try:
+            await self._run(scope, receive, send, edge, path, method)
+        finally:
+            deferral.current.set(None)
+
+    async def _run(
+        self, scope: Scope, receive: Receive, send: Send, edge: EdgeState, path: str, method: str
+    ) -> None:
+        start: Message | None = None
+        body = bytearray()
+        overflow = False
+        mode = "stream"
+        limit = (definitions.IDEMPOTENCY or {}).get("max_response_bytes", 0)
+
+        async def edge_send(message: Message) -> None:
+            nonlocal start, mode, overflow
+            if message["type"] == "http.response.start":
+                raw: RawHeaders = list(message.get("headers", []))
+                if edge.session is not None:
+                    mode = "capture"
+                elif (
+                    edge.version is not None
+                    and 200 <= message["status"] < 300
+                    and _is_json(raw)
+                    and not versioning.exempt(path)
+                    and versioning.pending(edge.version)
+                ):
+                    mode = "transform"
+                if mode == "stream":
+                    await send({**message, "headers": _merge(raw, edge.headers)})
+                else:
+                    start = message
+                return
+            if mode == "stream":
+                await send(message)
+                return
+            if message["type"] == "http.response.body":
+                chunk = message.get("body", b"")
+                if len(body) + len(chunk) > max(limit, 16 * 1024 * 1024 if mode == "transform" else 0):
+                    overflow = True
+                elif not overflow:
+                    body.extend(chunk)
+
+        try:
+            await self.app(scope, receive, edge_send)
+        except BaseException:
+            await self._discard(edge)
+            raise
+        if start is None:
+            await self._discard(edge)
+            return
+        if mode == "stream":
+            return
+        status: int = start["status"]
+        raw = list(start.get("headers", []))
+        payload = bytes(body)
+        if mode == "capture":
+            try:
+                status, raw, payload = await self._finish(edge, status, raw, payload, overflow)
+                await self._after_commit(edge)  # only when the real commit happened
+            finally:
+                await self._close(edge)
+        elif overflow:
+            status, raw, payload = self._failure(raw, 500, "api_version_transform_failed")
+        if edge.version is not None and 200 <= status < 300 and _is_json(raw) and not versioning.exempt(path):
+            try:
+                if versioning.pending(edge.version):
+                    new = versioning.downgrade(edge.version, method, path, json.loads(payload))
+                    payload = json.dumps(new, separators=(",", ":")).encode()
+            except Exception:
+                logger.exception("api_version_transform_failed", version=edge.version, path=path)
+                status, raw, payload = self._failure(raw, 500, "api_version_transform_failed")
+        await _send_all(send, status, _merge(raw, edge.headers), payload)
+
+    @staticmethod
+    def _failure(raw: RawHeaders, status: int, code: str) -> tuple[int, RawHeaders, bytes]:
+        message = "The response could not be produced: nothing was changed" if code != "api_version_transform_failed" else "The response could not be shaped for the requested API version"
+        return status, [(b"content-type", b"application/json")], _error_body(code, message)
+
+    async def _discard(self, edge: EdgeState) -> None:
+        edge.after_commit = None  # the request failed: its after_commit hooks never run
+        if edge.session is not None:
+            try:
+                await edge.session.rollback()
+            finally:
+                await edge.session.close()
+                edge.session = None
+
+    @staticmethod
+    async def _close(edge: EdgeState) -> None:
+        edge.after_commit = None
+        session, edge.session = edge.session, None
+        if session is not None:
+            await session.close()
+
+    @staticmethod
+    async def _after_commit(edge: EdgeState) -> None:
+        """Run the held-back after_commit stages after the real commit (errors are logged, never raised)."""
+        pending, edge.after_commit = edge.after_commit or [], None
+        if not edge.committed:
+            return
+        for stage in pending:
+            try:
+                await stage()
+            except Exception:
+                logger.exception("after_commit_failed")
+
+    async def _finish(
+        self, edge: EdgeState, status: int, raw: RawHeaders, payload: bytes, overflow: bool
+    ) -> tuple[int, RawHeaders, bytes]:
+        """Commit the write together with its stored response, or roll everything back."""
+        session = edge.session
+        assert session is not None
+        try:
+            if edge.replay is not None:
+                replay: Replay = edge.replay
+                await session.rollback()
+                headers: RawHeaders = [(n.lower().encode("latin-1"), v.encode("latin-1")) for n, v in replay.headers]
+                return replay.status, headers, replay.body
+            if edge.claim_id is None or edge.commit is None or not 200 <= status < 300:
+                await session.rollback()  # a refusal or an error leaves nothing behind
+                return status, raw, payload
+            if overflow:
+                await session.rollback()
+                return self._failure(raw, 500, "idempotency_response_too_large")
+            stored = [
+                (n.decode("latin-1"), v.decode("latin-1")) for n, v in raw if n.lower() in idempotency.KEPT_HEADERS_RAW
+            ]
+            if not await idempotency.finalize(session, edge.claim_id, status, stored, payload):
+                await session.rollback()
+                return self._failure(raw, 500, "idempotency_store_failed")
+            await edge.commit()
+            edge.committed = True
+            return status, raw, payload
+        except Exception:
+            logger.exception("idempotency_finalize_failed")
+            try:
+                await session.rollback()
+            except Exception:
+                logger.exception("idempotency_rollback_failed")
+            return self._failure(raw, 503, "idempotency_unavailable")

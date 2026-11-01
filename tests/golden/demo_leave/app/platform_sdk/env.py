@@ -30,6 +30,10 @@ class BudgetExceeded(Exception):
     """The hook read more rows than its budget, or touched something it was not granted."""
 
 
+class AccessDenied(Exception):
+    """The person whose request runs the hook may not read that entity (their access rules say so)."""
+
+
 @dataclasses.dataclass
 class HookEnv:
     hook: str
@@ -69,8 +73,13 @@ def now() -> _dt.datetime:
 def find_rows(entity: str, *, limit: int = 50, **equals: Any) -> list[dict[str, Any]]:
     """Read-only lookup: rows of `entity` whose columns equal the given values, as plain dicts.
 
-    Only the entities the hook declares in `reads` can be read, only up to its `rows` budget, and
-    only inside the caller's tenant. Nothing can be written through this function."""
+    Only the entities the hook declares in `reads` can be read, and only up to its `rows` budget.
+    `reads` is not a master key: the rows are filtered by the access rules of the person whose
+    request runs the hook, exactly as the entity's own list endpoint would filter them (role
+    permissions, owner / tenant / custom row rules, abac / pbac policies, soft-deleted rows hidden),
+    and only the fields that endpoint returns come back. Entities that person may not read raise
+    `AccessDenied`; with no identifiable person the read is refused where the endpoint needs one.
+    Nothing can be written through this function."""
     env = _env()
     if env.finder is None or entity not in env.reads:
         env.breached = True

@@ -1,0 +1,247 @@
+{
+  "$defs": {
+    "DownloadMode": {
+      "description": "proxy: the API streams the file. presigned: the API redirects to a short-lived signed URL.",
+      "enum": [
+        "proxy",
+        "presigned"
+      ],
+      "title": "DownloadMode",
+      "type": "string"
+    },
+    "StorageBackend": {
+      "description": "Where uploaded files live. Both speak the S3 API; minio is any self-hosted compatible server.",
+      "enum": [
+        "s3",
+        "minio"
+      ],
+      "title": "StorageBackend",
+      "type": "string"
+    },
+    "StorageRoles": {
+      "properties": {
+        "upload": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Upload",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "share": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Share",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Read",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read_all": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Read All",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "delete": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Delete",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "delete_all": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Delete All",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "operate": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Operate",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "title": "StorageRoles",
+      "type": "object"
+    },
+    "StorageSecurity": {
+      "properties": {
+        "audit_retention_days": {
+          "default": 2555,
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Audit Retention Days",
+          "type": "integer"
+        },
+        "audit_ip": {
+          "default": true,
+          "title": "Audit Ip",
+          "type": "boolean"
+        },
+        "rescan_after_days": {
+          "default": 30,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Rescan After Days",
+          "type": "integer"
+        },
+        "scan_timeout_seconds": {
+          "default": 120,
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Scan Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "title": "StorageSecurity",
+      "type": "object"
+    }
+  },
+  "description": "Body of PUT /projects/{id}/storage.",
+  "properties": {
+    "backend": {
+      "$ref": "#/$defs/StorageBackend",
+      "default": "s3"
+    },
+    "bucket": {
+      "default": "",
+      "maxLength": 63,
+      "title": "Bucket",
+      "type": "string"
+    },
+    "region": {
+      "anyOf": [
+        {
+          "maxLength": 32,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Region",
+      "x-ui": {
+        "showWhen": {
+          "field": "backend",
+          "equals": "s3"
+        }
+      }
+    },
+    "key_prefix": {
+      "default": "uploads",
+      "maxLength": 100,
+      "title": "Key Prefix",
+      "type": "string"
+    },
+    "allowed_types": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 60,
+      "title": "Allowed Types",
+      "type": "array",
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "max_file_mb": {
+      "default": 25,
+      "maximum": 100000,
+      "minimum": 1,
+      "title": "Max File Mb",
+      "type": "integer"
+    },
+    "user_quota_mb": {
+      "anyOf": [
+        {
+          "maximum": 100000000,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "User Quota Mb"
+    },
+    "uploads_per_hour": {
+      "default": 60,
+      "maximum": 1000000,
+      "minimum": 1,
+      "title": "Uploads Per Hour",
+      "type": "integer"
+    },
+    "download_mode": {
+      "$ref": "#/$defs/DownloadMode",
+      "default": "proxy"
+    },
+    "allow_inline_images": {
+      "default": false,
+      "title": "Allow Inline Images",
+      "type": "boolean"
+    },
+    "roles": {
+      "$ref": "#/$defs/StorageRoles"
+    },
+    "security": {
+      "$ref": "#/$defs/StorageSecurity"
+    }
+  },
+  "title": "Storage",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "backend",
+      "bucket",
+      "region",
+      "key_prefix",
+      "download_mode",
+      "max_file_mb",
+      "user_quota_mb",
+      "uploads_per_hour",
+      "allow_inline_images",
+      "allowed_types",
+      "roles",
+      "security"
+    ]
+  }
+}

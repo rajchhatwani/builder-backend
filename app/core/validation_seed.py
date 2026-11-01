@@ -31,6 +31,7 @@ from app.core.spec_models import (
     SpecStateMachine,
 )
 from app.core.validation_authorization import authz_active
+from app.core.validation_numbering import numbering
 from app.core.validation_runtime import looks_secret
 
 Add = Callable[[str, str, str], None]
@@ -50,9 +51,22 @@ MAX_SEED = 2**31 - 1
 NAME_RE = re.compile(r"[a-z][a-z0-9_]{0,23}")
 PREFIX_RE = re.compile(r"[A-Za-z0-9_.-]{0,40}")
 EMAIL_PREFIX_RE = re.compile(r"[a-z][a-z0-9]{0,19}")
-SAFE_DOMAIN_RE = re.compile(r".*@([A-Za-z0-9-]+\.)*(test|example|invalid|localhost)$|.*@example\.(com|org|net)$")
+SAFE_DOMAIN_RE = re.compile(
+    r".*@([A-Za-z0-9-]+\.)*(test|example|invalid|localhost)$|.*@example\.(com|org|net)$"
+)
 
-SEEDABLE = {"string", "text", "integer", "bigint", "float", "decimal", "boolean", "date", "datetime", "enum"}
+SEEDABLE = {
+    "string",
+    "text",
+    "integer",
+    "bigint",
+    "float",
+    "decimal",
+    "boolean",
+    "date",
+    "datetime",
+    "enum",
+}
 _INT_TYPES = {"integer", "bigint"}
 _INT_LIMITS = {"integer": (-(2**31), 2**31 - 1), "bigint": (-(2**63), 2**63 - 1)}
 
@@ -71,8 +85,20 @@ GENERATORS: dict[str, tuple[set[str], set[str]]] = {
     "state": ({"enum"}, {"weights"}),
 }
 _KEYS = (
-    "value", "values", "prefix", "start", "width", "min", "max", "places", "ratio",
-    "min_words", "max_words", "entity", "pick", "weights",
+    "value",
+    "values",
+    "prefix",
+    "start",
+    "width",
+    "min",
+    "max",
+    "places",
+    "ratio",
+    "min_words",
+    "max_words",
+    "entity",
+    "pick",
+    "weights",
 )
 # generators whose value differs for every row: usable on a unique column
 INJECTIVE = {"sequence", "email"}
@@ -95,7 +121,9 @@ def tenant_scoped(spec: Spec, entity: SpecEntity) -> bool:
     if not spec.auth.permissions:
         return False
     return any(
-        p.entity == entity.name and p.row_rule == "tenant" and p.operation in entity.options.operations
+        p.entity == entity.name
+        and p.row_rule == "tenant"
+        and p.operation in entity.options.operations
         for p in spec.auth.permissions
     )
 
@@ -164,11 +192,19 @@ def _check_profile(
         add(f"{p}.seed", "invalid_value", f"seed must be 0 to {MAX_SEED}")
     day = _iso_date(prof.as_of)
     if day is None or not 1990 <= day.year <= 2100:
-        add(f"{p}.as_of", "invalid_value", "as_of must be a date like 2026-01-31 (years 1990 to 2100)")
+        add(
+            f"{p}.as_of",
+            "invalid_value",
+            "as_of must be a date like 2026-01-31 (years 1990 to 2100)",
+        )
     if not 0 <= prof.tenants <= MAX_TENANTS:
         add(f"{p}.tenants", "invalid_value", f"tenants must be 0 to {MAX_TENANTS}")
     elif prof.tenants > 0 and not multi_tenant(spec):
-        add(f"{p}.tenants", "tenants_not_supported", "tenants need auth with multi_tenant switched on")
+        add(
+            f"{p}.tenants",
+            "tenants_not_supported",
+            "tenants need auth with multi_tenant switched on",
+        )
 
     plan: dict[str, SpecSeedEntity] = {}
     for j, pe in enumerate(prof.entities):
@@ -197,11 +233,29 @@ def _check_profile(
                 f"{pe.entity}: {pe.count} per tenant x {factor} tenants is more than {MAX_ROWS_PER_ENTITY} rows",
             )
         if pe.entity in scoped_names and prof.tenants == 0 and multi_tenant(spec):
-            add(f"{ep}.entity", "tenants_required", f"{pe.entity} belongs to a tenant: set tenants to 1 or more")
-        _check_entity_plan(spec, prof, pe, ep, entities[pe.entity], machines.get(pe.entity),
-                           fks.get(pe.entity, {}), plan, scoped_names, add)
+            add(
+                f"{ep}.entity",
+                "tenants_required",
+                f"{pe.entity} belongs to a tenant: set tenants to 1 or more",
+            )
+        _check_entity_plan(
+            spec,
+            prof,
+            pe,
+            ep,
+            entities[pe.entity],
+            machines.get(pe.entity),
+            fks.get(pe.entity, {}),
+            plan,
+            scoped_names,
+            add,
+        )
     if sum(totals.values()) > MAX_ROWS_PER_PROFILE:
-        add(f"{p}.entities", "too_many_rows", f"a profile may create at most {MAX_ROWS_PER_PROFILE} rows")
+        add(
+            f"{p}.entities",
+            "too_many_rows",
+            f"a profile may create at most {MAX_ROWS_PER_PROFILE} rows",
+        )
     _check_reference_cycles(prof, p, add)
 
 
@@ -221,6 +275,7 @@ def _check_entity_plan(
         add(f"{ep}.fields", "too_many", f"at most {MAX_FIELDS_PER_ENTITY} fields")
         return
     by_name = {f.name: f for f in entity.fields}
+    numbered = {field: seq for (ent, field), seq in numbering(spec).items() if ent == pe.entity}
     given: dict[str, SpecSeedGenerator] = {}
     rows_total = pe.count * (prof.tenants if pe.entity in scoped_names and prof.tenants > 0 else 1)
     for k, sf in enumerate(pe.fields):
@@ -229,9 +284,19 @@ def _check_entity_plan(
             add(f"{fp}.field", "duplicate", f"{sf.field} is listed twice")
             continue
         gen = sf.generator
-        if sf.field in by_name:
+        if sf.field in by_name and sf.field in numbered:
             given[sf.field] = gen
-            _check_field_generator(spec, entity, by_name[sf.field], gen, fp, machine, rows_total, add)
+            add(
+                f"{fp}.generator",
+                "sequence_numbered",
+                f"{pe.entity}.{sf.field} is numbered by sequence {numbered[sf.field]!r}: the "
+                "seed draws its number from the live counter, so give it no generator",
+            )
+        elif sf.field in by_name:
+            given[sf.field] = gen
+            _check_field_generator(
+                spec, entity, by_name[sf.field], gen, fp, machine, rows_total, add
+            )
         elif sf.field in fk_cols:
             given[sf.field] = gen
             _check_reference(spec, prof, pe, gen, fk_cols[sf.field], fp, plan, scoped_names, add)
@@ -244,13 +309,25 @@ def _check_entity_plan(
             )
     # required columns must be filled
     for f in entity.fields:
-        if f.name in given or (machine is not None and f.name == machine.field):
+        if (
+            f.name in given
+            or (machine is not None and f.name == machine.field)
+            or f.name in numbered
+        ):
             continue
         if f.required and f.default is None:
-            add(f"{ep}.fields", "required_field_missing", f"{pe.entity}.{f.name} is required: give it a generator")
+            add(
+                f"{ep}.fields",
+                "required_field_missing",
+                f"{pe.entity}.{f.name} is required: give it a generator",
+            )
     for col, (target, required, _unique) in fk_cols.items():
         if required and col not in given:
-            add(f"{ep}.fields", "required_field_missing", f"{pe.entity}.{col} is required: give it a reference generator")
+            add(
+                f"{ep}.fields",
+                "required_field_missing",
+                f"{pe.entity}.{col} is required: give it a reference generator",
+            )
 
 
 def _check_field_generator(
@@ -266,7 +343,11 @@ def _check_field_generator(
     gp = f"{fp}.generator"
     kind = gen.type
     if kind not in GENERATOR_TYPES:
-        add(f"{gp}.type", "unknown_generator", f"generator type must be one of {', '.join(GENERATOR_TYPES)}")
+        add(
+            f"{gp}.type",
+            "unknown_generator",
+            f"generator type must be one of {', '.join(GENERATOR_TYPES)}",
+        )
         return
     types, allowed = GENERATORS[kind]
     is_state = machine is not None and f.name == machine.field
@@ -274,13 +355,23 @@ def _check_field_generator(
         add(f"{fp}.field", "unsupported_field_type", f"{f.type} fields cannot be seeded")
         return
     if is_state and kind != "state":
-        add(f"{gp}.type", "state_managed", f"{f.name} is the state of a state machine: use the state generator")
+        add(
+            f"{gp}.type",
+            "state_managed",
+            f"{f.name} is the state of a state machine: use the state generator",
+        )
         return
     if kind == "state" and not is_state:
-        add(f"{gp}.type", "invalid_generator", f"{f.name} is not the state field of a state machine")
+        add(
+            f"{gp}.type", "invalid_generator", f"{f.name} is not the state field of a state machine"
+        )
         return
     if kind == "reference":
-        add(f"{gp}.type", "invalid_generator", f"{f.name} is not a foreign key: reference fills foreign keys only")
+        add(
+            f"{gp}.type",
+            "invalid_generator",
+            f"{f.name} is not a foreign key: reference fills foreign keys only",
+        )
         return
     if f.type not in types:
         add(f"{gp}.type", "type_mismatch", f"{kind} cannot fill a {f.type} field ({f.name})")
@@ -325,7 +416,9 @@ def _value_problem(f: SpecField, value: Any) -> str | None:
     if t in ("string", "text"):
         return _text_ok(value, f)
     if t == "enum":
-        return None if value in (f.enum_values or []) else f"{value!r} is not one of the enum values"
+        return (
+            None if value in (f.enum_values or []) else f"{value!r} is not one of the enum values"
+        )
     if t == "boolean":
         return None if isinstance(value, bool) else "must be true or false"
     if t in _INT_TYPES:
@@ -366,7 +459,9 @@ def _bounds(f: SpecField, num: Decimal) -> str | None:
     return None
 
 
-def _check_constant(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_constant(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     if gen.value is None:
         add(f"{gp}.value", "required", "constant needs a value")
         return
@@ -375,7 +470,9 @@ def _check_constant(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m:
         add(f"{gp}.value", "invalid_value", problem)
 
 
-def _check_one_of(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_one_of(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     values = gen.values
     if not values:
         add(f"{gp}.values", "required", "one_of needs at least one value")
@@ -389,7 +486,9 @@ def _check_one_of(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: A
             add(f"{gp}.values[{k}]", "invalid_value", problem)
 
 
-def _check_sequence(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_sequence(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     start = 0 if gen.start is None else gen.start
     width = 0 if gen.width is None else gen.width
     prefix = gen.prefix or ""
@@ -409,10 +508,16 @@ def _check_sequence(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m:
         return
     longest = len(sequence_text(prefix, start, width, max(rows - 1, 0)))
     if f.max_length is not None and longest > f.max_length:
-        add(f"{gp}.prefix", "too_long", f"values up to {longest} characters do not fit max_length {f.max_length}")
+        add(
+            f"{gp}.prefix",
+            "too_long",
+            f"values up to {longest} characters do not fit max_length {f.max_length}",
+        )
 
 
-def _check_int_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_int_range(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     lo, hi = gen.min, gen.max
     if isinstance(lo, str) or isinstance(hi, str) or lo is None or hi is None:
         add(gp, "required", "int_range needs whole-number min and max")
@@ -426,7 +531,9 @@ def _check_int_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m
             add(f"{gp}.{key}", "invalid_value", problem)
 
 
-def _check_decimal_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_decimal_range(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     places = 0 if gen.places is None else gen.places
     if not 0 <= places <= MAX_DECIMAL_PLACES:
         add(f"{gp}.places", "invalid_value", f"places must be 0 to {MAX_DECIMAL_PLACES}")
@@ -449,7 +556,9 @@ def _check_decimal_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: in
                 add(f"{gp}.{key}", "invalid_value", problem)
 
 
-def _check_date_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_date_range(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     lo, hi = _iso_date(gen.min), _iso_date(gen.max)
     if lo is None or hi is None:
         add(gp, "required", "date_range needs min and max dates like 2026-01-31")
@@ -460,32 +569,48 @@ def _check_date_range(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, 
         add(gp, "invalid_value", "years 1990 to 2100 only")
 
 
-def _check_bool_ratio(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_bool_ratio(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     if gen.ratio is None or isinstance(gen.ratio, bool) or not 0 <= gen.ratio <= 1:
         add(f"{gp}.ratio", "invalid_value", "ratio must be a number from 0 to 1")
 
 
-def _check_words(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_words(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     lo, hi = gen.min_words, gen.max_words
     if lo is None or hi is None or not 1 <= lo <= hi <= MAX_WORDS:
         add(gp, "invalid_value", f"words needs 1 <= min_words <= max_words <= {MAX_WORDS}")
         return
     longest = hi * MAX_WORD_LENGTH + (hi - 1)
     if f.max_length is not None and longest > f.max_length:
-        add(f"{gp}.max_words", "too_long", f"up to {longest} characters do not fit max_length {f.max_length}")
+        add(
+            f"{gp}.max_words",
+            "too_long",
+            f"up to {longest} characters do not fit max_length {f.max_length}",
+        )
 
 
-def _check_email(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add) -> None:
+def _check_email(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, m: Any, add: Add
+) -> None:
     prefix = gen.prefix if gen.prefix is not None else "user"
     if not EMAIL_PREFIX_RE.fullmatch(prefix):
         add(f"{gp}.prefix", "invalid_value", "prefix: lowercase letters and digits (max 20)")
         return
     longest = len(email_text(prefix, max(rows - 1, 0)))
     if f.max_length is not None and longest > f.max_length:
-        add(f"{gp}.prefix", "too_long", f"values up to {longest} characters do not fit max_length {f.max_length}")
+        add(
+            f"{gp}.prefix",
+            "too_long",
+            f"values up to {longest} characters do not fit max_length {f.max_length}",
+        )
 
 
-def _check_state(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, machine: Any, add: Add) -> None:
+def _check_state(
+    f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, machine: Any, add: Add
+) -> None:
     weights = gen.weights
     if not weights:
         add(f"{gp}.weights", "required", "state needs a weight for at least one state")
@@ -508,7 +633,11 @@ def _check_state(f: SpecField, gen: SpecSeedGenerator, gp: str, rows: int, machi
         elif isinstance(weight, bool) or not 0 <= weight <= 1000:
             add(wp, "invalid_value", "a weight is a whole number from 0 to 1000")
         elif weight > 0 and state not in reachable:
-            add(wp, "unreachable_state", f"no chain of transitions leads from {machine.initial!r} to {state!r}")
+            add(
+                wp,
+                "unreachable_state",
+                f"no chain of transitions leads from {machine.initial!r} to {state!r}",
+            )
     if not any(isinstance(w, int) and w > 0 for w in weights.values()):
         add(f"{gp}.weights", "invalid_value", "give at least one state a weight above 0")
 
@@ -545,21 +674,37 @@ def _check_reference(
         return
     _check_keys(gen, GENERATORS["reference"][1], gp, add)
     if gen.entity != target:
-        add(f"{gp}.entity", "type_mismatch", f"this foreign key points at {target}, not {gen.entity!r}")
+        add(
+            f"{gp}.entity",
+            "type_mismatch",
+            f"this foreign key points at {target}, not {gen.entity!r}",
+        )
         return
     if target == pe.entity:
-        add(f"{gp}.entity", "self_reference", "an entity cannot reference its own rows in a seed plan")
+        add(
+            f"{gp}.entity",
+            "self_reference",
+            "an entity cannot reference its own rows in a seed plan",
+        )
         return
     parent = plan.get(target)
     if parent is None:
-        add(f"{gp}.entity", "reference_not_seeded", f"{target} has no plan in this profile: seed it too")
+        add(
+            f"{gp}.entity",
+            "reference_not_seeded",
+            f"{target} has no plan in this profile: seed it too",
+        )
         return
     pick = gen.pick or "cycle"
     if pick not in ("cycle", "random"):
         add(f"{gp}.pick", "invalid_value", "pick is cycle or random")
         return
     if parent.count < 1 and required:
-        add(f"{gp}.entity", "empty_reference", f"{target} has count 0, so {pe.entity} has nothing to point at")
+        add(
+            f"{gp}.entity",
+            "empty_reference",
+            f"{target} has count 0, so {pe.entity} has nothing to point at",
+        )
     if pe.entity not in scoped_names and target in scoped_names:
         add(
             f"{gp}.entity",
@@ -574,7 +719,11 @@ def _check_reference(
             mine = pe.count * (tenants if pe.entity in scoped_names else 1)
             theirs = parent.count * (tenants if target in scoped_names else 1)
             if mine > theirs:
-                add(f"{gp}.entity", "unique_not_injective", f"{mine} rows cannot each get their own {target} ({theirs})")
+                add(
+                    f"{gp}.entity",
+                    "unique_not_injective",
+                    f"{mine} rows cannot each get their own {target} ({theirs})",
+                )
 
 
 def _check_reference_cycles(prof: SpecSeedProfile, p: str, add: Add) -> None:
@@ -597,4 +746,6 @@ def _check_reference_cycles(prof: SpecSeedProfile, p: str, add: Add) -> None:
         return False
 
     if any(visit(n) for n in sorted(edges)):
-        add(f"{p}.entities", "reference_cycle", "the references between seeded entities form a loop")
+        add(
+            f"{p}.entities", "reference_cycle", "the references between seeded entities form a loop"
+        )

@@ -1,12 +1,15 @@
 import uuid
 
-from fastapi import APIRouter, Depends, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
+from app.api.security import forbidden
 from app.db import get_session
+from app.models.enums import MemberRole
 from app.schemas.common import Page
 from app.schemas.generation import GenerationDetail, GenerationSummary, PreviewResponse
+from app.services.access_service import ROLE_LEVEL
 from app.services.generation_service import GenerationService
 
 router = APIRouter(tags=["generate"])
@@ -24,8 +27,31 @@ async def preview(
     response_class=Response,
     responses={200: {"content": {"application/zip": {}}}},
 )
-async def download(project_id: uuid.UUID, session: AsyncSession = Depends(get_session)) -> Response:
-    content, filename, generation = await GenerationService(session).download(project_id)
+async def download(
+    request: Request,
+    project_id: uuid.UUID,
+    allow_destructive: bool = Query(
+        False, description="Generate even if the migration plan drops data (editor or owner only)."
+    ),
+    accept_unreadable_baseline: bool = Query(
+        False,
+        description="Treat an unreadable previous generation snapshot as a first generation "
+        "(editor or owner only).",
+    ),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    if (
+        accept_unreadable_baseline
+        and ROLE_LEVEL[request.state.member_role] < ROLE_LEVEL[MemberRole.editor]
+    ):
+        raise forbidden("only an editor or owner can accept an unreadable baseline")
+    if allow_destructive and ROLE_LEVEL[request.state.member_role] < ROLE_LEVEL[MemberRole.editor]:
+        raise forbidden("only an editor or owner can allow a destructive migration")
+    content, filename, generation = await GenerationService(session).download(
+        project_id,
+        allow_destructive=allow_destructive,
+        accept_unreadable_baseline=accept_unreadable_baseline,
+    )
     return Response(
         content=content,
         media_type="application/zip",

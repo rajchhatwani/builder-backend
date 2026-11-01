@@ -11,7 +11,13 @@ from pydantic import BaseModel
 
 {% if auth %}
 from app.auth import access as _access
+{% if routes | selectattr("update_ops") | list %}
+from app.auth.deps import CurrentUser
+{% endif %}
 from app.auth.service import effective_roles
+{% if routes | selectattr("update_ops") | list %}
+from app.core.errors import AppError
+{% endif %}
 {% endif %}
 {% for r in routes %}
 from app.crud.{{ r.e.table }} import {{ r.e.name }}Repository
@@ -57,6 +63,17 @@ _access_move_{{ e.table }} = _ACCESS_{{ e.table }}["{{ r.post_op }}"]
 _access_{{ e.table }} = _access.access_dependency({% if r.gated %}authenticate=True{% endif %})
 {% endif %}
 {% endif %}
+{% for u in r.update_ops %}
+
+
+async def _can_{{ u.op }}_{{ e.table }}({% if u.needs_user %}user: CurrentUser{% endif %}) -> _access.Access | AppError:
+    """The entity's own {{ u.op }} access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_{{ e.table }}["{{ u.op }}"]({% if u.needs_user %}user{% endif %})
+    except AppError as refused:
+        return refused
+{% endfor %}
 
 
 def _roles_{{ e.table }}({% if auth %}access: _access.Access{% endif %}) -> set[str]:
@@ -76,6 +93,9 @@ async def list_{{ e.table }}_transitions(
 {% endif %}
 ) -> list[dict[str, object]]:
     item = await {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %}).get(item_id)
+{% if settings_guards %}
+    await engine.prime_settings(session, item)
+{% endif %}
     return engine.available("{{ e.name }}", item, _roles_{{ e.table }}({% if auth %}access{% endif %}))
 
 
@@ -86,8 +106,22 @@ async def apply_{{ e.table }}_transition(
     session: SessionDep,
 {% if auth %}
     access: Annotated[_access.Access, Depends(_access_{{ "move_" if r.post_op != r.access_op else "" }}{{ e.table }})],
+{% for u in r.update_ops %}
+    can_{{ u.op }}: Annotated[_access.Access | AppError, Depends(_can_{{ u.op }}_{{ e.table }})],
+{% endfor %}
 {% endif %}
 ) -> {{ e.name }}Read:
+{% if auth and r.update_ops %}
+    # No `roles` on the transition = anyone who may update this record: the entity's update access
+    # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
+    wanted = next((x for x in engine.machine("{{ e.name }}")["transitions"] if x["name"] == name and not x["auto"]), None)
+    if wanted is not None and not wanted["roles"]:
+{% for u in r.update_ops %}
+        if isinstance(can_{{ u.op }}, AppError):
+            raise can_{{ u.op }}
+        await {{ e.name }}Repository(session, **can_{{ u.op }}.repo_kwargs).get(item_id)
+{% endfor %}
+{% endif %}
     repo = {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %})
     item = await engine.apply(
         repo,

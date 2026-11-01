@@ -31,8 +31,15 @@ test.describe('projects and the 12 sections', () => {
     await page.getByLabel('Name').first().fill('Post')
     await page.getByRole('button', { name: 'Create entity' }).click()
     await expect(page.getByText('Post').first()).toBeVisible()
-    const entities = await (await api.get(`/projects/${id}/entities`)).json()
-    expect(entities.items.map((e: { name: string }) => e.name)).toContain('Post')
+    await expect
+      .poll(
+        async () => {
+          const entities = await (await api.get(`/projects/${id}/entities`)).json()
+          return entities.items.map((e: { name: string }) => e.name)
+        },
+        { timeout: 10_000 },
+      )
+      .toContain('Post')
   })
 
   test('every section loads from its deep link without a server error', async ({ page, request }) => {

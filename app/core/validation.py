@@ -46,10 +46,19 @@ from app.core.spec_models import (
     SpecProject,
     SpecRelation,
 )
+from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
+from app.core.validation_events import EV_TABLES, check_events, events_active
+from app.core.validation_jobs import JOB_TABLES, check_jobs, jobs_active
+from app.core.validation_workflows import WORKFLOW_TABLES, check_workflows, workflows_active
+from app.core.validation_notifications import NOTIFICATION_TABLES, check_notifications, notifications_active
+from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
 from app.core.validation_history import CH_TABLES, check_history, history_active
 from app.core.validation_hooks import check_hooks
+from app.core.validation_numbering import check_numbered_fields
+from app.core.validation_secrets import check_block_secrets
 from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
 from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
 from app.core.validation_deploy import check_deployment
@@ -134,6 +143,27 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     if seed_active(spec):
         for table in SEED_TABLES:
             ctx.tables[table] = "seed"
+    if events_active(spec):
+        for table in EV_TABLES:
+            ctx.tables[table] = "events"
+    if api_edge_active(spec):
+        for table in API_EDGE_TABLES:
+            ctx.tables[table] = "api_edge"
+    if jobs_active(spec):
+        for table in JOB_TABLES:
+            ctx.tables[table] = "jobs"
+    if workflows_active(spec):
+        for table in WORKFLOW_TABLES:
+            ctx.tables[table] = "workflows"
+    if providers_active(spec):
+        for table in PROVIDER_TABLES:
+            ctx.tables[table] = "providers"
+    if notifications_active(spec):
+        for table in NOTIFICATION_TABLES:
+            ctx.tables[table] = "notifications"
+    if webhooks_active(spec):
+        for table in WEBHOOK_TABLES:
+            ctx.tables[table] = "webhooks"
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
@@ -149,10 +179,27 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_documents(spec, ctx.add)
     check_state_machines(spec, entities_by_name, ctx.add)
     check_runtime_config(spec, ctx.add)
+    check_numbered_fields(spec, entities_by_name, ctx.add)
     check_history(spec, entities_by_name, ctx.add)
     check_hooks(spec, entities_by_name, ctx.add)
     check_seed(spec, entities_by_name, ctx.add)
-    return ctx.issues
+    check_events(spec, ctx.add)
+    check_api_edge(spec, ctx.add)
+    check_jobs(spec, ctx.add)
+    check_workflows(spec, ctx.add)
+    check_providers(spec, ctx.add)
+    check_notifications(spec, ctx.add)
+    check_webhooks(spec, ctx.add)
+    check_block_secrets(spec, ctx.add)
+    seen: set[tuple[str, str]] = set()
+    unique = []
+    for issue in ctx.issues:  # the same secret may be found by a block's own check too
+        if issue.code == "secret_in_spec":
+            if (issue.path, issue.code) in seen:
+                continue
+            seen.add((issue.path, issue.code))
+        unique.append(issue)
+    return unique
 
 
 # --- shared helpers ---------------------------------------------------------------------

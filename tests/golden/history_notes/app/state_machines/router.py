@@ -8,7 +8,9 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from app.auth import access as _access
+from app.auth.deps import CurrentUser
 from app.auth.service import effective_roles
+from app.core.errors import AppError
 from app.crud.tickets import TicketRepository
 from app.db import SessionDep
 from app.routers.tickets import _ACCESS as _ACCESS_tickets
@@ -37,6 +39,15 @@ class StateChange(BaseModel):
 _access_tickets = _ACCESS_tickets["get"]
 
 
+async def _can_update_tickets(user: CurrentUser) -> _access.Access | AppError:
+    """The entity's own update access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_tickets["update"](user)
+    except AppError as refused:
+        return refused
+
+
 def _roles_tickets(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -57,7 +68,15 @@ async def apply_tickets_transition(
     name: str,
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_tickets)],
+    can_update: Annotated[_access.Access | AppError, Depends(_can_update_tickets)],
 ) -> TicketRead:
+    # No `roles` on the transition = anyone who may update this record: the entity's update access
+    # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
+    wanted = next((x for x in engine.machine("Ticket")["transitions"] if x["name"] == name and not x["auto"]), None)
+    if wanted is not None and not wanted["roles"]:
+        if isinstance(can_update, AppError):
+            raise can_update
+        await TicketRepository(session, **can_update.repo_kwargs).get(item_id)
     repo = TicketRepository(session, **access.repo_kwargs)
     item = await engine.apply(
         repo,

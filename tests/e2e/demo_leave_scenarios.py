@@ -4,11 +4,13 @@ tests/e2e/test_cycle1_demo.py and run against a real Postgres. Every `say()` lin
 What the story shows: an employee asks for leave; the rules route it to the manager (up to 5 days) or to HR
 (more), or decline it at once when the balance is too small; only the matching reviewer decides; the
 `check_request` hook asks for a reason on long leave; dates and days keep a change history; request numbers come from
-a gapless sequence that restarts every year; settings and the leave-type list are HR-editable.
+a gapless sequence that restarts every year, assigned by the platform when the request is filed; the 5-day limit
+is a setting that HR can change at run time; settings and the leave-type list are HR-editable.
 """
 
 import asyncio
 import datetime as dt
+import re
 from pathlib import Path
 
 import pytest
@@ -42,13 +44,6 @@ async def people(http: AsyncClient) -> dict[str, dict[str, str]]:
     }
 
 
-async def next_number() -> str:
-    async with session_factory() as session:
-        number = await sequences.next_number(session, "request_no")
-        await session.commit()
-        return number
-
-
 async def employee(http: AsyncClient, who: dict[str, str], balance: int = 10) -> str:
     response = await http.post(
         "/employees",
@@ -65,8 +60,7 @@ def span(days: int) -> dict[str, str]:
 
 async def request(http, who, emp, days, balance, **extra):  # noqa: ANN001, ANN201
     body = {
-        "request_no": await next_number(), "employee_id": emp, "days": days, "balance": balance,
-        "reason": "Holiday", **span(days), **extra,
+        "employee_id": emp, "days": days, "balance": balance, "reason": "Holiday", **span(days), **extra,
     }
     return await http.post("/leave_requests", json=body, headers=who)
 
@@ -75,6 +69,7 @@ async def filed(http, who, emp, days, balance) -> dict:  # noqa: ANN001
     response = await request(http, who, emp, days, balance)
     assert response.status_code == 201, response.text
     body = response.json()
+    assert re.fullmatch(r"LR-\d{4}-\d{4}", body["request_no"]), body
     say(f"  employee asks for {days} day(s), balance {balance}: {body['request_no']} -> {body['state']}")
     return body
 
@@ -151,11 +146,24 @@ async def test_dates_and_days_keep_a_history(http, people) -> None:  # noqa: ANN
 
 
 async def test_request_numbers_are_gapless_and_yearly(http, people) -> None:  # noqa: ANN001
-    say("Scenario 5: gapless request numbers")
-    numbers = await asyncio.gather(*(next_number() for _ in range(10)))
+    say("Scenario 5: request numbers assigned on create, gapless")
+    emp = await employee(http, people["hr"])
     year = dt.datetime.now(dt.UTC).year
-    assert sorted(numbers) == [f"LR-{year}-{n:04d}" for n in range(1, 11)]
-    say(f"  10 parallel draws -> {min(numbers)} .. {max(numbers)}, no gap, no duplicate")
+    made = await asyncio.gather(*(request(http, people["employee"], emp, 2, 10) for _ in range(10)))
+    assert {r.status_code for r in made} == {201}, [r.text for r in made]
+    numbers = sorted(r.json()["request_no"] for r in made)
+    assert numbers == [f"LR-{year}-{n:04d}" for n in range(1, 11)], numbers
+    say(f"  10 parallel requests -> {numbers[0]} .. {numbers[-1]}, no gap, no duplicate")
+    refused = await request(http, people["employee"], emp, 8, 20, reason=None)  # the hook refuses AFTER the draw
+    assert refused.status_code == 422, refused.text
+    nxt = await request(http, people["employee"], emp, 2, 10)
+    assert nxt.json()["request_no"] == f"LR-{year}-0011", nxt.text
+    say(f"  a request refused by the hook (422) burns nothing: the next one is {nxt.json()['request_no']}")
+    forged = await request(http, people["employee"], emp, 2, 10, request_no="LR-1999-0001")
+    assert forged.json()["request_no"] == f"LR-{year}-0012", forged.text
+    say("  a number sent by the employee is ignored; the platform assigns LR-%d-0012" % year)
+    async with session_factory() as session:
+        assert await sequences.peek(session, "request_no") == f"LR-{year}-0013"
 
 
 async def test_settings_and_the_leave_type_list(http, people) -> None:  # noqa: ANN001
@@ -167,5 +175,13 @@ async def test_settings_and_the_leave_type_list(http, people) -> None:  # noqa: 
     shown = {s["key"]: s["value"] for s in (await http.get("/config/settings", headers=people["hr"])).json()}
     say(f"  max_days_without_hr: manager 403, HR 200, 0 -> 422; HR now sees {shown}")
     assert shown["max_days_without_hr"] == 7
+    emp = await employee(http, people["hr"])
+    six = await filed(http, people["employee"], emp, 6, 10)
+    assert six["state"] == "manager_review"
+    say("  with the limit at 7, a 6-day request goes to the manager (it went to HR at the default 5), no regeneration")
+    assert (await put("max_days_without_hr", 2, people["hr"])).status_code == 200
+    three = await filed(http, people["employee"], emp, 3, 10)
+    assert three["state"] == "hr_review"
+    say("  with the limit at 2, a 3-day request goes to HR")
     items = (await http.get("/config/lists/leave_type", headers=people["employee"])).json()["items"]
     say(f"  leave types for an employee: {[i['value'] for i in items]}")

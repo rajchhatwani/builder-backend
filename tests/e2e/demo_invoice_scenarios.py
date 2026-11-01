@@ -3,11 +3,13 @@ tests/e2e/test_cycle1_demo.py and run against a real Postgres. Every `say()` lin
 
 What the story shows: a clerk files invoices; a small invoice close to its purchase order is approved by the
 rules alone; a large one waits for the right person; the `match_invoice` hook can refuse a submission; every
-change of amount is kept with who and when; invoice numbers come from a gapless sequence; settings and the
-status list are editable by the right roles only.
+change of amount is kept with who and when; invoice numbers are assigned by the platform from a gapless
+sequence (inside the transaction that files the invoice); the approval threshold is a setting that the guards
+read, so changing it takes effect at once; settings and the status list are editable by the right roles only.
 """
 
 import asyncio
+import re
 from pathlib import Path
 
 import pytest
@@ -41,13 +43,6 @@ async def people(http: AsyncClient) -> dict[str, dict[str, str]]:
     }
 
 
-async def next_number() -> str:
-    async with session_factory() as session:
-        number = await sequences.next_number(session, "invoice_no")
-        await session.commit()
-        return number
-
-
 async def supplier(http: AsyncClient, who: dict[str, str]) -> str:
     response = await http.post(
         "/suppliers", json={"name": "Acme Parts", "email": "billing@acme.example", "payment_terms": "Net 30"}, headers=who
@@ -56,14 +51,14 @@ async def supplier(http: AsyncClient, who: dict[str, str]) -> str:
     return response.json()["id"]
 
 
-async def file_invoice(http, who, supplier_id, amount, po, number=None) -> str:  # noqa: ANN001
+async def file_invoice(http, who, supplier_id, amount, po) -> str:  # noqa: ANN001
+    """The clerk never sends a number: the platform assigns it."""
     response = await http.post(
-        "/invoices",
-        json={"invoice_no": number or await next_number(), "amount": amount, "po_amount": po, "supplier_id": supplier_id},
-        headers=who,
+        "/invoices", json={"amount": amount, "po_amount": po, "supplier_id": supplier_id}, headers=who
     )
     assert response.status_code == 201, response.text
     body = response.json()
+    assert re.fullmatch(r"INV-\d{5}", body["invoice_no"]), body
     say(f"  clerk files {body['invoice_no']}: amount {amount}, purchase order {po} -> status {body['status']}")
     return body["id"]
 
@@ -123,14 +118,7 @@ async def test_the_match_hook_can_refuse_a_submission(http, people) -> None:  # 
     assert refused.status_code == 409 and refused.json()["code"] == "transition_refused", refused.text
     assert await status_of(http, people["clerk"], off) == "draft"
     say(f"  invoice 50x its purchase order: submit -> 409 {refused.json()['code']}, status stays draft")
-    blank = await http.post(
-        "/invoices", json={"invoice_no": " ", "amount": "10.00", "po_amount": "10.00", "supplier_id": sup},
-        headers=people["clerk"],
-    )
-    assert blank.status_code == 201
-    refused_blank = await move(http, people["clerk"], blank.json()["id"], "submit")
-    assert refused_blank.status_code == 409
-    say("  blank invoice number: submit -> 409 transition_refused")
+    say("  (the invoice number can no longer be blank: the platform assigns it, see scenario 5)")
 
 
 async def test_amount_changes_are_kept_with_who_and_when(http, people) -> None:  # noqa: ANN001
@@ -152,21 +140,56 @@ async def test_amount_changes_are_kept_with_who_and_when(http, people) -> None: 
 
 
 async def test_invoice_numbers_are_gapless_under_parallel_filing(http, people) -> None:  # noqa: ANN001
-    say("Scenario 5: gapless invoice-number sequence")
+    say("Scenario 5: invoice numbers assigned on create, gapless")
     sup = await supplier(http, people["clerk"])
-    numbers = await asyncio.gather(*(next_number() for _ in range(12)))
-    assert sorted(numbers) == [f"INV-{n:05d}" for n in range(1, 13)]
-    say(f"  12 parallel draws -> {min(numbers)} .. {max(numbers)}, no gap, no duplicate")
+    one = (await http.post("/invoices", json={"invoice_no": "HACK-1", "amount": "1.00", "po_amount": "1.00",
+                                               "supplier_id": sup}, headers=people["clerk"])).json()
+    assert one["invoice_no"] == "INV-00001", one
+    say(f"  clerk sends invoice_no 'HACK-1': ignored, the platform assigned {one['invoice_no']}")
+    patched = await http.patch(f"/invoices/{one['id']}", json={"invoice_no": "HACK-2"}, headers=people["admin"])
+    assert patched.status_code == 200 and patched.json()["invoice_no"] == "INV-00001"
+    say("  admin tries to change the number with PATCH: ignored, the number stays INV-00001")
+    made = await asyncio.gather(
+        *(http.post("/invoices", json={"amount": "10.00", "po_amount": "10.00", "supplier_id": sup},
+                    headers=people["clerk"]) for _ in range(12))
+    )
+    assert {r.status_code for r in made} == {201}, [r.text for r in made]
+    numbers = sorted(r.json()["invoice_no"] for r in made)
+    assert numbers == [f"INV-{n:05d}" for n in range(2, 14)], numbers
+    say(f"  12 parallel creates -> {numbers[0]} .. {numbers[-1]}, no gap, no duplicate")
+    refused = await http.post(
+        "/invoices",
+        json={"amount": "10.00", "po_amount": "10.00", "supplier_id": "00000000-0000-0000-0000-000000000000"},
+        headers=people["clerk"],
+    )
+    assert refused.status_code == 422, refused.text
+    nxt = await http.post("/invoices", json={"amount": "10.00", "po_amount": "10.00", "supplier_id": sup},
+                          headers=people["clerk"])
+    assert nxt.json()["invoice_no"] == "INV-00014", nxt.text
+    say(f"  a create refused after the draw (unknown supplier, 422) burns nothing: the next invoice is {nxt.json()['invoice_no']}")
     async with session_factory() as session:
-        burned = await sequences.next_number(session, "invoice_no")
-        await session.rollback()
-    after = await next_number()
-    assert burned == after == "INV-00013"
-    say(f"  a rolled-back draw ({burned}) burns nothing: the next committed number is {after}")
-    invoice = await file_invoice(http, people["clerk"], sup, "10.00", "10.00", number="INV-00014")
+        assert await sequences.peek(session, "invoice_no") == "INV-00015"
     shown = (await http.get("/config/sequences", headers=people["admin"])).json()
     say(f"  admin sees the counter: {shown}")
-    assert invoice
+
+
+async def test_a_changed_threshold_takes_effect_without_regenerating(http, people) -> None:  # noqa: ANN001
+    say("Scenario 5b: the approval threshold is a setting that the guards read")
+    sup = await supplier(http, people["clerk"])
+    put = lambda value: http.put("/config/settings/approval_threshold", json={"value": value}, headers=people["approver"])  # noqa: E731
+    first = await file_invoice(http, people["clerk"], sup, "12000.00", "12000.00")
+    assert (await move(http, people["clerk"], first, "submit")).json()["status"] == "pending_approval"
+    say("  threshold 10000: a 12000 invoice waits for approval")
+    assert (await put(15000)).status_code == 200
+    second = await file_invoice(http, people["clerk"], sup, "12000.00", "12000.00")
+    assert (await move(http, people["clerk"], second, "submit")).json()["status"] == "approved"
+    say("  approver raises the threshold to 15000 (no regeneration): a 12000 invoice is approved by the rules")
+    assert (await put(5000)).status_code == 200
+    third = await file_invoice(http, people["clerk"], sup, "6000.00", "6000.00")
+    assert (await move(http, people["clerk"], third, "submit")).json()["status"] == "pending_approval"
+    say("  approver lowers it to 5000: a 6000 invoice now waits")
+    listed = (await http.get(f"/invoices/{third}/transitions", headers=people["approver"])).json()
+    assert {t["name"] for t in listed} >= {"approve", "reject"}
 
 
 async def test_settings_and_lists_are_edited_by_their_roles(http, people) -> None:  # noqa: ANN001

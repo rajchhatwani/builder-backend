@@ -1,6 +1,13 @@
 """Schemas for the behaviour of a project (state machines). Shapes and sizes are checked here;
 whether names, states, roles and guard expressions are legal is `validation.validate`'s job, so
-the dashboard can save work in progress and read every problem."""
+the dashboard can save work in progress and read every problem.
+
+Versioning contract (additive, backward compatible): each section (`state_machines`, `settings`,
+`sequences`, `lists`, `history`, `hooks`, `seed`) has its OWN `version`. A GET returns that
+section's `version` (0 = never saved). A PUT carrying `expected_version` is refused with
+409 `conflict` only when THAT section changed since it was read; saves to other sections never
+make it stale. Omitting `expected_version` overwrites without a check. The `row_version` of a
+Read is the old whole-row counter, kept for old clients and not used for conflict checks."""
 
 import uuid
 from datetime import datetime
@@ -36,6 +43,7 @@ class StateMachinesRead(BaseModel):
     project_id: uuid.UUID
     version: int  # 0 = never saved
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     state_machines: list[StateMachineBody]
 
 
@@ -63,6 +71,7 @@ class SettingsRead(BaseModel):
     project_id: uuid.UUID
     version: int  # 0 = never saved
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     settings: list[SettingBody]
 
 
@@ -74,6 +83,8 @@ class SequenceBody(BaseModel):
     per_tenant: bool = False
     reset_yearly: bool = False
     view_roles: list[str] = Field(default_factory=list, max_length=50)
+    entity: str | None = Field(default=None, max_length=80)
+    field: str | None = Field(default=None, max_length=80)
 
 
 class SequencesWrite(BaseModel):
@@ -87,6 +98,7 @@ class SequencesRead(BaseModel):
     project_id: uuid.UUID
     version: int
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     sequences: list[SequenceBody]
 
 
@@ -116,13 +128,16 @@ class ListsRead(BaseModel):
     project_id: uuid.UUID
     version: int
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     lists: list[ListBody]
 
 
 class HistoryBody(BaseModel):
     entity: str = Field(max_length=80)
     fields: list[str] = Field(default_factory=list, max_length=200)
-    retention_days: int = Field(ge=-1_000_000, le=1_000_000)  # the range 1..3650 is checked by validation
+    retention_days: int = Field(
+        ge=-1_000_000, le=1_000_000
+    )  # the range 1..3650 is checked by validation
     view_roles: list[str] = Field(default_factory=list, max_length=50)
 
 
@@ -137,6 +152,7 @@ class HistoryRead(BaseModel):
     project_id: uuid.UUID
     version: int
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     history: list[HistoryBody]
 
 
@@ -148,11 +164,15 @@ class HookFieldBody(BaseModel):
 
 class HookModelBody(BaseModel):
     name: str = Field(max_length=80)
-    fields: list[HookFieldBody] = Field(default_factory=list, max_length=200)  # validation caps at 30
+    fields: list[HookFieldBody] = Field(
+        default_factory=list, max_length=200
+    )  # validation caps at 30
 
 
 class HookBudgetBody(BaseModel):
-    cpu_ms: int = Field(default=200, ge=-1_000_000, le=1_000_000)  # ceilings are checked by validation
+    cpu_ms: int = Field(
+        default=200, ge=-1_000_000, le=1_000_000
+    )  # ceilings are checked by validation
     rows: int = Field(default=0, ge=-1_000_000, le=1_000_000)
     outbound_calls: int = Field(default=0, ge=-1_000_000, le=1_000_000)
 
@@ -180,6 +200,7 @@ class HooksRead(BaseModel):
     project_id: uuid.UUID
     version: int
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     hooks: list[HookBody]
 
 
@@ -238,7 +259,22 @@ class SeedRead(BaseModel):
     project_id: uuid.UUID
     version: int
     updated_at: datetime | None = None
+    row_version: int = 0  # whole-row counter, informational only (see module docstring)
     seed: list[SeedProfileBody]
+
+
+class RoleOption(BaseModel):
+    name: str
+    label: str
+
+
+class RolesRead(BaseModel):
+    """GET /projects/{id}/behavior/roles: the role names declared by the project's auth config, for
+    the role pickers of the behaviour pages. Empty when sign-in has no roles (or is not set up).
+    Readable by anyone who can read the project spec; carries names and labels only."""
+
+    project_id: uuid.UUID
+    roles: list[RoleOption]
 
 
 class BehaviorIssues(BaseModel):
@@ -269,3 +305,94 @@ class ExpressionCheckRead(BaseModel):
     type: str | None = None
     error: ExpressionError | None = None
     fields: list[ExpressionField]
+
+
+# --- single-object blocks (B2-11): events, providers, notifications, jobs, workflows, api_edge,
+# webhooks, hook_effects. The body IS the spec block, so a block saved here and one saved with
+# PUT /spec are byte-identical. `null` removes the block. Same per-section version contract.
+from app.core.spec_models import (  # noqa: E402
+    SpecApiEdge,
+    SpecEvents,
+    SpecHookEffects,
+    SpecJobs,
+    SpecNotifications,
+    SpecProviders,
+    SpecWebhooks,
+    SpecWorkflows,
+)
+
+
+class _BlockRead(BaseModel):
+    project_id: uuid.UUID
+    version: int  # 0 = never saved
+    updated_at: datetime | None = None
+    row_version: int = 0
+
+
+class _BlockWrite(BaseModel):
+    model_config = {"extra": "forbid"}
+    expected_version: int | None = Field(default=None, ge=0)
+
+
+class EventsWrite(_BlockWrite):
+    events: SpecEvents | None = None
+
+
+class EventsRead(_BlockRead):
+    events: SpecEvents | None = None
+
+
+class ProvidersWrite(_BlockWrite):
+    providers: SpecProviders | None = None
+
+
+class ProvidersRead(_BlockRead):
+    providers: SpecProviders | None = None
+
+
+class NotificationsWrite(_BlockWrite):
+    notifications: SpecNotifications | None = None
+
+
+class NotificationsRead(_BlockRead):
+    notifications: SpecNotifications | None = None
+
+
+class JobsWrite(_BlockWrite):
+    jobs: SpecJobs | None = None
+
+
+class JobsRead(_BlockRead):
+    jobs: SpecJobs | None = None
+
+
+class WorkflowsWrite(_BlockWrite):
+    workflows: SpecWorkflows | None = None
+
+
+class WorkflowsRead(_BlockRead):
+    workflows: SpecWorkflows | None = None
+
+
+class ApiEdgeWrite(_BlockWrite):
+    api_edge: SpecApiEdge | None = None
+
+
+class ApiEdgeRead(_BlockRead):
+    api_edge: SpecApiEdge | None = None
+
+
+class WebhooksWrite(_BlockWrite):
+    webhooks: SpecWebhooks | None = None
+
+
+class WebhooksRead(_BlockRead):
+    webhooks: SpecWebhooks | None = None
+
+
+class HookEffectsWrite(_BlockWrite):
+    hook_effects: SpecHookEffects | None = None
+
+
+class HookEffectsRead(_BlockRead):
+    hook_effects: SpecHookEffects | None = None

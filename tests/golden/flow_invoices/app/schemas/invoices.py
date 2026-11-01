@@ -33,6 +33,6 @@ class InvoiceRead(_pd.BaseModel):
     invoice_no: str
     amount: _decimal.Decimal
     po_amount: _decimal.Decimal
-    status: _t.Literal['draft', 'submitted', 'pending_approval', 'approved', 'paid', 'rejected']
+    status: _t.Literal['draft', 'submitted', 'pending_approval', 'approved', 'paid', 'rejected', 'withdrawn']
     created_at: _dt.datetime
     updated_at: _dt.datetime

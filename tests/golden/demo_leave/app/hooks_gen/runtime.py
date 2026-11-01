@@ -35,8 +35,10 @@ import structlog
 from pydantic import BaseModel
 
 from app.core.errors import AppError
+from app.core.pagination import PageParams
 from app.crud.lifecycle import HookContext
 from app.db import session_factory
+from app.hooks_gen import access
 from app.platform_sdk import env as sdk_env
 
 logger = structlog.get_logger()
@@ -75,29 +77,28 @@ def _payload(hook: dict[str, Any], values: dict[str, Any] | None, item: Any) -> 
 
 
 async def _find(
-    ref: tuple[str, str], equals: dict[str, Any], limit: int, caller: Any
+    entity: str, equals: dict[str, Any], limit: int, caller: Any
 ) -> list[dict[str, Any]]:
-    model = getattr(importlib.import_module(ref[0]), ref[1])
-    columns = {attr.key for attr in sa.inspect(model).column_attrs}
-    if not set(equals) <= columns:
+    """The entity's own list query for the person behind the request (see app/hooks_gen/access.py)."""
+    rule = access.rule_for(entity)
+    repository = getattr(importlib.import_module(rule["repo"][0]), rule["repo"][1])
+    read_schema = getattr(importlib.import_module(rule["read"][0]), rule["read"][1])
+    columns = {attr.key for attr in sa.inspect(repository.model).column_attrs}
+    readable = columns & set(read_schema.model_fields)  # what the list endpoint returns
+    if not set(equals) <= readable:
         raise ValueError("unknown column in the filter")
-    stmt = sa.select(model).limit(limit)
-    for key, value in equals.items():
-        stmt = stmt.where(getattr(model, key) == value)
-    if "deleted_at" in columns:
-        stmt = stmt.where(model.deleted_at.is_(None))
-    if "tenant_id" in columns:
-        tenant_id = getattr(caller, "tenant_id", None)
-        if tenant_id is None:
-            return []  # no tenant, no rows
-        stmt = stmt.where(model.tenant_id == tenant_id)
+    kwargs = access.repo_kwargs(entity, caller)
+    if "tenant_id" in columns and kwargs.get("scope", {}).get("tenant_id") is None:
+        raise sdk_env.AccessDenied("the signed-in person may not read that entity")  # no tenant, no rows
     async with session_factory() as session:
         await session.execute(sa.text("SET TRANSACTION READ ONLY"))
-        rows = (await session.execute(stmt)).scalars().all()
-    return [
-        {key: getattr(row, key) for key in sorted(columns) if isinstance(getattr(row, key), _PLAIN)}
-        for row in rows
-    ]
+        items, _ = await repository(session, **kwargs).list_items(
+            PageParams(limit=limit, offset=0), filters=equals
+        )
+        return [
+            {key: getattr(row, key) for key in sorted(readable) if isinstance(getattr(row, key), _PLAIN)}
+            for row in items
+        ]
 
 
 def _finder(
@@ -105,11 +106,9 @@ def _finder(
 ) -> sdk_env.Finder | None:
     if not hook["reads"]:
         return None
-    models = hook["models"]
-
     def find(entity: str, equals: dict[str, Any], limit: int) -> list[dict[str, Any]]:
         left = max(0.05, deadline - time.monotonic())
-        future = asyncio.run_coroutine_threadsafe(_find(models[entity], equals, limit, caller), loop)
+        future = asyncio.run_coroutine_threadsafe(_find(entity, equals, limit, caller), loop)
         return future.result(timeout=left)
 
     return find

@@ -246,7 +246,7 @@
           ],
           "to_state": "approved",
           "auto": true,
-          "when": "amount <= 10000 and abs(amount - po_amount) <= po_amount * 0.02"
+          "when": "amount <= settings.approval_threshold and abs(amount - po_amount) <= po_amount * 0.02"
         },
         {
           "name": "needs_approval",
@@ -255,7 +255,7 @@
           ],
           "to_state": "pending_approval",
           "auto": true,
-          "when": "amount > 10000 or abs(amount - po_amount) > po_amount * 0.02"
+          "when": "amount > settings.approval_threshold or abs(amount - po_amount) > po_amount * 0.02"
         },
         {
           "name": "approve",
@@ -338,7 +338,9 @@
       "padding": 5,
       "view_roles": [
         "admin"
-      ]
+      ],
+      "entity": "Invoice",
+      "field": "invoice_no"
     }
   ],
   "lists": [
@@ -507,15 +509,6 @@
           "count": 12,
           "fields": [
             {
-              "field": "invoice_no",
-              "generator": {
-                "type": "sequence",
-                "prefix": "DEMO-",
-                "start": 1,
-                "width": 5
-              }
-            },
-            {
               "field": "amount",
               "generator": {
                 "type": "decimal_range",
@@ -626,15 +619,6 @@
           "entity": "Invoice",
           "count": 80,
           "fields": [
-            {
-              "field": "invoice_no",
-              "generator": {
-                "type": "sequence",
-                "prefix": "DEV-",
-                "start": 1,
-                "width": 5
-              }
-            },
             {
               "field": "amount",
               "generator": {

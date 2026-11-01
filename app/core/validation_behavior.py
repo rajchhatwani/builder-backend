@@ -4,8 +4,9 @@ import re
 from collections.abc import Callable
 from typing import NamedTuple
 
-from app.core.expr import ExprError, Schema, check, parse
+from app.core.expr import ExprError, Schema, check_scoped, settings_used
 from app.core.spec_models import Spec, SpecEntity, SpecStateMachine
+from app.core.validation_seed import multi_tenant, tenant_scoped
 
 Add = Callable[[str, str, str], None]
 
@@ -26,7 +27,19 @@ _EXPR_TYPES = {
 def expr_schema(entity: SpecEntity) -> Schema:
     """Fields a guard may read: the types the expression engine supports, nothing else."""
     return {
-        f.name: (_EXPR_TYPES[f.type], not f.required) for f in entity.fields if f.type in _EXPR_TYPES
+        f.name: (_EXPR_TYPES[f.type], not f.required)
+        for f in entity.fields
+        if f.type in _EXPR_TYPES
+    }
+
+
+def settings_schema(spec: Spec) -> Schema:
+    """Settings a guard may read (`settings.<key>`): key -> (type, nullable). Every setting has a
+    default (validation_runtime), so none is ever null."""
+    return {
+        s.key: (s.type, False)
+        for s in spec.settings
+        if s.type in ("string", "int", "bool", "decimal")
     }
 
 
@@ -58,7 +71,11 @@ def _check_machine(
         add(f"{p}.field", "invalid_value", f"{sm.field!r} must be an enum field of {sm.entity}")
         return
     if not field.required:
-        add(f"{p}.field", "invalid_value", f"{sm.field} must be required: a record always has a state")
+        add(
+            f"{p}.field",
+            "invalid_value",
+            f"{sm.field} must be required: a record always has a state",
+        )
     if field.default is not None and field.default != sm.initial:
         add(f"{p}.field", "invalid_value", f"{sm.field} has a default other than the initial state")
     states = set(field.enum_values or [])
@@ -68,6 +85,7 @@ def _check_machine(
         add(f"{p}.transitions", "too_many", f"at most {MAX_TRANSITIONS} transitions")
         return
     schema = expr_schema(entity)
+    settings = settings_schema(spec)
     names: set[str] = set()
     auto_edges: dict[str, set[str]] = {}
     for j, t in enumerate(sm.transitions):
@@ -85,7 +103,18 @@ def _check_machine(
         if t.to_state not in states:
             add(f"{tp}.to_state", "unknown_state", f"{t.to_state!r} is not a state")
         if t.when is not None:
-            _check_guard(t.when, schema, f"{tp}.when", add)
+            _check_guard(t.when, schema, f"{tp}.when", add, settings)
+            if (
+                _reads_settings(t.when, schema, settings)
+                and multi_tenant(spec)
+                and not tenant_scoped(spec, entity)
+            ):
+                add(
+                    f"{tp}.when",
+                    "tenancy_required",
+                    f"settings are kept per tenant, but {entity.name} does not belong to a tenant: "
+                    "a guard cannot know whose settings to read",
+                )
         if t.auto and t.roles:
             add(f"{tp}.roles", "invalid_value", "an automatic transition has no roles")
         if t.roles:
@@ -111,13 +140,16 @@ class ExprVerdict(NamedTuple):
     pos: int
 
 
-def check_expression(source: str, schema: Schema, expect: str = "bool") -> ExprVerdict:
+def check_expression(
+    source: str, schema: Schema, expect: str = "bool", settings: Schema | None = None
+) -> ExprVerdict:
     """The single place that judges a guard expression: validation and the live checker share it.
-    `expect` is "bool" (a guard) or "any". Never raises for any input."""
+    `expect` is "bool" (a guard) or "any". `settings` are the project's declared settings a guard may
+    read as `settings.<key>` (None = not allowed here). Never raises for any input."""
     if len(source) > MAX_GUARD_LENGTH:
         return ExprVerdict(False, None, "too_long", f"at most {MAX_GUARD_LENGTH} characters", 0)
     try:
-        typed = check(parse(source), schema)
+        typed = check_scoped(source, schema, settings)
     except ExprError as exc:
         return ExprVerdict(False, None, "invalid_expression", str(exc), exc.pos)
     except RecursionError:
@@ -128,10 +160,19 @@ def check_expression(source: str, schema: Schema, expect: str = "bool") -> ExprV
     return ExprVerdict(True, typed["t"], None, None, 0)
 
 
-def _check_guard(source: str, schema: Schema, path: str, add: Add) -> None:
-    verdict = check_expression(source, schema)
+def _check_guard(
+    source: str, schema: Schema, path: str, add: Add, settings: Schema | None = None
+) -> None:
+    verdict = check_expression(source, schema, settings=settings)
     if not verdict.ok:
         add(path, verdict.code or "invalid_expression", verdict.message or "")
+
+
+def _reads_settings(source: str, schema: Schema, settings: Schema) -> bool:
+    try:
+        return bool(settings_used(check_scoped(source, schema, settings)))
+    except (ExprError, RecursionError):
+        return False  # already reported by _check_guard
 
 
 def _has_cycle(edges: dict[str, set[str]]) -> bool:

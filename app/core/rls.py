@@ -75,6 +75,7 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "project_permissions",
     "project_storage_configs",
     "relations",
+    "spec_ops",
 )
 ALL_TABLES: tuple[str, ...] = (
     ORGANIZATIONS_TABLE,

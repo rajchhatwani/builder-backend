@@ -1,0 +1,601 @@
+"""API edge checks (generated): idempotency keys, rate limits and quotas, dated API versions."""
+
+{% if idempotency %}
+import asyncio
+{% endif %}
+{% if idempotency or rate or quota %}
+import datetime as dt
+{% endif %}
+
+import pytest
+{% if idempotency or rate or quota or target %}
+import sqlalchemy as sa
+{% endif %}
+from httpx import AsyncClient
+{% if idempotency %}
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.requests import Request
+{% endif %}
+
+from app.api_edge import {% if idempotency %}caller, {% endif %}definitions{% if idempotency %}, idempotency{% endif %}{% if quota %}, quota{% endif %}{% if rate %}, ratelimit{% endif %}{% if versioning %}, versioning{% endif %}{{ "" }}
+{% if target %}
+from app.crud.{{ target.table }} import {{ target.name }}Repository
+{% endif %}
+{% if idempotency or rate or quota or target %}
+from app.db import session_factory
+{% endif %}
+{% if versioning %}
+from app.hooks import api_versions
+{% endif %}
+{% if target %}
+from tests import _factories
+{% endif %}
+{% if auth %}
+from tests._auth_support import ALL_ROLES, client_for, sign_in
+{% endif %}
+
+{% if auth %}
+pytestmark = pytest.mark.usefixtures("outbox")
+{% endif %}
+{% if target %}
+PATH = "/{{ target.path }}"
+Repo = {{ target.name }}Repository
+{% endif %}
+{% if auth %}
+READ = "/auth/me"
+{% elif target %}
+READ = PATH
+{% endif %}
+
+
+{% if target %}
+@pytest.fixture
+def http({% if auth %}authed_client{% else %}client{% endif %}: AsyncClient) -> AsyncClient:
+    return {% if auth %}authed_client{% else %}client{% endif %}
+
+
+async def _rows() -> int:
+    async with session_factory() as session:
+        return int((await session.execute(sa.text("SELECT count(*) FROM {{ target.table }}"))).scalar_one())
+
+
+{% endif %}
+{% if idempotency or rate or quota %}
+class Clock:
+    """A clock the tests move by hand."""
+
+    def __init__(self) -> None:
+        self.now = dt.datetime.now(dt.UTC)
+
+    def __call__(self) -> dt.datetime:
+        return self.now
+
+    def advance(self, **delta: float) -> None:
+        self.now += dt.timedelta(**delta)
+
+
+{% endif %}
+{% if idempotency and target %}
+# --- idempotency keys -----------------------------------------------------------------------------
+
+
+async def _api_rows() -> list[sa.Row[tuple[object, ...]]]:
+    async with session_factory() as session:
+        return list((await session.execute(sa.text("SELECT * FROM api_idempotency"))).all())
+
+
+async def test_the_same_key_and_request_replays_the_first_response_and_writes_once(http: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "replay-key-0001"}
+    first = await http.post(PATH, json=payload, headers=headers)
+    assert first.status_code == 201, first.text
+    assert "idempotent-replayed" not in first.headers
+    second = await http.post(PATH, json=payload, headers=headers)
+    assert second.status_code == 201
+    assert second.headers["Idempotent-Replayed"] == "true"
+    assert second.json() == first.json()
+    assert await _rows() == 1
+
+
+async def test_the_same_key_for_a_different_request_is_refused(http: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "reused-key-0001"}
+    assert (await http.post(PATH, json=payload, headers=headers)).status_code == 201
+    other_query = await http.post(PATH + "?again=1", json=payload, headers=headers)
+    assert other_query.status_code == 422
+    assert other_query.json()["code"] == "idempotency_key_reused"
+    assert await _rows() == 1
+
+
+@pytest.mark.parametrize("key", ["short", "x" * 129, "has space in it", "semi;colon;key", "naïve-key-0001"])
+async def test_a_malformed_key_is_refused_before_anything_runs(http: AsyncClient, key: str) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    try:
+        response = await http.post(PATH, json=payload, headers={"Idempotency-Key": key})
+    except UnicodeEncodeError:  # the client itself refuses a non-ASCII header
+        return
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_idempotency_key"
+    assert await _rows() == 0
+    assert await _api_rows() == []
+
+
+async def test_without_a_key_every_request_is_its_own(http: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    assert (await http.post(PATH, json=payload)).status_code == 201
+    assert (await http.post(PATH, json=payload)).status_code == 201
+    assert await _rows() == 2
+    assert await _api_rows() == []
+
+
+async def test_ten_identical_requests_with_one_key_write_exactly_once(http: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "parallel-key-0001"}
+    responses = await asyncio.gather(*(http.post(PATH, json=payload, headers=headers) for _ in range(10)))
+    codes = sorted(r.status_code for r in responses)
+    assert set(codes) <= {201, 409}, codes
+    assert 201 in codes
+    created = [r.json() for r in responses if r.status_code == 201]
+    assert all(body == created[0] for body in created)  # the winner's response, replayed
+    assert all(r.json()["code"] == "idempotency_in_progress" for r in responses if r.status_code == 409)
+    assert await _rows() == 1
+    assert len(await _api_rows()) == 1
+
+
+async def test_a_rolled_back_write_stores_no_success(http: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "rollback-key-0001"}
+
+    async def fail_late(_ctx: object) -> None:
+        raise RuntimeError("forced failure after the row was written")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Repo, "hooks", {**Repo.hooks, "after_save": (*Repo.hooks.get("after_save", ()), fail_late)})
+        failed = await http.post(PATH, json=payload, headers=headers)
+    assert failed.status_code == 500
+    assert await _rows() == 0
+    assert await _api_rows() == []  # nothing stored: not even the claim
+    retry = await http.post(PATH, json=payload, headers=headers)  # the same key runs for real now
+    assert retry.status_code == 201
+    assert "idempotent-replayed" not in retry.headers
+    assert await _rows() == 1
+
+
+class AfterCommit:
+    """An after_commit hook that records what a second connection sees at that moment."""
+
+    def __init__(self) -> None:
+        self.rows_seen: list[int] = []
+
+    async def __call__(self, _ctx: object) -> None:
+        self.rows_seen.append(await _rows())  # its own connection: sees committed rows only
+
+
+def _with_after_commit(patch: pytest.MonkeyPatch, hook: AfterCommit) -> None:
+    patch.setattr(Repo, "hooks", {**Repo.hooks, "after_commit": (*Repo.hooks.get("after_commit", ()), hook)})
+
+
+async def test_after_commit_runs_once_after_the_commit_and_never_on_a_replay(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "after-commit-0001"}
+    hook = AfterCommit()
+    _with_after_commit(monkeypatch, hook)
+    first = await http.post(PATH, json=payload, headers=headers)
+    assert first.status_code == 201, first.text
+    assert hook.rows_seen == [1]  # ran once, and the row was already visible to another connection
+    replay = await http.post(PATH, json=payload, headers=headers)
+    assert replay.headers["Idempotent-Replayed"] == "true"
+    assert hook.rows_seen == [1]  # a replay does not run it again
+    assert await _rows() == 1
+
+
+async def test_after_commit_never_runs_when_a_keyed_request_fails(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    hook = AfterCommit()
+
+    async def fail_late(_ctx: object) -> None:
+        raise RuntimeError("forced failure after the row was written")
+
+    real_commit = AsyncSession.commit
+
+    async def refuse_keyed_commit(self: AsyncSession) -> None:
+        if "commit" in vars(self):  # the keyed request's session (its commit is the deferred one)
+            raise RuntimeError("commit refused")
+        await real_commit(self)
+
+    _with_after_commit(monkeypatch, hook)
+    # a validation failure
+    bad = await http.post(PATH, json={"unknown_field_only": 1}, headers={"Idempotency-Key": "ac-invalid-0001"})
+    assert bad.status_code in (400, 422)
+    # a failure inside the transaction, after the write
+    with monkeypatch.context() as patch:
+        patch.setattr(Repo, "hooks", {**Repo.hooks, "after_save": (*Repo.hooks.get("after_save", ()), fail_late)})
+        failed = await http.post(PATH, json=payload, headers={"Idempotency-Key": "ac-failed-0001"})
+    assert failed.status_code == 500
+    # a response too large to store: the write is rolled back, so its effects must not happen
+    assert definitions.IDEMPOTENCY is not None
+    with monkeypatch.context() as patch:
+        patch.setitem(definitions.IDEMPOTENCY, "max_response_bytes", 10)
+        large = await http.post(PATH, json=payload, headers={"Idempotency-Key": "ac-large-00001"})
+    assert large.status_code == 500
+    # the database refuses the real commit
+    with monkeypatch.context() as patch:
+        patch.setattr(AsyncSession, "commit", refuse_keyed_commit)
+        refused = await http.post(PATH, json=payload, headers={"Idempotency-Key": "ac-commit-0001"})
+    assert refused.status_code == 503
+    assert hook.rows_seen == []
+    assert await _rows() == 0
+    assert await _api_rows() == []
+
+
+async def test_a_refused_request_is_not_stored_either(http: AsyncClient) -> None:
+    headers = {"Idempotency-Key": "invalid-key-0001"}
+    bad = await http.post(PATH, json={"unknown_field_only": 1}, headers=headers)
+    assert bad.status_code in (400, 422)
+    assert await _api_rows() == []
+
+
+async def test_only_content_headers_are_stored_never_credentials(http: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    response = await http.post(PATH, json=payload, headers={"Idempotency-Key": "headers-key-0001"})
+    assert response.status_code == 201
+    (row,) = await _api_rows()
+    stored = {name.lower() for name, _value in row.response_headers}
+    assert stored <= {"content-type", "location"}
+    assert b"authorization" not in bytes(row.response_body).lower()
+    assert "bearer" not in str(row).lower()
+
+
+async def test_a_response_too_large_to_store_rolls_the_write_back(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert definitions.IDEMPOTENCY is not None
+    monkeypatch.setitem(definitions.IDEMPOTENCY, "max_response_bytes", 10)
+    payload = await _factories.payload_{{ target.table }}(http)
+    response = await http.post(PATH, json=payload, headers={"Idempotency-Key": "large-key-00001"})
+    assert response.status_code == 500
+    assert response.json()["code"] == "idempotency_response_too_large"
+    assert await _rows() == 0
+    assert await _api_rows() == []
+
+
+async def test_a_key_expires_and_expired_keys_are_purged(http: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    clock = Clock()
+    monkeypatch.setattr(idempotency, "now", clock)
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "expiry-key-00001"}
+    assert (await http.post(PATH, json=payload, headers=headers)).status_code == 201
+    assert (await http.post(PATH, json=payload, headers=headers)).headers["Idempotent-Replayed"] == "true"
+    assert definitions.IDEMPOTENCY is not None
+    clock.advance(hours=definitions.IDEMPOTENCY["ttl_hours"] + 1)
+    again = await http.post(PATH, json=payload, headers=headers)
+    assert again.status_code == 201
+    assert "idempotent-replayed" not in again.headers  # the old key was gone: this ran for real
+    assert await _rows() == 2
+    clock.advance(hours=definitions.IDEMPOTENCY["ttl_hours"] + 1)
+    async with session_factory() as session:
+        assert await idempotency.purge(session) == 1
+        await session.commit()
+    assert await _api_rows() == []
+
+
+{% if auth %}
+async def test_keys_are_scoped_to_the_caller_and_the_tenant(http: AsyncClient, client: AsyncClient) -> None:
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "shared-key-00001"}
+    mine = await http.post(PATH, json=payload, headers=headers)
+    assert mine.status_code == 201
+    async with client_for(await sign_in(client, "other@example.com", roles=list(ALL_ROLES), n=1)) as other:
+        theirs_payload = await _factories.payload_{{ target.table }}(other)
+        theirs = await other.post(PATH, json=theirs_payload, headers=headers)
+        assert theirs.status_code == 201, theirs.text
+        assert "idempotent-replayed" not in theirs.headers  # never mine
+        assert theirs.json()["id"] != mine.json()["id"]
+        again = await other.post(PATH, json=theirs_payload, headers=headers)
+        assert again.headers["Idempotent-Replayed"] == "true"  # their own key replays their own response
+        assert again.json() == theirs.json()
+    replay = await http.post(PATH, json=payload, headers=headers)
+    assert replay.json() == mine.json()
+    rows = await _api_rows()
+    assert len(rows) == 2
+    assert len({(r.tenant_key, r.principal_key) for r in rows}) == 2
+{% if tenant %}
+    assert len({r.tenant_key for r in rows}) == 2  # two tenants: a key of one is invisible to the other
+{% endif %}
+
+
+{% endif %}
+def _request(peer: str | None, forwarded: str | None = None) -> Request:
+    headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded is not None else []
+    scope = {"type": "http", "headers": headers, "client": (peer, 5000) if peer else None, "method": "GET", "path": "/"}
+    return Request(scope)
+
+
+def test_the_client_address_is_the_direct_peer_unless_a_proxy_is_trusted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("API_EDGE_TRUSTED_PROXIES", raising=False)
+    assert caller.client_ip(_request("10.0.0.1", "203.0.113.9")) == "10.0.0.1"  # forged header ignored
+    assert caller.client_ip(_request(None)) == "unknown"
+    monkeypatch.setenv("API_EDGE_TRUSTED_PROXIES", "10.0.0.0/8")
+    assert caller.client_ip(_request("10.0.0.1", "203.0.113.9")) == "203.0.113.9"
+    assert caller.client_ip(_request("10.0.0.1", "198.51.100.1, 203.0.113.9, 10.0.0.7")) == "203.0.113.9"
+    assert caller.client_ip(_request("192.0.2.5", "203.0.113.9")) == "192.0.2.5"  # peer not a proxy
+    assert caller.client_ip(_request("10.0.0.1", "not-an-ip")) == "10.0.0.1"
+    monkeypatch.setenv("API_EDGE_TRUSTED_PROXIES", "10.0.0.0/8, nonsense")
+    with pytest.raises(ValueError, match="API_EDGE_TRUSTED_PROXIES"):
+        caller.client_ip(_request("10.0.0.1", "203.0.113.9"))
+
+
+{% endif %}
+{% if rate and target %}
+# --- rate limits ----------------------------------------------------------------------------------
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
+    moving = Clock()
+    monkeypatch.setattr(ratelimit, "now", moving)
+    return moving
+
+
+def _limits(monkeypatch: pytest.MonkeyPatch, **changes: object) -> None:
+    assert definitions.RATE_LIMITS is not None
+    for name, value in changes.items():
+        monkeypatch.setitem(definitions.RATE_LIMITS, name, value)
+{% if not auth %}
+    if "user" in changes:  # nobody signs in here: callers are limited by address
+        monkeypatch.setitem(definitions.RATE_LIMITS, "anonymous", changes["user"])
+{% endif %}
+
+
+async def test_a_caller_is_limited_and_gets_tokens_back_over_time(
+    http: AsyncClient, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _limits(monkeypatch, user={"capacity": 3, "refill_per_second": 1.0}, tenant=None, groups=[])
+    seen = [await http.get(READ) for _ in range(3)]
+    assert [r.status_code for r in seen] == [200, 200, 200]
+    assert [r.headers["RateLimit-Remaining"] for r in seen] == ["2", "1", "0"]
+    assert seen[0].headers["RateLimit-Limit"] == "3"
+    refused = await http.get(READ)
+    assert refused.status_code == 429
+    assert refused.json()["code"] == "rate_limited"
+    assert refused.headers["Retry-After"] == "1"
+    assert refused.headers["RateLimit-Remaining"] == "0"
+    clock.advance(seconds=2)
+    assert [(await http.get(READ)).status_code for _ in range(3)] == [200, 200, 429]
+    clock.advance(seconds=60)  # long idle: the bucket never holds more than its capacity
+    assert [(await http.get(READ)).status_code for _ in range(4)] == [200, 200, 200, 429]
+
+
+async def test_a_route_group_has_its_own_bucket_and_cost(
+    http: AsyncClient, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    group = {"name": "heavy", "path_prefix": PATH, "methods": ["POST"], "user": None, "tenant": None, "cost": 2}
+    payloads = [await _factories.payload_{{ target.table }}(http) for _ in range(3)]  # parents are created before the limits
+    _limits(monkeypatch, user={"capacity": 4, "refill_per_second": 1.0}, tenant=None, groups=[group])
+    codes = []
+    for payload in payloads:
+        codes.append((await http.post(PATH, json=payload)).status_code)
+    assert codes == [201, 201, 429]  # cost 2 each from a bucket of 4
+    assert (await http.get(READ)).status_code == 200  # other routes use the default group's bucket
+    assert await _rows() == 2  # the refused request wrote nothing
+
+
+{% if tenant %}
+async def test_the_tenant_bucket_is_shared_by_the_tenant_and_not_by_others(
+    http: AsyncClient, client: AsyncClient, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _limits(
+        monkeypatch,
+        user={"capacity": 100, "refill_per_second": 1.0},
+        tenant={"capacity": 2, "refill_per_second": 1.0},
+        groups=[],
+    )
+    assert [(await http.get(READ)).status_code for _ in range(3)] == [200, 200, 429]
+    async with client_for(await sign_in(client, "other-tenant@example.com", roles=list(ALL_ROLES), n=1)) as other:
+        assert (await other.get(READ)).status_code == 200  # another tenant has its own
+
+
+{% endif %}
+async def test_callers_without_a_token_are_limited_by_address_and_a_forged_header_does_not_help(
+    client: AsyncClient, clock: Clock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("API_EDGE_TRUSTED_PROXIES", raising=False)
+    _limits(monkeypatch, anonymous={"capacity": 2, "refill_per_second": 1.0})
+    codes = [
+        (await client.get(PATH, headers={"X-Forwarded-For": f"203.0.113.{n}"})).status_code for n in range(4)
+    ]
+    assert codes[2:] == [429, 429]
+    assert 429 not in codes[:2]
+
+
+async def test_the_store_failing_refuses_writes_and_reads_unless_reads_may_fail_open(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(*_args: object, **_kwargs: object) -> ratelimit.Decision:
+        raise ratelimit.StoreError("OperationalError")
+
+    payload = await _factories.payload_{{ target.table }}(http)
+    monkeypatch.setattr(ratelimit, "take", broken)
+    _limits(monkeypatch, read_fail_open=False)
+    write = await http.post(PATH, json=payload)
+    assert write.status_code == 503
+    assert write.json()["code"] == "rate_limit_unavailable"
+    assert await _rows() == 0
+    assert (await http.get(READ)).status_code == 503
+    _limits(monkeypatch, read_fail_open=True)
+    assert (await http.get(READ)).status_code == 200
+    assert (await http.post(PATH, json=payload)).status_code == 503  # writes never fail open
+    assert await _rows() == 0
+
+
+{% endif %}
+{% if quota and target %}
+# --- quotas ---------------------------------------------------------------------------------------
+
+
+async def test_a_quota_is_a_hard_cap_per_tenant_and_period(
+    http: AsyncClient, client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    clock = Clock()
+    monkeypatch.setattr(quota, "now", clock)
+    meter = {"meter": "edge_cap", "period": "day", "limit": 2, "path_prefix": PATH, "methods": ["POST"], "cost": 1}
+    monkeypatch.setattr(definitions, "QUOTAS", [meter])
+    codes = []
+    for _ in range(3):
+        codes.append(await http.post(PATH, json=await _factories.payload_{{ target.table }}(http)))
+    assert [r.status_code for r in codes] == [201, 201, 429]
+    assert codes[2].json()["code"] == "quota_exceeded"
+    assert codes[2].json()["details"][0] == {"meter": "edge_cap", "limit": 2, "used": 2}
+    assert int(codes[2].headers["Retry-After"]) > 0
+    assert await _rows() == 2
+    assert (await http.get(READ)).status_code == 200  # the meter covers POST under {{ target.path }} only
+{% if auth %}
+    async with client_for(await sign_in(client, "other-quota@example.com", roles=list(ALL_ROLES), n=1)) as other:
+        elsewhere = await other.post(PATH, json=await _factories.payload_{{ target.table }}(other))
+{% if tenant %}
+        assert elsewhere.status_code == 201  # another tenant's counter is its own
+{% else %}
+        assert elsewhere.status_code == 429  # no tenants: one shared counter
+{% endif %}
+{% endif %}
+    clock.advance(hours=25)  # a new day
+    assert (await http.post(PATH, json=await _factories.payload_{{ target.table }}(http))).status_code == 201
+
+
+async def test_a_refused_request_does_not_use_the_quota_of_another_meter(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    small = {"meter": "a_small", "period": "month", "limit": 1, "path_prefix": PATH, "methods": ["POST"], "cost": 1}
+    big = {"meter": "b_big", "period": "month", "limit": 5, "path_prefix": PATH, "methods": ["POST"], "cost": 1}
+    monkeypatch.setattr(definitions, "QUOTAS", [big, small])
+    assert (await http.post(PATH, json=await _factories.payload_{{ target.table }}(http))).status_code == 201
+    assert (await http.post(PATH, json=await _factories.payload_{{ target.table }}(http))).status_code == 429
+    async with session_factory() as session:
+        used = dict((await session.execute(sa.text("SELECT meter, used FROM api_quota_usage"))).all())
+    assert {k: v for k, v in used.items() if k in ("a_small", "b_big")} == {"a_small": 1, "b_big": 1}  # all or nothing
+
+
+{% endif %}
+{% if versioning %}
+# --- dated API versions ---------------------------------------------------------------------------
+
+
+def _old_and_new() -> tuple[str, str]:
+    if len(versioning.VERSIONS) < 2:
+        pytest.skip("only one API version is declared")
+    return versioning.VERSIONS[0], versioning.LATEST
+
+
+async def test_the_default_version_is_answered_and_named(client: AsyncClient) -> None:
+    response = await client.get("/api-versions")
+    assert response.status_code == 200
+    assert response.headers["API-Version"] == definitions.VERSIONING["default"]  # type: ignore[index]
+    body = response.json()
+    assert body["default"] == definitions.VERSIONING["default"]  # type: ignore[index]
+    assert body["latest"] == versioning.LATEST
+    assert [v["date"] for v in body["versions"]] == sorted(versioning.VERSIONS, reverse=True)
+
+
+@pytest.mark.parametrize("value", ["2099-01-01", "2020-02-30", "latest", "2026-1-1", "", "2026-11-01x"])
+async def test_an_unknown_or_malformed_version_is_refused(client: AsyncClient, value: str) -> None:
+    response = await client.get("/api-versions", headers={"API-Version": value})
+    assert response.status_code == 400, response.text
+    assert response.json()["code"] == "unsupported_api_version"
+    assert "supported" in response.json()["details"][0]
+    assert response.headers["API-Version"] == versioning.DEFAULT
+
+
+async def test_every_response_names_its_version(client: AsyncClient) -> None:
+    for version in versioning.VERSIONS:
+        response = await client.get("/health", headers={"API-Version": version})
+        assert response.headers["API-Version"] == version
+
+
+{% if target %}
+def _rename(method: str, path: str, body: object) -> object:
+    """A stand-in for a project transformer: the oldest shape called the id `legacy_id`."""
+    if isinstance(body, dict) and "id" in body:
+        body["legacy_id"] = body.pop("id")
+    return body
+
+
+async def test_an_old_version_keeps_its_old_shape_and_the_new_one_the_new(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, new = _old_and_new()
+    monkeypatch.setattr(api_versions, "TRANSFORMERS", {new: _rename})
+    payload = await _factories.payload_{{ target.table }}(http)
+    as_new = await http.post(PATH, json=payload, headers={"API-Version": new})
+    as_old = await http.post(PATH, json=payload, headers={"API-Version": old})
+    assert as_new.status_code == as_old.status_code == 201
+    assert "id" in as_new.json() and "legacy_id" not in as_new.json()
+    assert "legacy_id" in as_old.json() and "id" not in as_old.json()
+    assert as_old.headers["API-Version"] == old
+    item_id = as_new.json()["id"]
+    got_old = await http.get(f"{PATH}/{item_id}", headers={"API-Version": old})
+    assert got_old.json()["legacy_id"] == item_id and "id" not in got_old.json()
+    got_new = await http.get(f"{PATH}/{item_id}", headers={"API-Version": new})
+    assert got_new.json()["id"] == item_id
+    changelog = (await http.get("/api-versions")).json()
+    assert next(v for v in changelog["versions"] if v["date"] == new)["transformer"] is True
+
+
+async def test_a_transformer_that_fails_never_leaks_the_new_shape(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, new = _old_and_new()
+
+    def broken(method: str, path: str, body: object) -> object:
+        raise RuntimeError("bug in a transformer")
+
+    monkeypatch.setattr(api_versions, "TRANSFORMERS", {new: broken})
+    payload = await _factories.payload_{{ target.table }}(http)
+    response = await http.post(PATH, json=payload, headers={"API-Version": old})
+    assert response.status_code == 500
+    assert response.json()["code"] == "api_version_transform_failed"
+    assert "id" not in response.json()
+
+
+{% if idempotency %}
+async def test_a_replay_is_shaped_for_the_version_of_the_replaying_request(
+    http: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old, new = _old_and_new()
+    monkeypatch.setattr(api_versions, "TRANSFORMERS", {new: _rename})
+    payload = await _factories.payload_{{ target.table }}(http)
+    headers = {"Idempotency-Key": "versioned-key-001"}
+    first = await http.post(PATH, json=payload, headers={**headers, "API-Version": new})
+    replay = await http.post(PATH, json=payload, headers={**headers, "API-Version": old})
+    assert replay.headers["Idempotent-Replayed"] == "true"
+    assert replay.json()["legacy_id"] == first.json()["id"]
+
+
+{% endif %}
+{% endif %}
+def test_a_transformer_for_an_undeclared_version_stops_the_app(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(api_versions, "TRANSFORMERS", {"1999-01-01": lambda m, p, b: b})
+    with pytest.raises(ValueError, match="not a declared API version"):
+        versioning.check_registry()
+
+
+def test_transformers_run_newest_first_for_every_newer_version(monkeypatch: pytest.MonkeyPatch) -> None:
+    if len(versioning.VERSIONS) < 3:
+        pytest.skip("needs three API versions")
+    oldest, middle, newest = versioning.VERSIONS[0], versioning.VERSIONS[1], versioning.VERSIONS[-1]
+    monkeypatch.setattr(
+        api_versions,
+        "TRANSFORMERS",
+        {newest: lambda m, p, b: [*b, "undo-newest"], middle: lambda m, p, b: [*b, "undo-middle"]},
+    )
+    assert versioning.downgrade(oldest, "GET", "/x", []) == ["undo-newest", "undo-middle"]
+    assert versioning.downgrade(middle, "GET", "/x", []) == ["undo-newest"]
+    assert versioning.downgrade(newest, "GET", "/x", []) == []
+
+
+{% endif %}
+def test_the_settings_are_plain_data() -> None:
+    assert definitions.MULTI_TENANT is {{ "True" if tenant else "False" }}

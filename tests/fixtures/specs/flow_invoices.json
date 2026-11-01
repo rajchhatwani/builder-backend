@@ -46,7 +46,8 @@
             "pending_approval",
             "approved",
             "paid",
-            "rejected"
+            "rejected",
+            "withdrawn"
           ]
         }
       ]
@@ -198,6 +199,13 @@
           "roles": [
             "admin"
           ]
+        },
+        {
+          "name": "withdraw",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "withdrawn"
         }
       ]
     }

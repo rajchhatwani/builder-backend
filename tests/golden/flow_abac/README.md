@@ -76,6 +76,16 @@ alembic revision --autogenerate -m "describe the change"
 alembic upgrade head
 ```
 
+### Upgrading a deployed project
+
+Optional features ship their own migration under a fixed revision id, and the revisions are chained in
+id order each time the project is generated. If you enable a feature whose revision id is LOWER than a
+revision your database has already applied, `alembic upgrade head` will NOT apply it: Alembic sees the
+database at a later revision and treats the earlier one as done. For a deployed database use the
+builder's migration plan or apply that feature's migration by hand (for example with
+`alembic upgrade <revision>` on a copy first, or by running its SQL), then check `alembic current`.
+Enabling a feature with a higher id than your database's head is safe.
+
 ## Tests
 
 ```bash

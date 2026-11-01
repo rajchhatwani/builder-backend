@@ -28,6 +28,9 @@ from app.models.project import Project
 from app.services import audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
 from app.services.generation_service import GenerationService
+from app.services.ops.scope import Actor
+from app.services.ops.service import OpsService
+from app.services.behavior_service import ACTOR_ROLE
 from app.services.spec_service import SpecService
 
 MAX_RESPONSE_CHARS = 50_000
@@ -109,7 +112,12 @@ class McpService:
                 org.id, plan, actor_id=principal.user.id, actor_email=principal.user.email
             )
 
+    @staticmethod
+    def _actor(principal: Principal) -> Actor:
+        return Actor("mcp", principal.user.id)
+
     async def _require_editor(self, member: ProjectMember) -> None:
+        ACTOR_ROLE.set(member.role.value)  # CO-3: only an owner may change effectful hooks
         if ROLE_LEVEL[member.role] < ROLE_LEVEL[MemberRole.editor]:
             raise AppError(
                 code="forbidden",
@@ -369,10 +377,17 @@ class McpService:
         member = await self._resolve_membership(principal, project_id)
         await self._require_editor(member)
         from app.schemas.entity import EntityCreate
-        from app.services.entity_service import EntityService
 
         # EntityCreate has no description field; name is the only required field.
-        entity = await EntityService(self.db).create(project_id, EntityCreate(name=name))
+        EntityCreate(name=name)  # same name rules as the REST endpoint
+        applied = await OpsService(self.db).apply_op(
+            project_id,
+            "add_entity",
+            {"entity": {"name": name}},
+            self._actor(principal),
+            validate_result=False,
+        )
+        entity = applied.result
         await self._audit(principal, "create_entity", project_id, extra={"entity": name})
         return _cap_dict(
             {"id": str(entity.id), "name": entity.name, "table_name": entity.table_name}
@@ -399,9 +414,17 @@ class McpService:
                 status_code=404,
             )
         from app.schemas.field import FieldCreate
-        from app.services.field_service import FieldService
 
-        created = await FieldService(self.db).create(ent.id, FieldCreate(**field))
+        data = FieldCreate(**field)  # same rules as the REST endpoint
+        spec_field = data.model_dump(mode="json", exclude={"position"})
+        applied = await OpsService(self.db).apply_op(
+            project_id,
+            "add_field",
+            {"entity": entity_name, "field": spec_field, "index": data.position},
+            self._actor(principal),
+            validate_result=False,
+        )
+        created = applied.result
         await self._audit(
             principal,
             "add_field",
@@ -419,9 +442,39 @@ class McpService:
         member = await self._resolve_membership(principal, project_id)
         await self._require_editor(member)
         from app.schemas.relation import RelationCreate
-        from app.services.relation_service import RelationService
 
-        created = await RelationService(self.db).create(project_id, RelationCreate(**relation))
+        data = RelationCreate(**relation)  # same rules as the REST endpoint
+        names: dict[uuid.UUID, str] = {}
+        for label, entity_id in (
+            ("from_entity_id", data.from_entity_id),
+            ("to_entity_id", data.to_entity_id),
+        ):
+            row = await self.db.get(Entity, entity_id)
+            if row is None or row.project_id != project_id:
+                raise AppError(
+                    code="invalid_reference",
+                    message=f"{label} does not reference an entity in this project",
+                    status_code=400,
+                )
+            names[entity_id] = row.name
+        applied = await OpsService(self.db).apply_op(
+            project_id,
+            "add_relation",
+            {
+                "relation": {
+                    "kind": data.kind.value,
+                    "from_entity": names[data.from_entity_id],
+                    "to_entity": names[data.to_entity_id],
+                    "from_name": data.from_name,
+                    "to_name": data.to_name,
+                    "on_delete": data.on_delete.value,
+                    "required": data.required,
+                }
+            },
+            self._actor(principal),
+            validate_result=False,
+        )
+        created = applied.result
         await self._audit(principal, "add_relation", project_id)
         return _cap_dict({"id": str(created.id), "kind": str(created.kind)})
 

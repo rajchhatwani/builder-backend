@@ -1,0 +1,59 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Invoice Jobs",
+    "slug": "invoice-jobs",
+    "description": "Invoices with background jobs: a weekly dunning run and a retrying delivery job",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Invoice",
+      "table_name": "invoices",
+      "plural_path": "invoices",
+      "options": {
+        "sortable": ["created_at"]
+      },
+      "fields": [
+        {"name": "number", "type": "string", "required": true, "max_length": 40},
+        {"name": "customer", "type": "string", "required": true, "max_length": 120},
+        {"name": "total", "type": "decimal", "required": true}
+      ]
+    }
+  ],
+  "relations": [],
+  "jobs": {
+    "enabled": true,
+    "queue": {"backend": "postgres"},
+    "worker_groups": [
+      {"name": "default", "concurrency": 4, "queues": ["default"], "placement": "same_server"},
+      {"name": "reports", "concurrency": 2, "queues": ["reports"], "placement": "separate_server"}
+    ],
+    "jobs": [
+      {
+        "name": "send_invoice",
+        "queue": "default",
+        "handler": "send_invoice",
+        "retry": {"max_attempts": 4, "backoff_seconds": 5, "backoff": "exponential"},
+        "timeout_seconds": 60
+      },
+      {
+        "name": "weekly_dunning",
+        "queue": "reports",
+        "handler": "run_weekly_dunning",
+        "retry": {"max_attempts": 2, "backoff_seconds": 60, "backoff": "fixed"},
+        "timeout_seconds": 600
+      }
+    ],
+    "schedules": [
+      {
+        "name": "weekly_dunning_monday",
+        "job": "weekly_dunning",
+        "cron": "0 6 * * 1",
+        "timezone": "Asia/Kolkata",
+        "enabled": true,
+        "missed": "catch_up_one"
+      }
+    ]
+  }
+}

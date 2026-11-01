@@ -6,6 +6,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests import _factories
+from tests._auth_support import client_for, sign_in
 
 
 @pytest.fixture
@@ -44,3 +45,14 @@ async def test_tickets_unknown_transition_and_record(client: AsyncClient) -> Non
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/tickets/{uuid.uuid4()}/transitions/start")
     assert missing.status_code == 404
+
+
+async def test_tickets_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
+    """A transition that lists no roles is open to whoever may update Ticket, not to every reader
+    (role `auditor` can read but not update); one that lists roles keeps its own role check."""
+    created = await _factories.make_tickets(client)
+    base = f"/tickets/{created['id']}"
+    async with client_for(await sign_in(client, "sm-reader@example.com", roles=['auditor'])) as reader:
+        assert (await reader.get(base)).status_code == 200  # the reader sees the record...
+    async with client_for({}) as anonymous:
+        assert (await anonymous.post(f"{base}/transitions/x")).status_code in (401, 403)

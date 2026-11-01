@@ -1,0 +1,111 @@
+"""webhooks
+
+Revision ID: 0017
+Revises: 0016
+Create Date: rendered from the spec by Backend Builder
+
+Webhook subscriptions, deliveries and the delivery log, incoming-endpoint secret versions and the
+incoming delivery ledger. No secret is stored: signing secrets are in the credential vault.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0017"
+down_revision: str | None = "0016"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "wh_subscriptions",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=True),
+        sa.Column("url", sa.String(2048), nullable=False),
+        sa.Column("description", sa.String(200), nullable=False),
+        sa.Column("event_types", sa.JSON(), nullable=False),
+        sa.Column("status", sa.String(16), nullable=False),
+        sa.Column("disabled_reason", sa.String(40), nullable=True),
+        sa.Column("consecutive_failures", sa.Integer(), nullable=False),
+        sa.Column("secret_version", sa.Integer(), nullable=False),
+        sa.Column("previous_version", sa.Integer(), nullable=True),
+        sa.Column("previous_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_by", sa.Uuid(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_wh_subscriptions"),
+    )
+    op.create_index("ix_wh_subscriptions_tenant", "wh_subscriptions", ["tenant_id", "status"])
+    op.create_table(
+        "wh_deliveries",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("subscription_id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=True),
+        sa.Column("event_id", sa.Uuid(), nullable=False),
+        sa.Column("event_type", sa.String(120), nullable=False),
+        sa.Column("occurred_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("status", sa.String(16), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("last_status_code", sa.Integer(), nullable=True),
+        sa.Column("last_error", sa.String(60), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.ForeignKeyConstraint(
+            ["subscription_id"], ["wh_subscriptions.id"], name="fk_wh_deliveries_subscription_id", ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id", name="pk_wh_deliveries"),
+        sa.UniqueConstraint("subscription_id", "event_id", name="uq_wh_deliveries_subscription_event"),
+    )
+    op.create_index("ix_wh_deliveries_subscription", "wh_deliveries", ["subscription_id", "created_at"])
+    op.create_index("ix_wh_deliveries_finished_at", "wh_deliveries", ["finished_at"])
+    op.create_table(
+        "wh_attempts",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("delivery_id", sa.Uuid(), nullable=False),
+        sa.Column("attempt", sa.Integer(), nullable=False),
+        sa.Column("outcome", sa.String(60), nullable=False),
+        sa.Column("status_code", sa.Integer(), nullable=True),
+        sa.Column("duration_ms", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["delivery_id"], ["wh_deliveries.id"], name="fk_wh_attempts_delivery_id", ondelete="CASCADE"
+        ),
+        sa.PrimaryKeyConstraint("id", name="pk_wh_attempts"),
+    )
+    op.create_index("ix_wh_attempts_delivery", "wh_attempts", ["delivery_id", "attempt"])
+    op.create_table(
+        "wh_endpoints",
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(40), nullable=False),
+        sa.Column("secret_version", sa.Integer(), nullable=False),
+        sa.Column("previous_version", sa.Integer(), nullable=True),
+        sa.Column("previous_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("tenant_id", "name", name="pk_wh_endpoints"),
+    )
+    op.create_table(
+        "wh_inbound",
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("endpoint", sa.String(40), nullable=False),
+        sa.Column("delivery_id", sa.String(128), nullable=False),
+        sa.Column("received_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("tenant_id", "endpoint", "delivery_id", name="pk_wh_inbound"),
+    )
+    op.create_index("ix_wh_inbound_received_at", "wh_inbound", ["received_at"])
+
+
+def downgrade() -> None:
+    op.drop_index("ix_wh_inbound_received_at", table_name="wh_inbound")
+    op.drop_table("wh_inbound")
+    op.drop_table("wh_endpoints")
+    op.drop_index("ix_wh_attempts_delivery", table_name="wh_attempts")
+    op.drop_table("wh_attempts")
+    op.drop_index("ix_wh_deliveries_finished_at", table_name="wh_deliveries")
+    op.drop_index("ix_wh_deliveries_subscription", table_name="wh_deliveries")
+    op.drop_table("wh_deliveries")
+    op.drop_index("ix_wh_subscriptions_tenant", table_name="wh_subscriptions")
+    op.drop_table("wh_subscriptions")

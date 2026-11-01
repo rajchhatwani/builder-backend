@@ -99,6 +99,7 @@ def start_own_stack(
     (root / ".env").write_text(
         "\n".join(
             [
+                "APP_ENV=development",  # compose defaults to production (CO-1); this stack uses http Keycloak
                 f"API_PORT={api_port}",
                 f"API_PUBLIC_URL=http://localhost:{api_port}",
                 f"KEYCLOAK_PORT={kc_port}",
@@ -168,7 +169,7 @@ def portal(hub: Stack, tmp_path_factory: pytest.TempPathFactory) -> Iterator[Sta
     write_project(root, spec)
     api_port = free_port()
     (root / ".env").write_text(
-        f"API_PORT={api_port}\nAPI_PUBLIC_URL=http://localhost:{api_port}\n"
+        f"APP_ENV=development\nAPI_PORT={api_port}\nAPI_PUBLIC_URL=http://localhost:{api_port}\n"
         f"KEYCLOAK_PUBLIC_URL={hub.keycloak}\n"
         f"KEYCLOAK_INTERNAL_URL=http://host.docker.internal:{hub.keycloak.rsplit(':', 1)[1]}\n",
         encoding="utf-8",

@@ -13,7 +13,6 @@ def _token(length: int) -> str:
 
 def sample_invoices() -> dict[str, _t.Any]:
     return {
-        "invoice_no": _token(12),
         "amount": str(round(_random.uniform(0, 1000), 2)),
         "po_amount": str(round(_random.uniform(0, 1000), 2)),
         "due_date": (_dt.date(2026, 1, 1) + _dt.timedelta(days=_random.randint(0, 3000))).isoformat(),

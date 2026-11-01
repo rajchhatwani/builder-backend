@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import session_factory
 from app.models import Base
-from app.seed import engine, guard, invariants
+from app.seed import engine, guard, invariants, numbering
 from app.seed.definitions import DEFINITIONS
 from app.seed.models import SeedRow
 from app.seed.plan import PROFILES
@@ -64,6 +64,10 @@ async def _insert_rows(session: AsyncSession, table_name: str, rows: list[dict[s
 
 async def _write(session: AsyncSession, data: engine.SeedData) -> None:
     pending: list[dict[str, Any]] = []
+    try:
+        drawn = await numbering.draw_numbers(session, data)  # inside this transaction
+    except numbering.NumberingError as exc:
+        raise SeedError(str(exc)) from exc
     table = ""
 
     async def flush() -> None:
@@ -76,7 +80,7 @@ async def _write(session: AsyncSession, data: engine.SeedData) -> None:
         if row.table != table:
             await flush()
             table = row.table
-        pending.append({"id": row.id, **row.values})
+        pending.append({"id": row.id, **row.values, **drawn.get(row.id, {})})
     await flush()
     logs = [
         {

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { api } from '../../api/client'
 import type { ListBody, SequenceBody, SettingBody } from '../../api/types'
 import {
@@ -235,14 +235,9 @@ const TABS: { id: Tab; label: string; one: string }[] = [
 ]
 
 function SectionBody({ projectId, tab }: { projectId: string; tab: Tab }) {
-  // One version for the whole behaviour row: a save in one tab moves the other tabs' version along
-  // (only if they were at the old one), so editing two tabs in a row is not a false conflict.
-  const siblings = useRef<((from: number, to: number) => void)[]>([])
-  const share = (self: number) => (from: number, to: number) => siblings.current.forEach((f, n) => n !== self && f(from, to))
-  const settings = useSection(projectId, SETTINGS, share(0))
-  const sequences = useSection(projectId, SEQUENCES, share(1))
-  const lists = useSection(projectId, LISTS, share(2))
-  siblings.current = [settings.adopt, sequences.adopt, lists.adopt]
+  const settings = useSection(projectId, SETTINGS)
+  const sequences = useSection(projectId, SEQUENCES)
+  const lists = useSection(projectId, LISTS)
   // all three hooks are mounted (and loaded) once; the tab only chooses what to show
   const cur = tab === 'settings' ? settings : tab === 'sequences' ? sequences : lists
   const st = cur.state

@@ -1,0 +1,265 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Event Orders",
+    "slug": "event-orders",
+    "description": "Orders and customers that publish events through a transactional outbox",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "plural_path": "customers",
+      "options": {
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": false,
+          "max_length": 200
+        },
+        {
+          "name": "api_token",
+          "type": "string",
+          "required": false,
+          "max_length": 100
+        }
+      ]
+    },
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "reference",
+          "type": "string",
+          "required": true,
+          "max_length": 60
+        },
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "submitted",
+            "approved"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Customer",
+      "to_entity": "Order",
+      "from_name": "orders",
+      "to_name": "customer",
+      "on_delete": "restrict",
+      "required": false
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://orders.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "manager",
+        "label": "Manager",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Customer",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@orders.example.com",
+      "from_name": "Order Desk"
+    }
+  },
+  "settings": [],
+  "sequences": [],
+  "lists": [],
+  "state_machines": [
+    {
+      "entity": "Order",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "submit",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "submitted",
+          "auto": false,
+          "roles": []
+        },
+        {
+          "name": "approve",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "approved",
+          "auto": false,
+          "roles": [
+            "manager",
+            "admin"
+          ]
+        }
+      ]
+    }
+  ],
+  "seed": [],
+  "events": {
+    "enabled": true,
+    "adapter": "in_process",
+    "retention_days": 14
+  }
+}

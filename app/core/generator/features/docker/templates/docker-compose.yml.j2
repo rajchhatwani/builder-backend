@@ -1,7 +1,7 @@
 {% if pay %}
 # Settings every payments process shares (the API and the workers).
 x-payments-env: &payments-env
-  APP_ENV: ${APP_ENV:-development}
+  APP_ENV: ${APP_ENV:-production}
 {% for name in prov.key_envs + (prov.webhook_secret_env,) %}
   {{ name }}: ${ {{- name }}:?set {{ name }} in .env (see .env.example)}
 {% endfor %}
@@ -83,7 +83,7 @@ services:
 {% endif %}
 {% if storage %}
       # File storage: the bucket, the malware scanner (see deploy/storage/STORAGE.md).
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-{{ 'http://objectstore:8333' if minio else '' }}}
       STORAGE_PUBLIC_ENDPOINT_URL: ${STORAGE_PUBLIC_ENDPOINT_URL:-{{ 'http://localhost:8333' if minio else '' }}}
       STORAGE_REGION: ${STORAGE_REGION:-}
@@ -99,6 +99,16 @@ services:
       STORAGE_TRUSTED_PROXIES: ${STORAGE_TRUSTED_PROXIES:-0}
       CLAMD_HOST: ${CLAMD_HOST:-clamav}
       CLAMD_PORT: ${CLAMD_PORT:-3310}
+{% endif %}
+{% if provider_vault %}
+      # The master key of the per-tenant credential vault (app/providers). Required: a deployment without
+      # one cannot start. Rotation: raise PROVIDER_VAULT_KEY_VERSION and list old keys in ..._PREVIOUS.
+{% if not storage and not pay %}
+      APP_ENV: ${APP_ENV:-production}
+{% endif %}
+      PROVIDER_VAULT_KEY: ${PROVIDER_VAULT_KEY:?set PROVIDER_VAULT_KEY in .env (see .env.example)}
+      PROVIDER_VAULT_KEY_VERSION: ${PROVIDER_VAULT_KEY_VERSION:-1}
+      PROVIDER_VAULT_KEY_PREVIOUS: ${PROVIDER_VAULT_KEY_PREVIOUS:-}
 {% endif %}
 {% if auth and not keycloak %}
       # Copy .env.example to .env and fill these in; compose reads .env automatically.
@@ -134,7 +144,7 @@ services:
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL in .env (see .env.example)}
       KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
 {% endif %}
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       AUTH_ALLOW_PROVIDER_SWITCH: ${AUTH_ALLOW_PROVIDER_SWITCH:-false}
 {% endif %}
     depends_on:
@@ -198,6 +208,63 @@ services:
 {% endif %}
     deploy:
       replicas: ${WORKER_REPLICAS:-{{ sizing.worker_replicas }}}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+{% endif %}
+{% for g in jobs_groups %}
+
+  # Job worker group "{{ g.name }}" ({{ g.concurrency }} job(s) at a time per process). Scale with
+  # `docker compose up --scale worker-{{ g.service }}=N`. Your handlers (app/hooks/jobs.py) may need more settings here.
+  worker-{{ g.service }}:
+    build: .
+    command: ["python", "-m", "app.jobs.worker", "--group", "{{ g.name }}"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      APP_ENV: ${APP_ENV:-production}
+      JOBS_CONCURRENCY: ${JOBS_CONCURRENCY_{{ g.service | upper | replace("-", "_") }}:-{{ g.concurrency }}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE_{{ g.service | upper | replace("-", "_") }}:-{{ g.concurrency + 2 }}}
+      DB_MAX_OVERFLOW: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s
+    restart: unless-stopped
+{% endfor %}
+{% if workflows_worker %}
+
+  # Durable workflow worker. Scale with `docker compose up --scale workflow-worker=N`: a run is driven by one
+  # worker at a time and survives this process being killed. Your step functions (app/hooks/workflows.py)
+  # may need more settings here.
+  workflow-worker:
+    build: .
+    command: ["python", "-m", "app.workflows.worker"]
+    environment:
+      DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
+      APP_ENV: ${APP_ENV:-production}
+      WORKFLOWS_CONCURRENCY: ${WORKFLOWS_CONCURRENCY:-{{ workflows_concurrency }}}
+      DB_POOL_SIZE: ${DB_POOL_SIZE_WORKFLOWS:-{{ workflows_concurrency + 2 }}}
+      DB_MAX_OVERFLOW: "0"
+    depends_on:
+      db:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     read_only: true
     tmpfs:
       - /tmp

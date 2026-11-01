@@ -130,3 +130,20 @@ async def test_many_simultaneous_moves_have_exactly_one_winner(http, people) -> 
         assert all(c in (200, 403, 409) for c in codes), codes
         history = (await http.get(f"/invoices/{invoice}/state-history", headers=people["admin"])).json()
         assert len([h for h in history if h["from_state"] == "pending_approval"]) == 1
+
+
+async def test_a_transition_without_roles_needs_the_right_to_update_the_invoice(http, people) -> None:  # noqa: ANN001
+    # `withdraw` lists no roles: it is open to whoever may UPDATE an invoice (admin only), not to every reader.
+    invoice = await make(http, people["clerk"], "100.00", "100.00")
+    for reader in ("clerk", "approver"):  # both may read the invoice, neither may update it
+        assert (await http.get(f"/invoices/{invoice}", headers=people[reader])).status_code == 200
+        refused = await move(http, people[reader], invoice, "withdraw")
+        assert refused.status_code == 403, refused.text
+    assert await status(http, people["admin"], invoice) == "draft"
+    anonymous = await http.post(f"/invoices/{invoice}/transitions/withdraw")
+    assert anonymous.status_code == 401
+    moved = await move(http, people["admin"], invoice, "withdraw")
+    assert moved.status_code == 200 and moved.json()["status"] == "withdrawn"
+    # a transition that lists roles is unchanged: the clerk submits without being able to update
+    other = await make(http, people["clerk"], "100.00", "100.00")
+    assert (await move(http, people["clerk"], other, "submit")).status_code == 200

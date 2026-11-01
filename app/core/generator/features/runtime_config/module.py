@@ -18,6 +18,7 @@ from typing import Any
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.features.state_machines.module import migration_parent as _before_machines
+from app.core.generator.features.tests.module import _skip_reason
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_runtime import (
     DEFAULT_MAX_LENGTH,
@@ -132,6 +133,16 @@ class RuntimeConfigModule:
                 multi_tenant=multi_tenant,
                 defs=", ".join(names),
             )
+        numbered = [e for e in project.entities if e.numbered]
+        if numbered:
+            files["app/runtime_config/numbering.py"] = read_verbatim(
+                _TEMPLATES, "app/runtime_config/numbering.py.tpl"
+            )
+            files["tests/test_numbering.py"] = render_template(
+                self._env,
+                "tests/test_numbering.py.j2",
+                entities=[{"e": e, "skip": _skip_reason(e, project)} for e in numbered],
+            )
         files["alembic/versions/0006_runtime_config.py"] = render_template(
             self._env,
             "alembic/versions/0006_runtime_config.py.j2",
@@ -146,5 +157,3 @@ class RuntimeConfigModule:
             multi_tenant=multi_tenant,
         )
         return files
-
-

@@ -431,9 +431,9 @@ class SpecTransition(_SpecModel):
 
     `when` is an expression (app/core/expr) over the record's own fields: the move is refused
     unless it is true (null counts as false). `roles` limits who may trigger it. With NO roles
-    the move is open to anyone who can read the record; on role-permission entities that does not need
-    update rights (approvers can approve without edit rights), on abac / pbac entities the caller must
-    also pass the entity's update policy. `auto` moves are applied by the platform right after a write
+    the move is open to anyone who may UPDATE the entity (default deny): the caller must pass the same
+    update access as PATCH / PUT (roles, row rules or policies), so a read-only role cannot move a
+    record. To let a role move records without edit rights, list that role here. `auto` moves are applied by the platform right after a write
     whenever their guard holds, so they never have `roles`."""
 
     name: str
@@ -482,6 +482,11 @@ class SpecSequence(_SpecModel):
     per_tenant: bool = False  # one counter per tenant (needs auth.multi_tenant)
     reset_yearly: bool = False  # the counter restarts at `start` every calendar year (UTC)
     view_roles: list[str] = Field(default_factory=list)  # who may read the counters; empty = nobody
+    # Numbers a field automatically: set BOTH to make the platform draw the next number into
+    # `entity`.`field` on every create, in the same transaction as the insert. The field is then
+    # read-only for callers (validation_numbering). Leave both empty for a counter that code draws.
+    entity: str | None = None
+    field: str | None = None
 
 
 class SpecListItem(_SpecModel):
@@ -515,6 +520,301 @@ class SpecHistory(_SpecModel):
     view_roles: list[str] = Field(default_factory=list)
 
 
+class SpecEvents(_SpecModel):
+    """Transactional outbox and typed event bus (C10). Off unless `enabled`. Every entity gets
+    created / updated / deleted events, and every state machine a `<entity>.transitioned` event; each
+    is written to the outbox in the write's own transaction and delivered at least once, in order per
+    record, by a relay. `adapter` is where events go: `in_process` (subscribers in the same app) or
+    `redis_streams` (not implemented yet). Delivered rows are purged after `retention_days`."""
+
+    enabled: bool = False
+    adapter: str = "in_process"
+    retention_days: int = 14
+
+
+class SpecRateBucket(_SpecModel):
+    """A token bucket: holds at most `capacity` tokens and gets `refill_per_second` back each second."""
+
+    capacity: int
+    refill_per_second: float
+
+
+class SpecRateGroup(_SpecModel):
+    """Limits for a group of routes (first matching group wins; `methods` empty = every method).
+    `user` / `tenant` replace the defaults for this group (callers without a valid token always use
+    `anonymous`); `cost` is what one request takes out."""
+
+    name: str
+    path_prefix: str
+    methods: list[str] = Field(default_factory=list)
+    user: SpecRateBucket | None = None
+    tenant: SpecRateBucket | None = None
+    cost: int = 1
+
+
+class SpecRateLimits(_SpecModel):
+    """Rate limits per (tenant, caller) and per tenant, stored in Postgres so they hold across processes.
+    Callers without a valid token are limited per client address (`anonymous`). A store error refuses
+    writes with 503; reads are refused too unless `read_fail_open`."""
+
+    user: SpecRateBucket = SpecRateBucket(capacity=120, refill_per_second=2.0)
+    tenant: SpecRateBucket | None = None
+    anonymous: SpecRateBucket = SpecRateBucket(capacity=30, refill_per_second=0.5)
+    groups: list[SpecRateGroup] = Field(default_factory=list)
+    read_fail_open: bool = False
+
+
+class SpecQuota(_SpecModel):
+    """A hard cap on a named meter per tenant and period (`day` or `month`, UTC). Requests whose method
+    is in `methods` (empty = all) and whose path is under `path_prefix` use `cost` of the meter."""
+
+    meter: str
+    period: str
+    limit: int
+    path_prefix: str = "/"
+    methods: list[str] = Field(default_factory=list)
+    cost: int = 1
+
+
+class SpecIdempotency(_SpecModel):
+    """`Idempotency-Key` on the listed methods: the same key and request replays the first response."""
+
+    methods: list[str] = Field(default_factory=lambda: ["POST"])
+    ttl_hours: int = 24
+    max_response_bytes: int = 65536
+
+
+class SpecApiVersion(_SpecModel):
+    date: str  # YYYY-MM-DD
+    note: str = ""
+
+
+class SpecApiVersioning(_SpecModel):
+    """Dated API versions. `default` is what a client without an `API-Version` header gets; the newest
+    version's shape is the one the code produces, older ones come from transformers in
+    app/hooks/api_versions.py."""
+
+    default: str
+    versions: list[SpecApiVersion]
+
+
+class SpecApiEdge(_SpecModel):
+    """The API edge (C14), off unless `enabled`: idempotency keys, rate limits and quotas, dated API
+    versions. Each part is on when its section is present."""
+
+    enabled: bool = False
+    idempotency: SpecIdempotency | None = None
+    rate_limits: SpecRateLimits | None = None
+    quotas: list[SpecQuota] = Field(default_factory=list)
+    versioning: SpecApiVersioning | None = None
+
+
+class SpecJobRetry(_SpecModel):
+    """How a failing job is tried again: up to `max_attempts` runs in all, waiting `backoff_seconds`
+    (`fixed`) or `backoff_seconds` doubling each time (`exponential`, capped at an hour) between runs.
+    After the last failed run the job is parked as `dead` (visible, and it can be requeued)."""
+
+    max_attempts: int = 3
+    backoff_seconds: int = 30
+    backoff: str = "exponential"
+
+
+class SpecJobQueue(_SpecModel):
+    """Where jobs wait. Only `postgres` (the app's own database, FOR UPDATE SKIP LOCKED) is
+    implemented; `redis` and `rabbitmq` are accepted by the schema and refused by validation."""
+
+    backend: str = "postgres"
+
+
+class SpecWorkerGroup(_SpecModel):
+    """A set of worker processes that run jobs from the listed `queues`, `concurrency` jobs at a time
+    per process. `same_server` adds a compose service to the project; `separate_server` writes a
+    bundle under deploy/workers/<name>/ to run on another machine with its own DATABASE_URL."""
+
+    name: str
+    concurrency: int = 4
+    queues: list[str] = Field(default_factory=lambda: ["default"])
+    placement: str = "same_server"
+
+
+class SpecJob(_SpecModel):
+    """A kind of background job. `handler` is the name of a function you write in the custom file
+    app/hooks/jobs.py (the platform generates only the registry and the stub)."""
+
+    name: str
+    queue: str = "default"
+    handler: str
+    retry: SpecJobRetry = Field(default_factory=SpecJobRetry)
+    timeout_seconds: int = 300
+
+
+class SpecJobSchedule(_SpecModel):
+    """Enqueue `job` on a 5-field `cron` in `timezone`. Exactly one job per tick, however many worker
+    processes run. If ticks were missed (everything was down), `missed` decides: `catch_up_one` runs
+    the most recent missed tick once, `skip` drops them."""
+
+    name: str
+    job: str
+    cron: str
+    timezone: str = "UTC"
+    enabled: bool = True
+    missed: str = "catch_up_one"
+
+
+class SpecJobs(_SpecModel):
+    """Background jobs, schedules and worker groups (C11). Off unless `enabled`."""
+
+    enabled: bool = False
+    queue: SpecJobQueue = Field(default_factory=SpecJobQueue)
+    worker_groups: list[SpecWorkerGroup] = Field(default_factory=list)
+    jobs: list[SpecJob] = Field(default_factory=list)
+    schedules: list[SpecJobSchedule] = Field(default_factory=list)
+
+
+class SpecWorkflowRetry(_SpecModel):
+    """How a failing workflow step is tried again before the workflow counts it as failed."""
+
+    max_attempts: int = 3
+    backoff_seconds: int = 5
+    backoff: str = "exponential"
+
+
+class SpecWorkflowStep(_SpecModel):
+    """One step. `kind: hook` runs the function you write in app/hooks/workflows.py for (workflow, step);
+    `kind: job` enqueues the declared background job `job` (atomically with recording the step) and counts
+    as done once enqueued. `compensate` says the step has an undo function (run in reverse order when a
+    later step fails or the run is cancelled); set it false only for a step that needs no undo."""
+
+    name: str
+    kind: str = "hook"
+    job: str | None = None
+    compensate: bool = True
+    timeout_seconds: int = 60
+    retry: SpecWorkflowRetry = Field(default_factory=SpecWorkflowRetry)
+
+
+class SpecWorkflow(_SpecModel):
+    """A durable saga: ordered `steps` run one at a time and each completed step is recorded in Postgres,
+    so a crashed or restarted worker resumes after the last completed step. `on_failure`: `compensate`
+    undoes completed steps in reverse order, `fail` stops and leaves them. `roles` may start, inspect and
+    cancel runs (default deny: at least one is required)."""
+
+    name: str
+    steps: list[SpecWorkflowStep] = Field(default_factory=list)
+    roles: list[str] = Field(default_factory=list)
+    on_failure: str = "compensate"
+    timeout_seconds: int = 3600
+
+
+class SpecWorkflowWorker(_SpecModel):
+    """The worker process that executes runs (`python -m app.workflows.worker`)."""
+
+    concurrency: int = 2
+
+
+class SpecWorkflows(_SpecModel):
+    """Durable workflows (C12), off unless `enabled`. `runtime`: `postgres` is the built-in durable
+    runner; `dbos` and `temporal` are accepted by the schema and refused by validation (not_yet_implemented)."""
+
+    enabled: bool = False
+    runtime: str = "postgres"
+    worker: SpecWorkflowWorker = Field(default_factory=SpecWorkflowWorker)
+    workflows: list[SpecWorkflow] = Field(default_factory=list)
+
+
+class SpecProviderAdapter(_SpecModel):
+    """One adapter a project may use: its `kind` (email | sms | push | payments | storage | llm |
+    generic), its `name` and NON-SECRET settings. Credentials are never part of the spec: each tenant
+    writes its own through the generated, admin-only vault API."""
+
+    kind: str
+    name: str
+    settings: dict[str, str | int | bool] = Field(default_factory=dict)
+
+
+class SpecProviders(_SpecModel):
+    """Provider adapter framework and per-tenant credential vault (C15). Off unless `enabled`.
+    Every kind always has the in-process `emulator`; the adapters listed here are the ones a tenant
+    may select by storing credentials for them. Nothing secret lives in the spec (`secret_in_spec`)."""
+
+    enabled: bool = False
+    admin_role: str = "admin"  # the only role that may write, delete or list credentials
+    adapters: list[SpecProviderAdapter] = Field(default_factory=list)
+    timeout_seconds: float = 10.0
+    max_attempts: int = 3
+    breaker_failures: int = 5  # consecutive failures that open the circuit breaker
+    breaker_reset_seconds: float = 30.0  # open -> half-open probe after this long
+
+
+class SpecNotificationTemplate(_SpecModel):
+    """The default template of one notification type for one channel. `{{ name }}` placeholders may
+    only name the type's declared `variables` (no expressions, no filters). For email, `html: true`
+    makes the body HTML: every variable is HTML-escaped. `subject` is the email subject / push title."""
+
+    channel: str
+    subject: str = ""
+    body: str
+    html: bool = False
+
+
+class SpecNotificationType(_SpecModel):
+    """One kind of notification. `category`: `transactional` (always sent) or `optional` (a user can opt
+    out per channel). `on_event` (e.g. `order.created`) sends it when that event is delivered by the
+    outbox: `recipient_key_field` is the event-data field naming the recipient (a user id, compared with
+    the preferences) and `address_fields` maps each channel to the data field holding the address."""
+
+    name: str
+    category: str = "optional"
+    channels: list[str] = Field(default_factory=list)
+    variables: list[str] = Field(default_factory=list)
+    templates: list[SpecNotificationTemplate] = Field(default_factory=list)
+    default_enabled: bool = True  # optional types: the setting of a user who never chose
+    on_event: str | None = None
+    recipient_key_field: str | None = None
+    address_fields: dict[str, str] = Field(default_factory=dict)
+
+
+class SpecNotifications(_SpecModel):
+    """Notifications over the provider adapters (C17). Off unless `enabled`. Needs `providers` and auth.
+    Messages are queued as delivery-log rows and sent by a dispatcher with retries and backoff."""
+
+    enabled: bool = False
+    admin_role: str = "admin"  # edits templates and reads the delivery log
+    types: list[SpecNotificationType] = Field(default_factory=list)
+    max_attempts: int = 5
+    backoff_seconds: int = 30
+    retention_days: int = 90  # finished delivery-log rows are purged after this long
+
+
+class SpecWebhookInbound(_SpecModel):
+    """One incoming webhook receiver, served at POST /webhooks/in/<name>. Requests must carry a valid
+    Standard Webhooks signature (raw body, HMAC-SHA256) made with a secret the admin stored for this
+    endpoint; the handler is a function you write in app/hooks/webhooks.py."""
+
+    name: str
+    tolerance_seconds: int = 300
+    max_body_bytes: int = 262144
+    dedupe_days: int = 7
+
+
+class SpecWebhooks(_SpecModel):
+    """Webhooks out and in (C13). Off unless `enabled`. Needs events (the source of outgoing webhooks),
+    jobs (retries with backoff: declare a job `webhook_delivery`) and providers (the vault that keeps
+    the signing secrets). Nothing secret lives in the spec. Only `events` listed here can be subscribed
+    to (default deny); URLs must pass the SSRF guard (public addresses only, no redirects followed)."""
+
+    enabled: bool = False
+    admin_role: str = "admin"
+    events: list[str] = Field(default_factory=list)
+    max_consecutive_failures: int = 5
+    secret_overlap_hours: int = 24
+    timeout_seconds: float = 10.0
+    max_payload_bytes: int = 262144
+    allow_http: bool = False
+    allowed_ports: list[int] = Field(default_factory=list)
+    inbound: list[SpecWebhookInbound] = Field(default_factory=list)
+
+
 class SpecHookField(_SpecModel):
     """One scalar field of a hook's input or output model. The platform generates the Pydantic model
     from the list. `type` is string | int | float | decimal | bool | date | datetime | uuid."""
@@ -537,6 +837,26 @@ class SpecHookBudget(_SpecModel):
     outbound_calls: int = 0
 
 
+class SpecHookEffectBudget(_SpecModel):
+    """Limits of an effectful hook (H3): outbound calls per effect type in one invocation, the largest
+    payload of one call in bytes, and outbound calls per minute for the hook (per API process).
+    The wall-clock limit is `budget.cpu_ms`. Breaking any limit aborts the hook (its failure policy applies)."""
+
+    calls_per_effect: int = 1
+    payload_bytes: int = 10_000
+    outbound_per_minute: int = 30
+
+
+class SpecHookEffects(_SpecModel):
+    """Per-project opt-in for effectful hooks (H2). OFF unless `enabled`. Hooks are written by TRUSTED
+    authors only until the Cycle 3 sandbox exists: `trusted_authors_only` must be true to turn this on.
+    `webhook_hosts` is the allow-list of hosts a hook may post to (SSRF guard still applies)."""
+
+    enabled: bool = False
+    trusted_authors_only: bool = False
+    webhook_hosts: list[str] = Field(default_factory=list)
+
+
 class SpecHook(_SpecModel):
     """A piece of custom logic under contract. The spec declares the name, where it runs (`point`),
     what goes in and what must come out; the platform generates the models, the stub file, the wiring
@@ -557,6 +877,10 @@ class SpecHook(_SpecModel):
     fallback: dict[str, Any] | None = None
     budget: SpecHookBudget = Field(default_factory=SpecHookBudget)
     reads: list[str] = Field(default_factory=list)
+    # Effectful tier (H2/H3): refused unless `hook_effects.enabled`. `author` other than trusted is refused.
+    effects: list[str] = Field(default_factory=list)  # email | sms | webhook | notification
+    effect_budget: SpecHookEffectBudget | None = None
+    author: str | None = None  # None / "trusted"; "ai" or "external" hooks are refused when effects are on
 
 
 class SpecSeedGenerator(_SpecModel):
@@ -570,7 +894,9 @@ class SpecSeedGenerator(_SpecModel):
     prefix: str | None = None  # sequence (text) and email (local part)
     start: int | None = None  # sequence
     width: int | None = None  # sequence: zero padding
-    min: str | int | None = None  # int_range, decimal_range (decimals are strings: "10.50"), date_range
+    min: str | int | None = (
+        None  # int_range, decimal_range (decimals are strings: "10.50"), date_range
+    )
     max: str | int | None = None
     places: int | None = None  # decimal_range: digits after the point
     ratio: float | None = None  # bool_ratio: share of true values, 0..1
@@ -627,7 +953,15 @@ class Spec(_SpecModel):
     lists: list[SpecList] = Field(default_factory=list)
     history: list[SpecHistory] = Field(default_factory=list)
     hooks: list[SpecHook] = Field(default_factory=list)
+    events: SpecEvents | None = None
+    providers: SpecProviders | None = None
+    notifications: SpecNotifications | None = None
+    jobs: SpecJobs | None = None
+    workflows: SpecWorkflows | None = None
     seed: list[SpecSeedProfile] = Field(default_factory=list)
+    api_edge: SpecApiEdge | None = None
+    webhooks: SpecWebhooks | None = None
+    hook_effects: SpecHookEffects | None = None
 
 
 def spec_hash(spec: Spec) -> str:

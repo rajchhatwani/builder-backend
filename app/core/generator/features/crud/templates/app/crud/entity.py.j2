@@ -1,5 +1,10 @@
 """Repository for {{ e.name }} (generated). Add custom queries by subclassing in your own module."""
 
+{% if e.numbered %}
+import uuid as _uuid
+from typing import Any
+
+{% endif %}
 {% if e.machine and e.history %}
 from app.change_history.hooks import hooks_for as history_hooks_for
 {% if not e.custom_hooks %}
@@ -9,12 +14,18 @@ from app.change_history.hooks import merge_hooks
 from app.change_history.hooks import hooks_for
 {% endif %}
 from app.crud import _base as _crud_base
+{% if e.events %}
+from app.events import hooks as _event_hooks
+{% endif %}
 {% if e.custom_hooks %}
 from app.hooks_gen import registry as custom_hooks
 {% endif %}
 {% for module, cls in e.repo_imports %}
 from app.models.{{ module }} import {{ cls }}
 {% endfor %}
+{% if e.numbered %}
+from app.runtime_config import numbering as _numbering
+{% endif %}
 {% if e.file_fields %}
 from app.storage.refs import check_attachable
 {% endif %}
@@ -52,4 +63,32 @@ class {{ e.name }}Repository(_crud_base.Repository[{{ e.name }}]):
     hooks = merge_hooks(machine_hooks_for("{{ e.name }}"), history_hooks_for("{{ e.name }}"))
 {% elif e.machine or e.history %}
     hooks = hooks_for("{{ e.name }}")
+{% endif %}
+{% if e.numbered %}
+    # Fields numbered by a sequence: (field, sequence, per_tenant, as_int). Drawn inside the create's
+    # transaction; never writable by a caller.
+    numbered = (
+{% for f, seq, per_tenant, as_int in e.numbered %}
+        ({{ f | pyrepr }}, {{ seq | pyrepr }}, {{ per_tenant | pyrepr }}, {{ as_int | pyrepr }}),
+{% endfor %}
+    )
+
+    async def create(self, data: dict[str, Any]) -> {{ e.name }}:
+        data = dict(data)
+        for field, sequence, per_tenant, as_int in self.numbered:
+            data[field] = await _numbering.draw(
+                self.session, sequence, tenant_id=self.tenant_id, per_tenant=per_tenant, as_int=as_int
+            )
+        return await super().create(data)
+
+    async def _apply(self, item_id: _uuid.UUID, data: dict[str, Any]) -> {{ e.name }}:
+        _numbering.refuse_change(tuple(n[0] for n in self.numbered), data)
+        return await super()._apply(item_id, data)
+{% endif %}
+{% if e.events %}
+
+
+# Events last: they see the final state (automatic moves applied) and roll the write back if the outbox
+# row cannot be written.
+{{ e.name }}Repository.hooks = _event_hooks.attach("{{ e.name }}", {{ e.name }}Repository.hooks)
 {% endif %}

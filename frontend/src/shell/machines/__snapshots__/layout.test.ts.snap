@@ -13,7 +13,7 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       },
       "points": [
         {
-          "x": 342,
+          "x": 283,
           "y": 60,
         },
         {
@@ -34,28 +34,28 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "label": {
         "height": 24,
         "width": 143,
-        "x": 383,
+        "x": 433,
         "y": 254,
       },
       "points": [
         {
-          "x": 359,
+          "x": 379,
           "y": 168,
         },
         {
-          "x": 383,
+          "x": 433,
           "y": 200,
         },
         {
-          "x": 383,
+          "x": 433,
           "y": 254,
         },
         {
-          "x": 383,
+          "x": 433,
           "y": 308,
         },
         {
-          "x": 342,
+          "x": 379,
           "y": 340,
         },
       ],
@@ -68,20 +68,20 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "label": {
         "height": 24,
         "width": 157,
-        "x": 201,
+        "x": 251,
         "y": 200,
       },
       "points": [
         {
-          "x": 285,
+          "x": 305,
           "y": 168,
         },
         {
-          "x": 201,
+          "x": 251,
           "y": 200,
         },
         {
-          "x": 201,
+          "x": 251,
           "y": 232,
         },
       ],
@@ -94,20 +94,20 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "label": {
         "height": 24,
         "width": 73,
-        "x": 321,
+        "x": 371,
         "y": 308,
       },
       "points": [
         {
-          "x": 250,
+          "x": 300,
           "y": 276,
         },
         {
-          "x": 321,
+          "x": 371,
           "y": 308,
         },
         {
-          "x": 317,
+          "x": 354,
           "y": 340,
         },
       ],
@@ -120,20 +120,20 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "label": {
         "height": 24,
         "width": 115,
-        "x": 207,
+        "x": 251,
         "y": 308,
       },
       "points": [
         {
-          "x": 203,
+          "x": 251,
           "y": 276,
         },
         {
-          "x": 207,
+          "x": 251,
           "y": 308,
         },
         {
-          "x": 270,
+          "x": 305,
           "y": 340,
         },
       ],
@@ -151,7 +151,7 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       },
       "points": [
         {
-          "x": 158,
+          "x": 188,
           "y": 276,
         },
         {
@@ -172,26 +172,52 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "label": {
         "height": 24,
         "width": 45,
-        "x": 314,
+        "x": 342,
         "y": 416,
       },
       "points": [
         {
-          "x": 314,
+          "x": 342,
           "y": 384,
         },
         {
-          "x": 314,
+          "x": 342,
           "y": 416,
         },
         {
-          "x": 314,
+          "x": 342,
           "y": 448,
         },
       ],
       "source": "approved",
       "target": "paid",
       "transition": "pay",
+    },
+    {
+      "id": "withdraw:draft",
+      "label": {
+        "height": 24,
+        "width": 80,
+        "x": 142,
+        "y": 92,
+      },
+      "points": [
+        {
+          "x": 201,
+          "y": 60,
+        },
+        {
+          "x": 142,
+          "y": 92,
+        },
+        {
+          "x": 142,
+          "y": 124,
+        },
+      ],
+      "source": "draft",
+      "target": "withdrawn",
+      "transition": "withdraw",
     },
   ],
   "nodes": [
@@ -200,7 +226,7 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "id": "draft",
       "initial": true,
       "width": 160,
-      "x": 262,
+      "x": 162,
       "y": 16,
     },
     {
@@ -216,7 +242,7 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "id": "approved",
       "initial": false,
       "width": 160,
-      "x": 234,
+      "x": 262,
       "y": 340,
     },
     {
@@ -224,7 +250,7 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "id": "pending_approval",
       "initial": false,
       "width": 160,
-      "x": 121,
+      "x": 171,
       "y": 232,
     },
     {
@@ -240,8 +266,16 @@ exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] =
       "id": "paid",
       "initial": false,
       "width": 160,
-      "x": 234,
+      "x": 262,
       "y": 448,
+    },
+    {
+      "height": 44,
+      "id": "withdrawn",
+      "initial": false,
+      "width": 160,
+      "x": 62,
+      "y": 124,
     },
   ],
 }

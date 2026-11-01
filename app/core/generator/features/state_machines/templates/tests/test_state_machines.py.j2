@@ -10,6 +10,9 @@ import pytest
 from httpx import AsyncClient
 
 from tests import _factories
+{% if live | selectattr("probe") | list %}
+from tests._auth_support import client_for, sign_in
+{% endif %}
 {% endif %}
 {% for r in routes %}
 {% set e = r.e %}
@@ -66,5 +69,43 @@ async def test_{{ e.table }}_unknown_transition_and_record(client: AsyncClient) 
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/{{ e.path }}/{uuid.uuid4()}/transitions/{{ (m.transitions | rejectattr("auto") | map(attribute="name") | list or ["x"])[0] }}")
     assert missing.status_code == 404
+{% endif %}
+{% if r.probe and not r.skip %}
+{% set p = r.probe %}
+
+
+async def test_{{ e.table }}_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
+    """A transition that lists no roles is open to whoever may update {{ e.name }}, not to every reader
+    (role `{{ p.reader }}` can read but not update); one that lists roles keeps its own role check."""
+    created = await _factories.make_{{ e.table }}(client)
+    base = f"/{{ e.path }}/{created['id']}"
+    async with client_for(await sign_in(client, "sm-reader@example.com", roles=[{{ p.reader | pyrepr }}])) as reader:
+{% if "get" in e.ops %}
+        assert (await reader.get(base)).status_code == 200  # the reader sees the record...
+{% else %}
+        assert (await reader.get(f"{base}/transitions")).status_code == 200
+{% endif %}
+{% if p.refused %}
+        refused = await reader.post(f"{base}/transitions/{{ p.refused }}")
+        assert refused.status_code == 403, refused.text
+        assert refused.json()["code"] == "forbidden"
+{% endif %}
+{% if p.roled %}
+{% if p.roled[1] != p.reader %}
+    async with client_for(await sign_in(client, "sm-roled@example.com", roles=[{{ p.roled[1] | pyrepr }}])) as roled:
+        moved = await roled.post(f"{base}/transitions/{{ p.roled[0] }}")
+{% else %}
+        moved = await reader.post(f"{base}/transitions/{{ p.roled[0] }}")
+{% endif %}
+        assert moved.status_code == 200, moved.text  # listed role: unchanged, no update right needed
+        created = await _factories.make_{{ e.table }}(client)
+        base = f"/{{ e.path }}/{created['id']}"
+{% endif %}
+    async with client_for({}) as anonymous:
+        assert (await anonymous.post(f"{base}/transitions/{{ (p.refused or p.empty or (p.roled and p.roled[0]) or "x") }}")).status_code in (401, 403)
+{% if p.empty %}
+    allowed = await client.post(f"{base}/transitions/{{ p.empty }}")  # holds every role, so may update
+    assert allowed.status_code == 200, allowed.text
+{% endif %}
 {% endif %}
 {% endfor %}

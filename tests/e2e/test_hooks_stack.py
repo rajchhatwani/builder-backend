@@ -1,6 +1,7 @@
 """Custom hooks end to end: generate the example projects, migrate a real Postgres, run the project's own
 tests, the gate on the hook bodies, and the scenario files in tests/e2e/. Needs Docker (testcontainers)."""
 
+import json
 import shutil
 from pathlib import Path
 
@@ -18,6 +19,7 @@ from tests.e2e.hooks_support import (
 from tests.e2e.test_generated_project import ok, postgres, run  # noqa: F401
 
 HERE = Path(__file__).resolve().parent
+FIXTURES = HERE.parent / "fixtures" / "specs"
 
 
 def write_project(root: Path, files: dict[str, str]) -> Path:
@@ -124,3 +126,32 @@ def test_hooks_at_every_point_of_the_chain(
     shutil.copy(HERE / "hooks_points_scenarios.py", root / "tests" / "test_scenarios.py")
     output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider"], root, url))
     assert "passed" in output and "failed" not in output
+
+
+def _access_project(name: str, scenarios: str, postgres, tmp_path_factory) -> None:  # noqa: ANN001
+    """A project whose hook reads entities under access rules: the gate passes on the stub bodies being
+    replaced by the scenario's own patched functions, and the scenarios prove `find_rows` follows the rules."""
+    spec = json.loads((FIXTURES / f"{name}.json").read_text(encoding="utf-8"))
+    root = write_project(tmp_path_factory.mktemp(name), generate_tree(spec))
+    url = db_url(postgres, f"{name}_scn_test")
+    migrate(root, url)
+    write_body(root, "peek", "return PeekResult(seen=True)")
+    code, report, summary = run_gate(root)
+    assert code == 0, summary
+    shutil.copy(HERE / scenarios, root / "tests" / "test_scenarios.py")
+    output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider"], root, url))
+    assert "passed" in output and "failed" not in output
+
+
+def test_find_rows_follows_role_owner_and_tenant_rules(
+    postgres: PostgresContainer,  # noqa: F811
+    tmp_path_factory,  # noqa: ANN001
+) -> None:
+    _access_project("hooks_access", "hooks_access_scenarios.py", postgres, tmp_path_factory)
+
+
+def test_find_rows_follows_abac_policies(
+    postgres: PostgresContainer,  # noqa: F811
+    tmp_path_factory,  # noqa: ANN001
+) -> None:
+    _access_project("hooks_access_abac", "hooks_access_abac_scenarios.py", postgres, tmp_path_factory)

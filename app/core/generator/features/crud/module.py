@@ -8,6 +8,13 @@ from app.core.generator.context import ProjectCtx
 from app.core.generator.features.change_history.module import router_present as history_router_present
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_documents import documents_active
+from app.core.validation_api_edge import api_edge_active, api_edge_tables_active
+from app.core.validation_events import events_active
+from app.core.validation_notifications import notifications_active
+from app.core.validation_providers import providers_active
+from app.core.validation_jobs import jobs_active
+from app.core.validation_webhooks import webhooks_active
+from app.core.validation_workflows import workflows_active
 from app.core.validation_observability import observability_active
 from app.core.validation_history import history_active
 from app.core.validation_payments import payments_active
@@ -77,6 +84,16 @@ class CrudModule:
             "change_history": history_active(project.spec),
             "history_router": history_router_present(project),
             "seed": seed_active(project.spec),
+            "events": events_active(project.spec),
+            "api_edge": api_edge_active(project.spec),
+            "api_edge_tables": api_edge_tables_active(project.spec),
+            "providers": providers_active(project.spec) and project.auth is not None,
+            "jobs": jobs_active(project.spec),
+            "webhooks": webhooks_active(project.spec) and project.auth is not None,
+            "notifications": notifications_active(project.spec)
+            and providers_active(project.spec)
+            and project.auth is not None,
+            "workflows": workflows_active(project.spec) and project.auth is not None,
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

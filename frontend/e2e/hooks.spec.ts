@@ -33,7 +33,7 @@ test('hooks: declared hooks are listed; declare one, save, reload, see it and it
   const watch = watchProblems(page)
 
   await page.goto(`/#/p/${id}/overview`)
-  if (info.project.name === 'desktop') await page.locator('aside[data-sidebar]').getByRole('link', { name: 'Hooks' }).click()
+  if (info.project.name === 'desktop') await page.locator('aside[data-sidebar]').getByRole('link', { name: 'Hooks', exact: true }).click()
   else await page.goto(`/#/p/${id}/hooks`)
   await expect(page).toHaveURL(new RegExp(`#/p/${id}/hooks$`))
   await expect(page.getByRole('heading', { level: 1, name: 'Hooks' })).toBeVisible()

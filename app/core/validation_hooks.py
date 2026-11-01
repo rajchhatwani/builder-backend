@@ -11,6 +11,9 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
+from app.core.validation_notifications import notifications_active
+from app.core.validation_providers import providers_active
+from app.core.validation_webhooks import webhooks_active
 from app.core.spec_models import (
     Spec,
     SpecEntity,
@@ -104,6 +107,7 @@ def policy_of(hook: SpecHook) -> str:
 
 
 def check_hooks(spec: Spec, entities: dict[str, SpecEntity], add: Add) -> None:
+    check_hook_effects_section(spec, add)
     if len(spec.hooks) > MAX_HOOKS:
         add("hooks", "too_many", f"at most {MAX_HOOKS} hooks")
         return
@@ -131,6 +135,7 @@ def check_hooks(spec: Spec, entities: dict[str, SpecEntity], add: Add) -> None:
         _check_policy(hook, stage, out_fields, p, add)
         _check_budget(hook, p, add)
         _check_reads(hook, entities, p, add)
+        _check_effects(spec, hook, p, add)
         if transition is not None and entity is not None:
             _check_transition(hook, entity, transition, machines, p, add)
 
@@ -338,6 +343,67 @@ def _check_budget(hook: SpecHook, p: str, add: Add) -> None:
             "over_ceiling",
             f"outbound_calls must be 0 to {ceiling['outbound_calls']} (no outbound client yet)",
         )
+
+
+EFFECT_TYPES = ("email", "sms", "webhook", "notification")
+HOST_RE = re.compile(r"[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?")
+
+
+def _check_effects(spec: Spec, hook: SpecHook, p: str, add: Add) -> None:
+    """The effectful tier (H2/H3, CO-3): off unless the project opts in, trusted authors only, fail closed."""
+    fx = spec.hook_effects
+    on = fx is not None and fx.enabled
+    if hook.author not in (None, "trusted"):
+        if hook.effects or on:
+            add(f"{p}.author", "untrusted_author", "hooks by an AI agent or outside parties are not allowed when effects are on (no sandbox yet)")
+        elif hook.author not in ("ai", "external"):
+            add(f"{p}.author", "invalid_value", "author is trusted, ai or external")
+    if hook.effect_budget is not None and not hook.effects:
+        add(f"{p}.effect_budget", "invalid_value", "effect_budget needs a declared effects list")
+    if not hook.effects:
+        return
+    if not on:
+        add(f"{p}.effects", "effects_not_enabled", "effects are off: set hook_effects.enabled (trusted authors only)")
+        return
+    if hook.kind != "effect":
+        add(f"{p}.effects", "invalid_value", "only an effect hook may declare effects")
+    seen: set[str] = set()
+    for k, name in enumerate(hook.effects):
+        ep = f"{p}.effects[{k}]"
+        if name not in EFFECT_TYPES:
+            add(ep, "invalid_value", f"effect must be one of {', '.join(EFFECT_TYPES)}")
+        elif name in seen:
+            add(ep, "duplicate_name", f"{name} is listed twice")
+        seen.add(name)
+        if name in ("email", "sms") and not providers_active(spec):
+            add(ep, "needs_providers", f"{name} goes through the provider framework: enable providers")
+        if name == "webhook" and not webhooks_active(spec):
+            add(ep, "needs_webhooks", "webhook effects use the webhook egress guard: enable webhooks")
+        if name == "notification" and not notifications_active(spec):
+            add(ep, "needs_notifications", "notification effects need notifications enabled")
+    if "webhook" in seen and fx is not None and not fx.webhook_hosts:
+        add("hook_effects.webhook_hosts", "required", "a webhook effect needs an allow-list of hosts")
+    eb = hook.effect_budget
+    if eb is not None:
+        if not 1 <= eb.calls_per_effect <= 20:
+            add(f"{p}.effect_budget.calls_per_effect", "over_ceiling", "calls_per_effect must be 1 to 20")
+        if not 1 <= eb.payload_bytes <= 262144:
+            add(f"{p}.effect_budget.payload_bytes", "over_ceiling", "payload_bytes must be 1 to 262144")
+        if not 1 <= eb.outbound_per_minute <= 600:
+            add(f"{p}.effect_budget.outbound_per_minute", "over_ceiling", "outbound_per_minute must be 1 to 600")
+
+
+def check_hook_effects_section(spec: Spec, add: Add) -> None:
+    fx = spec.hook_effects
+    if fx is None:
+        return
+    if fx.enabled and not fx.trusted_authors_only:
+        add("hook_effects.trusted_authors_only", "required", "effectful hooks need the owner's confirmation: trusted_authors_only must be true")
+    if fx.enabled and not spec.hooks:
+        add("hook_effects", "invalid_value", "hook_effects needs at least one hook")
+    for k, host in enumerate(fx.webhook_hosts):
+        if not HOST_RE.fullmatch(host) or host.replace(".", "").isdigit():
+            add(f"hook_effects.webhook_hosts[{k}]", "invalid_value", "use a lowercase DNS host name (no IP address, scheme or port)")
 
 
 def _check_reads(hook: SpecHook, entities: dict[str, SpecEntity], p: str, add: Add) -> None:

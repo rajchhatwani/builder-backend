@@ -47,6 +47,18 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/seed`, { page: 'project', projectId: PID, section: 'seed' }],
   // Added by F1-3 (addition, no existing row changed): the v2-only Rules (expression checker) page.
   [`#/p/${PID}/rules`, { page: 'project', projectId: PID, section: 'rules' }],
+  // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
+  // Added by F2-4 (addition): the v2-only History timeline page.
+  [`#/p/${PID}/timeline`, { page: 'project', projectId: PID, section: 'timeline' }],
+  [`#/p/${PID}/forms`, { page: 'project', projectId: PID, section: 'forms' }],
+  // Added by F2-6 (addition): the v2-only Notifications page.
+  [`#/p/${PID}/notifications`, { page: 'project', projectId: PID, section: 'notifications' }],
+  // Added by F2-2/F2-3 (additions): the v2-only Connect and Operate pages.
+  [`#/p/${PID}/webhooks`, { page: 'project', projectId: PID, section: 'webhooks' }],
+  [`#/p/${PID}/providers`, { page: 'project', projectId: PID, section: 'providers' }],
+  [`#/p/${PID}/jobs`, { page: 'project', projectId: PID, section: 'jobs' }],
+  [`#/p/${PID}/workers`, { page: 'project', projectId: PID, section: 'workers' }],
+  [`#/p/${PID}/workflows`, { page: 'project', projectId: PID, section: 'workflows' }],
   [`#/p/${PID}/nonsense`, { page: 'project', projectId: PID, section: 'overview' }],
 ]
 

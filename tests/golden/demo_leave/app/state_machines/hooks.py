@@ -1,5 +1,6 @@
 """Lifecycle hooks that tie the state machines into every write (generated)."""
 
+from sqlalchemy.ext.asyncio import async_object_session
 from sqlalchemy.orm import object_session
 
 from app.core.errors import AppError
@@ -30,6 +31,7 @@ def hooks_for(entity: str) -> dict[str, tuple[Hook, ...]]:
                 session, entity, item, "created", None, state, getattr(ctx.caller, "id", None),
                 automatic=False,
             )
+        await engine.prime_settings(async_object_session(item), item)
         engine.settle(session, entity, item)
 
     return {"before_save": (set_initial_state,), "after_save": (settle_and_log,)}

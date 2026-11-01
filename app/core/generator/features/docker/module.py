@@ -5,6 +5,7 @@ from pathlib import Path
 
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
+from app.core.generator.features.jobs.module import same_server_groups
 from app.core.generator.features.keycloak.module import (
     KEYCLOAK_IMAGE,
     KEYCLOAK_IMAGE_TAG,
@@ -26,6 +27,18 @@ from app.core.generator.features.storage.module import active as storage_block
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import invitations_enabled, uses_keycloak
 from app.core.validation_documents import documents_active
+from app.core.validation_api_edge import api_edge_tables_active
+from app.core.validation_events import events_active
+from app.core.validation_history import history_active
+from app.core.validation_hooks import hooks_active
+from app.core.validation_jobs import jobs_active
+from app.core.validation_workflows import workflows_active
+from app.core.validation_payments import payments_active
+from app.core.validation_runtime import runtime_config_active
+from app.core.validation_seed import seed_active
+from app.core.validation_storage import storage_active
+from app.core.validation_providers import providers_active
+from app.core.validation_webhooks import webhooks_active
 from app.core.validation_observability import observability_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -82,6 +95,29 @@ class DockerModule:
             "dev_s3_image": DEV_S3_IMAGE,
             "clamd_limit_mb": clamd_limit_mb(stor) if stor is not None else 0,
             "pay": pay,
+            "jobs_groups": same_server_groups(project),
+            "workflows_worker": workflows_active(project.spec) and project.auth is not None,
+            "workflows_concurrency": project.spec.workflows.worker.concurrency if project.spec.workflows is not None else 1,
+            "hooks": hooks_active(project.spec),
+            "hook_effects": project.spec.hook_effects is not None and project.spec.hook_effects.enabled,
+            # any optional feature that ships its own Alembic revision (see "Upgrading a deployed project")
+            "optional_migrations": any(
+                (
+                    events_active(project.spec),
+                    jobs_active(project.spec),
+                    workflows_active(project.spec),
+                    history_active(project.spec),
+                    api_edge_tables_active(project.spec),
+                    providers_active(project.spec),
+                    webhooks_active(project.spec),
+                    runtime_config_active(project.spec),
+                    seed_active(project.spec),
+                    payments_active(project.spec),
+                    storage_active(project.spec),
+                    bool(project.spec.state_machines),
+                )
+            ),
+            "provider_vault": providers_active(project.spec) and project.auth is not None,
             "prov": PROVIDERS[pay.provider] if pay is not None else None,
             "sizing": sizing,
             "pgbouncer_image": PGBOUNCER_IMAGE,

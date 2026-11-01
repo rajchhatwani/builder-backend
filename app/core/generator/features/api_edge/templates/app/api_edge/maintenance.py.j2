@@ -1,0 +1,37 @@
+"""Housekeeping for the API edge tables (generated). Run it from a schedule:
+
+    python -m app.api_edge.maintenance
+
+Deletes expired idempotency keys, idle rate-limit buckets and old quota periods."""
+
+import asyncio
+
+from app.api_edge import {{ ([("idempotency")] if idempotency else []) | join(", ") }}{% if quota %}{{ ", " if idempotency else "" }}quota{% endif %}{% if rate %}{{ ", " if idempotency or quota else "" }}ratelimit{% endif %}{{ "" }}
+from app.db import engine{% if idempotency %}, session_factory{% endif %}{{ "" }}
+
+
+async def purge() -> dict[str, int]:
+    done: dict[str, int] = {}
+{% if idempotency %}
+    async with session_factory() as session:
+        done["idempotency"] = await idempotency.purge(session)
+        await session.commit()
+{% endif %}
+{% if rate %}
+    done["rate_buckets"] = await ratelimit.purge()
+{% endif %}
+{% if quota %}
+    done["quota_usage"] = await quota.purge()
+{% endif %}
+    return done
+
+
+async def main() -> None:
+    try:
+        print(await purge())  # noqa: T201
+    finally:
+        await engine.dispose()
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
