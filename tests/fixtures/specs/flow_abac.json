@@ -1,0 +1,302 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Ticket flow",
+    "slug": "flow-abac",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "priority"
+        ]
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "open",
+            "pending",
+            "closed"
+          ]
+        },
+        {
+          "name": "priority",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "department",
+          "type": "string",
+          "required": true,
+          "max_length": 40
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false,
+      "custom_fields": [
+        {
+          "name": "department",
+          "label": "Department",
+          "type": "string",
+          "required": false,
+          "max_length": 40
+        }
+      ]
+    },
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false
+    },
+    "login_rate_limit": "50/minute",
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent",
+        "is_default": true
+      }
+    ]
+  },
+  "authorization": {
+    "model": "abac",
+    "policies": [
+      {
+        "id": "see_own_department",
+        "description": "People see tickets of their own department, and tickets they opened.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.list",
+          "Ticket.get",
+          "Ticket.head"
+        ],
+        "when": {
+          "any": [
+            {
+              "left": {
+                "resource": "department"
+              },
+              "op": "eq",
+              "right": {
+                "subject": "department"
+              }
+            },
+            {
+              "left": {
+                "resource": "created_by_id"
+              },
+              "op": "eq",
+              "right": {
+                "subject": "id"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "open_in_own_department",
+        "description": "A ticket may only be opened for the person's own department.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.create"
+        ],
+        "when": {
+          "all": [
+            {
+              "left": {
+                "resource": "department"
+              },
+              "op": "eq",
+              "right": {
+                "subject": "department"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "edit_own_unfinished",
+        "description": "Authors edit their own tickets while they are not closed.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.update",
+          "Ticket.replace"
+        ],
+        "when": {
+          "all": [
+            {
+              "left": {
+                "resource": "created_by_id"
+              },
+              "op": "eq",
+              "right": {
+                "subject": "id"
+              }
+            },
+            {
+              "left": {
+                "resource": "status"
+              },
+              "op": "ne",
+              "right": {
+                "literal": "closed"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "id": "admins_manage_everything",
+        "description": "Administrators can do anything to a ticket that is not closed.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.*"
+        ],
+        "when": {
+          "left": {
+            "subject": "roles"
+          },
+          "op": "contains",
+          "right": {
+            "literal": "admin"
+          }
+        }
+      },
+      {
+        "id": "closed_is_final",
+        "description": "Closed tickets cannot be changed or deleted by anyone.",
+        "effect": "deny",
+        "actions": [
+          "Ticket.update",
+          "Ticket.replace",
+          "Ticket.delete"
+        ],
+        "when": {
+          "left": {
+            "resource": "status"
+          },
+          "op": "eq",
+          "right": {
+            "literal": "closed"
+          }
+        }
+      },
+      {
+        "id": "delete_from_office",
+        "description": "People delete their own low-priority tickets, from the office network only.",
+        "effect": "allow",
+        "actions": [
+          "Ticket.delete"
+        ],
+        "when": {
+          "all": [
+            {
+              "left": {
+                "env": "client_ip"
+              },
+              "op": "ip_in",
+              "right": {
+                "literal": [
+                  "10.0.0.0/8",
+                  "127.0.0.0/8"
+                ]
+              }
+            },
+            {
+              "left": {
+                "resource": "priority"
+              },
+              "op": "lte",
+              "right": {
+                "literal": 3
+              }
+            },
+            {
+              "left": {
+                "resource": "created_by_id"
+              },
+              "op": "eq",
+              "right": {
+                "subject": "id"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "attachments": {}
+  },
+  "state_machines": [
+    {
+      "entity": "Ticket",
+      "field": "status",
+      "initial": "open",
+      "transitions": [
+        {
+          "name": "start",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "pending"
+        },
+        {
+          "name": "close",
+          "from_states": [
+            "open",
+            "pending"
+          ],
+          "to_state": "closed"
+        },
+        {
+          "name": "reopen",
+          "from_states": [
+            "closed"
+          ],
+          "to_state": "open"
+        },
+        {
+          "name": "escalate",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "pending",
+          "when": "div(1, priority - priority) > 0"
+        },
+        {
+          "name": "overflow",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "pending",
+          "when": "priority * 9223372036854775807 > 0"
+        }
+      ]
+    }
+  ]
+}

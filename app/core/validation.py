@@ -47,6 +47,11 @@ from app.core.spec_models import (
     SpecRelation,
 )
 from app.core.validation_authorization import check_authorization
+from app.core.validation_behavior import check_state_machines
+from app.core.validation_history import CH_TABLES, check_history, history_active
+from app.core.validation_hooks import check_hooks
+from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
+from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
 from app.core.validation_deploy import check_deployment
 from app.core.validation_documents import check_documents
 from app.core.validation_observability import check_observability
@@ -120,6 +125,16 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         for table in STORAGE_TABLES:
             ctx.tables[table] = "storage"
 
+    if runtime_config_active(spec):
+        for table in RC_TABLES:
+            ctx.tables[table] = "runtime_config"
+    if history_active(spec):
+        for table in CH_TABLES:
+            ctx.tables[table] = "change_history"
+    if seed_active(spec):
+        for table in SEED_TABLES:
+            ctx.tables[table] = "seed"
+
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
     entities_by_name = _check_entities(spec, ctx)
@@ -132,6 +147,11 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_observability(spec, ctx.add)
     check_deployment(spec, ctx.add)
     check_documents(spec, ctx.add)
+    check_state_machines(spec, entities_by_name, ctx.add)
+    check_runtime_config(spec, ctx.add)
+    check_history(spec, entities_by_name, ctx.add)
+    check_hooks(spec, entities_by_name, ctx.add)
+    check_seed(spec, entities_by_name, ctx.add)
     return ctx.issues
 
 
@@ -659,16 +679,24 @@ def _claim_name(ctx: _Ctx, entity_name: str, name: str, path: str) -> None:
 
 # Tables the generated auth module creates; entities may not use these names.
 AUTH_TABLES = (
+    "auth_identities",
     "auth_invitations",
     "auth_provider_lock",
     "auth_refresh_tokens",
+    "auth_sessions",
     "auth_tenants",
     "auth_users",
     "auth_verification_codes",
 )
 # With Keycloak the identity provider owns passwords, tokens and invitations; the project keeps
 # only a profile row per user (auth_users) and the provider lock.
-KEYCLOAK_AUTH_TABLES = ("auth_provider_lock", "auth_tenants", "auth_users")
+KEYCLOAK_AUTH_TABLES = (
+    "auth_identities",
+    "auth_provider_lock",
+    "auth_sessions",
+    "auth_tenants",
+    "auth_users",
+)
 
 
 def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
@@ -689,6 +717,7 @@ AUTH_USER_COLUMNS = frozenset(
         "password",
         "password_hash",
         "roles",
+        "role_source",
         "is_active",
         "email_verified_at",
         "phone_verified_at",

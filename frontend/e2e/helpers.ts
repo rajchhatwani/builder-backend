@@ -86,3 +86,25 @@ export async function setPlanAsAdmin(request: APIRequestContext, orgId: string, 
   })
   expect(r.status(), await r.text()).toBe(200)
 }
+
+/** The neutral invoice-approval example (one entity, one state machine, auth on). */
+export async function importInvoiceFlow(api: Api, projectId: string) {
+  const { readFileSync } = await import('node:fs')
+  const { fileURLToPath } = await import('node:url')
+  const dir = fileURLToPath(new URL('../../tests/fixtures/specs/', import.meta.url))
+  const r = await api.put(`/projects/${projectId}/spec`, JSON.parse(readFileSync(dir + 'flow_invoices.json', 'utf8')))
+  expect(r.status(), await r.text()).toBe(200)
+}
+
+/** The invoice example, then two guards that do not compile (unknown field `bogus_field`, dangling `amount <= `),
+ *  written through the behaviour API (which accepts work in progress; PUT /spec refuses them). */
+export async function importBrokenInvoiceFlow(api: Api, projectId: string) {
+  await importInvoiceFlow(api, projectId)
+  const cur = await (await api.get(`/projects/${projectId}/behavior/state-machines`)).json()
+  const machines = cur.state_machines
+  const ts = machines[0].transitions
+  ts.find((t: { name: string }) => t.name === 'approve').when = 'bogus_field > 1'
+  ts.find((t: { name: string }) => t.name === 'auto_approve').when = 'amount <= '
+  const r = await api.put(`/projects/${projectId}/behavior/state-machines`, { state_machines: machines, expected_version: cur.version })
+  expect(r.status(), await r.text()).toBe(200)
+}

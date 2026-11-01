@@ -21,6 +21,8 @@
     "app/auth/config.py": "generated",
     "app/auth/delivery.py": "generated",
     "app/auth/deps.py": "generated",
+    "app/auth/export.py": "generated",
+    "app/auth/identity.py": "generated",
     "app/auth/keys.py": "generated",
     "app/auth/middleware.py": "generated",
     "app/auth/models.py": "generated",
@@ -83,6 +85,7 @@
     "tests/conftest.py": "generated",
     "tests/test__health.py": "generated",
     "tests/test_auth.py": "generated",
+    "tests/test_identity.py": "generated",
     "tests/test_notes.py": "generated",
     "tests/test_provider_lock.py": "generated"
   }

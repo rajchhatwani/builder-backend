@@ -2671,6 +2671,25 @@
     "title": "AwsSnsSecretsWrite",
     "type": "object"
    },
+   "BehaviorIssues": {
+    "properties": {
+     "issues": {
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Issues",
+      "type": "array"
+     }
+    },
+    "required": [
+     "issues"
+    ],
+    "title": "BehaviorIssues",
+    "type": "object"
+   },
    "CheckoutCreate": {
     "properties": {
      "plan_id": {
@@ -3463,6 +3482,119 @@
     "title": "EntityUpdate",
     "type": "object"
    },
+   "ExpressionCheckBody": {
+    "description": "Body of POST /projects/{id}/behavior/expressions/check (no side effects).",
+    "properties": {
+     "entity": {
+      "maxLength": 80,
+      "title": "Entity",
+      "type": "string"
+     },
+     "expect": {
+      "default": "bool",
+      "enum": [
+       "bool",
+       "any"
+      ],
+      "title": "Expect",
+      "type": "string"
+     },
+     "expression": {
+      "maxLength": 1000,
+      "title": "Expression",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity",
+     "expression"
+    ],
+    "title": "ExpressionCheckBody",
+    "type": "object"
+   },
+   "ExpressionCheckRead": {
+    "properties": {
+     "error": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ExpressionError"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/ExpressionField"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Type"
+     }
+    },
+    "required": [
+     "ok",
+     "fields"
+    ],
+    "title": "ExpressionCheckRead",
+    "type": "object"
+   },
+   "ExpressionError": {
+    "properties": {
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "pos": {
+      "title": "Pos",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "message",
+     "pos"
+    ],
+    "title": "ExpressionError",
+    "type": "object"
+   },
+   "ExpressionField": {
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "nullable": {
+      "title": "Nullable",
+      "type": "boolean"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "type",
+     "nullable"
+    ],
+    "title": "ExpressionField",
+    "type": "object"
+   },
    "FieldCreate": {
     "properties": {
      "default": {
@@ -3966,6 +4098,334 @@
      }
     },
     "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "HistoryBody": {
+    "properties": {
+     "entity": {
+      "maxLength": 80,
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Fields",
+      "type": "array"
+     },
+     "retention_days": {
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Retention Days",
+      "type": "integer"
+     },
+     "view_roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "View Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "retention_days"
+    ],
+    "title": "HistoryBody",
+    "type": "object"
+   },
+   "HistoryRead": {
+    "properties": {
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/HistoryBody"
+      },
+      "title": "History",
+      "type": "array"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "history"
+    ],
+    "title": "HistoryRead",
+    "type": "object"
+   },
+   "HistoryWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/history. Replaces every change-history config.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/HistoryBody"
+      },
+      "maxItems": 200,
+      "title": "History",
+      "type": "array"
+     }
+    },
+    "title": "HistoryWrite",
+    "type": "object"
+   },
+   "HookBody": {
+    "properties": {
+     "budget": {
+      "$ref": "#/components/schemas/HookBudgetBody"
+     },
+     "failure_policy": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Failure Policy"
+     },
+     "fallback": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          },
+          {
+           "type": "number"
+          },
+          {
+           "type": "boolean"
+          }
+         ]
+        },
+        "maxProperties": 60,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fallback"
+     },
+     "input": {
+      "$ref": "#/components/schemas/HookModelBody"
+     },
+     "kind": {
+      "default": "pure",
+      "maxLength": 20,
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     },
+     "output": {
+      "$ref": "#/components/schemas/HookModelBody"
+     },
+     "point": {
+      "maxLength": 200,
+      "title": "Point",
+      "type": "string"
+     },
+     "reads": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Reads",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name",
+     "point",
+     "input",
+     "output"
+    ],
+    "title": "HookBody",
+    "type": "object"
+   },
+   "HookBudgetBody": {
+    "properties": {
+     "cpu_ms": {
+      "default": 200,
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Cpu Ms",
+      "type": "integer"
+     },
+     "outbound_calls": {
+      "default": 0,
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Outbound Calls",
+      "type": "integer"
+     },
+     "rows": {
+      "default": 0,
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Rows",
+      "type": "integer"
+     }
+    },
+    "title": "HookBudgetBody",
+    "type": "object"
+   },
+   "HookFieldBody": {
+    "properties": {
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "default": true,
+      "title": "Required",
+      "type": "boolean"
+     },
+     "type": {
+      "default": "string",
+      "maxLength": 20,
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "HookFieldBody",
+    "type": "object"
+   },
+   "HookModelBody": {
+    "properties": {
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/HookFieldBody"
+      },
+      "maxItems": 200,
+      "title": "Fields",
+      "type": "array"
+     },
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "HookModelBody",
+    "type": "object"
+   },
+   "HooksRead": {
+    "properties": {
+     "hooks": {
+      "items": {
+       "$ref": "#/components/schemas/HookBody"
+      },
+      "title": "Hooks",
+      "type": "array"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "hooks"
+    ],
+    "title": "HooksRead",
+    "type": "object"
+   },
+   "HooksWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/hooks. Replaces every hook declaration.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "hooks": {
+      "items": {
+       "$ref": "#/components/schemas/HookBody"
+      },
+      "maxItems": 200,
+      "title": "Hooks",
+      "type": "array"
+     }
+    },
+    "title": "HooksWrite",
     "type": "object"
    },
    "IdentityProvider": {
@@ -4888,6 +5348,158 @@
     "title": "LibraryItem",
     "type": "object"
    },
+   "ListBody": {
+    "properties": {
+     "edit_roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Edit Roles",
+      "type": "array"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ListItemBody"
+      },
+      "maxItems": 1000,
+      "title": "Items",
+      "type": "array"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "maxLength": 120,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Label"
+     },
+     "max_items": {
+      "default": 100,
+      "maximum": 100000.0,
+      "minimum": 0.0,
+      "title": "Max Items",
+      "type": "integer"
+     },
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "ListBody",
+    "type": "object"
+   },
+   "ListItemBody": {
+    "properties": {
+     "color": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Color"
+     },
+     "label": {
+      "maxLength": 200,
+      "title": "Label",
+      "type": "string"
+     },
+     "locked": {
+      "default": false,
+      "title": "Locked",
+      "type": "boolean"
+     },
+     "value": {
+      "maxLength": 80,
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "value",
+     "label"
+    ],
+    "title": "ListItemBody",
+    "type": "object"
+   },
+   "ListsRead": {
+    "properties": {
+     "lists": {
+      "items": {
+       "$ref": "#/components/schemas/ListBody"
+      },
+      "title": "Lists",
+      "type": "array"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "lists"
+    ],
+    "title": "ListsRead",
+    "type": "object"
+   },
+   "ListsWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/lists. Replaces every list.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "lists": {
+      "items": {
+       "$ref": "#/components/schemas/ListBody"
+      },
+      "maxItems": 500,
+      "title": "Lists",
+      "type": "array"
+     }
+    },
+    "title": "ListsWrite",
+    "type": "object"
+   },
    "LoginDiscoverRead": {
     "description": "`sso`: send the browser to `login_url`. `password`: show the password form.",
     "properties": {
@@ -5262,6 +5874,34 @@
      "mfa_token"
     ],
     "title": "MfaTokenRequest",
+    "type": "object"
+   },
+   "NextStep": {
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     },
+     "section": {
+      "title": "Section",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "reason",
+     "section"
+    ],
+    "title": "NextStep",
     "type": "object"
    },
    "ObservabilityIssues": {
@@ -8154,6 +8794,47 @@
     "title": "ProjectRoleUpdate",
     "type": "object"
    },
+   "ProjectStatus": {
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "issues": {
+      "items": {
+       "$ref": "#/components/schemas/ValidationIssue"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "next_step": {
+      "$ref": "#/components/schemas/NextStep"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "sections": {
+      "items": {
+       "$ref": "#/components/schemas/StatusSection"
+      },
+      "title": "Sections",
+      "type": "array"
+     }
+    },
+    "required": [
+     "ready",
+     "issues",
+     "counts",
+     "sections",
+     "next_step"
+    ],
+    "title": "ProjectStatus",
+    "type": "object"
+   },
    "ProjectTokenRead": {
     "description": "An API token as seen by a project owner \u2014 includes whose token it is.",
     "properties": {
@@ -9016,6 +9697,504 @@
     "title": "ScimTokenRead",
     "type": "object"
    },
+   "SeedEntityBody": {
+    "additionalProperties": false,
+    "properties": {
+     "count": {
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Count",
+      "type": "integer"
+     },
+     "entity": {
+      "maxLength": 80,
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SeedFieldBody"
+      },
+      "maxItems": 300,
+      "title": "Fields",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "count"
+    ],
+    "title": "SeedEntityBody",
+    "type": "object"
+   },
+   "SeedFieldBody": {
+    "additionalProperties": false,
+    "properties": {
+     "field": {
+      "maxLength": 80,
+      "title": "Field",
+      "type": "string"
+     },
+     "generator": {
+      "$ref": "#/components/schemas/SeedGeneratorBody"
+     }
+    },
+    "required": [
+     "field",
+     "generator"
+    ],
+    "title": "SeedFieldBody",
+    "type": "object"
+   },
+   "SeedGeneratorBody": {
+    "additionalProperties": false,
+    "description": "One generator of a seed plan. Shapes and sizes only; which keys a type takes and whether the values\nfit the column is `validation.validate`'s job.",
+    "properties": {
+     "entity": {
+      "anyOf": [
+       {
+        "maxLength": 80,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "max": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max"
+     },
+     "max_words": {
+      "anyOf": [
+       {
+        "maximum": 1000.0,
+        "minimum": -1000.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Words"
+     },
+     "min": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min"
+     },
+     "min_words": {
+      "anyOf": [
+       {
+        "maximum": 1000.0,
+        "minimum": -1000.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min Words"
+     },
+     "pick": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pick"
+     },
+     "places": {
+      "anyOf": [
+       {
+        "maximum": 1000.0,
+        "minimum": -1000.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Places"
+     },
+     "prefix": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prefix"
+     },
+     "ratio": {
+      "anyOf": [
+       {
+        "maximum": 1000.0,
+        "minimum": -1000.0,
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ratio"
+     },
+     "start": {
+      "anyOf": [
+       {
+        "maximum": 4.611686018427388e+18,
+        "minimum": -4.611686018427388e+18,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start"
+     },
+     "type": {
+      "maxLength": 30,
+      "title": "Type",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       },
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     },
+     "values": {
+      "anyOf": [
+       {
+        "items": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          },
+          {
+           "type": "number"
+          },
+          {
+           "type": "boolean"
+          }
+         ]
+        },
+        "maxItems": 1000,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Values"
+     },
+     "weights": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "maxProperties": 200,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Weights"
+     },
+     "width": {
+      "anyOf": [
+       {
+        "maximum": 1000.0,
+        "minimum": -1000.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Width"
+     }
+    },
+    "required": [
+     "type"
+    ],
+    "title": "SeedGeneratorBody",
+    "type": "object"
+   },
+   "SeedProfileBody": {
+    "additionalProperties": false,
+    "properties": {
+     "as_of": {
+      "maxLength": 20,
+      "title": "As Of",
+      "type": "string"
+     },
+     "entities": {
+      "items": {
+       "$ref": "#/components/schemas/SeedEntityBody"
+      },
+      "maxItems": 200,
+      "title": "Entities",
+      "type": "array"
+     },
+     "name": {
+      "maxLength": 40,
+      "title": "Name",
+      "type": "string"
+     },
+     "seed": {
+      "maximum": 4.611686018427388e+18,
+      "minimum": -4.611686018427388e+18,
+      "title": "Seed",
+      "type": "integer"
+     },
+     "tenants": {
+      "default": 0,
+      "maximum": 1000.0,
+      "minimum": -1000.0,
+      "title": "Tenants",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "seed",
+     "as_of"
+    ],
+    "title": "SeedProfileBody",
+    "type": "object"
+   },
+   "SeedRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "seed": {
+      "items": {
+       "$ref": "#/components/schemas/SeedProfileBody"
+      },
+      "title": "Seed",
+      "type": "array"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "seed"
+    ],
+    "title": "SeedRead",
+    "type": "object"
+   },
+   "SeedWrite": {
+    "additionalProperties": false,
+    "description": "Body of PUT /projects/{id}/behavior/seed. Replaces every seed profile.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "seed": {
+      "items": {
+       "$ref": "#/components/schemas/SeedProfileBody"
+      },
+      "maxItems": 20,
+      "title": "Seed",
+      "type": "array"
+     }
+    },
+    "title": "SeedWrite",
+    "type": "object"
+   },
+   "SequenceBody": {
+    "properties": {
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     },
+     "padding": {
+      "default": 0,
+      "maximum": 100.0,
+      "minimum": 0.0,
+      "title": "Padding",
+      "type": "integer"
+     },
+     "per_tenant": {
+      "default": false,
+      "title": "Per Tenant",
+      "type": "boolean"
+     },
+     "prefix": {
+      "default": "",
+      "maxLength": 40,
+      "title": "Prefix",
+      "type": "string"
+     },
+     "reset_yearly": {
+      "default": false,
+      "title": "Reset Yearly",
+      "type": "boolean"
+     },
+     "start": {
+      "default": 1,
+      "maximum": 4.611686018427388e+18,
+      "minimum": 0.0,
+      "title": "Start",
+      "type": "integer"
+     },
+     "view_roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "View Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SequenceBody",
+    "type": "object"
+   },
+   "SequencesRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "sequences": {
+      "items": {
+       "$ref": "#/components/schemas/SequenceBody"
+      },
+      "title": "Sequences",
+      "type": "array"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "sequences"
+    ],
+    "title": "SequencesRead",
+    "type": "object"
+   },
+   "SequencesWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/sequences. Replaces every sequence.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "sequences": {
+      "items": {
+       "$ref": "#/components/schemas/SequenceBody"
+      },
+      "maxItems": 200,
+      "title": "Sequences",
+      "type": "array"
+     }
+    },
+    "title": "SequencesWrite",
+    "type": "object"
+   },
    "SessionRead": {
     "description": "Access token in the body (the app keeps it in memory); the refresh token is a cookie.",
     "properties": {
@@ -9078,6 +10257,190 @@
      "recovery_codes"
     ],
     "title": "SessionWithRecoveryCodesRead",
+    "type": "object"
+   },
+   "SettingBody": {
+    "properties": {
+     "default": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "maxLength": 1000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "edit_roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Edit Roles",
+      "type": "array"
+     },
+     "key": {
+      "maxLength": 80,
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "maxLength": 120,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Label"
+     },
+     "max_length": {
+      "anyOf": [
+       {
+        "maximum": 100000.0,
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Length"
+     },
+     "maximum": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Maximum"
+     },
+     "minimum": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Minimum"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "type": {
+      "default": "string",
+      "maxLength": 20,
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key"
+    ],
+    "title": "SettingBody",
+    "type": "object"
+   },
+   "SettingsRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "settings": {
+      "items": {
+       "$ref": "#/components/schemas/SettingBody"
+      },
+      "title": "Settings",
+      "type": "array"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "settings"
+    ],
+    "title": "SettingsRead",
+    "type": "object"
+   },
+   "SettingsWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/settings. Replaces every setting.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "settings": {
+      "items": {
+       "$ref": "#/components/schemas/SettingBody"
+      },
+      "maxItems": 500,
+      "title": "Settings",
+      "type": "array"
+     }
+    },
+    "title": "SettingsWrite",
     "type": "object"
    },
    "SimulateRequest": {
@@ -9360,6 +10723,27 @@
       "title": "Features",
       "type": "array"
      },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/SpecHistory"
+      },
+      "title": "History",
+      "type": "array"
+     },
+     "hooks": {
+      "items": {
+       "$ref": "#/components/schemas/SpecHook"
+      },
+      "title": "Hooks",
+      "type": "array"
+     },
+     "lists": {
+      "items": {
+       "$ref": "#/components/schemas/SpecList"
+      },
+      "title": "Lists",
+      "type": "array"
+     },
      "observability": {
       "anyOf": [
        {
@@ -9390,10 +10774,38 @@
       "title": "Relations",
       "type": "array"
      },
+     "seed": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSeedProfile"
+      },
+      "title": "Seed",
+      "type": "array"
+     },
+     "sequences": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSequence"
+      },
+      "title": "Sequences",
+      "type": "array"
+     },
+     "settings": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSetting"
+      },
+      "title": "Settings",
+      "type": "array"
+     },
      "spec_version": {
       "default": 1,
       "title": "Spec Version",
       "type": "integer"
+     },
+     "state_machines": {
+      "items": {
+       "$ref": "#/components/schemas/SpecStateMachine"
+      },
+      "title": "State Machines",
+      "type": "array"
      },
      "storage": {
       "anyOf": [
@@ -9469,6 +10881,27 @@
       "title": "Features",
       "type": "array"
      },
+     "history": {
+      "items": {
+       "$ref": "#/components/schemas/SpecHistory"
+      },
+      "title": "History",
+      "type": "array"
+     },
+     "hooks": {
+      "items": {
+       "$ref": "#/components/schemas/SpecHook"
+      },
+      "title": "Hooks",
+      "type": "array"
+     },
+     "lists": {
+      "items": {
+       "$ref": "#/components/schemas/SpecList"
+      },
+      "title": "Lists",
+      "type": "array"
+     },
      "observability": {
       "anyOf": [
        {
@@ -9499,10 +10932,38 @@
       "title": "Relations",
       "type": "array"
      },
+     "seed": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSeedProfile"
+      },
+      "title": "Seed",
+      "type": "array"
+     },
+     "sequences": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSequence"
+      },
+      "title": "Sequences",
+      "type": "array"
+     },
+     "settings": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSetting"
+      },
+      "title": "Settings",
+      "type": "array"
+     },
      "spec_version": {
       "default": 1,
       "title": "Spec Version",
       "type": "integer"
+     },
+     "state_machines": {
+      "items": {
+       "$ref": "#/components/schemas/SpecStateMachine"
+      },
+      "title": "State Machines",
+      "type": "array"
      },
      "storage": {
       "anyOf": [
@@ -9665,6 +11126,16 @@
        }
       ]
      },
+     "suite": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteRef"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "token_store": {
       "default": "db",
       "title": "Token Store",
@@ -9809,6 +11280,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecSmtpConfig"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "suite": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteRef"
        },
        {
         "type": "null"
@@ -10458,6 +11939,175 @@
     "title": "SpecField",
     "type": "object"
    },
+   "SpecHistory": {
+    "additionalProperties": false,
+    "description": "Change history for one entity: every create, update and delete of the listed `fields` is\nrecorded with the actor, the old value and the new value, and kept for `retention_days`.\nOnly the listed fields are ever recorded. `view_roles` may read an entity's history through the\nAPI; empty = nobody (fail closed).",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "retention_days": {
+      "title": "Retention Days",
+      "type": "integer"
+     },
+     "view_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "View Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "retention_days"
+    ],
+    "title": "SpecHistory",
+    "type": "object"
+   },
+   "SpecHook": {
+    "additionalProperties": false,
+    "description": "A piece of custom logic under contract. The spec declares the name, where it runs (`point`),\nwhat goes in and what must come out; the platform generates the models, the stub file, the wiring\nand the gates. The body is free Python inside the marked region of the stub.\n\npoint: `<Entity>.before_save | validate | after_save | after_commit` or\n`<Entity>.transition_guard(<manual transition>)`. kind: `pure` (no I/O) or `effect` (only at\nafter_commit). failure_policy empty = the default for the point (guards and validate: fail_closed,\neffects: fail_open, other pure hooks: fail_closed). `fallback` gives the output values used by the\n`fallback` policy. `reads` lists the entities an effect hook may read through the SDK.",
+    "properties": {
+     "budget": {
+      "$ref": "#/components/schemas/SpecHookBudget"
+     },
+     "failure_policy": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Failure Policy"
+     },
+     "fallback": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fallback"
+     },
+     "input": {
+      "$ref": "#/components/schemas/SpecHookModel"
+     },
+     "kind": {
+      "default": "pure",
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "output": {
+      "$ref": "#/components/schemas/SpecHookModel"
+     },
+     "point": {
+      "title": "Point",
+      "type": "string"
+     },
+     "reads": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Reads",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name",
+     "point",
+     "input",
+     "output"
+    ],
+    "title": "SpecHook",
+    "type": "object"
+   },
+   "SpecHookBudget": {
+    "additionalProperties": false,
+    "description": "Resource limits of one call: wall-clock milliseconds, rows read through the SDK, outbound calls.",
+    "properties": {
+     "cpu_ms": {
+      "default": 200,
+      "title": "Cpu Ms",
+      "type": "integer"
+     },
+     "outbound_calls": {
+      "default": 0,
+      "title": "Outbound Calls",
+      "type": "integer"
+     },
+     "rows": {
+      "default": 0,
+      "title": "Rows",
+      "type": "integer"
+     }
+    },
+    "title": "SpecHookBudget",
+    "type": "object"
+   },
+   "SpecHookField": {
+    "additionalProperties": false,
+    "description": "One scalar field of a hook's input or output model. The platform generates the Pydantic model\nfrom the list. `type` is string | int | float | decimal | bool | date | datetime | uuid.",
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "default": true,
+      "title": "Required",
+      "type": "boolean"
+     },
+     "type": {
+      "default": "string",
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecHookField",
+    "type": "object"
+   },
+   "SpecHookModel": {
+    "additionalProperties": false,
+    "properties": {
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecHookField"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecHookModel",
+    "type": "object"
+   },
    "SpecIdentityProvider": {
     "additionalProperties": false,
     "description": "One external login offered by the Keycloak realm. The client secret is never part of\nthe spec: the generated project reads it from KC_IDP_<ALIAS>_CLIENT_SECRET.",
@@ -10637,6 +12287,86 @@
      "web_client_id"
     ],
     "title": "SpecKeycloak",
+    "type": "object"
+   },
+   "SpecList": {
+    "additionalProperties": false,
+    "description": "A named list of values (statuses, categories ...). `items` is the system default set; a\ntenant (or the whole project when single-tenant) may add values, relabel, recolour, reorder and\nswitch off the unlocked ones, if it holds one of `edit_roles`.",
+    "properties": {
+     "edit_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Edit Roles",
+      "type": "array"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/SpecListItem"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Label"
+     },
+     "max_items": {
+      "default": 100,
+      "title": "Max Items",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecList",
+    "type": "object"
+   },
+   "SpecListItem": {
+    "additionalProperties": false,
+    "properties": {
+     "color": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Color"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "locked": {
+      "default": false,
+      "title": "Locked",
+      "type": "boolean"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "value",
+     "label"
+    ],
+    "title": "SpecListItem",
     "type": "object"
    },
    "SpecObservability": {
@@ -11347,6 +13077,450 @@
     "title": "SpecRole",
     "type": "object"
    },
+   "SpecSeedEntity": {
+    "additionalProperties": false,
+    "description": "`count` rows of `entity` (for each tenant when the entity is tenant-scoped).",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSeedField"
+      },
+      "title": "Fields",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "count"
+    ],
+    "title": "SpecSeedEntity",
+    "type": "object"
+   },
+   "SpecSeedField": {
+    "additionalProperties": false,
+    "properties": {
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "generator": {
+      "$ref": "#/components/schemas/SpecSeedGenerator"
+     }
+    },
+    "required": [
+     "field",
+     "generator"
+    ],
+    "title": "SpecSeedField",
+    "type": "object"
+   },
+   "SpecSeedGenerator": {
+    "additionalProperties": false,
+    "description": "How one column of a seeded row gets its value. `type` is one of a CLOSED set (see\nvalidation_seed.GENERATORS); each type accepts only its own keys, anything else is refused.\nThe plan holds data only: no code, no SQL, no expressions.",
+    "properties": {
+     "entity": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "max": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max"
+     },
+     "max_words": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Words"
+     },
+     "min": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min"
+     },
+     "min_words": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Min Words"
+     },
+     "pick": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pick"
+     },
+     "places": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Places"
+     },
+     "prefix": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prefix"
+     },
+     "ratio": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ratio"
+     },
+     "start": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       },
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     },
+     "values": {
+      "anyOf": [
+       {
+        "items": {
+         "anyOf": [
+          {
+           "type": "string"
+          },
+          {
+           "type": "integer"
+          },
+          {
+           "type": "number"
+          },
+          {
+           "type": "boolean"
+          }
+         ]
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Values"
+     },
+     "weights": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Weights"
+     },
+     "width": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Width"
+     }
+    },
+    "required": [
+     "type"
+    ],
+    "title": "SpecSeedGenerator",
+    "type": "object"
+   },
+   "SpecSeedProfile": {
+    "additionalProperties": false,
+    "description": "One named, reproducible data set (demo, dev ...). The same profile always yields the same rows:\n`seed` drives every random choice and `as_of` is the only clock (no wall-clock time is read).\n`tenants` is the number of tenants to create and must be 0 unless the project is multi-tenant.",
+    "properties": {
+     "as_of": {
+      "title": "As Of",
+      "type": "string"
+     },
+     "entities": {
+      "items": {
+       "$ref": "#/components/schemas/SpecSeedEntity"
+      },
+      "title": "Entities",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "seed": {
+      "title": "Seed",
+      "type": "integer"
+     },
+     "tenants": {
+      "default": 0,
+      "title": "Tenants",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "seed",
+     "as_of"
+    ],
+    "title": "SpecSeedProfile",
+    "type": "object"
+   },
+   "SpecSequence": {
+    "additionalProperties": false,
+    "description": "A gapless counter: a number is consumed only when the caller's transaction commits.\nNumbers look like `<prefix>[<year>-]<zero padded counter>`.",
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "padding": {
+      "default": 0,
+      "title": "Padding",
+      "type": "integer"
+     },
+     "per_tenant": {
+      "default": false,
+      "title": "Per Tenant",
+      "type": "boolean"
+     },
+     "prefix": {
+      "default": "",
+      "title": "Prefix",
+      "type": "string"
+     },
+     "reset_yearly": {
+      "default": false,
+      "title": "Reset Yearly",
+      "type": "boolean"
+     },
+     "start": {
+      "default": 1,
+      "title": "Start",
+      "type": "integer"
+     },
+     "view_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "View Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecSequence",
+    "type": "object"
+   },
+   "SpecSetting": {
+    "additionalProperties": false,
+    "description": "A typed value the running service reads and a role may change at run time (per tenant when\nthe project is multi-tenant). `default` is what everybody gets until a value is saved.\nSettings are for business knobs, never secrets: names that look like credentials are refused.",
+    "properties": {
+     "default": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "edit_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Edit Roles",
+      "type": "array"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Label"
+     },
+     "max_length": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Length"
+     },
+     "maximum": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Maximum"
+     },
+     "minimum": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Minimum"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "type": {
+      "default": "string",
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key"
+    ],
+    "title": "SpecSetting",
+    "type": "object"
+   },
    "SpecSmsConfig": {
     "additionalProperties": false,
     "properties": {
@@ -11393,6 +13567,38 @@
      "from_name"
     ],
     "title": "SpecSmtpConfig",
+    "type": "object"
+   },
+   "SpecStateMachine": {
+    "additionalProperties": false,
+    "description": "A lifecycle for one entity. The states are the `enum_values` of `field`, which must be a\nrequired enum field; callers cannot write it directly, only move it through transitions.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "initial": {
+      "title": "Initial",
+      "type": "string"
+     },
+     "transitions": {
+      "items": {
+       "$ref": "#/components/schemas/SpecTransition"
+      },
+      "title": "Transitions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "field",
+     "initial"
+    ],
+    "title": "SpecStateMachine",
     "type": "object"
    },
    "SpecStorage": {
@@ -11561,6 +13767,91 @@
      }
     },
     "title": "SpecStorageSecurity",
+    "type": "object"
+   },
+   "SpecSuiteRef": {
+    "additionalProperties": false,
+    "description": "Reserved: this app is one of several that share a sign-in hub. Empty (None on SpecAuth)\nfor every project that has not opted in; the generator ignores it for now.",
+    "properties": {
+     "hub_issuer": {
+      "anyOf": [
+       {
+        "maxLength": 512,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hub Issuer"
+     },
+     "join_state": {
+      "default": "none",
+      "title": "Join State",
+      "type": "string"
+     },
+     "suite_id": {
+      "maxLength": 63,
+      "minLength": 1,
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "title": "Suite Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "suite_id"
+    ],
+    "title": "SpecSuiteRef",
+    "type": "object"
+   },
+   "SpecTransition": {
+    "additionalProperties": false,
+    "description": "One allowed move of a state machine: from any of `from_states` to `to_state`.\n\n`when` is an expression (app/core/expr) over the record's own fields: the move is refused\nunless it is true (null counts as false). `roles` limits who may trigger it. With NO roles\nthe move is open to anyone who can read the record; on role-permission entities that does not need\nupdate rights (approvers can approve without edit rights), on abac / pbac entities the caller must\nalso pass the entity's update policy. `auto` moves are applied by the platform right after a write\nwhenever their guard holds, so they never have `roles`.",
+    "properties": {
+     "auto": {
+      "default": false,
+      "title": "Auto",
+      "type": "boolean"
+     },
+     "from_states": {
+      "items": {
+       "type": "string"
+      },
+      "title": "From States",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     },
+     "to_state": {
+      "title": "To State",
+      "type": "string"
+     },
+     "when": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "When"
+     }
+    },
+    "required": [
+     "name",
+     "to_state"
+    ],
+    "title": "SpecTransition",
     "type": "object"
    },
    "SsoCertificateRead": {
@@ -12061,6 +14352,134 @@
     "title": "SsoTestStart",
     "type": "object"
    },
+   "StateMachineBody": {
+    "properties": {
+     "entity": {
+      "maxLength": 80,
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "maxLength": 80,
+      "title": "Field",
+      "type": "string"
+     },
+     "initial": {
+      "maxLength": 80,
+      "title": "Initial",
+      "type": "string"
+     },
+     "transitions": {
+      "items": {
+       "$ref": "#/components/schemas/TransitionBody"
+      },
+      "maxItems": 500,
+      "title": "Transitions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "field",
+     "initial"
+    ],
+    "title": "StateMachineBody",
+    "type": "object"
+   },
+   "StateMachinesRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "state_machines": {
+      "items": {
+       "$ref": "#/components/schemas/StateMachineBody"
+      },
+      "title": "State Machines",
+      "type": "array"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version",
+     "state_machines"
+    ],
+    "title": "StateMachinesRead",
+    "type": "object"
+   },
+   "StateMachinesWrite": {
+    "description": "Body of PUT /projects/{id}/behavior/state-machines. Replaces every machine.",
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "state_machines": {
+      "items": {
+       "$ref": "#/components/schemas/StateMachineBody"
+      },
+      "maxItems": 200,
+      "title": "State Machines",
+      "type": "array"
+     }
+    },
+    "title": "StateMachinesWrite",
+    "type": "object"
+   },
+   "StatusSection": {
+    "properties": {
+     "configured": {
+      "title": "Configured",
+      "type": "boolean"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "issue_count": {
+      "title": "Issue Count",
+      "type": "integer"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "label",
+     "configured",
+     "issue_count"
+    ],
+    "title": "StatusSection",
+    "type": "object"
+   },
    "StorageBackend": {
     "description": "Where uploaded files live. Both speak the S3 API; minio is any self-hosted compatible server.",
     "enum": [
@@ -12555,6 +14974,59 @@
      "password"
     ],
     "title": "TotpSetupRequest",
+    "type": "object"
+   },
+   "TransitionBody": {
+    "properties": {
+     "auto": {
+      "default": false,
+      "title": "Auto",
+      "type": "boolean"
+     },
+     "from_states": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 100,
+      "title": "From States",
+      "type": "array"
+     },
+     "name": {
+      "maxLength": 80,
+      "title": "Name",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 50,
+      "title": "Roles",
+      "type": "array"
+     },
+     "to_state": {
+      "maxLength": 80,
+      "title": "To State",
+      "type": "string"
+     },
+     "when": {
+      "anyOf": [
+       {
+        "maxLength": 5000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "When"
+     }
+    },
+    "required": [
+     "name",
+     "to_state"
+    ],
+    "title": "TransitionBody",
     "type": "object"
    },
    "TwilioSecretsWrite": {
@@ -18827,6 +21299,761 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/expressions/check": {
+   "post": {
+    "description": "Same judge as the validation report (`validation_behavior.check_expression`), so the error\ntext is identical. Nothing is evaluated or saved; `fields` is what the expression may read.",
+    "operationId": "check_expression_route_projects__project_id__behavior_expressions_check_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ExpressionCheckBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ExpressionCheckRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Check an expression against an entity's current fields (no side effects)",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/history": {
+   "get": {
+    "operationId": "get_history_projects__project_id__behavior_history_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HistoryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the change-history settings",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_history_projects__project_id__behavior_history_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/HistoryWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HistoryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every change-history config",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/hooks": {
+   "get": {
+    "operationId": "get_hooks_projects__project_id__behavior_hooks_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HooksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the declared custom hooks",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_hooks_projects__project_id__behavior_hooks_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/HooksWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HooksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every hook declaration",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/issues": {
+   "get": {
+    "operationId": "behavior_issues_projects__project_id__behavior_issues_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BehaviorIssues"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Problems with the behaviour sections (no side effects)",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/lists": {
+   "get": {
+    "operationId": "get_lists_projects__project_id__behavior_lists_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ListsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the tenant-editable lists",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_lists_projects__project_id__behavior_lists_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ListsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ListsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every list",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/seed": {
+   "get": {
+    "operationId": "get_seed_projects__project_id__behavior_seed_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SeedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the seed profiles (the seed plan)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_seed_projects__project_id__behavior_seed_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SeedWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SeedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every seed profile",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/sequences": {
+   "get": {
+    "operationId": "get_sequences_projects__project_id__behavior_sequences_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SequencesRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the gapless sequences",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_sequences_projects__project_id__behavior_sequences_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SequencesWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SequencesRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every sequence",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/settings": {
+   "get": {
+    "operationId": "get_settings_projects__project_id__behavior_settings_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SettingsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the runtime settings",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_settings_projects__project_id__behavior_settings_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SettingsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SettingsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every runtime setting",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/state-machines": {
+   "get": {
+    "operationId": "get_state_machines_projects__project_id__behavior_state_machines_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StateMachinesRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the state machines (empty when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_state_machines_projects__project_id__behavior_state_machines_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StateMachinesWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/StateMachinesRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace every state machine",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/deployment": {
    "get": {
     "operationId": "get_deployment_projects__project_id__deployment_get",
@@ -20914,6 +24141,50 @@
     "summary": "Put Spec",
     "tags": [
      "spec"
+    ]
+   }
+  },
+  "/projects/{project_id}/status": {
+   "get": {
+    "description": "One validate call over the current spec; no generation, nothing is written.\n\n`ready` = at least one entity and no validation issue. `issues` are the validation issues\n(path, code, message). `sections` lists 13 areas with `configured` and `issue_count` (issues\nare assigned to an area by path; auth.roles/auth.permissions and `authz.*` codes belong to\n`authorization`, sequences and lists to `settings`, anything else unknown to `model`).\n\n`next_step` (exactly one, first match wins):\n1. any issue -> `fix_issues`, section = area of the first issue in validation order;\n2. no entities -> `add_entity` (section `model`);\n3. sign-in not enabled -> `consider_auth` (section `auth`);\n4. otherwise `generate` (section `generate`).",
+    "operationId": "project_status_projects__project_id__status_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ProjectStatus"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Readiness board: issues, counts, next step",
+    "tags": [
+     "status"
     ]
    }
   },

@@ -3,6 +3,9 @@
 {% if auth %}
 from app.auth import models as _auth_models
 {% endif %}
+{% if change_history %}
+from app.change_history import models as _change_history_models
+{% endif %}
 from app.models import _associations
 from app.models._base import Base
 {% for e in entities %}
@@ -13,6 +16,15 @@ from app.payments import models as _payments_models
 {% endif %}
 {% if storage %}
 from app.storage import models as _storage_models
+{% endif %}
+{% if runtime_config %}
+from app.runtime_config import models as _runtime_config_models
+{% endif %}
+{% if seed %}
+from app.seed import models as _seed_models
+{% endif %}
+{% if state_machines %}
+from app.state_machines import models as _state_machine_models
 {% endif %}
 
 __all__ = [
@@ -29,5 +41,17 @@ __all__ = [
 {% endif %}
 {% if storage %}
     "_storage_models",
+{% endif %}
+{% if runtime_config %}
+    "_runtime_config_models",
+{% endif %}
+{% if state_machines %}
+    "_state_machine_models",
+{% endif %}
+{% if change_history %}
+    "_change_history_models",
+{% endif %}
+{% if seed %}
+    "_seed_models",
 {% endif %}
 ]

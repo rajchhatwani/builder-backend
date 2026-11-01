@@ -830,11 +830,15 @@ def test_access_tokens_carry_the_tenant_claim(workspace: Path) -> None:
 
         tenant, user = uuid.uuid4(), uuid.uuid4()
         token = security.create_access_token(
-            user, ["member"], key="k" * 40, ttl_seconds=60, tenant_id=tenant
+            user, ["member"], key="k" * 40, ttl_seconds=60, tenant_id=tenant, issuer="builtin:x",
+            session_id="sid-1",
         )
         claims = security.decode_jwt(token, "k" * 40)
         assert claims["tid"] == str(tenant) and claims["sub"] == str(user)
-        bare = security.create_access_token(user, [], key="k" * 40, ttl_seconds=60)
+        assert claims["iss"] == "builtin:x" and claims["sid"] == "sid-1"
+        bare = security.create_access_token(
+            user, [], key="k" * 40, ttl_seconds=60, issuer="builtin:x"
+        )
         assert "tid" not in security.decode_jwt(bare, "k" * 40)
         """,
         AUTH_JWT_SECRET="j" * 40,

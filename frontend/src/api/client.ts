@@ -8,6 +8,11 @@ import {
   type Surface,
 } from './session'
 import type {
+  BehaviorIssues,
+  ExpressionCheckRead,
+  ProjectStatus,
+  StateMachinesRead,
+  SettingsRead, SettingBody, SequencesRead, SequenceBody, ListsRead, ListBody, HistoryRead, HistoryBody, HooksRead, HookBody, SeedRead, SeedProfileBody,
   AdminInsights,
   ImpersonationDigest,
   ImpersonationSessionRow,
@@ -156,9 +161,24 @@ async function request<T>(
     return undefined as T
   }
 
-  const body = await response.json()
+  // A proxy or crashed server can answer with HTML or an empty body: never let a SyntaxError escape.
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    if (!response.ok) {
+      body = { code: 'bad_response', message: `The server answered ${response.status} without a readable error`, details: [] }
+    } else {
+      throw new ApiError(response.status, { code: 'bad_response', message: 'The server sent a response that could not be read', details: [] })
+    }
+  }
   if (!response.ok) {
-    const error = new ApiError(response.status, body as ApiErrorBody)
+    const raw = (body ?? {}) as Partial<ApiErrorBody>
+    const error = new ApiError(response.status, {
+      code: typeof raw.code === 'string' ? raw.code : 'bad_response',
+      message: typeof raw.message === 'string' ? raw.message : `The server answered ${response.status}`,
+      details: Array.isArray(raw.details) ? raw.details : [],
+    })
     if (response.status === 402) notifyQuotaExceeded(error)
     if (response.status === 423 && error.code === 'org_deletion_pending') notifyOrgLocked(error)
     if (response.status === 403 && error.code === 'org_mfa_required') notifyOrgMfaRequired(error)
@@ -285,6 +305,55 @@ function scim(slug: string, path = ''): string {
 }
 
 export const api = {
+  // ── Behaviour (read-only in the dashboard so far) ───────────────────────
+  getStateMachines: (projectId: string) =>
+    request<StateMachinesRead>(`/projects/${projectId}/behavior/state-machines`),
+  getProjectStatus: (projectId: string) => request<ProjectStatus>(`/projects/${projectId}/status`),
+  /** Read-only live check of a guard expression; `signal` cancels a stale request. */
+  checkExpression: (projectId: string, entity: string, expression: string, signal?: AbortSignal) =>
+    request<ExpressionCheckRead>(`/projects/${projectId}/behavior/expressions/check`, {
+      method: 'POST',
+      body: JSON.stringify({ entity, expression, expect: 'bool' }),
+      signal,
+    }),
+  getBehaviorIssues: (projectId: string) =>
+    request<BehaviorIssues>(`/projects/${projectId}/behavior/issues`),
+  getSettings: (projectId: string) => request<SettingsRead>(`/projects/${projectId}/behavior/settings`),
+  putSettings: (projectId: string, settings: SettingBody[], expectedVersion: number) =>
+    request<SettingsRead>(`/projects/${projectId}/behavior/settings`, {
+      method: 'PUT',
+      body: JSON.stringify({ settings, expected_version: expectedVersion }),
+    }),
+  getSequences: (projectId: string) => request<SequencesRead>(`/projects/${projectId}/behavior/sequences`),
+  putSequences: (projectId: string, sequences: SequenceBody[], expectedVersion: number) =>
+    request<SequencesRead>(`/projects/${projectId}/behavior/sequences`, {
+      method: 'PUT',
+      body: JSON.stringify({ sequences, expected_version: expectedVersion }),
+    }),
+  getLists: (projectId: string) => request<ListsRead>(`/projects/${projectId}/behavior/lists`),
+  putLists: (projectId: string, lists: ListBody[], expectedVersion: number) =>
+    request<ListsRead>(`/projects/${projectId}/behavior/lists`, {
+      method: 'PUT',
+      body: JSON.stringify({ lists, expected_version: expectedVersion }),
+    }),
+  getHistory: (projectId: string) => request<HistoryRead>(`/projects/${projectId}/behavior/history`),
+  putHistory: (projectId: string, history: HistoryBody[], expectedVersion: number) =>
+    request<HistoryRead>(`/projects/${projectId}/behavior/history`, {
+      method: 'PUT',
+      body: JSON.stringify({ history, expected_version: expectedVersion }),
+    }),
+  getHooks: (projectId: string) => request<HooksRead>(`/projects/${projectId}/behavior/hooks`),
+  putHooks: (projectId: string, hooks: HookBody[], expectedVersion: number) =>
+    request<HooksRead>(`/projects/${projectId}/behavior/hooks`, {
+      method: 'PUT',
+      body: JSON.stringify({ hooks, expected_version: expectedVersion }),
+    }),
+  getSeed: (projectId: string) => request<SeedRead>(`/projects/${projectId}/behavior/seed`),
+  putSeed: (projectId: string, seed: SeedProfileBody[], expectedVersion: number) =>
+    request<SeedRead>(`/projects/${projectId}/behavior/seed`, {
+      method: 'PUT',
+      body: JSON.stringify({ seed, expected_version: expectedVersion }),
+    }),
   // ── Organizations & plan (customer) ──────────────────────────────────────
   listOrgs: () => request<Page<Organization>>('/orgs'),
   getOrg: (slug: string) => request<Organization>(`/orgs/${encodeURIComponent(slug)}`),
@@ -487,7 +556,7 @@ export const api = {
     let response = await download()
     if (response.status === 401 && (await refreshSession('app'))) response = await download()
     if (!response.ok) {
-      throw new ApiError(response.status, (await response.json()) as ApiErrorBody)
+      throw new ApiError(response.status, (await response.json().catch(() => null)) ?? { code: 'bad_response', message: 'Download failed', details: [] })
     }
     const disposition = response.headers.get('Content-Disposition') ?? ''
     const match = /filename="([^"]+)"/.exec(disposition)

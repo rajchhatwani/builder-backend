@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api, ApiError } from '../api/client'
 import type {
   AuthConfig,
@@ -29,6 +29,21 @@ import { DeploymentPanel } from '../components/DeploymentPanel'
 import { DocumentsPanel } from '../components/DocumentsPanel'
 import { ObservabilityPanel } from '../components/ObservabilityPanel'
 import { ProjectSidebar, ProjectsSidebar, type Section } from '../components/Sidebar'
+import { useQueryClient } from '@tanstack/react-query'
+import { shellV2Enabled } from '../shell/flag'
+import { railProblems } from '../shell/home/homeLogic'
+import { statusKey, useProjectStatus } from '../shell/home/useProjectStatus'
+import { ShellV2 } from '../shell/ShellV2'
+import { MachinesPage } from '../shell/machines/MachinesPage'
+import type { AnySection } from '../shell/pages'
+
+// F1-6A pages: own chunks, kept out of the main bundle
+const SettingsPage = lazy(() => import('../shell/behavior/SettingsPage').then((m) => ({ default: m.SettingsPage })))
+const SeedPage = lazy(() => import('../shell/behavior/SeedPage').then((m) => ({ default: m.SeedPage })))
+const HooksPage = lazy(() => import('../shell/behavior/HooksPage').then((m) => ({ default: m.HooksPage })))
+const HomePage = lazy(() => import('../shell/home/HomePage').then((m) => ({ default: m.HomePage })))
+const RulesPage = lazy(() => import('../shell/rules/RulesPage').then((m) => ({ default: m.RulesPage })))
+const HistoryPage = lazy(() => import('../shell/behavior/HistoryPage').then((m) => ({ default: m.HistoryPage })))
 
 /** The organization that owns this project (one call: projects carry `organization_id`). */
 function useProjectOrg(organizationId: string | null | undefined): Organization | null {
@@ -49,7 +64,7 @@ function useProjectOrg(organizationId: string | null | undefined): Organization 
 
 interface ProjectWorkspaceProps {
   projectId: string
-  section: Section
+  section: AnySection
 }
 
 function SubTabs<T extends string>({
@@ -83,9 +98,30 @@ function PageTitle({ title, children }: { title: string; children: string }) {
   )
 }
 
+/** Old shell by default; the new one when flag ui.shell=v2 is on. The panels inside are the same either way. */
+function Frame({
+  v2,
+  children,
+  ...props
+}: {
+  v2: boolean
+  project: Project
+  section: AnySection
+  problems: Partial<Record<AnySection, number>>
+  on: Partial<Record<Section, boolean>>
+  onShare: () => void
+  org: Organization | null
+  children: ReactNode
+}) {
+  if (v2) return <ShellV2 {...props}>{children}</ShellV2>
+  return <Layout sidebar={<ProjectSidebar {...props} />}>{children}</Layout>
+}
+
 export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) {
   const [project, setProject] = useState<Project | null>(null)
   const [missing, setMissing] = useState(false)
+  // A failed project request that is not "not found" (network, 5xx, unreadable body): shown with a Retry button.
+  const [loadError, setLoadError] = useState<string | null>(null)
   // 423: the project's org is waiting for deletion (the global prompt explains and links to it).
   const [locked, setLocked] = useState(false)
   // 403 org_mfa_required: the org requires two-factor (the global prompt explains the way out).
@@ -106,47 +142,81 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
   const org = useProjectOrg(project?.organization_id)
+  // New shell only: one status call feeds the rail badges and the Home board (shared Query cache).
+  const v2 = shellV2Enabled()
+  const queryClient = useQueryClient()
+  const statusQuery = useProjectStatus(projectId, v2)
 
+  // Newest load wins: a slow answer to an older load must not overwrite (or break) a newer one.
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
+    // Secondary requests: one failing only empties its own panel, never the whole page.
+    const soft = <T,>(p: Promise<T>): Promise<T | null> => p.catch(() => null)
     try {
       const [proj, entityPage, relationPage, rolePage, authConfig, keycloakConfig, paymentsConfig, storageConfig, report, generations] = await Promise.all([
         api.getProject(projectId),
-        api.listEntities(projectId, 200, 0),
-        api.listRelations(projectId, 200, 0),
-        api.listRoles(projectId, 200, 0),
-        api.getAuthConfig(projectId).catch(() => null),
-        api.getKeycloak(projectId).catch(() => null),
-        api.getPayments(projectId).catch(() => null),
-        api.getStorage(projectId).catch(() => null),
-        api.validateProject(projectId).catch(() => null),
-        api.listGenerations(projectId, 1, 0),
+        soft(api.listEntities(projectId, 200, 0)),
+        soft(api.listRelations(projectId, 200, 0)),
+        soft(api.listRoles(projectId, 200, 0)),
+        soft(api.getAuthConfig(projectId)),
+        soft(api.getKeycloak(projectId)),
+        soft(api.getPayments(projectId)),
+        soft(api.getStorage(projectId)),
+        soft(api.validateProject(projectId)),
+        soft(api.listGenerations(projectId, 1, 0)),
       ])
+      if (seq !== loadSeq.current) return
       setProject(proj)
-      setEntities(entityPage.items)
-      setRelations(relationPage.items)
-      setRoles(rolePage.items)
+      setEntities(entityPage?.items ?? [])
+      setRelations(relationPage?.items ?? [])
+      setRoles(rolePage?.items ?? [])
       setAuth(authConfig)
       setKeycloak(keycloakConfig)
       setPayments(paymentsConfig)
       setStorage(storageConfig)
       setIssues(report ? report.issues : null)
-      setGenerationCount(generations.total)
+      setGenerationCount(generations?.total ?? 0)
       setModelVersion((v) => v + 1)
+      setLocked(false)
+      setNeedsMfa(false)
+      setMissing(false)
+      setLoadError(null)
     } catch (err) {
-      setLocked(err instanceof ApiError && err.code === 'org_deletion_pending')
-      setNeedsMfa(err instanceof ApiError && err.code === 'org_mfa_required')
-      setMissing(true)
+      if (seq !== loadSeq.current) return
+      // Only "this project is not there / not yours / locked" is a missing project; anything else is transient.
+      const gone = err instanceof ApiError && (err.status === 404 || err.status === 403 || err.status === 423)
+      if (gone) {
+        setLocked(err.code === 'org_deletion_pending')
+        setNeedsMfa(err.code === 'org_mfa_required')
+        setMissing(true)
+        setLoadError(null)
+      } else {
+        setLoadError(err instanceof ApiError ? err.message : 'The backend could not be reached')
+      }
     } finally {
-      setLoading(false)
+      if (seq === loadSeq.current) setLoading(false)
     }
   }, [projectId])
+
+  const retry = () => {
+    setLoadError(null)
+    setLoading(true)
+    void load()
+  }
 
   useEffect(() => {
     setProject(null)
     setLoading(true)
     setMissing(false)
+    setLoadError(null)
     load()
   }, [load])
+
+  // Anything that reloads the project data (panel saves, moving between sections) also refreshes the status.
+  useEffect(() => {
+    if (v2 && modelVersion > 0) void queryClient.invalidateQueries({ queryKey: statusKey(projectId) })
+  }, [v2, modelVersion, projectId, queryClient])
 
   // Auth, role and permission panels save by themselves, so re-check whenever the user moves on.
   useEffect(() => {
@@ -179,7 +249,21 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
     )
   }
 
+  const errorBanner = loadError ? (
+    <div className="card" role="alert" data-testid="load-error">
+      <p>We could not load this project: {loadError}</p>
+      <button type="button" onClick={retry}>
+        Retry
+      </button>
+    </div>
+  ) : null
+
   if (!project) {
+    if (errorBanner) {
+      return (
+        <Layout sidebar={<ProjectsSidebar />}>{errorBanner}</Layout>
+      )
+    }
     return (
       <Layout sidebar={<ProjectsSidebar />}>
         <p className="empty-state">Loading…</p>
@@ -187,10 +271,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
     )
   }
 
-  const problems: Partial<Record<Section, number>> = {}
-  for (const issue of issues ?? []) {
-    const s = sectionForIssue(issue)
-    problems[s] = (problems[s] ?? 0) + 1
+  let problems: Partial<Record<AnySection, number>> = {}
+  if (v2) {
+    problems = railProblems(statusQuery.data)
+  } else {
+    for (const issue of issues ?? []) {
+      const s = sectionForIssue(issue)
+      problems[s] = (problems[s] ?? 0) + 1
+    }
   }
 
   const keycloakOn = auth?.provider === 'keycloak' && auth.enabled
@@ -198,19 +286,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const storageOn = storage?.enabled === true
 
   return (
-    <Layout
-      sidebar={
-        <ProjectSidebar
-          project={project}
-          section={section}
-          problems={problems}
-          on={{ keycloak: keycloakOn, payments: paymentsOn, storage: storageOn }}
-          onShare={() => setSharing(true)}
-          org={org}
-        />
-      }
+    <Frame
+      v2={v2}
+      project={project}
+      section={section}
+      problems={problems}
+      on={{ keycloak: keycloakOn, payments: paymentsOn, storage: storageOn }}
+      onShare={() => setSharing(true)}
+      org={org}
     >
-      {section === 'overview' && (
+      {errorBanner}
+      {section === 'overview' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <HomePage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'overview' && !v2 && (
         <OverviewPanel
           projectId={project.id}
           entityCount={entities.length}
@@ -225,6 +316,28 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           issues={issues}
           generationCount={generationCount}
         />
+      )}
+
+      {section === 'machines' && <MachinesPage projectId={project.id} />}
+      {section === 'rules' && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <RulesPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'hooks' && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <HooksPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'seed' && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <SeedPage projectId={project.id} />
+        </Suspense>
+      )}
+      {(section === 'settings' || section === 'history') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          {section === 'settings' ? <SettingsPage projectId={project.id} /> : <HistoryPage projectId={project.id} />}
+        </Suspense>
       )}
 
       {section === 'model' && (
@@ -360,6 +473,6 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         projectName={project.name}
         onClose={() => setSharing(false)}
       />
-    </Layout>
+    </Frame>
   )
 }

@@ -66,6 +66,9 @@ class AuthSettings(BaseSettings):
     app_env: str = "development"
     # Start once with this on to move a database to a different identity provider on purpose.
     auth_allow_provider_switch: bool = False
+    # Keycloak's "backchannel logout URL" calls POST /auth/backchannel-logout. Off until you
+    # point Keycloak at it: a signed logout token from your realm then ends that session here.
+    auth_backchannel_logout_enabled: bool = False
 
     @field_validator("keycloak_public_url", "keycloak_internal_url")
     @classmethod
@@ -99,6 +102,10 @@ class AuthSettings(BaseSettings):
     def jwks_url(self) -> str:
         base = self.keycloak_internal_url or self.keycloak_public_url
         return f"{base}/realms/{REALM}/protocol/openid-connect/certs"
+
+
+def current_issuer() -> str:
+    return get_auth_settings().issuer
 
 
 @lru_cache

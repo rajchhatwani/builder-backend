@@ -5,10 +5,14 @@ from typing import Any
 
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
+from app.core.generator.features.change_history.module import router_present as history_router_present
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_documents import documents_active
 from app.core.validation_observability import observability_active
+from app.core.validation_history import history_active
 from app.core.validation_payments import payments_active
+from app.core.validation_runtime import runtime_config_active, runtime_router_present
+from app.core.validation_seed import seed_active
 from app.core.validation_storage import storage_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -67,6 +71,12 @@ class CrudModule:
             "storage": storage_active(project.spec) and project.auth is not None,
             "observability": observability_active(project.spec) is not None,
             "documents": documents_active(project.spec) is not None and project.auth is not None,
+            "state_machines": bool(project.spec.state_machines),
+            "runtime_config": runtime_config_active(project.spec),
+            "runtime_router": runtime_router_present(project.spec),
+            "change_history": history_active(project.spec),
+            "history_router": history_router_present(project),
+            "seed": seed_active(project.spec),
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

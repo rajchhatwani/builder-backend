@@ -1,11 +1,27 @@
 """Repository for {{ e.name }} (generated). Add custom queries by subclassing in your own module."""
 
+{% if e.machine and e.history %}
+from app.change_history.hooks import hooks_for as history_hooks_for
+{% if not e.custom_hooks %}
+from app.change_history.hooks import merge_hooks
+{% endif %}
+{% elif e.history %}
+from app.change_history.hooks import hooks_for
+{% endif %}
 from app.crud import _base as _crud_base
+{% if e.custom_hooks %}
+from app.hooks_gen import registry as custom_hooks
+{% endif %}
 {% for module, cls in e.repo_imports %}
 from app.models.{{ module }} import {{ cls }}
 {% endfor %}
 {% if e.file_fields %}
 from app.storage.refs import check_attachable
+{% endif %}
+{% if e.machine and e.history %}
+from app.state_machines.hooks import hooks_for as machine_hooks_for
+{% elif e.machine %}
+from app.state_machines.hooks import hooks_for
 {% endif %}
 
 
@@ -21,4 +37,19 @@ class {{ e.name }}Repository(_crud_base.Repository[{{ e.name }}]):
 {% if e.file_fields %}
     file_fields = {{ e.file_fields_literal }}
     file_check = staticmethod(check_attachable)
+{% endif %}
+{% if e.custom_hooks %}
+    hooks = custom_hooks.merge_hooks(
+{% if e.machine and e.history %}
+        machine_hooks_for("{{ e.name }}"),
+        history_hooks_for("{{ e.name }}"),
+{% elif e.machine or e.history %}
+        hooks_for("{{ e.name }}"),
+{% endif %}
+        custom_hooks.hooks_for("{{ e.name }}"),
+    )
+{% elif e.machine and e.history %}
+    hooks = merge_hooks(machine_hooks_for("{{ e.name }}"), history_hooks_for("{{ e.name }}"))
+{% elif e.machine or e.history %}
+    hooks = hooks_for("{{ e.name }}")
 {% endif %}

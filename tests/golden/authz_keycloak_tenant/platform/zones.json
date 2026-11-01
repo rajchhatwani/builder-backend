@@ -18,6 +18,8 @@
     "app/auth/authorize.py": "generated",
     "app/auth/config.py": "generated",
     "app/auth/deps.py": "generated",
+    "app/auth/export.py": "generated",
+    "app/auth/identity.py": "generated",
     "app/auth/middleware.py": "generated",
     "app/auth/models.py": "generated",
     "app/auth/oidc.py": "generated",
@@ -73,6 +75,7 @@
     "tests/test_custom_fields.py": "generated",
     "tests/test_customers.py": "generated",
     "tests/test_deals.py": "generated",
+    "tests/test_identity.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tenancy.py": "generated"
   }

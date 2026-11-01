@@ -180,6 +180,15 @@ class SpecKeycloak(_SpecModel):
     identity_providers: list[SpecIdentityProvider] = Field(default_factory=list)
 
 
+class SpecSuiteRef(_SpecModel):
+    """Reserved: this app is one of several that share a sign-in hub. Empty (None on SpecAuth)
+    for every project that has not opted in; the generator ignores it for now."""
+
+    suite_id: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9][a-z0-9-]*$")
+    hub_issuer: str | None = Field(default=None, max_length=512)
+    join_state: str = "none"  # none | planned | joined
+
+
 class SpecAuth(_SpecModel):
     enabled: bool = True
     # Who manages users and tokens. The keycloak block is kept while the provider is builtin,
@@ -205,6 +214,7 @@ class SpecAuth(_SpecModel):
     reset_rate_limit: str = "3/hour"
     roles: list[SpecRole] = Field(default_factory=list)
     permissions: list[SpecPermission] = Field(default_factory=list)
+    suite: SpecSuiteRef | None = None
     # Populated at generation time only — excluded from JSON output
     secrets: SpecAuthSecrets = Field(default_factory=SpecAuthSecrets, exclude=True)
 
@@ -416,6 +426,186 @@ class SpecStorage(_SpecModel):
     security: SpecStorageSecurity = Field(default_factory=SpecStorageSecurity)
 
 
+class SpecTransition(_SpecModel):
+    """One allowed move of a state machine: from any of `from_states` to `to_state`.
+
+    `when` is an expression (app/core/expr) over the record's own fields: the move is refused
+    unless it is true (null counts as false). `roles` limits who may trigger it. With NO roles
+    the move is open to anyone who can read the record; on role-permission entities that does not need
+    update rights (approvers can approve without edit rights), on abac / pbac entities the caller must
+    also pass the entity's update policy. `auto` moves are applied by the platform right after a write
+    whenever their guard holds, so they never have `roles`."""
+
+    name: str
+    from_states: list[str] = Field(default_factory=list)
+    to_state: str
+    when: str | None = None
+    roles: list[str] = Field(default_factory=list)
+    auto: bool = False
+
+
+class SpecStateMachine(_SpecModel):
+    """A lifecycle for one entity. The states are the `enum_values` of `field`, which must be a
+    required enum field; callers cannot write it directly, only move it through transitions."""
+
+    entity: str
+    field: str
+    initial: str
+    transitions: list[SpecTransition] = Field(default_factory=list)
+
+
+class SpecSetting(_SpecModel):
+    """A typed value the running service reads and a role may change at run time (per tenant when
+    the project is multi-tenant). `default` is what everybody gets until a value is saved.
+    Settings are for business knobs, never secrets: names that look like credentials are refused."""
+
+    key: str
+    type: str = "string"  # string | int | bool | decimal
+    default: str | int | bool | None = None  # decimals are written as strings: "0.15"
+    label: str | None = None
+    description: str | None = None
+    minimum: str | int | None = None  # int and decimal only
+    maximum: str | int | None = None
+    max_length: int | None = None  # string only (default 200)
+    read_roles: list[str] = Field(default_factory=list)  # empty = any caller of the API
+    edit_roles: list[str] = Field(default_factory=list)  # empty = nobody can change it at run time
+
+
+class SpecSequence(_SpecModel):
+    """A gapless counter: a number is consumed only when the caller's transaction commits.
+    Numbers look like `<prefix>[<year>-]<zero padded counter>`."""
+
+    name: str
+    prefix: str = ""
+    padding: int = 0
+    start: int = 1
+    per_tenant: bool = False  # one counter per tenant (needs auth.multi_tenant)
+    reset_yearly: bool = False  # the counter restarts at `start` every calendar year (UTC)
+    view_roles: list[str] = Field(default_factory=list)  # who may read the counters; empty = nobody
+
+
+class SpecListItem(_SpecModel):
+    value: str
+    label: str
+    color: str | None = None  # "#rrggbb"
+    locked: bool = False  # a tenant may relabel it but never switch it off
+
+
+class SpecList(_SpecModel):
+    """A named list of values (statuses, categories ...). `items` is the system default set; a
+    tenant (or the whole project when single-tenant) may add values, relabel, recolour, reorder and
+    switch off the unlocked ones, if it holds one of `edit_roles`."""
+
+    name: str
+    label: str | None = None
+    items: list[SpecListItem] = Field(default_factory=list)
+    max_items: int = 100  # system + custom values per tenant
+    edit_roles: list[str] = Field(default_factory=list)  # empty = nobody can change it at run time
+
+
+class SpecHistory(_SpecModel):
+    """Change history for one entity: every create, update and delete of the listed `fields` is
+    recorded with the actor, the old value and the new value, and kept for `retention_days`.
+    Only the listed fields are ever recorded. `view_roles` may read an entity's history through the
+    API; empty = nobody (fail closed)."""
+
+    entity: str
+    fields: list[str] = Field(default_factory=list)
+    retention_days: int
+    view_roles: list[str] = Field(default_factory=list)
+
+
+class SpecHookField(_SpecModel):
+    """One scalar field of a hook's input or output model. The platform generates the Pydantic model
+    from the list. `type` is string | int | float | decimal | bool | date | datetime | uuid."""
+
+    name: str
+    type: str = "string"
+    required: bool = True
+
+
+class SpecHookModel(_SpecModel):
+    name: str  # class name of the generated Pydantic model
+    fields: list[SpecHookField] = Field(default_factory=list)
+
+
+class SpecHookBudget(_SpecModel):
+    """Resource limits of one call: wall-clock milliseconds, rows read through the SDK, outbound calls."""
+
+    cpu_ms: int = 200
+    rows: int = 0
+    outbound_calls: int = 0
+
+
+class SpecHook(_SpecModel):
+    """A piece of custom logic under contract. The spec declares the name, where it runs (`point`),
+    what goes in and what must come out; the platform generates the models, the stub file, the wiring
+    and the gates. The body is free Python inside the marked region of the stub.
+
+    point: `<Entity>.before_save | validate | after_save | after_commit` or
+    `<Entity>.transition_guard(<manual transition>)`. kind: `pure` (no I/O) or `effect` (only at
+    after_commit). failure_policy empty = the default for the point (guards and validate: fail_closed,
+    effects: fail_open, other pure hooks: fail_closed). `fallback` gives the output values used by the
+    `fallback` policy. `reads` lists the entities an effect hook may read through the SDK."""
+
+    name: str
+    point: str
+    kind: str = "pure"
+    input: SpecHookModel
+    output: SpecHookModel
+    failure_policy: str | None = None
+    fallback: dict[str, Any] | None = None
+    budget: SpecHookBudget = Field(default_factory=SpecHookBudget)
+    reads: list[str] = Field(default_factory=list)
+
+
+class SpecSeedGenerator(_SpecModel):
+    """How one column of a seeded row gets its value. `type` is one of a CLOSED set (see
+    validation_seed.GENERATORS); each type accepts only its own keys, anything else is refused.
+    The plan holds data only: no code, no SQL, no expressions."""
+
+    type: str
+    value: str | int | float | bool | None = None  # constant
+    values: list[str | int | float | bool] | None = None  # one_of
+    prefix: str | None = None  # sequence (text) and email (local part)
+    start: int | None = None  # sequence
+    width: int | None = None  # sequence: zero padding
+    min: str | int | None = None  # int_range, decimal_range (decimals are strings: "10.50"), date_range
+    max: str | int | None = None
+    places: int | None = None  # decimal_range: digits after the point
+    ratio: float | None = None  # bool_ratio: share of true values, 0..1
+    min_words: int | None = None  # words
+    max_words: int | None = None
+    entity: str | None = None  # reference: entity whose seeded rows are picked
+    pick: str | None = None  # reference: cycle | random
+    weights: dict[str, int] | None = None  # state: relative weight per state
+
+
+class SpecSeedField(_SpecModel):
+    field: str  # a field of the entity, or the column of a foreign key (e.g. customer_id)
+    generator: SpecSeedGenerator
+
+
+class SpecSeedEntity(_SpecModel):
+    """`count` rows of `entity` (for each tenant when the entity is tenant-scoped)."""
+
+    entity: str
+    count: int
+    fields: list[SpecSeedField] = Field(default_factory=list)
+
+
+class SpecSeedProfile(_SpecModel):
+    """One named, reproducible data set (demo, dev ...). The same profile always yields the same rows:
+    `seed` drives every random choice and `as_of` is the only clock (no wall-clock time is read).
+    `tenants` is the number of tenants to create and must be 0 unless the project is multi-tenant."""
+
+    name: str
+    seed: int
+    as_of: str  # YYYY-MM-DD, midnight UTC; created_at of the first row
+    tenants: int = 0
+    entities: list[SpecSeedEntity] = Field(default_factory=list)
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -431,6 +621,13 @@ class Spec(_SpecModel):
     observability: SpecObservability | None = None
     deployment: SpecDeployment | None = None
     documents: SpecDocuments | None = None
+    state_machines: list[SpecStateMachine] = Field(default_factory=list)
+    settings: list[SpecSetting] = Field(default_factory=list)
+    sequences: list[SpecSequence] = Field(default_factory=list)
+    lists: list[SpecList] = Field(default_factory=list)
+    history: list[SpecHistory] = Field(default_factory=list)
+    hooks: list[SpecHook] = Field(default_factory=list)
+    seed: list[SpecSeedProfile] = Field(default_factory=list)
 
 
 def spec_hash(spec: Spec) -> str:

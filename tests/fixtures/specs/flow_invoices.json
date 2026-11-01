@@ -1,0 +1,205 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Invoice Flow",
+    "slug": "flow-invoices",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Invoice",
+      "table_name": "invoices",
+      "plural_path": "invoices",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "invoice_no",
+          "type": "string",
+          "required": true,
+          "max_length": 40
+        },
+        {
+          "name": "amount",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "po_amount",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "submitted",
+            "pending_approval",
+            "approved",
+            "paid",
+            "rejected"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "approver",
+        "label": "Approver"
+      },
+      {
+        "name": "clerk",
+        "label": "Clerk"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Invoice",
+        "operation": "create",
+        "roles": [
+          "clerk",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Invoice",
+        "operation": "list",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Invoice",
+        "operation": "get",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Invoice",
+        "operation": "update",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Invoice",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    }
+  },
+  "state_machines": [
+    {
+      "entity": "Invoice",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "submit",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "submitted",
+          "roles": [
+            "clerk",
+            "admin"
+          ]
+        },
+        {
+          "name": "auto_approve",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "approved",
+          "auto": true,
+          "when": "amount <= 10000 and abs(amount - po_amount) <= po_amount * 0.02"
+        },
+        {
+          "name": "needs_approval",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "pending_approval",
+          "auto": true,
+          "when": "amount > 10000 or abs(amount - po_amount) > po_amount * 0.02"
+        },
+        {
+          "name": "approve",
+          "from_states": [
+            "pending_approval"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "approver"
+          ],
+          "when": "amount <= 50000"
+        },
+        {
+          "name": "approve_large",
+          "from_states": [
+            "pending_approval"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "admin"
+          ]
+        },
+        {
+          "name": "reject",
+          "from_states": [
+            "pending_approval"
+          ],
+          "to_state": "rejected",
+          "roles": [
+            "approver",
+            "admin"
+          ]
+        },
+        {
+          "name": "pay",
+          "from_states": [
+            "approved"
+          ],
+          "to_state": "paid",
+          "roles": [
+            "admin"
+          ]
+        }
+      ]
+    }
+  ]
+}

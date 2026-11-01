@@ -19,6 +19,9 @@ export type Section =
   | 'integrations'
   | 'generate'
 
+/** Pages that exist only in the new shell (flag ui.shell=v2); the old sidebar never lists them. */
+export type V2Section = 'machines' | 'rules' | 'settings' | 'history' | 'hooks' | 'seed'
+
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {
     id: 'overview',
@@ -149,7 +152,7 @@ export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   },
 ]
 
-function Icon({ children }: { children: ReactNode }) {
+export function Icon({ children }: { children: ReactNode }) {
   return (
     <svg
       width="16"
@@ -194,7 +197,7 @@ function useMyOrgs(): { orgs: Organization[]; invites: number } {
   return { orgs, invites }
 }
 
-function orgLabel(org: Organization): string {
+export function orgLabel(org: Organization): string {
   return org.kind === 'personal' ? 'Personal' : org.name
 }
 
@@ -301,7 +304,7 @@ export function ProjectsSidebar() {
 
 interface ProjectSidebarProps {
   project: Project
-  section: Section
+  section: Section | V2Section
   /** Number of problems per section, shown as a badge. */
   problems: Partial<Record<Section, number>>
   /** Sections that are switched on, shown with a dot. */

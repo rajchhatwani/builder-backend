@@ -1406,3 +1406,182 @@ export interface ScimConfigUpdate {
   active?: boolean
   group_roles?: Record<string, ScimRole>
 }
+
+// ── Behaviour: state machines (GET /projects/{id}/behavior/state-machines, /behavior/issues) ──
+// Fields the API defaults are optional here (the API always sends them; this matches api/contract.test.ts).
+export interface TransitionBody {
+  name: string
+  from_states?: string[]
+  to_state: string
+  when?: string | null
+  roles?: string[]
+  auto?: boolean
+}
+
+export interface StateMachineBody {
+  entity: string
+  field: string
+  initial: string
+  transitions?: TransitionBody[]
+}
+
+export interface StateMachinesRead {
+  project_id: string
+  version: number
+  updated_at?: string | null
+  state_machines: StateMachineBody[]
+}
+
+export interface BehaviorIssues {
+  issues: ValidationIssue[]
+}
+
+// ── Behaviour: runtime settings, sequences, lists, change history (F1-6A; shapes in app/schemas/behavior.py) ──
+export interface SettingBody {
+  key: string
+  type?: string
+  default?: string | number | boolean | null
+  label?: string | null
+  description?: string | null
+  minimum?: string | number | null
+  maximum?: string | number | null
+  max_length?: number | null
+  read_roles?: string[]
+  edit_roles?: string[]
+}
+export interface SequenceBody {
+  name: string
+  prefix?: string
+  padding?: number
+  start?: number
+  per_tenant?: boolean
+  reset_yearly?: boolean
+  view_roles?: string[]
+}
+export interface ListItemBody {
+  value: string
+  label: string
+  color?: string | null
+  locked?: boolean
+}
+export interface ListBody {
+  name: string
+  label?: string | null
+  items?: ListItemBody[]
+  max_items?: number
+  edit_roles?: string[]
+}
+export interface HistoryBody {
+  entity: string
+  fields?: string[]
+  retention_days: number
+  view_roles?: string[]
+}
+interface SectionRead {
+  project_id: string
+  version: number
+  updated_at?: string | null
+}
+export interface SettingsRead extends SectionRead { settings: SettingBody[] }
+export interface SequencesRead extends SectionRead { sequences: SequenceBody[] }
+export interface ListsRead extends SectionRead { lists: ListBody[] }
+export interface HistoryRead extends SectionRead { history: HistoryBody[] }
+
+// ── Behaviour: custom-logic hooks (F1-5; shapes in app/schemas/behavior.py HookBody) ──
+export interface HookFieldBody {
+  name: string
+  type?: string
+  required?: boolean
+}
+export interface HookModelBody {
+  name: string
+  fields?: HookFieldBody[]
+}
+export interface HookBudgetBody {
+  cpu_ms?: number
+  rows?: number
+  outbound_calls?: number
+}
+export interface HookBody {
+  name: string
+  point: string
+  kind?: string
+  input: HookModelBody
+  output: HookModelBody
+  failure_policy?: string | null
+  fallback?: Record<string, string | number | boolean> | null
+  budget?: HookBudgetBody
+  reads?: string[]
+}
+export interface HooksRead extends SectionRead { hooks: HookBody[] }
+
+// ── Behaviour: seed profiles (F1-6B; shapes in app/schemas/behavior.py Seed*Body) ──
+export interface SeedGeneratorBody {
+  type: string
+  value?: string | number | boolean | null
+  values?: (string | number | boolean)[] | null
+  prefix?: string | null
+  start?: number | null
+  width?: number | null
+  min?: string | number | null
+  max?: string | number | null
+  places?: number | null
+  ratio?: number | null
+  min_words?: number | null
+  max_words?: number | null
+  entity?: string | null
+  pick?: string | null
+  weights?: Record<string, number> | null
+}
+export interface SeedFieldBody { field: string; generator: SeedGeneratorBody }
+export interface SeedEntityBody { entity: string; count: number; fields?: SeedFieldBody[] }
+export interface SeedProfileBody { name: string; seed: number; as_of: string; tenants?: number; entities?: SeedEntityBody[] }
+export interface SeedRead extends SectionRead { seed: SeedProfileBody[] }
+
+// ── Readiness board (F1-2; shapes in app/schemas/status.py) ──
+export interface StatusSection {
+  id: string
+  label: string
+  configured: boolean
+  issue_count: number
+}
+
+export interface NextStep {
+  id: string
+  title: string
+  reason: string
+  section: string
+}
+
+export interface ProjectStatus {
+  ready: boolean
+  issues: ValidationIssue[]
+  counts: Record<string, number>
+  sections: StatusSection[]
+  next_step: NextStep
+}
+
+// ── Build > Rules expression checker (F1-3; shapes in app/schemas/behavior.py) ──
+export interface ExpressionCheckBody {
+  entity: string
+  expression: string
+  expect?: 'bool' | 'any'
+}
+
+export interface ExpressionError {
+  message: string
+  pos: number
+}
+
+export interface ExpressionField {
+  name: string
+  type: string
+  nullable: boolean
+}
+
+export interface ExpressionCheckRead {
+  ok: boolean
+  type?: string | null
+  error?: ExpressionError | null
+  fields: ExpressionField[]
+}

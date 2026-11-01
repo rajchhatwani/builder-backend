@@ -55,6 +55,9 @@ class FieldCtx:
     sample: str  # python expression producing a valid JSON value, used in tests
     patchable: bool
     filter_type: str | None  # python type for a query parameter, None if not filterable
+    # The state of a state machine: set by the platform (initial state, transitions), never by
+    # the caller, so it is left out of the create and update schemas and of the smoke tests' payloads.
+    managed: bool = False
 
 
 @dataclass(frozen=True)
@@ -174,6 +177,9 @@ class EntityCtx:
     owned: bool = False  # rows record who created them (created_by_id)
     tenant_scoped: bool = False  # rows belong to a tenant (tenant_id)
     policy: bool = False  # access is decided by abac / pbac policies, not role permissions
+    machine: bool = False  # has a state machine (hooks, transition routes, state log)
+    history: bool = False  # has change history (hooks, history route, ch_changes rows)
+    custom_hooks: bool = False  # has custom hooks declared in the spec (lifecycle stages)
 
     @property
     def file_fields(self) -> tuple[FieldCtx, ...]:
@@ -707,6 +713,9 @@ def build_context(spec: Spec) -> ProjectCtx:
         )
     joins.sort(key=lambda j: j.name)
     entity_ctxs = _attach_access(spec, entity_ctxs)
+    entity_ctxs = _attach_machines(spec, entity_ctxs)
+    entity_ctxs = _attach_history(spec, entity_ctxs)
+    entity_ctxs = _attach_hooks(spec, entity_ctxs)
     all_tables = sorted({e.table for e in entity_ctxs} | {j.name for j in joins})
     return ProjectCtx(
         spec=spec,
@@ -718,6 +727,52 @@ def build_context(spec: Spec) -> ProjectCtx:
         tables=tuple(all_tables),
         entity_by_name={e.name: e for e in entity_ctxs},
     )
+
+
+def _attach_machines(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Mark the state field of every state machine as platform-managed."""
+    state_field = {m.entity: m.field for m in spec.state_machines}
+    if not state_field:
+        return entities
+    out: list[EntityCtx] = []
+    for e in entities:
+        name = state_field.get(e.name)
+        if name is None:
+            out.append(e)
+            continue
+        fields = tuple(
+            replace(f, managed=True, patchable=False) if f.name == name else f for f in e.fields
+        )
+        out.append(
+            replace(
+                e,
+                fields=fields,
+                machine=True,
+                non_nullable=tuple(n for n in e.non_nullable if n != name),
+            )
+        )
+    return tuple(out)
+
+
+def _attach_history(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Mark the entities whose changes are recorded."""
+    audited = {h.entity for h in spec.history}
+    if not audited:
+        return entities
+    return tuple(replace(e, history=True) if e.name in audited else e for e in entities)
+
+
+def _attach_hooks(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Mark the entities that have custom hooks at a lifecycle stage (transition guards are wired
+    through the state machine engine instead)."""
+    staged = {
+        h.point.split(".", 1)[0]
+        for h in spec.hooks
+        if "." in h.point and not h.point.split(".", 1)[1].startswith("transition_guard")
+    }
+    if not staged:
+        return entities
+    return tuple(replace(e, custom_hooks=True) if e.name in staged else e for e in entities)
 
 
 # --- access control (auth permissions) --------------------------------------------------

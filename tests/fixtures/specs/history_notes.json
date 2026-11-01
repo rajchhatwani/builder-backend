@@ -1,0 +1,258 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Notes Trail",
+    "slug": "history-notes",
+    "description": "Notes and tickets with an audit trail on chosen fields",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {
+        "filterable": [
+          "title"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "body",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "payload",
+          "type": "json",
+          "required": false
+        },
+        {
+          "name": "private_note",
+          "type": "text",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "assignee",
+          "type": "string",
+          "required": false,
+          "max_length": 80
+        },
+        {
+          "name": "internal_memo",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "open",
+            "in_progress",
+            "closed"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "auditor",
+        "label": "Auditor"
+      },
+      {
+        "name": "agent",
+        "label": "Agent"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Note",
+        "operation": "create",
+        "roles": [
+          "agent",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Note",
+        "operation": "list",
+        "roles": [
+          "agent",
+          "auditor",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Note",
+        "operation": "get",
+        "roles": [
+          "agent",
+          "auditor",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Note",
+        "operation": "update",
+        "roles": [
+          "agent",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Note",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "agent",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "agent",
+          "auditor",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "get",
+        "roles": [
+          "agent",
+          "auditor",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "update",
+        "roles": [
+          "agent",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    }
+  },
+  "state_machines": [
+    {
+      "entity": "Ticket",
+      "field": "status",
+      "initial": "open",
+      "transitions": [
+        {
+          "name": "start",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "in_progress",
+          "roles": [
+            "agent",
+            "admin"
+          ]
+        },
+        {
+          "name": "close",
+          "from_states": [
+            "in_progress"
+          ],
+          "to_state": "closed",
+          "roles": [
+            "agent",
+            "admin"
+          ]
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "entity": "Note",
+      "fields": [
+        "title",
+        "body",
+        "payload"
+      ],
+      "retention_days": 90,
+      "view_roles": [
+        "auditor",
+        "admin"
+      ]
+    },
+    {
+      "entity": "Ticket",
+      "fields": [
+        "subject",
+        "assignee"
+      ],
+      "retention_days": 30,
+      "view_roles": [
+        "admin"
+      ]
+    }
+  ]
+}

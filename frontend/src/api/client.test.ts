@@ -61,3 +61,19 @@ describe('api client', () => {
     expect(String(fetchMock.mock.calls[1][0])).toContain('/account/refresh')
   })
 })
+
+describe('api client, unreadable bodies', () => {
+  beforeEach(() => vi.stubGlobal('fetch', vi.fn()))
+  afterEach(() => vi.unstubAllGlobals())
+  it('turns a non-JSON error body into an ApiError with the status', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('<html>Bad Gateway</html>', { status: 502 }))
+    const err = await api.getProject('p1').catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toMatchObject({ status: 502, code: 'bad_response' })
+  })
+  it('turns a non-JSON success body into an ApiError, not a SyntaxError', async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('not json', { status: 200 }))
+    const err = await api.getProject('p1').catch((e) => e)
+    expect(err).toBeInstanceOf(ApiError)
+  })
+})

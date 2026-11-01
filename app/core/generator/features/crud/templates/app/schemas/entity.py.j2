@@ -6,7 +6,7 @@
 
 
 class {{ e.name }}Create(_pd.BaseModel):
-{% for f in e.fields %}
+{% for f in e.fields if not f.managed %}
     {{ f.create_decl }}
 {% endfor %}
 {% for fk in e.fks %}
@@ -21,7 +21,7 @@ class {{ e.name }}Create(_pd.BaseModel):
 
 
 class {{ e.name }}Update(_pd.BaseModel):
-{% for f in e.fields %}
+{% for f in e.fields if not f.managed %}
     {{ f.update_decl }}
 {% endfor %}
 {% for fk in e.fks %}

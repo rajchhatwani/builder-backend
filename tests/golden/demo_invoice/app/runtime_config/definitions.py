@@ -1,0 +1,53 @@
+"""Runtime configuration (generated from the spec: change it in the builder).
+
+Plain data; nothing in this file is ever evaluated as code."""
+
+SETTINGS = {'approval_threshold': {'default': 10000,
+                        'description': None,
+                        'edit_roles': ['admin', 'approver'],
+                        'label': 'Invoices above this amount need an approver',
+                        'max_length': None,
+                        'maximum': 1000000,
+                        'minimum': 0,
+                        'read_roles': [],
+                        'type': 'int'},
+ 'payment_grace_days': {'default': 5,
+                        'description': None,
+                        'edit_roles': ['admin'],
+                        'label': 'Days after the due date before an invoice is late',
+                        'max_length': None,
+                        'maximum': 90,
+                        'minimum': 0,
+                        'read_roles': ['admin', 'approver'],
+                        'type': 'int'}}
+
+SEQUENCES = {'invoice_no': {'padding': 5,
+                'per_tenant': False,
+                'prefix': 'INV-',
+                'reset_yearly': False,
+                'start': 1,
+                'view_roles': ['admin']}}
+
+LISTS = {'invoice_status': {'edit_roles': ['admin'],
+                    'items': [{'color': '#6b7280',
+                               'label': 'Draft',
+                               'locked': True,
+                               'value': 'draft'},
+                              {'color': '#d97706',
+                               'label': 'Waiting for approval',
+                               'locked': False,
+                               'value': 'pending_approval'},
+                              {'color': '#16a34a',
+                               'label': 'Approved',
+                               'locked': False,
+                               'value': 'approved'},
+                              {'color': '#2563eb',
+                               'label': 'Paid',
+                               'locked': False,
+                               'value': 'paid'},
+                              {'color': '#dc2626',
+                               'label': 'Rejected',
+                               'locked': False,
+                               'value': 'rejected'}],
+                    'label': 'Invoice statuses',
+                    'max_items': 12}}

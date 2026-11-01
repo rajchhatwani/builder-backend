@@ -3,6 +3,7 @@ from app.models.auth_custom_field import AuthCustomField
 from app.models.auth_secrets import ProjectAuthSecrets
 from app.models.authorization_config import ProjectAuthorization
 from app.models.base import Base
+from app.models.behavior_config import ProjectBehavior
 from app.models.deployment_config import ProjectDeployment
 from app.models.documents_config import ProjectDocuments
 from app.models.entity import Entity
@@ -35,6 +36,7 @@ __all__ = [
     "MfaRecoveryCode",
     "AuthCustomField",
     "Base",
+    "ProjectBehavior",
     "Entity",
     "Field",
     "Generation",

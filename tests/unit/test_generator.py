@@ -51,6 +51,15 @@ NAMES = [
     "deploy_azure",
     "deploy_gcp",
     "docs_desk",
+    "flow_invoices",
+    "flow_leave",
+    "flow_abac",
+    "runtime_config",
+    "history_notes",
+    "hooks_invoice",
+    "seed_demo",
+    "demo_invoice",
+    "demo_leave",
 ]
 
 

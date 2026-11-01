@@ -36,6 +36,17 @@ const CONTRACT: [string, unknown][] = [
   ['#/admin/settings', { page: 'admin', section: 'settings' }],
   ['#/admin/nonsense', { page: 'admin', section: 'overview' }],
   [`#/p/${PID}`, { page: 'project', projectId: PID, section: 'overview' }],
+  // Added by F1-4 (an addition, no existing row changed): the v2-only State machines page.
+  [`#/p/${PID}/machines`, { page: 'project', projectId: PID, section: 'machines' }],
+  // Added by F1-6A (additions, no existing row changed): the v2-only Settings and Change history pages.
+  [`#/p/${PID}/settings`, { page: 'project', projectId: PID, section: 'settings' }],
+  [`#/p/${PID}/history`, { page: 'project', projectId: PID, section: 'history' }],
+  // Added by F1-5 (addition, no existing row changed): the v2-only Hooks page.
+  [`#/p/${PID}/hooks`, { page: 'project', projectId: PID, section: 'hooks' }],
+  // Added by F1-6B (addition, no existing row changed): the v2-only Seed data page.
+  [`#/p/${PID}/seed`, { page: 'project', projectId: PID, section: 'seed' }],
+  // Added by F1-3 (addition, no existing row changed): the v2-only Rules (expression checker) page.
+  [`#/p/${PID}/rules`, { page: 'project', projectId: PID, section: 'rules' }],
   [`#/p/${PID}/nonsense`, { page: 'project', projectId: PID, section: 'overview' }],
 ]
 

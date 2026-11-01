@@ -9,7 +9,10 @@ from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
+from app.core.validation_history import CH_TABLES, history_active
 from app.core.validation_payments import PAYMENTS_TABLES, payments_active
+from app.core.validation_runtime import RC_TABLES, runtime_config_active
+from app.core.validation_seed import SEED_TABLES, seed_active
 from app.core.validation_storage import STORAGE_TABLES, storage_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -70,6 +73,14 @@ class TestsModule:
         if storage:
             # Same reason as the payments audit table: it is append-only and cannot be truncated.
             tables |= set(STORAGE_TABLES) - {"stor_audit_log"}
+        if project.spec.state_machines:
+            tables.add("state_transitions")
+        if runtime_config_active(project.spec):
+            tables |= set(RC_TABLES)
+        if history_active(project.spec):
+            tables |= set(CH_TABLES)
+        if seed_active(project.spec):
+            tables |= set(SEED_TABLES)
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",
@@ -126,6 +137,6 @@ class TestsModule:
             "replace_args": "".join(
                 f', {fk.column}=created["{fk.column}"]' for fk in entity.required_fks
             ),
-            "has_required_input": any(f.required for f in entity.fields)
+            "has_required_input": any(f.required and not f.managed for f in entity.fields)
             or bool(entity.required_fks),
         }

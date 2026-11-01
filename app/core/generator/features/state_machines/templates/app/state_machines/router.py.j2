@@ -1,0 +1,114 @@
+"""Transition routes for entities with a state machine (generated)."""
+
+import datetime as _dt
+import uuid as _uuid
+{% if auth %}
+from typing import Annotated
+{% endif %}
+
+from fastapi import APIRouter{{ ", Depends" if auth else "" }}
+from pydantic import BaseModel
+
+{% if auth %}
+from app.auth import access as _access
+from app.auth.service import effective_roles
+{% endif %}
+{% for r in routes %}
+from app.crud.{{ r.e.table }} import {{ r.e.name }}Repository
+{% endfor %}
+from app.db import SessionDep
+{% for r in routes if auth and r.access_op %}
+from app.routers.{{ r.e.table }} import _ACCESS as _ACCESS_{{ r.e.table }}
+{% endfor %}
+{% for r in routes %}
+from app.schemas.{{ r.e.table }} import {{ r.e.name }}Read
+{% endfor %}
+from app.state_machines import engine
+
+router = APIRouter(tags=["state machines"])
+
+
+class TransitionInfo(BaseModel):
+    name: str
+    to_state: str
+    allowed: bool
+    refused_because: str | None = None  # "role" or "guard"
+
+
+class StateChange(BaseModel):
+    model_config = {"from_attributes": True}
+
+    transition: str
+    from_state: str | None
+    to_state: str
+    actor_id: _uuid.UUID | None
+    automatic: bool
+    created_at: _dt.datetime
+{% for r in routes %}
+{% set e = r.e %}
+{% if auth %}
+{% if r.access_op %}
+_access_{{ e.table }} = _ACCESS_{{ e.table }}["{{ r.access_op }}"]
+{% if r.post_op != r.access_op %}
+# A move changes the record: on policy entities the caller must pass the UPDATE decision as well.
+_access_move_{{ e.table }} = _ACCESS_{{ e.table }}["{{ r.post_op }}"]
+{% endif %}
+{% else %}
+_access_{{ e.table }} = _access.access_dependency({% if r.gated %}authenticate=True{% endif %})
+{% endif %}
+{% endif %}
+
+
+def _roles_{{ e.table }}({% if auth %}access: _access.Access{% endif %}) -> set[str]:
+{% if auth %}
+    return effective_roles(access.user.roles) if access.user is not None else set()
+{% else %}
+    return set()
+{% endif %}
+
+
+@router.get("/{{ e.path }}/{item_id}/transitions", response_model=list[TransitionInfo])
+async def list_{{ e.table }}_transitions(
+    item_id: _uuid.UUID,
+    session: SessionDep,
+{% if auth %}
+    access: Annotated[_access.Access, Depends(_access_{{ e.table }})],
+{% endif %}
+) -> list[dict[str, object]]:
+    item = await {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %}).get(item_id)
+    return engine.available("{{ e.name }}", item, _roles_{{ e.table }}({% if auth %}access{% endif %}))
+
+
+@router.post("/{{ e.path }}/{item_id}/transitions/{name}", response_model={{ e.name }}Read)
+async def apply_{{ e.table }}_transition(
+    item_id: _uuid.UUID,
+    name: str,
+    session: SessionDep,
+{% if auth %}
+    access: Annotated[_access.Access, Depends(_access_{{ "move_" if r.post_op != r.access_op else "" }}{{ e.table }})],
+{% endif %}
+) -> {{ e.name }}Read:
+    repo = {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %})
+    item = await engine.apply(
+        repo,
+        "{{ e.name }}",
+        item_id,
+        name,
+        roles=_roles_{{ e.table }}({% if auth %}access{% endif %}),
+        actor_id={% if auth %}access.user.id if access.user is not None else None{% else %}None{% endif %},
+    )
+    return {{ e.name }}Read.model_validate(item)
+
+
+@router.get("/{{ e.path }}/{item_id}/state-history", response_model=list[StateChange])
+async def {{ e.table }}_state_history(
+    item_id: _uuid.UUID,
+    session: SessionDep,
+{% if auth %}
+    access: Annotated[_access.Access, Depends(_access_{{ e.table }})],
+{% endif %}
+) -> list[StateChange]:
+    await {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %}).get(item_id)
+    rows = await engine.history(session, "{{ e.name }}", item_id)
+    return [StateChange.model_validate(row) for row in rows]
+{% endfor %}

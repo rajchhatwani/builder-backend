@@ -17,7 +17,7 @@ def _token(length: int) -> str:
 
 def sample_{{ e.table }}() -> dict[str, _t.Any]:
     return {
-{% for f in e.fields %}
+{% for f in e.fields if not f.managed %}
         "{{ f.name }}": {{ f.sample }},
 {% endfor %}
     }

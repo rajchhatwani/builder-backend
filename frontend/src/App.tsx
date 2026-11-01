@@ -6,7 +6,8 @@ import { OrgLockedPrompt } from './components/OrgLockedPrompt'
 import { OrgMfaPrompt } from './components/OrgMfaPrompt'
 import { QuotaPrompt } from './components/QuotaPrompt'
 import { ViewingBanner } from './components/ViewingBanner'
-import { ProjectsSidebar, SECTIONS, type Section } from './components/Sidebar'
+import { ProjectsSidebar } from './components/Sidebar'
+import { findSection, type AnySection } from './shell/pages'
 import { UiProvider } from './components/Ui'
 import { AccountPage } from './pages/AccountPage'
 import { AdminApp, parseAdminSection, type AdminSection } from './pages/admin/AdminApp'
@@ -26,7 +27,7 @@ type Route =
   | { page: 'invitations'; token?: string }
   | { page: 'sso-complete' }
   | { page: 'admin'; section: AdminSection }
-  | { page: 'project'; projectId: string; section: Section }
+  | { page: 'project'; projectId: string; section: AnySection }
 
 const ORG_TABS: OrgTab[] = ['people', 'invites', 'projects', 'plan', 'audit', 'sso', 'policies']
 
@@ -48,7 +49,7 @@ export function parseHash(hash: string): Route {
   }
   const match = hash.match(/^#\/p\/([^/]+)(?:\/([a-z]+))?/)
   if (!match) return { page: 'projects' }
-  const section = SECTIONS.find((s) => s.id === match[2])?.id ?? 'overview'
+  const section = findSection(match[2] as AnySection)?.id ?? 'overview'
   return { page: 'project', projectId: match[1], section }
 }
 

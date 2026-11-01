@@ -220,11 +220,18 @@ async def test_missing_or_unknown_key_id(client: AsyncClient) -> None:
         {"exp": True},
         {"nbf": int(time.time()) + 3600},
         {"iat": int(time.time()) + 3600},
-        {"sub": "not-a-uuid"},
+        {"sub": "x" * 256},
     ],
 )
 async def test_claims_that_are_wrong(client: AsyncClient, overrides: dict[str, object]) -> None:
     await assert_refused(client, sign(claims(**overrides)))
+
+
+async def test_a_token_whose_subject_is_not_text_is_refused(client: AsyncClient) -> None:
+    for subject in (12345, ["a"], {"a": 1}, True):
+        payload = claims()
+        payload["sub"] = subject
+        await assert_refused(client, sign(payload))
 
 
 async def test_a_token_without_a_subject_is_refused(client: AsyncClient) -> None:

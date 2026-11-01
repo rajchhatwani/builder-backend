@@ -1,0 +1,200 @@
+{
+  "ceilings": {
+    "effect": {
+      "cpu_ms": 4000,
+      "outbound_calls": 0,
+      "rows": 1000
+    },
+    "pure": {
+      "cpu_ms": 1000,
+      "outbound_calls": 0,
+      "rows": 0
+    }
+  },
+  "contract": "v1",
+  "contract_exports": [
+    "RequestInput",
+    "RequestResult"
+  ],
+  "custom_prefixes": [
+    "app/custom_routers/",
+    "app/hooks/",
+    "app/custom/",
+    "tests/custom/"
+  ],
+  "gate": "app/platform_gate.py",
+  "generated_sha256": {
+    "app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/auth/__init__.py": "c1c28c93bc301ce3bda45e99548b572b78cced27a7a3cb851aae571b4fc7c318",
+    "app/auth/access.py": "699e3de12a94c4f57d8ac5a179e485dcb6e77c514eb0ad71bf034109dee0fa4a",
+    "app/auth/config.py": "979dd2efcbbdbb334db2d66767d898c3962b4b47e5abbdc8aa8a8c9dd5cbaea5",
+    "app/auth/delivery.py": "fd4c8b7e9413a37882601b50a6a135a0a5e737b38aedb48d7c18caaf1a37ee62",
+    "app/auth/deps.py": "c82d284fbbce2c02197431ea1e88febf2891abc4a0b9ab88c2042fe531e4ee58",
+    "app/auth/export.py": "67f6ad852eb134827e38a8d2c561f548094cbe565c31907fe4f80750604a6974",
+    "app/auth/identity.py": "db0687206416c5e3e0ece3b283902130675ebffcfca8c6dcb1a9e9c0aa1e4383",
+    "app/auth/keys.py": "226266ba8f72763622a0f61bbd1d68e25915f96ae347a996f758655cd4bea7fd",
+    "app/auth/middleware.py": "157a2076f0144c7f9866052875b33b82433380dc6a98ceaaab6dbdd9937ce6aa",
+    "app/auth/models.py": "f9c7c3a193504ebe10cb2d385abff88b3ddfc467c3b942d57206334bfa2bdba6",
+    "app/auth/provider_lock.py": "a34c54ffac64f5982f5309c8d2dd427d07ca3b81dcf5efbfea2d9510489cbb60",
+    "app/auth/ratelimit.py": "cb152523fd8af7e97f8f86e90f1492c4fdc4ae2f6765797cdc1df865e36b79d4",
+    "app/auth/router.py": "0a93e4de54fdbe102e76057d8cfa4c98bf1f286f48fd500c36675a547945286d",
+    "app/auth/schemas.py": "fb35d541ffb630145db2df9f74e639dc72850962750f8061f1d988992b935eb2",
+    "app/auth/security.py": "7ce89dcd293fc84a8dee3d238164411a3b1f9dee36fe3b475b3fb1f69f4dc7e2",
+    "app/auth/service.py": "ee3e1aa0874803ec593cf9db16c4fb4eed4e2252b4a498b5e885e9f1f4aa44af",
+    "app/auth/tokens.py": "5a0b9ab11e791a362bc602b78281353a1a607d41c71a4558ac1f57971ce84d33",
+    "app/change_history/__init__.py": "bd62ce22a71141959e4c90dedd85b991be365dce7b6ab6e87718c26a1335b4d5",
+    "app/change_history/definitions.py": "f3459c6f72fccc909718634efec322d35015ec6c97b00a668d0d5312bb4bd0c5",
+    "app/change_history/hooks.py": "8340ffdfc4aaddafdfae036229d4aa4e79c6d62d6245e8b55d23078f6e6d488c",
+    "app/change_history/models.py": "bb22ac0c72b95236910f4198991f79626e3e5edad670ffc744a93a32952dddd9",
+    "app/change_history/purge.py": "2c0f0b56c3418104e8cbacb29de073adc4a888f878aa84892b909ce4fb053121",
+    "app/change_history/router.py": "a25f3c2a9425ce4d73f0912a225afb877dbb038b3bca0ff51962a9e379274579",
+    "app/config.py": "4e5d6547f26331336e0d8f56d1f0d5facf28922a436ad420a684f026414f41f5",
+    "app/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/core/errors.py": "5482270e29cba24f629492cf49ce59e023b1cafa7de205f75746a80c067db92f",
+    "app/core/logging.py": "4c994070af4c7c24273eedfa51cec2f32ef89a5a7e9ce65dafbb9c3192459e49",
+    "app/core/pagination.py": "50c4e219b6ece56379c058618efe1c579b03b6852ced56d01251f4bcdf53b686",
+    "app/core/redact.py": "ad598dcf29bb50c06ed34d21949ab9b8fe7928fef7b1c991f902932925425e4d",
+    "app/crud/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/crud/_base.py": "df7634459f67f2505a57f3511c4fd9045211e6d9c1590bc4289154078aae8652",
+    "app/crud/employees.py": "f68039f6086cc55be8ead14f3b521d1c1ee6f36298a8f7b2b6d6c1a39dc36256",
+    "app/crud/leave_requests.py": "0040d81ebab7a4c09260af49124c53ebbe3f09bac7a600ea5453e215aa8fd01e",
+    "app/crud/lifecycle.py": "b458b7eded78cb98c67ffa42d012db587fd2b2a3504eec0fe80f47770d7556e0",
+    "app/db.py": "9aa8e3bce269adff5928fb5523eed783fab7ed3e5a8d04378265f5c48499dd0a",
+    "app/hooks_gen/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/hooks_gen/contracts.py": "0c87b582a6a396fcab444427adeabf728c97ec8d76c4ca92e0e0020a6c3a58c1",
+    "app/hooks_gen/registry.py": "3c974e55c3c9d5248755fb5efd539ab0ce5b9f0c83f4a8c66808987ddf4ae33e",
+    "app/hooks_gen/runtime.py": "c4da5d4be3d61a72610414d29f406f42087ad0ee5c0ee423fe993440b874fdb1",
+    "app/main.py": "f90d7d71f3b8512070e70ceacebde6f756afc3050b8d1f7a9a83850540f82b9b",
+    "app/models/__init__.py": "1eabbf9600a819db2a90df92e89253175e07475ca2633432bae47838a7e661af",
+    "app/models/_associations.py": "e01dface66784e19c42edf5047cb2709668ee370b8800ad689786c3dbfe9386a",
+    "app/models/_base.py": "93717ae7c7f0bc758b104307008dafc4b90eb257633223686b140d1c8bdc45b0",
+    "app/models/employees.py": "a1b312db0d43bb2be1feddee09b87c71a928f3da3d6456e7fdd8576611e5f97a",
+    "app/models/leave_requests.py": "b92cc69eb01a5ae5f6a54308b0c99a15fa7c6a9897402adb13176f6379db8bf2",
+    "app/platform_gate.py": "0b073ac99dbc8ddeb3aab5e6a1f54554a8b9aad74a0fa60219a37aac35aace0e",
+    "app/platform_sdk/__init__.py": "0bdfdb57c0b08d18194a83241a1c422178a60dfc83fd8b4491d433b466a391e0",
+    "app/platform_sdk/env.py": "547c9848851e0d58fd54bf878383718b7c8fa5292cd9a0e8b1b34ca86c916982",
+    "app/platform_sdk/helpers.py": "47833db406bfdb1161597af0a7dbf40b2216d259aac22b47547e7e37022da544",
+    "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
+    "app/routers/employees.py": "82d70b68b1de51a7796a9705ef6602db9171385561d46254f665bf337278996e",
+    "app/routers/leave_requests.py": "30dc6714085aa083510af56ac1bd1fef13e06122e4b30288a7dae03b24a94952",
+    "app/runtime_config/__init__.py": "6812bcc2a3554012b8ebe59bb9e24f4b9759fc8421f612a67e37c2a8b139d399",
+    "app/runtime_config/definitions.py": "02e53e572b9d223ff53d9a7fd202ef6237fb67ab8749846894da6c1220f00c16",
+    "app/runtime_config/lists.py": "a783e5ff4e02b6a7fa0e0cdc9487063bee754cfee96cd4101a5afab2b82cc231",
+    "app/runtime_config/models.py": "de66dc72888effb492605009cccd4f6d26f907493ba999ed53ff13c980c954cd",
+    "app/runtime_config/router.py": "0e9ced427df7a91e70282113413ec304d21d6e921fa19e25ee2252a694693e65",
+    "app/runtime_config/sequences.py": "d14fbb81c01e28af640b25c42a730a567978a23dd9a36b59be797168356d31dd",
+    "app/runtime_config/settings.py": "4681a971acd6ab3b3f887a48a2fb96e42c95fad9244370236a977e36f3f2ca3f",
+    "app/schemas/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/schemas/employees.py": "bbd88b13ee49e6c9b6957a9e5c95f0c4d786014bb016a5f6e93a67f89e458675",
+    "app/schemas/leave_requests.py": "cf9313e7b63f3bcc5c94d2a25952c18ae95c21793ad10eceee0004ec8305f1fa",
+    "app/seed/__init__.py": "98fc2bf9fac8dd91a5a57697b7c3362509d3a18ab1286e3a1eaeff8ec785745c",
+    "app/seed/__main__.py": "31452029c5e2b5380c9d28607066e9972d205dcfa2fc5c685a212f323f8c41e8",
+    "app/seed/definitions.py": "e2edcc3578d5b960a8f6138361e14d16cf2028807167066c47957d5dea0cf334",
+    "app/seed/engine.py": "ca17e10a76b68efce0813dbe19f37085d8d8e45bcff340705df6f690ece6503d",
+    "app/seed/guard.py": "27bae9bb8a398994fcd706d796d7e211256cbefa235da2fdc71ba7c328962f65",
+    "app/seed/invariants.py": "910e85afb5e25206294cb7f058ca2324566af6412267e5fbf52e4a970eea2e54",
+    "app/seed/models.py": "df55a6eaa408bb3969a8b7b3144c8be1ae14d98bc10c686d18dd821f4800a823",
+    "app/seed/runner.py": "44911c1a8e11374e8049576f4ecbf63199f8281a0de7b059280073ba061b80c6",
+    "app/state_machines/__init__.py": "01be60eda6d8cc7974d48fdc8c1ec455070375d36a379aa3752682ec28d19587",
+    "app/state_machines/definitions.py": "405222684da602aecffdd8cd7f0457532c4186e53811b16390f16749c0adb381",
+    "app/state_machines/engine.py": "845d5559d3f52963243a07ced2179b602a5135731b665eb1d6d97b1852a133fe",
+    "app/state_machines/expr/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/state_machines/expr/errors.py": "a7622db2071ed0a95ebbda9eb5d3c9e0d8276af00e401dc80dc0f27aa713b2fa",
+    "app/state_machines/expr/limits.py": "8b2bb92adbec9d9c957158b11334e5eaf872ba7e10a20e03a2ff7e7771d7cae9",
+    "app/state_machines/expr/parser.py": "c9cc379cceb0b5c64ba5d7ad932e1172ec8f257e5648f077fe7272ea15a63097",
+    "app/state_machines/expr/pyeval.py": "972baa00d8253d06a5d61e63a5ced829bb408ed687c6fe4f07c13111b7dcb875",
+    "app/state_machines/expr/runtime.py": "ddfc057a1444b8836fb58d337a370f262966f645826c87b01f7dd40910c8a5b9",
+    "app/state_machines/hooks.py": "762a9160b052204e1fe85789a2dbf870892f6ebd68ef2c817ddaf3c4c70fa20b",
+    "app/state_machines/models.py": "2205982c3e59e3663d828ccc311db45e32742fc4e7ca858fb266f422e383bd9d",
+    "app/state_machines/router.py": "73e3c7db9b5f714e951b474382a94042f648a273314785b4d37348b4de3fca0d"
+  },
+  "guarded_sha256": {
+    "Dockerfile": "cc7e28011233461a78472e4bc38ed5edd7f2e9ebb73bb043e261c9d4e06f2761",
+    "alembic.ini": "af41c19f1bd69aa268efa0be9782b2787387c7ccb723841e60ed30cdfeab2563",
+    "alembic/env.py": "538b9bc7c0992bbef24f98a76da020191775e0998d71a7ab673a49c999527d68",
+    "alembic/script.py.mako": "7883f9f4f59387bc303343ed2eac18f9a5376b46e252c476c6c47a8030fedede",
+    "alembic/versions/0001_initial.py": "bd352c4457a74051d4abf9d6e8d3fd62ff481815c1397c08f6de826f79c9ef92",
+    "alembic/versions/0002_auth.py": "38ff8b2f9caafc16ba763ffb40cd033dd0dc896cf7c6671fc24eb7f72406a931",
+    "alembic/versions/0005_state_machines.py": "cc9a0c0dcee9bbbb0500d47f36d2e22b7192e49965d993cb035765badd93a7a2",
+    "alembic/versions/0006_runtime_config.py": "1de59a72b556e66ec2d48b245ea3f655081547e7f2cf7a1b2374c7c0426715da",
+    "alembic/versions/0007_change_history.py": "329a37fdb95ffad2ec9f99dac4b8f6e96995bce7ff5b6074d330d7a5b4db5dcd",
+    "alembic/versions/0008_seed.py": "0c9df79c2d364116213202268a8fd5c6aa207c1a6b00765a46c981195a55c9ab",
+    "docker-compose.yml": "39fd8708c3ad18cecfeb04fa92ad701047cd5fe783c37bf84267c3c24a5c00d8",
+    "requirements-dev.txt": "19f18546389f41f7571e67802b7fde4a09e1cef00039792142cf6d6944a46780",
+    "requirements.txt": "56c448364cf42072c34c18556fabecaa7b13ad081fa8c3955ff7cd411c3bbf24",
+    "tests/conftest.py": "2009649e5936fc3feb1e3330a11d6110f5b9d64ec83bbdd8548f19f387aacc66"
+  },
+  "hooks": [
+    {
+      "budget": {
+        "cpu_ms": 200,
+        "outbound_calls": 0,
+        "rows": 0
+      },
+      "failure_policy": "fail_closed",
+      "file": "app/custom/hooks/check_request.py",
+      "frame_sha256": "2ce9ddcce0fbacd850324e2d065ac62024f63e0e96bf82cb7b9330cdd836dc9e",
+      "function": "check_request",
+      "input_fields": [
+        {
+          "name": "days",
+          "required": true,
+          "type": "int"
+        },
+        {
+          "name": "reason",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "input_model": "RequestInput",
+      "kind": "pure",
+      "name": "check_request",
+      "output_fields": [
+        {
+          "name": "valid",
+          "required": true,
+          "type": "bool"
+        },
+        {
+          "name": "message",
+          "required": false,
+          "type": "string"
+        }
+      ],
+      "output_model": "RequestResult",
+      "point": "LeaveRequest.validate",
+      "signature": "def check_request(data: RequestInput) -> RequestResult:  # platform:signature (fixed)"
+    }
+  ],
+  "limits": {
+    "max_ast_nodes": 1500,
+    "max_body_lines": 200,
+    "max_file_bytes": 65536,
+    "max_iterations": 1000000,
+    "max_loop_depth": 3,
+    "max_small": 100000,
+    "max_string": 2000
+  },
+  "locked_sha256": {
+    "app/custom/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/custom/hooks/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "sdk_exports": [
+    "Principal",
+    "clamp",
+    "current_principal",
+    "find_rows",
+    "is_blank",
+    "log",
+    "now",
+    "pct_diff",
+    "slugify"
+  ],
+  "sdk_io": [
+    "find_rows",
+    "now"
+  ],
+  "version": 1
+}

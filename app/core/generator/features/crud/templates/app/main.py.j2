@@ -21,6 +21,9 @@ from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 {% endif %}
+{% if history_router %}
+from app.change_history.router import router as _change_history_router
+{% endif %}
 from app.config import get_settings
 {% if observability %}
 from app.core import telemetry
@@ -39,6 +42,12 @@ from app.routers._health import router as _health_router
 {% for e in entities %}
 from app.routers.{{ e.table }} import router as {{ e.table }}_router
 {% endfor %}
+{% if runtime_router %}
+from app.runtime_config.router import router as _runtime_config_router
+{% endif %}
+{% if state_machines %}
+from app.state_machines.router import router as _state_machines_router
+{% endif %}
 {% if storage %}
 from app.storage import config as _storage_config
 from app.storage.backend import prepare_bucket
@@ -131,6 +140,15 @@ def create_app() -> FastAPI:
 {% for e in entities %}
     app.include_router({{ e.table }}_router)
 {% endfor %}
+{% if state_machines %}
+    app.include_router(_state_machines_router)
+{% endif %}
+{% if runtime_router %}
+    app.include_router(_runtime_config_router)
+{% endif %}
+{% if history_router %}
+    app.include_router(_change_history_router)
+{% endif %}
     include_custom_routers(app)
     return app
 

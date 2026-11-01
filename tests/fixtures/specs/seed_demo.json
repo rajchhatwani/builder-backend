@@ -1,0 +1,516 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Seed Demo",
+    "slug": "seed-demo",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "plural_path": "customers",
+      "options": {
+        "filterable": [
+          "active"
+        ],
+        "sortable": [
+          "name"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 120
+        },
+        {
+          "name": "notes",
+          "type": "text"
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "default": true
+        }
+      ]
+    },
+    {
+      "name": "Invoice",
+      "table_name": "invoices",
+      "plural_path": "invoices",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "invoice_no",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 40
+        },
+        {
+          "name": "amount",
+          "type": "decimal",
+          "required": true,
+          "min_value": 0
+        },
+        {
+          "name": "issued_on",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "memo",
+          "type": "string",
+          "max_length": 200
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "submitted",
+            "approved",
+            "paid",
+            "rejected"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Customer",
+      "to_entity": "Invoice",
+      "from_name": "invoices",
+      "to_name": "customer",
+      "on_delete": "restrict",
+      "required": true
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "approver",
+        "label": "Approver"
+      },
+      {
+        "name": "clerk",
+        "label": "Clerk"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Customer",
+        "operation": "create",
+        "roles": [
+          "clerk",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "list",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "get",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "update",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Invoice",
+        "operation": "create",
+        "roles": [
+          "clerk",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Invoice",
+        "operation": "list",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Invoice",
+        "operation": "get",
+        "roles": [
+          "clerk",
+          "approver",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Invoice",
+        "operation": "update",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Invoice",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "multi_tenant": true,
+    "app_url": "https://workspace.example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@workspace.example.com",
+      "from_name": "Workspace"
+    }
+  },
+  "state_machines": [
+    {
+      "entity": "Invoice",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "submit",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "submitted",
+          "roles": [
+            "clerk",
+            "admin"
+          ]
+        },
+        {
+          "name": "auto_approve",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "approved",
+          "auto": true,
+          "when": "amount <= 100"
+        },
+        {
+          "name": "approve",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "approver",
+            "admin"
+          ]
+        },
+        {
+          "name": "reject",
+          "from_states": [
+            "submitted"
+          ],
+          "to_state": "rejected",
+          "roles": [
+            "approver",
+            "admin"
+          ]
+        },
+        {
+          "name": "pay",
+          "from_states": [
+            "approved"
+          ],
+          "to_state": "paid",
+          "roles": [
+            "admin"
+          ]
+        }
+      ]
+    }
+  ],
+  "seed": [
+    {
+      "name": "demo",
+      "seed": 20261031,
+      "as_of": "2026-10-01",
+      "tenants": 2,
+      "entities": [
+        {
+          "entity": "Customer",
+          "count": 5,
+          "fields": [
+            {
+              "field": "name",
+              "generator": {
+                "type": "words",
+                "min_words": 2,
+                "max_words": 3
+              }
+            },
+            {
+              "field": "email",
+              "generator": {
+                "type": "email",
+                "prefix": "customer"
+              }
+            },
+            {
+              "field": "notes",
+              "generator": {
+                "type": "words",
+                "min_words": 3,
+                "max_words": 8
+              }
+            },
+            {
+              "field": "active",
+              "generator": {
+                "type": "bool_ratio",
+                "ratio": 0.8
+              }
+            }
+          ]
+        },
+        {
+          "entity": "Invoice",
+          "count": 8,
+          "fields": [
+            {
+              "field": "invoice_no",
+              "generator": {
+                "type": "sequence",
+                "prefix": "INV-",
+                "start": 1,
+                "width": 5
+              }
+            },
+            {
+              "field": "amount",
+              "generator": {
+                "type": "decimal_range",
+                "min": "20.00",
+                "max": "900.00",
+                "places": 2
+              }
+            },
+            {
+              "field": "issued_on",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-01-01",
+                "max": "2026-09-30"
+              }
+            },
+            {
+              "field": "memo",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Net 30",
+                  "Partial delivery",
+                  "Rush order"
+                ]
+              }
+            },
+            {
+              "field": "customer_id",
+              "generator": {
+                "type": "reference",
+                "entity": "Customer",
+                "pick": "random"
+              }
+            },
+            {
+              "field": "status",
+              "generator": {
+                "type": "state",
+                "weights": {
+                  "draft": 1,
+                  "submitted": 2,
+                  "approved": 3,
+                  "paid": 4,
+                  "rejected": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dev",
+      "seed": 7,
+      "as_of": "2026-06-01",
+      "tenants": 3,
+      "entities": [
+        {
+          "entity": "Customer",
+          "count": 40,
+          "fields": [
+            {
+              "field": "name",
+              "generator": {
+                "type": "words",
+                "min_words": 2,
+                "max_words": 3
+              }
+            },
+            {
+              "field": "email",
+              "generator": {
+                "type": "email",
+                "prefix": "customer"
+              }
+            },
+            {
+              "field": "notes",
+              "generator": {
+                "type": "words",
+                "min_words": 3,
+                "max_words": 8
+              }
+            },
+            {
+              "field": "active",
+              "generator": {
+                "type": "bool_ratio",
+                "ratio": 0.8
+              }
+            }
+          ]
+        },
+        {
+          "entity": "Invoice",
+          "count": 120,
+          "fields": [
+            {
+              "field": "invoice_no",
+              "generator": {
+                "type": "sequence",
+                "prefix": "INV-",
+                "start": 1,
+                "width": 5
+              }
+            },
+            {
+              "field": "amount",
+              "generator": {
+                "type": "decimal_range",
+                "min": "20.00",
+                "max": "900.00",
+                "places": 2
+              }
+            },
+            {
+              "field": "issued_on",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-01-01",
+                "max": "2026-09-30"
+              }
+            },
+            {
+              "field": "memo",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Net 30",
+                  "Partial delivery",
+                  "Rush order"
+                ]
+              }
+            },
+            {
+              "field": "customer_id",
+              "generator": {
+                "type": "reference",
+                "entity": "Customer",
+                "pick": "random"
+              }
+            },
+            {
+              "field": "status",
+              "generator": {
+                "type": "state",
+                "weights": {
+                  "draft": 1,
+                  "submitted": 2,
+                  "approved": 3,
+                  "paid": 4,
+                  "rejected": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

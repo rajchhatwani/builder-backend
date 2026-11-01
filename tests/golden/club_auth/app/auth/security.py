@@ -119,9 +119,12 @@ def create_access_token(
     key: str,
     ttl_seconds: int,
     tenant_id: uuid.UUID | None = None,
+    issuer: str,
+    session_id: str | None = None,
 ) -> str:
     issued = int(time.time())
     claims: dict[str, Any] = {
+        "iss": issuer,
         "sub": str(user_id),
         "roles": roles,
         "type": "access",
@@ -129,6 +132,8 @@ def create_access_token(
         "exp": issued + ttl_seconds,
         "jti": uuid.uuid4().hex,
     }
+    if session_id is not None:
+        claims["sid"] = session_id
     if tenant_id is not None:
         claims["tid"] = str(tenant_id)  # for services that only check the token
     return encode_jwt(claims, key)

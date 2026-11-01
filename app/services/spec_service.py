@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -42,6 +43,7 @@ from app.core.spec_models import (
     SpecRole,
     SpecSmsConfig,
     SpecSmtpConfig,
+    SpecStateMachine,
     SpecStorage,
 )
 from app.core.validation import ValidationIssue, validate
@@ -49,6 +51,7 @@ from app.exceptions import AppError
 from app.models.auth_config import ProjectAuthConfig
 from app.models.auth_custom_field import AuthCustomField
 from app.models.authorization_config import ProjectAuthorization
+from app.models.behavior_config import ProjectBehavior
 from app.models.deployment_config import ProjectDeployment
 from app.models.documents_config import ProjectDocuments
 from app.models.entity import Entity
@@ -63,6 +66,16 @@ from app.models.relation import Relation
 from app.models.storage_config import ProjectStorageConfig
 from app.services.authorization_service import apply_spec as apply_authorization_spec
 from app.services.authorization_service import config_to_spec as authorization_config_to_spec
+from app.services.behavior_service import (
+    HISTORY,
+    HOOKS,
+    LISTS,
+    SEED,
+    SEQUENCES,
+    SETTINGS,
+    BehaviorService,
+    apply_section,
+)
 from app.services.deployment_service import apply_spec as apply_deployment_spec
 from app.services.deployment_service import config_to_spec as deployment_config_to_spec
 from app.services.documents_service import apply_spec as apply_documents_spec
@@ -279,6 +292,13 @@ class SpecService:
             storage=await self._storage_spec(project_id),
             authorization=await self._authorization_spec(project_id),
             observability=await self._observability_spec(project_id),
+            state_machines=await BehaviorService(self.session).machines(project_id),
+            settings=await BehaviorService(self.session).settings(project_id),
+            sequences=await BehaviorService(self.session).sequences(project_id),
+            lists=await BehaviorService(self.session).lists(project_id),
+            history=await BehaviorService(self.session).history(project_id),
+            hooks=await BehaviorService(self.session).hooks(project_id),
+            seed=await BehaviorService(self.session).seed(project_id),
             deployment=await self._deployment_spec(project_id),
             documents=await self._documents_spec(project_id),
         )
@@ -425,6 +445,18 @@ class SpecService:
             await self._replace_authorization(project_id, spec.authorization)
         if spec.observability is not None:
             await self._replace_observability(project_id, spec.observability)
+        if spec.state_machines:
+            await self._replace_state_machines(project_id, spec.state_machines)
+        for key, items in (
+            (SETTINGS, spec.settings),
+            (SEQUENCES, spec.sequences),
+            (LISTS, spec.lists),
+            (HISTORY, spec.history),
+            (HOOKS, spec.hooks),
+            (SEED, spec.seed),
+        ):
+            if items:
+                await self._replace_behavior_section(project_id, key, items)
         if spec.deployment is not None:
             await self._replace_deployment(project_id, spec.deployment)
         if spec.documents is not None:
@@ -593,6 +625,27 @@ class SpecService:
         else:
             row.version += 1
         apply_authorization_spec(row, authorization)
+
+    async def _replace_state_machines(
+        self, project_id: uuid.UUID, machines: list[SpecStateMachine]
+    ) -> None:
+        await self._replace_behavior_section(project_id, "state_machines", machines)
+
+    async def _replace_behavior_section(
+        self, project_id: uuid.UUID, key: str, items: list[Any]
+    ) -> None:
+        # An import without items for a section leaves it alone; one with them replaces it.
+        row = (
+            await self.session.execute(
+                select(ProjectBehavior).where(ProjectBehavior.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectBehavior(project_id=project_id, version=1, sections={})
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_section(row, key, items)
 
     async def _replace_observability(
         self, project_id: uuid.UUID, observability: SpecObservability

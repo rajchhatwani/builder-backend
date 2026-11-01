@@ -65,6 +65,7 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "project_auth_configs",
     "project_auth_secrets",
     "project_authorizations",
+    "project_behavior",
     "project_deployments",
     "project_documents",
     "project_keycloak_configs",

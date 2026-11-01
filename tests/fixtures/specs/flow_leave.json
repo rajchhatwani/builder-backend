@@ -1,0 +1,208 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Leave Flow",
+    "slug": "flow-leave",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "LeaveRequest",
+      "table_name": "leave_requests",
+      "plural_path": "leave_requests",
+      "options": {
+        "filterable": [
+          "state"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "employee",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        },
+        {
+          "name": "days",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "balance",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "state",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "requested",
+            "manager_review",
+            "hr_review",
+            "approved",
+            "declined",
+            "cancelled"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "employee",
+        "label": "Employee",
+        "is_default": true
+      },
+      {
+        "name": "hr",
+        "label": "HR"
+      },
+      {
+        "name": "manager",
+        "label": "Manager"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "LeaveRequest",
+        "operation": "create",
+        "roles": [
+          "employee",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "list",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "get",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "delete",
+        "roles": [
+          "hr"
+        ]
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    }
+  },
+  "state_machines": [
+    {
+      "entity": "LeaveRequest",
+      "field": "state",
+      "initial": "requested",
+      "transitions": [
+        {
+          "name": "route_short",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "manager_review",
+          "auto": true,
+          "when": "days <= 5 and days <= balance"
+        },
+        {
+          "name": "route_long",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "hr_review",
+          "auto": true,
+          "when": "days > 5 and days <= balance"
+        },
+        {
+          "name": "decline_no_balance",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "declined",
+          "auto": true,
+          "when": "days > balance"
+        },
+        {
+          "name": "manager_approve",
+          "from_states": [
+            "manager_review"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "manager"
+          ]
+        },
+        {
+          "name": "manager_decline",
+          "from_states": [
+            "manager_review"
+          ],
+          "to_state": "declined",
+          "roles": [
+            "manager"
+          ]
+        },
+        {
+          "name": "hr_approve",
+          "from_states": [
+            "hr_review"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "hr_decline",
+          "from_states": [
+            "hr_review"
+          ],
+          "to_state": "declined",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "cancel",
+          "from_states": [
+            "requested",
+            "manager_review",
+            "hr_review"
+          ],
+          "to_state": "cancelled",
+          "roles": [
+            "employee",
+            "hr"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -14,6 +14,12 @@ APP_NAME = 'Docs'
 # Which identity provider this build uses (see app/auth/provider_lock.py).
 PROVIDER = "builtin"
 PROVIDER_REALM: str | None = None
+# The "issuer" of this app's own tokens: how auth_identities tells them from a hub's.
+ISSUER = 'builtin:docs-pbac'
+
+
+def current_issuer() -> str:
+    return ISSUER
 APP_URL = None
 
 JWT_ALGORITHM = 'HS256'

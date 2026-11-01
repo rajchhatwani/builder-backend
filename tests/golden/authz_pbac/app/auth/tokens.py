@@ -63,13 +63,14 @@ class TokenStore:
         row.revoked_at = _now()
         return Rotation("ok", row.user_id, row.family_id)
 
-    async def revoke_family_of(self, token_hash: str) -> None:
+    async def revoke_family_of(self, token_hash: str) -> uuid.UUID | None:
         stmt = sa.select(AuthRefreshToken.family_id).where(
             AuthRefreshToken.token_hash == token_hash
         )
         family_id = (await self.session.execute(stmt)).scalar_one_or_none()
         if family_id is not None:
             await self.revoke_family(family_id)
+        return family_id
 
     async def revoke_family(self, family_id: uuid.UUID) -> None:
         await self.session.execute(

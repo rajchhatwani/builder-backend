@@ -25,6 +25,8 @@ _VERBATIM = (
     "app/auth/__init__.py.tpl",
     "app/auth/access.py.tpl",
     "app/auth/deps.py.tpl",
+    "app/auth/export.py.tpl",
+    "app/auth/identity.py.tpl",
     "app/auth/middleware.py.tpl",
     "app/auth/ratelimit.py.tpl",
     "app/auth/service.py.tpl",
@@ -50,6 +52,8 @@ _RENDERED = (
 _KEYCLOAK_VERBATIM = (
     "app/auth/__init__.py.tpl",
     "app/auth/access.py.tpl",
+    "app/auth/export.py.tpl",
+    "app/auth/identity.py.tpl",
     "app/auth/middleware.py.tpl",
     "app/auth/provider_lock.py.tpl",
     "tests/test_provider_lock.py.tpl",
@@ -242,6 +246,7 @@ def _auth_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
         "a": auth,
         "project_name": project.name,
         "app_name": auth.app_name or project.name,
+        "issuer": f"builtin:{project.slug}",
         "email_enabled": auth.smtp is not None,
         "magic_link": reset.email_magic_link,
         "sms_otp": reset.sms_otp,
@@ -404,6 +409,9 @@ class AuthModule:
         context = _auth_context(project, auth)
         for template in _RENDERED:
             files[template.rsplit(".", 1)[0]] = render_template(self._env, template, **context)
+        files["tests/test_identity.py"] = render_template(
+            self._env, "tests/test_identity.py.j2", **context
+        )
         if context["invitations"] or context["self_assignable_names"]:
             files["tests/test_invitations.py"] = render_template(
                 self._env, "tests/test_invitations.py.j2", **context
@@ -429,6 +437,9 @@ class AuthModule:
         for template in _KEYCLOAK_RENDERED:
             target = template.removeprefix(_KEYCLOAK_DIR).rsplit(".", 1)[0]
             files[target] = render_template(self._env, template, **context)
+        files["tests/test_identity.py"] = render_template(
+            self._env, "keycloak/tests/test_identity.py.j2", **context
+        )
         if context["gated"]:
             files["tests/test_access.py"] = render_template(
                 self._env, "tests/test_access.py.j2", **context

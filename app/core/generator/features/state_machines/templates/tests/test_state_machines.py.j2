@@ -1,0 +1,70 @@
+"""State machine checks (generated): initial state, state cannot be written directly, state log."""
+
+{% set live = routes | rejectattr("skip") | list %}
+{% if live %}
+import uuid
+
+{% endif %}
+import pytest
+{% if live %}
+from httpx import AsyncClient
+
+from tests import _factories
+{% endif %}
+{% for r in routes %}
+{% set e = r.e %}
+{% set m = machines[e.name] %}
+{% if r.skip %}
+
+
+def test_{{ e.table }}_state_machine() -> None:
+    pytest.skip({{ r.skip | pyrepr }})
+{% else %}
+{% if e.access %}
+
+
+@pytest.fixture
+def client(authed_client: AsyncClient) -> AsyncClient:
+    """The state machine's entity has access rules: sign in as a user who holds every role."""
+    return authed_client
+{% endif %}
+
+
+async def test_{{ e.table }}_starts_in_its_initial_state(client: AsyncClient) -> None:
+    other = {{ (m.states | reject("equalto", m.initial) | list or [m.initial])[0] | pyrepr }}
+    # A caller cannot choose the state: whatever is sent, the record starts in the initial state
+    # (the log's first entry says so, even if an automatic transition has moved it on since).
+    created = await _factories.make_{{ e.table }}(client, **{"{{ m.field }}": other})
+{% if not (m.transitions | selectattr("auto") | list) %}
+    assert created["{{ m.field }}"] == {{ m.initial | pyrepr }}
+{% endif %}
+    history = (await client.get(f"/{{ e.path }}/{created['id']}/state-history")).json()
+    assert [(h["transition"], h["from_state"], h["to_state"]) for h in history][:1] == [
+        ("created", None, {{ m.initial | pyrepr }})
+    ]
+
+
+async def test_{{ e.table }}_state_cannot_be_written_directly(client: AsyncClient) -> None:
+    created = await _factories.make_{{ e.table }}(client)
+    before = created["{{ m.field }}"]
+{% if "update" in e.ops %}
+    for state in ({{ m.states | map("pyrepr") | join(", ") }},):
+        response = await client.patch(f"/{{ e.path }}/{created['id']}", json={"{{ m.field }}": state})
+        assert response.status_code in (200, 422), response.text
+{% endif %}
+    current = (await client.get(f"/{{ e.path }}/{created['id']}/transitions")).status_code
+    assert current == 200
+{% if "get" in e.ops %}
+    assert (await client.get(f"/{{ e.path }}/{created['id']}")).json()["{{ m.field }}"] == before
+{% endif %}
+
+
+async def test_{{ e.table }}_unknown_transition_and_record(client: AsyncClient) -> None:
+    created = await _factories.make_{{ e.table }}(client)
+    unknown = await client.post(f"/{{ e.path }}/{created['id']}/transitions/__no_such_transition__")
+    assert unknown.status_code == 404
+    assert unknown.json()["code"] == "not_found"
+    missing = await client.post(f"/{{ e.path }}/{uuid.uuid4()}/transitions/{{ (m.transitions | rejectattr("auto") | map(attribute="name") | list or ["x"])[0] }}")
+    assert missing.status_code == 404
+{% endif %}
+{% endfor %}

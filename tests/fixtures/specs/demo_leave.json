@@ -1,0 +1,724 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Leave Request Demo",
+    "slug": "demo-leave",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Employee",
+      "table_name": "employees",
+      "plural_path": "employees",
+      "options": {
+        "filterable": [
+          "department"
+        ],
+        "sortable": [
+          "name"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        },
+        {
+          "name": "email",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 120
+        },
+        {
+          "name": "department",
+          "type": "string",
+          "max_length": 60
+        },
+        {
+          "name": "leave_balance",
+          "type": "integer",
+          "required": true,
+          "min_value": 0
+        }
+      ]
+    },
+    {
+      "name": "LeaveRequest",
+      "table_name": "leave_requests",
+      "plural_path": "leave_requests",
+      "options": {
+        "filterable": [
+          "state"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "request_no",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 40
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "required": true
+        },
+        {
+          "name": "days",
+          "type": "integer",
+          "required": true,
+          "min_value": 1,
+          "max_value": 60
+        },
+        {
+          "name": "balance",
+          "type": "integer",
+          "required": true,
+          "min_value": 0
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "max_length": 200
+        },
+        {
+          "name": "state",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "requested",
+            "manager_review",
+            "hr_review",
+            "approved",
+            "declined",
+            "cancelled"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Employee",
+      "to_entity": "LeaveRequest",
+      "from_name": "leave_requests",
+      "to_name": "employee",
+      "on_delete": "restrict",
+      "required": true
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "employee",
+        "label": "Employee"
+      },
+      {
+        "name": "hr",
+        "label": "Hr"
+      },
+      {
+        "name": "manager",
+        "label": "Manager"
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Employee",
+        "operation": "create",
+        "roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "list",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "get",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "update",
+        "roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "delete",
+        "roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "create",
+        "roles": [
+          "employee",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "list",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "get",
+        "roles": [
+          "employee",
+          "manager",
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "update",
+        "roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "LeaveRequest",
+        "operation": "delete",
+        "roles": [
+          "hr"
+        ]
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    }
+  },
+  "state_machines": [
+    {
+      "entity": "LeaveRequest",
+      "field": "state",
+      "initial": "requested",
+      "transitions": [
+        {
+          "name": "route_short",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "manager_review",
+          "auto": true,
+          "when": "days <= 5 and days <= balance"
+        },
+        {
+          "name": "route_long",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "hr_review",
+          "auto": true,
+          "when": "days > 5 and days <= balance"
+        },
+        {
+          "name": "decline_no_balance",
+          "from_states": [
+            "requested"
+          ],
+          "to_state": "declined",
+          "auto": true,
+          "when": "days > balance"
+        },
+        {
+          "name": "manager_approve",
+          "from_states": [
+            "manager_review"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "manager"
+          ]
+        },
+        {
+          "name": "manager_decline",
+          "from_states": [
+            "manager_review"
+          ],
+          "to_state": "declined",
+          "roles": [
+            "manager"
+          ]
+        },
+        {
+          "name": "hr_approve",
+          "from_states": [
+            "hr_review"
+          ],
+          "to_state": "approved",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "hr_decline",
+          "from_states": [
+            "hr_review"
+          ],
+          "to_state": "declined",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "cancel",
+          "from_states": [
+            "requested",
+            "manager_review",
+            "hr_review"
+          ],
+          "to_state": "cancelled",
+          "roles": [
+            "employee",
+            "hr"
+          ]
+        }
+      ]
+    }
+  ],
+  "settings": [
+    {
+      "key": "max_days_without_hr",
+      "type": "int",
+      "default": 5,
+      "label": "Longest leave a manager may approve alone",
+      "minimum": 1,
+      "maximum": 60,
+      "edit_roles": [
+        "hr"
+      ]
+    },
+    {
+      "key": "carry_over_days",
+      "type": "int",
+      "default": 5,
+      "label": "Days that carry over to the next year",
+      "minimum": 0,
+      "maximum": 30,
+      "read_roles": [
+        "manager",
+        "hr"
+      ],
+      "edit_roles": [
+        "hr"
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "name": "request_no",
+      "prefix": "LR-",
+      "padding": 4,
+      "reset_yearly": true,
+      "view_roles": [
+        "hr"
+      ]
+    }
+  ],
+  "lists": [
+    {
+      "name": "leave_type",
+      "label": "Leave types",
+      "max_items": 12,
+      "edit_roles": [
+        "hr"
+      ],
+      "items": [
+        {
+          "value": "annual",
+          "label": "Annual leave",
+          "color": "#2563eb",
+          "locked": true
+        },
+        {
+          "value": "sick",
+          "label": "Sick leave",
+          "color": "#dc2626",
+          "locked": true
+        },
+        {
+          "value": "unpaid",
+          "label": "Unpaid leave",
+          "color": "#6b7280"
+        },
+        {
+          "value": "parental",
+          "label": "Parental leave",
+          "color": "#16a34a"
+        }
+      ]
+    }
+  ],
+  "history": [
+    {
+      "entity": "LeaveRequest",
+      "fields": [
+        "start_date",
+        "end_date",
+        "days",
+        "reason"
+      ],
+      "retention_days": 730,
+      "view_roles": [
+        "manager",
+        "hr"
+      ]
+    },
+    {
+      "entity": "Employee",
+      "fields": [
+        "department",
+        "leave_balance"
+      ],
+      "retention_days": 730,
+      "view_roles": [
+        "hr"
+      ]
+    }
+  ],
+  "hooks": [
+    {
+      "name": "check_request",
+      "point": "LeaveRequest.validate",
+      "kind": "pure",
+      "input": {
+        "name": "RequestInput",
+        "fields": [
+          {
+            "name": "days",
+            "type": "int",
+            "required": true
+          },
+          {
+            "name": "reason",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      "output": {
+        "name": "RequestResult",
+        "fields": [
+          {
+            "name": "valid",
+            "type": "bool",
+            "required": true
+          },
+          {
+            "name": "message",
+            "type": "string",
+            "required": false
+          }
+        ]
+      },
+      "failure_policy": "fail_closed",
+      "fallback": null,
+      "budget": {
+        "cpu_ms": 200,
+        "rows": 0,
+        "outbound_calls": 0
+      },
+      "reads": []
+    }
+  ],
+  "seed": [
+    {
+      "name": "demo",
+      "seed": 20261102,
+      "as_of": "2026-10-01",
+      "tenants": 0,
+      "entities": [
+        {
+          "entity": "Employee",
+          "count": 5,
+          "fields": [
+            {
+              "field": "name",
+              "generator": {
+                "type": "words",
+                "min_words": 2,
+                "max_words": 2
+              }
+            },
+            {
+              "field": "email",
+              "generator": {
+                "type": "email",
+                "prefix": "employee"
+              }
+            },
+            {
+              "field": "department",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Finance",
+                  "Engineering",
+                  "Support",
+                  "Sales"
+                ]
+              }
+            },
+            {
+              "field": "leave_balance",
+              "generator": {
+                "type": "int_range",
+                "min": 5,
+                "max": 25
+              }
+            }
+          ]
+        },
+        {
+          "entity": "LeaveRequest",
+          "count": 10,
+          "fields": [
+            {
+              "field": "request_no",
+              "generator": {
+                "type": "sequence",
+                "prefix": "LR-DEMO-",
+                "start": 1,
+                "width": 4
+              }
+            },
+            {
+              "field": "start_date",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-03-01",
+                "max": "2026-03-31"
+              }
+            },
+            {
+              "field": "end_date",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-04-01",
+                "max": "2026-04-30"
+              }
+            },
+            {
+              "field": "days",
+              "generator": {
+                "type": "int_range",
+                "min": 1,
+                "max": 2
+              }
+            },
+            {
+              "field": "balance",
+              "generator": {
+                "type": "int_range",
+                "min": 5,
+                "max": 25
+              }
+            },
+            {
+              "field": "reason",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Family event",
+                  "Holiday",
+                  "Medical appointment"
+                ]
+              }
+            },
+            {
+              "field": "employee_id",
+              "generator": {
+                "type": "reference",
+                "entity": "Employee",
+                "pick": "random"
+              }
+            },
+            {
+              "field": "state",
+              "generator": {
+                "type": "state",
+                "weights": {
+                  "manager_review": 3,
+                  "hr_review": 2,
+                  "approved": 3,
+                  "declined": 2,
+                  "cancelled": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "dev",
+      "seed": 11,
+      "as_of": "2026-06-01",
+      "tenants": 0,
+      "entities": [
+        {
+          "entity": "Employee",
+          "count": 20,
+          "fields": [
+            {
+              "field": "name",
+              "generator": {
+                "type": "words",
+                "min_words": 2,
+                "max_words": 2
+              }
+            },
+            {
+              "field": "email",
+              "generator": {
+                "type": "email",
+                "prefix": "employee"
+              }
+            },
+            {
+              "field": "department",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Finance",
+                  "Engineering",
+                  "Support",
+                  "Sales"
+                ]
+              }
+            },
+            {
+              "field": "leave_balance",
+              "generator": {
+                "type": "int_range",
+                "min": 5,
+                "max": 25
+              }
+            }
+          ]
+        },
+        {
+          "entity": "LeaveRequest",
+          "count": 60,
+          "fields": [
+            {
+              "field": "request_no",
+              "generator": {
+                "type": "sequence",
+                "prefix": "LR-DEV-",
+                "start": 1,
+                "width": 4
+              }
+            },
+            {
+              "field": "start_date",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-03-01",
+                "max": "2026-03-31"
+              }
+            },
+            {
+              "field": "end_date",
+              "generator": {
+                "type": "date_range",
+                "min": "2026-04-01",
+                "max": "2026-04-30"
+              }
+            },
+            {
+              "field": "days",
+              "generator": {
+                "type": "int_range",
+                "min": 1,
+                "max": 2
+              }
+            },
+            {
+              "field": "balance",
+              "generator": {
+                "type": "int_range",
+                "min": 5,
+                "max": 25
+              }
+            },
+            {
+              "field": "reason",
+              "generator": {
+                "type": "one_of",
+                "values": [
+                  "Family event",
+                  "Holiday",
+                  "Medical appointment"
+                ]
+              }
+            },
+            {
+              "field": "employee_id",
+              "generator": {
+                "type": "reference",
+                "entity": "Employee",
+                "pick": "random"
+              }
+            },
+            {
+              "field": "state",
+              "generator": {
+                "type": "state",
+                "weights": {
+                  "manager_review": 3,
+                  "hr_review": 2,
+                  "approved": 3,
+                  "declined": 2,
+                  "cancelled": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

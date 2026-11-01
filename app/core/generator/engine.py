@@ -4,13 +4,19 @@ from app.core.generator.base import FeatureModule, FileTree, ModuleManifest
 from app.core.generator.context import build_context
 from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.authz.module import AuthzModule
+from app.core.generator.features.change_history.module import ChangeHistoryModule
 from app.core.generator.features.crud.module import CrudModule
 from app.core.generator.features.deploy.module import DeployModule
 from app.core.generator.features.docker.module import DockerModule
 from app.core.generator.features.documents.module import DocumentsModule
+from app.core.generator.features.hooks.module import MANIFEST_PATH as HOOKS_MANIFEST_PATH
+from app.core.generator.features.hooks.module import HooksModule, build_manifest
 from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
+from app.core.generator.features.runtime_config.module import RuntimeConfigModule
+from app.core.generator.features.seed.module import SeedModule
+from app.core.generator.features.state_machines.module import StateMachinesModule
 from app.core.generator.features.storage.module import StorageModule
 from app.core.generator.features.tests.module import TestsModule
 from app.core.generator.zones import ZONES_PATH, render_zones
@@ -37,6 +43,11 @@ def default_modules() -> list[FeatureModule]:
         ObservabilityModule(),
         DeployModule(),
         DocumentsModule(),
+        StateMachinesModule(),
+        RuntimeConfigModule(),
+        ChangeHistoryModule(),
+        HooksModule(),
+        SeedModule(),
     ]
 
 
@@ -72,5 +83,7 @@ def generate(spec: Spec, modules: list[FeatureModule] | None = None) -> FileTree
             if path in files:
                 raise RuntimeError(f"feature module {module.name!r} redefines {path}")
             files[path] = content
+    if spec.hooks:
+        files[HOOKS_MANIFEST_PATH] = build_manifest(project, files)
     files[ZONES_PATH] = render_zones(files)
     return dict(sorted(files.items()))

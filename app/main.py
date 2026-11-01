@@ -16,6 +16,7 @@ from app.api import (
     admin,
     auth,
     authorization,
+    behavior,
     billing,
     deployment,
     documents,
@@ -34,6 +35,7 @@ from app.api import (
     scim,
     spec,
     sso,
+    status,
     storage,
     wellknown,
 )
@@ -259,6 +261,7 @@ def create_app() -> FastAPI:
     for router in (
         auth.router,
         authorization.router,
+        behavior.router,
         observability.router,
         deployment.router,
         documents.router,
@@ -271,6 +274,7 @@ def create_app() -> FastAPI:
         fields.router,
         relations.router,
         spec.router,
+        status.router,
         generate.router,
     ):
         app.include_router(router, dependencies=guarded)

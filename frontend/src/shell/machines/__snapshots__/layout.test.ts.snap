@@ -1,0 +1,581 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`layout of flow_invoices.json > matches the stored layout snapshot 1`] = `
+{
+  "edges": [
+    {
+      "id": "submit:draft",
+      "label": {
+        "height": 24,
+        "width": 66,
+        "x": 342,
+        "y": 92,
+      },
+      "points": [
+        {
+          "x": 342,
+          "y": 60,
+        },
+        {
+          "x": 342,
+          "y": 92,
+        },
+        {
+          "x": 342,
+          "y": 124,
+        },
+      ],
+      "source": "draft",
+      "target": "submitted",
+      "transition": "submit",
+    },
+    {
+      "id": "auto_approve:submitted",
+      "label": {
+        "height": 24,
+        "width": 143,
+        "x": 383,
+        "y": 254,
+      },
+      "points": [
+        {
+          "x": 359,
+          "y": 168,
+        },
+        {
+          "x": 383,
+          "y": 200,
+        },
+        {
+          "x": 383,
+          "y": 254,
+        },
+        {
+          "x": 383,
+          "y": 308,
+        },
+        {
+          "x": 342,
+          "y": 340,
+        },
+      ],
+      "source": "submitted",
+      "target": "approved",
+      "transition": "auto_approve",
+    },
+    {
+      "id": "needs_approval:submitted",
+      "label": {
+        "height": 24,
+        "width": 157,
+        "x": 201,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 285,
+          "y": 168,
+        },
+        {
+          "x": 201,
+          "y": 200,
+        },
+        {
+          "x": 201,
+          "y": 232,
+        },
+      ],
+      "source": "submitted",
+      "target": "pending_approval",
+      "transition": "needs_approval",
+    },
+    {
+      "id": "approve:pending_approval",
+      "label": {
+        "height": 24,
+        "width": 73,
+        "x": 321,
+        "y": 308,
+      },
+      "points": [
+        {
+          "x": 250,
+          "y": 276,
+        },
+        {
+          "x": 321,
+          "y": 308,
+        },
+        {
+          "x": 317,
+          "y": 340,
+        },
+      ],
+      "source": "pending_approval",
+      "target": "approved",
+      "transition": "approve",
+    },
+    {
+      "id": "approve_large:pending_approval",
+      "label": {
+        "height": 24,
+        "width": 115,
+        "x": 207,
+        "y": 308,
+      },
+      "points": [
+        {
+          "x": 203,
+          "y": 276,
+        },
+        {
+          "x": 207,
+          "y": 308,
+        },
+        {
+          "x": 270,
+          "y": 340,
+        },
+      ],
+      "source": "pending_approval",
+      "target": "approved",
+      "transition": "approve_large",
+    },
+    {
+      "id": "reject:pending_approval",
+      "label": {
+        "height": 24,
+        "width": 66,
+        "x": 96,
+        "y": 308,
+      },
+      "points": [
+        {
+          "x": 158,
+          "y": 276,
+        },
+        {
+          "x": 96,
+          "y": 308,
+        },
+        {
+          "x": 96,
+          "y": 340,
+        },
+      ],
+      "source": "pending_approval",
+      "target": "rejected",
+      "transition": "reject",
+    },
+    {
+      "id": "pay:approved",
+      "label": {
+        "height": 24,
+        "width": 45,
+        "x": 314,
+        "y": 416,
+      },
+      "points": [
+        {
+          "x": 314,
+          "y": 384,
+        },
+        {
+          "x": 314,
+          "y": 416,
+        },
+        {
+          "x": 314,
+          "y": 448,
+        },
+      ],
+      "source": "approved",
+      "target": "paid",
+      "transition": "pay",
+    },
+  ],
+  "nodes": [
+    {
+      "height": 44,
+      "id": "draft",
+      "initial": true,
+      "width": 160,
+      "x": 262,
+      "y": 16,
+    },
+    {
+      "height": 44,
+      "id": "submitted",
+      "initial": false,
+      "width": 160,
+      "x": 262,
+      "y": 124,
+    },
+    {
+      "height": 44,
+      "id": "approved",
+      "initial": false,
+      "width": 160,
+      "x": 234,
+      "y": 340,
+    },
+    {
+      "height": 44,
+      "id": "pending_approval",
+      "initial": false,
+      "width": 160,
+      "x": 121,
+      "y": 232,
+    },
+    {
+      "height": 44,
+      "id": "rejected",
+      "initial": false,
+      "width": 160,
+      "x": 16,
+      "y": 340,
+    },
+    {
+      "height": 44,
+      "id": "paid",
+      "initial": false,
+      "width": 160,
+      "x": 234,
+      "y": 448,
+    },
+  ],
+}
+`;
+
+exports[`layout of flow_leave.json > matches the stored layout snapshot 1`] = `
+{
+  "edges": [
+    {
+      "id": "route_short:requested",
+      "label": {
+        "height": 24,
+        "width": 136,
+        "x": 840,
+        "y": 92,
+      },
+      "points": [
+        {
+          "x": 362,
+          "y": 46,
+        },
+        {
+          "x": 840,
+          "y": 92,
+        },
+        {
+          "x": 840,
+          "y": 124,
+        },
+      ],
+      "source": "requested",
+      "target": "manager_review",
+      "transition": "route_short",
+    },
+    {
+      "id": "route_long:requested",
+      "label": {
+        "height": 24,
+        "width": 129,
+        "x": 424,
+        "y": 92,
+      },
+      "points": [
+        {
+          "x": 340,
+          "y": 60,
+        },
+        {
+          "x": 424,
+          "y": 92,
+        },
+        {
+          "x": 424,
+          "y": 124,
+        },
+      ],
+      "source": "requested",
+      "target": "hr_review",
+      "transition": "route_long",
+    },
+    {
+      "id": "decline_no_balance:requested",
+      "label": {
+        "height": 24,
+        "width": 185,
+        "x": 195,
+        "y": 146,
+      },
+      "points": [
+        {
+          "x": 246,
+          "y": 60,
+        },
+        {
+          "x": 195,
+          "y": 92,
+        },
+        {
+          "x": 195,
+          "y": 146,
+        },
+        {
+          "x": 195,
+          "y": 200,
+        },
+        {
+          "x": 442,
+          "y": 241,
+        },
+      ],
+      "source": "requested",
+      "target": "declined",
+      "transition": "decline_no_balance",
+    },
+    {
+      "id": "manager_approve:manager_review",
+      "label": {
+        "height": 24,
+        "width": 129,
+        "x": 930,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 877,
+          "y": 168,
+        },
+        {
+          "x": 930,
+          "y": 200,
+        },
+        {
+          "x": 890,
+          "y": 232,
+        },
+      ],
+      "source": "manager_review",
+      "target": "approved",
+      "transition": "manager_approve",
+    },
+    {
+      "id": "manager_decline:manager_review",
+      "label": {
+        "height": 24,
+        "width": 129,
+        "x": 781,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 816,
+          "y": 168,
+        },
+        {
+          "x": 781,
+          "y": 200,
+        },
+        {
+          "x": 602,
+          "y": 237,
+        },
+      ],
+      "source": "manager_review",
+      "target": "declined",
+      "transition": "manager_decline",
+    },
+    {
+      "id": "hr_approve:hr_review",
+      "label": {
+        "height": 24,
+        "width": 94,
+        "x": 564,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 481,
+          "y": 168,
+        },
+        {
+          "x": 564,
+          "y": 200,
+        },
+        {
+          "x": 783,
+          "y": 240,
+        },
+      ],
+      "source": "hr_review",
+      "target": "approved",
+      "transition": "hr_approve",
+    },
+    {
+      "id": "hr_decline:hr_review",
+      "label": {
+        "height": 24,
+        "width": 94,
+        "x": 450,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 435,
+          "y": 168,
+        },
+        {
+          "x": 450,
+          "y": 200,
+        },
+        {
+          "x": 493,
+          "y": 232,
+        },
+      ],
+      "source": "hr_review",
+      "target": "declined",
+      "transition": "hr_decline",
+    },
+    {
+      "id": "cancel:requested",
+      "label": {
+        "height": 24,
+        "width": 66,
+        "x": 49,
+        "y": 146,
+      },
+      "points": [
+        {
+          "x": 202,
+          "y": 57,
+        },
+        {
+          "x": 49,
+          "y": 92,
+        },
+        {
+          "x": 49,
+          "y": 146,
+        },
+        {
+          "x": 49,
+          "y": 200,
+        },
+        {
+          "x": 242,
+          "y": 238,
+        },
+      ],
+      "source": "requested",
+      "target": "cancelled",
+      "transition": "cancel",
+    },
+    {
+      "id": "cancel:manager_review",
+      "label": {
+        "height": 24,
+        "width": 66,
+        "x": 664,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 768,
+          "y": 168,
+        },
+        {
+          "x": 664,
+          "y": 200,
+        },
+        {
+          "x": 402,
+          "y": 241,
+        },
+      ],
+      "source": "manager_review",
+      "target": "cancelled",
+      "transition": "cancel",
+    },
+    {
+      "id": "cancel:hr_review",
+      "label": {
+        "height": 24,
+        "width": 66,
+        "x": 300,
+        "y": 200,
+      },
+      "points": [
+        {
+          "x": 373,
+          "y": 168,
+        },
+        {
+          "x": 300,
+          "y": 200,
+        },
+        {
+          "x": 313,
+          "y": 232,
+        },
+      ],
+      "source": "hr_review",
+      "target": "cancelled",
+      "transition": "cancel",
+    },
+  ],
+  "nodes": [
+    {
+      "height": 44,
+      "id": "requested",
+      "initial": true,
+      "width": 160,
+      "x": 202,
+      "y": 16,
+    },
+    {
+      "height": 44,
+      "id": "manager_review",
+      "initial": false,
+      "width": 160,
+      "x": 760,
+      "y": 124,
+    },
+    {
+      "height": 44,
+      "id": "hr_review",
+      "initial": false,
+      "width": 160,
+      "x": 344,
+      "y": 124,
+    },
+    {
+      "height": 44,
+      "id": "declined",
+      "initial": false,
+      "width": 160,
+      "x": 442,
+      "y": 232,
+    },
+    {
+      "height": 44,
+      "id": "approved",
+      "initial": false,
+      "width": 160,
+      "x": 783,
+      "y": 232,
+    },
+    {
+      "height": 44,
+      "id": "cancelled",
+      "initial": false,
+      "width": 160,
+      "x": 242,
+      "y": 232,
+    },
+  ],
+}
+`;
