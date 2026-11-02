@@ -106,6 +106,12 @@ import type {
   Page,
   PermissionEntry,
   Preview,
+  PreviewLimits,
+  PreviewLimitsWrite,
+  PreviewOrgLimits,
+  PreviewOrgLimitsRow,
+  PreviewUsage,
+  PreviewOrgLimitsWrite,
   Project,
   ProjectPermission,
   ProjectRole,
@@ -1061,6 +1067,20 @@ export const api = {
   adminPlans: () => request<PlanInfo[]>('/admin/plans', undefined, admin),
   adminSavePlan: (id: string, data: PlanWrite) =>
     request<PlanInfo>(`/admin/plans/${encodeURIComponent(id)}`, { method: 'PUT', body: json(data) }, admin),
+
+  // ── Admin: preview limits and kill switch (B3-10). Read: any staff; write: platform admins. ──
+  adminPreviewLimits: () => request<PreviewLimits>('/admin/preview-limits', undefined, admin),
+  adminUpdatePreviewLimits: (data: PreviewLimitsWrite) =>
+    request<PreviewLimits>('/admin/preview-limits', { method: 'PUT', body: json(data) }, admin),
+  adminPreviewUsage: () => request<PreviewUsage>('/admin/preview-limits/usage', undefined, admin),
+  adminPreviewOrgList: (limit = 25, offset = 0) =>
+    request<Page<PreviewOrgLimitsRow>>(`/admin/preview-limits/orgs?${queryString({ limit, offset })}`, undefined, admin),
+  adminPreviewOrgLimits: (orgId: string) =>
+    request<PreviewOrgLimits>(`/admin/preview-limits/orgs/${orgId}`, undefined, admin),
+  adminSetPreviewOrgLimits: (orgId: string, data: PreviewOrgLimitsWrite) =>
+    request<PreviewOrgLimits>(`/admin/preview-limits/orgs/${orgId}`, { method: 'PUT', body: json(data) }, admin),
+  adminClearPreviewOrgLimits: (orgId: string) =>
+    request<PreviewOrgLimits>(`/admin/preview-limits/orgs/${orgId}`, { method: 'DELETE' }, admin),
 
   // ── Admin: tokens of any user ────────────────────────────────────────────
   adminListUserTokens: (userId: string) =>

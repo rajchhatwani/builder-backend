@@ -128,6 +128,47 @@ class Settings(BaseSettings):
         raw = self.stripe_webhook_secret.get_secret_value()
         return [s.strip() for s in raw.split(",") if s.strip()]
 
+    # -- sandbox + draft workspaces (B3-4). Generated/AI-written code only ever runs in a sandbox.
+    # OCI runtime for every sandbox. Fails closed if it is not registered with Docker; `runc`
+    # (no user-space kernel) is accepted only when environment is local/test.
+    sandbox_runtime: str = "runsc"
+    sandbox_docker_bin: str = "docker"
+    # Root of per-project git repos + worktrees. Unset -> workspaces answer 503.
+    workspace_root: str | None = None
+    # Postgres server (admin URL, needs CREATEDB) hosting preview DBs. Unset -> workspaces 503.
+    workspace_db_admin_url: SecretStr | None = None
+    # Optional template database the preview DB is cloned from (synthetic data). Empty DB if unset.
+    workspace_template_db: str | None = None
+    # Images a sandbox may run (exact refs; pin by digest in production). Never pulled: the
+    # image must already exist on the runner (`--pull never`).
+    sandbox_images: list[str] = ["python:3.12-slim", "postgres:16-alpine", "bb-preview-app:1"]
+    # How often the preview runtime should call reap_expired() (no scheduler lives here yet).
+    sandbox_reap_interval_seconds: int = 60
+    workspace_max_active_per_project: int = 5
+    workspace_max_checkpoints: int = 20
+    # Per workspace: preview DB size (checked before every checkpoint) and worktree size.
+    workspace_max_db_bytes: int = 1024**3
+    workspace_max_disk_bytes: int = 200 * 1024**2
+
+    # -- preview runtime (B3-10). Unset preview_root -> previews answer 503.
+    # Where each preview's generated code lives (read-only mount into its sandbox).
+    preview_root: str | None = None
+    # Prebuilt image holding the generated project's runtime dependencies (never pulled).
+    preview_app_image: str = "bb-preview-app:1"
+    preview_db_image: str = "postgres:16-alpine"
+    # App-startup scheduler for the idle-sleep / expiry sweep + reaper. Off unless enabled.
+    preview_scheduler_enabled: bool = False
+    # Dependency approvals (B3-9) expire so a package is re-vetted periodically.
+    dependency_approval_ttl_days: int = 90
+    preview_sweep_interval_seconds: int = 60
+    # With the scheduler off, preview API calls start a sweep (at most once per interval).
+    preview_lazy_sweep: bool = True
+    preview_wake_timeout_seconds: int = 90
+    preview_max_body_bytes: int = 1024**2
+    preview_max_response_bytes: int = 8 * 1024**2
+    preview_request_timeout_seconds: int = 30
+    preview_log_stream_max_seconds: int = 60
+
     @property
     def is_local(self) -> bool:
         return self.environment == "local"

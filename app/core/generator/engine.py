@@ -17,17 +17,17 @@ from app.core.generator.features.hooks.module import MANIFEST_PATH as HOOKS_MANI
 from app.core.generator.features.hooks.module import HooksModule, build_manifest
 from app.core.generator.features.jobs.module import JobsModule
 from app.core.generator.features.keycloak.module import KeycloakModule
+from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
-from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.providers.module import ProvidersModule
-from app.core.generator.features.webhooks.module import WebhooksModule
-from app.core.generator.features.workflows.module import WorkflowsModule
 from app.core.generator.features.runtime_config.module import RuntimeConfigModule
 from app.core.generator.features.seed.module import SeedModule
 from app.core.generator.features.state_machines.module import StateMachinesModule
 from app.core.generator.features.storage.module import StorageModule
 from app.core.generator.features.tests.module import TestsModule
+from app.core.generator.features.webhooks.module import WebhooksModule
+from app.core.generator.features.workflows.module import WorkflowsModule
 from app.core.generator.zones import ZONES_PATH, render_zones
 from app.core.spec_models import Spec
 from app.core.validation import ValidationIssue, validate

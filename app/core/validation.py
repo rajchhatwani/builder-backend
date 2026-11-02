@@ -49,23 +49,27 @@ from app.core.spec_models import (
 from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
-from app.core.validation_events import EV_TABLES, check_events, events_active
-from app.core.validation_jobs import JOB_TABLES, check_jobs, jobs_active
-from app.core.validation_workflows import WORKFLOW_TABLES, check_workflows, workflows_active
-from app.core.validation_notifications import NOTIFICATION_TABLES, check_notifications, notifications_active
-from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
-from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
-from app.core.validation_history import CH_TABLES, check_history, history_active
-from app.core.validation_hooks import check_hooks
-from app.core.validation_numbering import check_numbered_fields
-from app.core.validation_secrets import check_block_secrets
-from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
-from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
 from app.core.validation_deploy import check_deployment
 from app.core.validation_documents import check_documents
+from app.core.validation_events import EV_TABLES, check_events, events_active
+from app.core.validation_history import CH_TABLES, check_history, history_active
+from app.core.validation_hooks import check_hooks
+from app.core.validation_jobs import JOB_TABLES, check_jobs, jobs_active
+from app.core.validation_notifications import (
+    NOTIFICATION_TABLES,
+    check_notifications,
+    notifications_active,
+)
+from app.core.validation_numbering import check_numbered_fields
 from app.core.validation_observability import check_observability
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
+from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
+from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
+from app.core.validation_secrets import check_block_secrets
+from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
 from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
+from app.core.validation_workflows import WORKFLOW_TABLES, check_workflows, workflows_active
 
 MAX_ENTITIES = 100
 MAX_FIELDS_PER_ENTITY = 100

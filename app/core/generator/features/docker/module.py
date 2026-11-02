@@ -26,20 +26,20 @@ from app.core.generator.features.storage.module import (
 from app.core.generator.features.storage.module import active as storage_block
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import invitations_enabled, uses_keycloak
-from app.core.validation_documents import documents_active
 from app.core.validation_api_edge import api_edge_tables_active
+from app.core.validation_documents import documents_active
 from app.core.validation_events import events_active
 from app.core.validation_history import history_active
 from app.core.validation_hooks import hooks_active
 from app.core.validation_jobs import jobs_active
-from app.core.validation_workflows import workflows_active
+from app.core.validation_observability import observability_active
 from app.core.validation_payments import payments_active
+from app.core.validation_providers import providers_active
 from app.core.validation_runtime import runtime_config_active
 from app.core.validation_seed import seed_active
 from app.core.validation_storage import storage_active
-from app.core.validation_providers import providers_active
 from app.core.validation_webhooks import webhooks_active
-from app.core.validation_observability import observability_active
+from app.core.validation_workflows import workflows_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 

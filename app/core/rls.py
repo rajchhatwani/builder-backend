@@ -54,6 +54,7 @@ ORG_TABLES: tuple[str, ...] = (
     "impersonation_sessions",
     "ai_org_settings",
     "ai_cost_ledger",
+    "preview_org_limits",
 )
 AUDIT_TABLE = "platform_audit_log"
 # `organizations` itself is scoped by its primary key.
@@ -81,6 +82,10 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "registry_block_versions",
     "registry_hooks_ledger",
     "registry_deps_lock",
+    "workspaces",
+    "workspace_checkpoints",
+    "dependency_requests",
+    "previews",
 )
 ALL_TABLES: tuple[str, ...] = (
     ORGANIZATIONS_TABLE,

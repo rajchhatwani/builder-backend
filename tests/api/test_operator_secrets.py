@@ -100,9 +100,14 @@ async def test_a_view_as_session_never_returns_a_secret_or_a_credential(
     session_factory,
     dns,
     totp_clock: TotpClock,  # type: ignore[no-untyped-def]
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Consent lets an operator see what the member sees - not the credentials the platform
     keeps for them. Every GET route reachable with the token, writes switched ON, is walked."""
+    from app.services import preview_service as ps
+
+    # The public preview routes open their own sessions; point them at the test database.
+    monkeypatch.setattr(ps, "session_factory", lambda: session_factory)
     owner = await client_for("owner@leaky.test")
     planted = await _plant(owner, session_factory, dns, totp_clock)
     org, pid = planted.pop("_org"), planted.pop("_project")

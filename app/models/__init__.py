@@ -5,6 +5,7 @@ from app.models.auth_secrets import ProjectAuthSecrets
 from app.models.authorization_config import ProjectAuthorization
 from app.models.base import Base
 from app.models.behavior_config import ProjectBehavior
+from app.models.dependency_policy import DependencyRequest
 from app.models.deployment_config import ProjectDeployment
 from app.models.documents_config import ProjectDocuments
 from app.models.entity import Entity
@@ -16,11 +17,11 @@ from app.models.payments_config import ProjectPaymentsConfig
 from app.models.platform import (
     ApiToken,
     AuditLog,
+    EmailVerificationToken,
     ImpersonationSession,
     MfaRecoveryCode,
     PlatformUser,
     ProjectMember,
-    EmailVerificationToken,
     RefreshToken,
 )
 from app.models.project import Project
@@ -32,10 +33,16 @@ from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
 from app.models.spec_op import SpecOp
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
+from app.models.preview import Preview, PreviewOrgLimits, PreviewPlatformSettings
+from app.models.workspace import Workspace, WorkspaceCheckpoint
 
 __all__ = [
     "AiCostLedger",
     "AiOrgSettings",
+    "DependencyRequest",
+    "Preview",
+    "PreviewOrgLimits",
+    "PreviewPlatformSettings",
     "RegistryBlockVersion",
     "RegistryDepLock",
     "RegistryHookEntry",
@@ -74,4 +81,6 @@ __all__ = [
     "SsoConnection",
     "SsoDomain",
     "SsoLoginRequest",
+    "Workspace",
+    "WorkspaceCheckpoint",
 ]

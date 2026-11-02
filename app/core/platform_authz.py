@@ -30,6 +30,10 @@ _OWNER_ONLY: tuple[tuple[str, str], ...] = (
     ("POST", "/projects/{project_id}/members"),
     # Registry (B3-8): recording block versions, hooks, locked deps and approvals is owner-only.
     ("POST", "/projects/{project_id}/registry/"),
+    # Dependency policy (B3-9): only an owner approves or denies an unknown package.
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/approve"),
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/deny"),
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/revoke"),
     ("PATCH", "/projects/{project_id}/members/"),
     ("DELETE", "/projects/{project_id}/members/"),
     # MCP access grant: only an owner may enable/disable MCP for a member.
@@ -261,6 +265,8 @@ ADMIN_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
             "audit:read",
             "stats:read",
             "settings:read",
+            # B3-10: preview limits, per-org overrides and the preview kill switch.
+            "settings:write",
             # §4.5: "view as" a customer member. Platform admins only, never support.
             "impersonate:write",
             # SEC L-1: the SSO "test" button makes an outbound fetch; read-only support may not.

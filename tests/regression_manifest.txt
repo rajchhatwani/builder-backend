@@ -84,3 +84,5 @@ tests/api/test_ai_cost_registry.py
 tests/unit/test_email_verification.py
 tests/api/test_email_verification.py
 tests/e2e/test_cycle2_exit_demo.py
+tests/e2e/test_sandbox_hostile.py
+tests/e2e/test_preview_stack.py

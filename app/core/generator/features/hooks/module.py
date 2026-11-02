@@ -32,9 +32,6 @@ from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.generator.zones import custom_prefixes, zone_for
 from app.core.spec_models import Spec, SpecHook, SpecHookEffectBudget, SpecHookField
-from app.core.validation_notifications import notifications_active
-from app.core.validation_providers import providers_active
-from app.core.validation_webhooks import webhooks_active
 from app.core.validation_hooks import (
     STAGES,
     ceilings_for,
@@ -42,6 +39,9 @@ from app.core.validation_hooks import (
     parse_point,
     policy_of,
 )
+from app.core.validation_notifications import notifications_active
+from app.core.validation_providers import providers_active
+from app.core.validation_webhooks import webhooks_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 MANIFEST_PATH = "platform/hooks.json"

@@ -17,8 +17,8 @@ from app.services.ai.base import (
 )
 from app.services.ai.claude import ClaudeProvider
 from app.services.ai.fake import FakeProvider
-from app.services.ai.pricing import price_table
 from app.services.ai.ledger import AiLedgerService
+from app.services.ai.pricing import price_table
 from app.services.ai.routing import route_model
 
 ProviderFactory = Callable[[str | None], ModelProvider]

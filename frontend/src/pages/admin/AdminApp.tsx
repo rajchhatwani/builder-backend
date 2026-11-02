@@ -4,6 +4,8 @@ import { onSessionLost } from '../../api/session'
 import { isMfaChallenge, type MfaChallenge, type UserAccount } from '../../api/types'
 import { MfaStep } from '../../components/MfaStep'
 import { useUi } from '../../components/Ui'
+import { shellV2Enabled } from '../../shell/flag'
+import { PreviewLimitsPage, showPreviewLimits } from './PreviewLimitsPage'
 import {
   AdminAudit,
   AdminBilling,
@@ -27,6 +29,7 @@ export type AdminSection =
   | 'projects'
   | 'audit'
   | 'settings'
+  | 'previews'
 
 const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -38,6 +41,7 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'projects', label: 'Projects' },
   { id: 'audit', label: 'Audit log' },
   { id: 'settings', label: 'Settings' },
+  { id: 'previews', label: 'Preview limits' },
 ]
 
 export function parseAdminSection(hash: string): AdminSection {
@@ -153,13 +157,16 @@ export function AdminApp({ section }: { section: AdminSection }) {
   if (user === undefined) return <p className="empty-state">Loading…</p>
   if (user === null) return <AdminLogin onSignedIn={setUser} />
 
+  // Preview limits: platform admins only, and only with ui.shell=v2.
+  const previewsOn = showPreviewLimits(user.platform_role, shellV2Enabled())
+  const sections = SECTIONS.filter((s) => s.id !== 'previews' || previewsOn)
   const readOnly = user.platform_role !== 'platform_admin'
   // #/admin/organizations/<id> opens one organization.
   const orgId = window.location.hash.match(/^#\/admin\/organizations\/([0-9a-f-]{36})/)?.[1]
 
   return (
     <>
-      <nav data-topnav className="admin-band">
+      <nav data-topnav className="admin-band" aria-label="Administration">
         <div className="row">
           <div className="col-6 branding">
             <span className="admin-badge">Administration</span>
@@ -186,9 +193,9 @@ export function AdminApp({ section }: { section: AdminSection }) {
       </nav>
 
       <aside data-sidebar className="main-sidebar">
-        <nav>
+        <nav aria-label="Admin sections">
           <ul>
-            {SECTIONS.map((s) => (
+            {sections.map((s) => (
               <li key={s.id}>
                 <a href={`#/admin/${s.id}`} aria-current={section === s.id ? 'page' : undefined}>
                   <span>{s.label}</span>
@@ -211,6 +218,8 @@ export function AdminApp({ section }: { section: AdminSection }) {
           {section === 'projects' && <AdminProjects />}
           {section === 'audit' && <AdminAudit />}
           {section === 'settings' && <AdminSettings />}
+          {section === 'previews' && previewsOn && <PreviewLimitsPage readOnly={readOnly} />}
+          {section === 'previews' && !previewsOn && <p className="empty-state" role="alert">This page is for platform admins, with the new interface turned on.</p>}
         </div>
       </main>
     </>

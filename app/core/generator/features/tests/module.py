@@ -11,16 +11,16 @@ from app.core.generator.render import make_environment, read_verbatim, render_te
 from app.core.validation import auth_tables, uses_keycloak
 from app.core.validation_api_edge import api_edge_tables
 from app.core.validation_events import EV_TABLES, events_active
-from app.core.validation_notifications import NOTIFICATION_TABLES, notifications_active
-from app.core.validation_providers import PROVIDER_TABLES, providers_active
-from app.core.validation_jobs import JOB_TABLES, jobs_active
-from app.core.validation_webhooks import WEBHOOK_TABLES, webhooks_active
-from app.core.validation_workflows import WORKFLOW_TABLES, workflows_active
 from app.core.validation_history import CH_TABLES, history_active
+from app.core.validation_jobs import JOB_TABLES, jobs_active
+from app.core.validation_notifications import NOTIFICATION_TABLES, notifications_active
 from app.core.validation_payments import PAYMENTS_TABLES, payments_active
+from app.core.validation_providers import PROVIDER_TABLES, providers_active
 from app.core.validation_runtime import RC_TABLES, runtime_config_active
 from app.core.validation_seed import SEED_TABLES, seed_active
 from app.core.validation_storage import STORAGE_TABLES, storage_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, webhooks_active
+from app.core.validation_workflows import WORKFLOW_TABLES, workflows_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 

@@ -1528,6 +1528,45 @@
     "title": "ApiTokenRead",
     "type": "object"
    },
+   "ApprovedPin": {
+    "properties": {
+     "expires_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "hashes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Hashes",
+      "type": "array"
+     },
+     "package": {
+      "title": "Package",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "package",
+     "version",
+     "hashes",
+     "expires_at"
+    ],
+    "title": "ApprovedPin",
+    "type": "object"
+   },
    "AuditRead": {
     "properties": {
      "action": {
@@ -3112,6 +3151,70 @@
     "title": "CheckoutRead",
     "type": "object"
    },
+   "CheckpointCreate": {
+    "properties": {
+     "label": {
+      "default": "checkpoint",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Label",
+      "type": "string"
+     }
+    },
+    "title": "CheckpointCreate",
+    "type": "object"
+   },
+   "CheckpointRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "git_sha": {
+      "title": "Git Sha",
+      "type": "string"
+     },
+     "has_data_snapshot": {
+      "title": "Has Data Snapshot",
+      "type": "boolean"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "spec_hash": {
+      "title": "Spec Hash",
+      "type": "string"
+     },
+     "spec_seq": {
+      "title": "Spec Seq",
+      "type": "integer"
+     },
+     "workspace_id": {
+      "format": "uuid",
+      "title": "Workspace Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "workspace_id",
+     "label",
+     "git_sha",
+     "spec_seq",
+     "spec_hash",
+     "has_data_snapshot",
+     "created_at"
+    ],
+    "title": "CheckpointRead",
+    "type": "object"
+   },
    "CoverageResponse": {
     "properties": {
      "model": {
@@ -3249,6 +3352,274 @@
      "hash"
     ],
     "title": "DepLockWrite",
+    "type": "object"
+   },
+   "DependencyDecision": {
+    "additionalProperties": false,
+    "description": "Approve must echo what was reviewed; a changed request is refused (409).",
+    "properties": {
+     "hashes": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Hashes",
+      "type": "array"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "package": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Package"
+     },
+     "version": {
+      "anyOf": [
+       {
+        "maxLength": 50,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Version"
+     }
+    },
+    "title": "DependencyDecision",
+    "type": "object"
+   },
+   "DependencyPolicyRead": {
+    "properties": {
+     "allow_list": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Allow List",
+      "type": "array"
+     },
+     "approved": {
+      "items": {
+       "$ref": "#/components/schemas/ApprovedPin"
+      },
+      "title": "Approved",
+      "type": "array"
+     },
+     "curated_sets": {
+      "additionalProperties": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Curated Sets",
+      "type": "object"
+     },
+     "pending_requests": {
+      "title": "Pending Requests",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "curated_sets",
+     "allow_list",
+     "approved",
+     "pending_requests"
+    ],
+    "title": "DependencyPolicyRead",
+    "type": "object"
+   },
+   "DependencyRequestRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "decided_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided At"
+     },
+     "decided_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided By"
+     },
+     "decision_note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decision Note"
+     },
+     "expires_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "hashes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Hashes",
+      "type": "array"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "package": {
+      "title": "Package",
+      "type": "string"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     },
+     "requested_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Requested By"
+     },
+     "revoked_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revoked At"
+     },
+     "revoked_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revoked By"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "package",
+     "version",
+     "reason",
+     "hashes",
+     "status",
+     "requested_by",
+     "decided_by",
+     "decided_at",
+     "decision_note",
+     "expires_at",
+     "revoked_by",
+     "revoked_at",
+     "created_at"
+    ],
+    "title": "DependencyRequestRead",
+    "type": "object"
+   },
+   "DependencyRequestWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "hashes": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 20,
+      "title": "Hashes",
+      "type": "array"
+     },
+     "package": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Package",
+      "type": "string"
+     },
+     "reason": {
+      "maxLength": 2000,
+      "minLength": 3,
+      "title": "Reason",
+      "type": "string"
+     },
+     "version": {
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "package",
+     "version",
+     "reason"
+    ],
+    "title": "DependencyRequestWrite",
     "type": "object"
    },
    "Dependent": {
@@ -6136,6 +6507,90 @@
     "title": "LibraryItem",
     "type": "object"
    },
+   "LimitsBody": {
+    "additionalProperties": false,
+    "properties": {
+     "cpus": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cpus"
+     },
+     "db_mb": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Db Mb"
+     },
+     "delete_after_days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Delete After Days"
+     },
+     "max_live_per_user": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Live Per User"
+     },
+     "memory_mb": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Memory Mb"
+     },
+     "rate_per_minute": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rate Per Minute"
+     },
+     "sleep_after_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sleep After Minutes"
+     }
+    },
+    "title": "LimitsBody",
+    "type": "object"
+   },
    "ListBody": {
     "properties": {
      "edit_roles": {
@@ -8195,6 +8650,37 @@
     "title": "Page[OrganizationRead]",
     "type": "object"
    },
+   "Page_PreviewOrgLimitsRow_": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/PreviewOrgLimitsRow"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "Page[PreviewOrgLimitsRow]",
+    "type": "object"
+   },
    "Page_ProjectPermissionRead_": {
     "properties": {
      "items": {
@@ -9363,6 +9849,464 @@
     "title": "PortalRead",
     "type": "object"
    },
+   "PreviewCreate": {
+    "properties": {
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "title": "PreviewCreate",
+    "type": "object"
+   },
+   "PreviewCreated": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "is_preview": {
+      "default": true,
+      "title": "Is Preview",
+      "type": "boolean"
+     },
+     "last_request_at": {
+      "format": "date-time",
+      "title": "Last Request At",
+      "type": "string"
+     },
+     "limits": {
+      "additionalProperties": true,
+      "title": "Limits",
+      "type": "object"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "spec_hash": {
+      "title": "Spec Hash",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "token": {
+      "description": "Shown once. Send it as the X-Preview-Token header.",
+      "title": "Token",
+      "type": "string"
+     },
+     "url_path": {
+      "title": "Url Path",
+      "type": "string"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "workspace_id",
+     "state",
+     "spec_hash",
+     "url_path",
+     "created_at",
+     "last_request_at",
+     "expires_at",
+     "limits",
+     "token"
+    ],
+    "title": "PreviewCreated",
+    "type": "object"
+   },
+   "PreviewLimitsRead": {
+    "description": "Platform view: kill switch, the stored defaults (merged over built-ins) and the bounds.",
+    "properties": {
+     "bounds": {
+      "additionalProperties": {
+       "maxItems": 2,
+       "minItems": 2,
+       "prefixItems": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "number"
+        }
+       ],
+       "type": "array"
+      },
+      "title": "Bounds",
+      "type": "object"
+     },
+     "defaults": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Defaults",
+      "type": "object"
+     },
+     "kill_switch": {
+      "title": "Kill Switch",
+      "type": "boolean"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "updated_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated By"
+     }
+    },
+    "required": [
+     "kill_switch",
+     "defaults",
+     "bounds"
+    ],
+    "title": "PreviewLimitsRead",
+    "type": "object"
+   },
+   "PreviewLimitsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "defaults": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/LimitsBody"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "kill_switch": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kill Switch"
+     }
+    },
+    "title": "PreviewLimitsWrite",
+    "type": "object"
+   },
+   "PreviewOrgLimitsRead": {
+    "properties": {
+     "allow_above_default": {
+      "default": false,
+      "title": "Allow Above Default",
+      "type": "boolean"
+     },
+     "effective": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Effective",
+      "type": "object"
+     },
+     "enabled": {
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "kill_switch": {
+      "title": "Kill Switch",
+      "type": "boolean"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "organization_id": {
+      "format": "uuid",
+      "title": "Organization Id",
+      "type": "string"
+     },
+     "overrides": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Overrides",
+      "type": "object"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "organization_id",
+     "enabled",
+     "overrides",
+     "effective",
+     "kill_switch"
+    ],
+    "title": "PreviewOrgLimitsRead",
+    "type": "object"
+   },
+   "PreviewOrgLimitsRow": {
+    "description": "One line of the paginated list of all organizations that have an override.",
+    "properties": {
+     "allow_above_default": {
+      "title": "Allow Above Default",
+      "type": "boolean"
+     },
+     "enabled": {
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "organization_id": {
+      "format": "uuid",
+      "title": "Organization Id",
+      "type": "string"
+     },
+     "organization_name": {
+      "title": "Organization Name",
+      "type": "string"
+     },
+     "organization_slug": {
+      "title": "Organization Slug",
+      "type": "string"
+     },
+     "overrides": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Overrides",
+      "type": "object"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "organization_id",
+     "organization_name",
+     "organization_slug",
+     "enabled",
+     "allow_above_default",
+     "overrides"
+    ],
+    "title": "PreviewOrgLimitsRow",
+    "type": "object"
+   },
+   "PreviewOrgLimitsWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "allow_above_default": {
+      "default": false,
+      "title": "Allow Above Default",
+      "type": "boolean"
+     },
+     "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "overrides": {
+      "$ref": "#/components/schemas/LimitsBody"
+     }
+    },
+    "title": "PreviewOrgLimitsWrite",
+    "type": "object"
+   },
+   "PreviewRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "is_preview": {
+      "default": true,
+      "title": "Is Preview",
+      "type": "boolean"
+     },
+     "last_request_at": {
+      "format": "date-time",
+      "title": "Last Request At",
+      "type": "string"
+     },
+     "limits": {
+      "additionalProperties": true,
+      "title": "Limits",
+      "type": "object"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "spec_hash": {
+      "title": "Spec Hash",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "url_path": {
+      "title": "Url Path",
+      "type": "string"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "workspace_id",
+     "state",
+     "spec_hash",
+     "url_path",
+     "created_at",
+     "last_request_at",
+     "expires_at",
+     "limits"
+    ],
+    "title": "PreviewRead",
+    "type": "object"
+   },
    "PreviewRequest": {
     "description": "Render a template with data and return the PDF, without saving anything.",
     "properties": {
@@ -9434,6 +10378,42 @@
      "files"
     ],
     "title": "PreviewResponse",
+    "type": "object"
+   },
+   "PreviewUsageRead": {
+    "properties": {
+     "by_state": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "By State",
+      "type": "object"
+     },
+     "kill_switch": {
+      "title": "Kill Switch",
+      "type": "boolean"
+     },
+     "live": {
+      "title": "Live",
+      "type": "integer"
+     },
+     "orgs_with_overrides": {
+      "title": "Orgs With Overrides",
+      "type": "integer"
+     },
+     "running": {
+      "title": "Running",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "live",
+     "running",
+     "by_state",
+     "orgs_with_overrides",
+     "kill_switch"
+    ],
+    "title": "PreviewUsageRead",
     "type": "object"
    },
    "ProjectCreate": {
@@ -10835,6 +11815,20 @@
      "roles"
     ],
     "title": "RolesRead",
+    "type": "object"
+   },
+   "RollbackRequest": {
+    "properties": {
+     "checkpoint_id": {
+      "format": "uuid",
+      "title": "Checkpoint Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "checkpoint_id"
+    ],
+    "title": "RollbackRequest",
     "type": "object"
    },
    "RowRule": {
@@ -18320,6 +19314,89 @@
     },
     "title": "WorkflowsWrite",
     "type": "object"
+   },
+   "WorkspaceCreate": {
+    "properties": {
+     "name": {
+      "default": "draft",
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "title": "WorkspaceCreate",
+    "type": "object"
+   },
+   "WorkspaceRead": {
+    "properties": {
+     "base_spec_seq": {
+      "title": "Base Spec Seq",
+      "type": "integer"
+     },
+     "branch": {
+      "title": "Branch",
+      "type": "string"
+     },
+     "checkpoints": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/CheckpointRead"
+      },
+      "title": "Checkpoints",
+      "type": "array"
+     },
+     "cleanup_incomplete": {
+      "default": false,
+      "title": "Cleanup Incomplete",
+      "type": "boolean"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "spec_seq": {
+      "title": "Spec Seq",
+      "type": "integer"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "name",
+     "state",
+     "base_spec_seq",
+     "spec_seq",
+     "branch",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "WorkspaceRead",
+    "type": "object"
    }
   }
  },
@@ -20447,6 +21524,278 @@
      }
     },
     "summary": "Upsert Plan",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/preview-limits": {
+   "get": {
+    "operationId": "read_limits_admin_preview_limits_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewLimitsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Read Limits",
+    "tags": [
+     "admin"
+    ]
+   },
+   "put": {
+    "operationId": "update_limits_admin_preview_limits_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PreviewLimitsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewLimitsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Limits",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/preview-limits/orgs": {
+   "get": {
+    "operationId": "list_org_limits_admin_preview_limits_orgs_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Page_PreviewOrgLimitsRow_"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Org Limits",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/preview-limits/orgs/{org_id}": {
+   "delete": {
+    "operationId": "clear_org_limits_admin_preview_limits_orgs__org_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "org_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Org Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewOrgLimitsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Clear Org Limits",
+    "tags": [
+     "admin"
+    ]
+   },
+   "get": {
+    "operationId": "read_org_limits_admin_preview_limits_orgs__org_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "org_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Org Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewOrgLimitsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Read Org Limits",
+    "tags": [
+     "admin"
+    ]
+   },
+   "put": {
+    "operationId": "set_org_limits_admin_preview_limits_orgs__org_id__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "org_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Org Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PreviewOrgLimitsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewOrgLimitsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Set Org Limits",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/preview-limits/usage": {
+   "get": {
+    "operationId": "usage_admin_preview_limits_usage_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewUsageRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Usage",
     "tags": [
      "admin"
     ]
@@ -23695,6 +25044,47 @@
     ]
    }
   },
+  "/previews/{preview_id}/-/logs": {
+   "get": {
+    "operationId": "preview_logs_previews__preview_id____logs_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "preview_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Preview Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Preview Logs",
+    "tags": [
+     "previews"
+    ]
+   }
+  },
   "/projects": {
    "get": {
     "operationId": "list_projects_projects_get",
@@ -26391,6 +27781,350 @@
     ]
    }
   },
+  "/projects/{project_id}/dependencies": {
+   "get": {
+    "operationId": "get_policy_projects__project_id__dependencies_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DependencyPolicyRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Policy",
+    "tags": [
+     "dependencies"
+    ]
+   }
+  },
+  "/projects/{project_id}/dependencies/requests": {
+   "get": {
+    "operationId": "list_requests_projects__project_id__dependencies_requests_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/DependencyRequestRead"
+         },
+         "title": "Response List Requests Projects  Project Id  Dependencies Requests Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Requests",
+    "tags": [
+     "dependencies"
+    ]
+   },
+   "post": {
+    "operationId": "request_dependency_projects__project_id__dependencies_requests_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DependencyRequestWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DependencyRequestRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Request Dependency",
+    "tags": [
+     "dependencies"
+    ]
+   }
+  },
+  "/projects/{project_id}/dependencies/requests/{request_id}/approve": {
+   "post": {
+    "operationId": "approve_request_projects__project_id__dependencies_requests__request_id__approve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "request_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Request Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DependencyDecision"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DependencyRequestRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Approve Request",
+    "tags": [
+     "dependencies"
+    ]
+   }
+  },
+  "/projects/{project_id}/dependencies/requests/{request_id}/deny": {
+   "post": {
+    "operationId": "deny_request_projects__project_id__dependencies_requests__request_id__deny_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "request_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Request Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/DependencyDecision"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DependencyRequestRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Deny Request",
+    "tags": [
+     "dependencies"
+    ]
+   }
+  },
+  "/projects/{project_id}/dependencies/requests/{request_id}/revoke": {
+   "post": {
+    "operationId": "revoke_request_projects__project_id__dependencies_requests__request_id__revoke_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "request_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Request Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/DependencyDecision"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DependencyRequestRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Revoke Request",
+    "tags": [
+     "dependencies"
+    ]
+   }
+  },
   "/projects/{project_id}/deployment": {
    "get": {
     "operationId": "get_deployment_projects__project_id__deployment_get",
@@ -27034,6 +28768,45 @@
     "summary": "Preview",
     "tags": [
      "generate"
+    ]
+   }
+  },
+  "/projects/{project_id}/generate/self-host-kit": {
+   "get": {
+    "operationId": "self_host_kit_projects__project_id__generate_self_host_kit_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/zip": {}
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Self Host Kit",
+    "tags": [
+     "previews"
     ]
    }
   },
@@ -28247,6 +30020,261 @@
     "summary": "Bulk upsert permissions for a project (returns full updated list)",
     "tags": [
      "auth"
+    ]
+   }
+  },
+  "/projects/{project_id}/previews": {
+   "get": {
+    "operationId": "list_previews_projects__project_id__previews_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/PreviewRead"
+         },
+         "title": "Response List Previews Projects  Project Id  Previews Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Previews",
+    "tags": [
+     "previews"
+    ]
+   },
+   "post": {
+    "operationId": "create_preview_projects__project_id__previews_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PreviewCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewCreated"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Preview",
+    "tags": [
+     "previews"
+    ]
+   }
+  },
+  "/projects/{project_id}/previews/{preview_id}": {
+   "delete": {
+    "operationId": "kill_preview_projects__project_id__previews__preview_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "preview_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Preview Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Kill Preview",
+    "tags": [
+     "previews"
+    ]
+   },
+   "get": {
+    "operationId": "get_preview_projects__project_id__previews__preview_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "preview_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Preview Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Preview",
+    "tags": [
+     "previews"
+    ]
+   }
+  },
+  "/projects/{project_id}/previews/{preview_id}/rotate-token": {
+   "post": {
+    "operationId": "rotate_preview_token_projects__project_id__previews__preview_id__rotate_token_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "preview_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Preview Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PreviewCreated"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Rotate Preview Token",
+    "tags": [
+     "previews"
     ]
    }
   },
@@ -29781,6 +31809,334 @@
     "summary": "Validate Project",
     "tags": [
      "spec"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces": {
+   "get": {
+    "operationId": "list_workspaces_projects__project_id__workspaces_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/WorkspaceRead"
+         },
+         "title": "Response List Workspaces Projects  Project Id  Workspaces Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Workspaces",
+    "tags": [
+     "workspaces"
+    ]
+   },
+   "post": {
+    "operationId": "create_workspace_projects__project_id__workspaces_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WorkspaceCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Workspace",
+    "tags": [
+     "workspaces"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces/{ws_id}": {
+   "delete": {
+    "operationId": "discard_workspace_projects__project_id__workspaces__ws_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Discard Workspace",
+    "tags": [
+     "workspaces"
+    ]
+   },
+   "get": {
+    "operationId": "get_workspace_projects__project_id__workspaces__ws_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Workspace",
+    "tags": [
+     "workspaces"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces/{ws_id}/checkpoints": {
+   "post": {
+    "operationId": "create_checkpoint_projects__project_id__workspaces__ws_id__checkpoints_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CheckpointCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CheckpointRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Checkpoint",
+    "tags": [
+     "workspaces"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces/{ws_id}/rollback": {
+   "post": {
+    "operationId": "rollback_workspace_projects__project_id__workspaces__ws_id__rollback_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RollbackRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Rollback Workspace",
+    "tags": [
+     "workspaces"
     ]
    }
   },

@@ -11,9 +11,6 @@ from collections.abc import Callable
 
 from pydantic import BaseModel
 
-from app.core.validation_notifications import notifications_active
-from app.core.validation_providers import providers_active
-from app.core.validation_webhooks import webhooks_active
 from app.core.spec_models import (
     Spec,
     SpecEntity,
@@ -22,6 +19,9 @@ from app.core.spec_models import (
     SpecHookModel,
     SpecStateMachine,
 )
+from app.core.validation_notifications import notifications_active
+from app.core.validation_providers import providers_active
+from app.core.validation_webhooks import webhooks_active
 
 Add = Callable[[str, str, str], None]
 

@@ -1609,3 +1609,58 @@ export interface SpecOp {
   spec_hash_after: string
   created_at: string
 }
+
+// ── Admin: preview limits (B3-10) ────────────────────────────────────────
+export type PreviewLimitKey =
+  | 'max_live_per_user'
+  | 'sleep_after_minutes'
+  | 'delete_after_days'
+  | 'cpus'
+  | 'memory_mb'
+  | 'db_mb'
+  | 'rate_per_minute'
+export type PreviewLimitValues = Record<PreviewLimitKey, number>
+export interface PreviewLimits {
+  kill_switch: boolean
+  defaults: PreviewLimitValues
+  bounds: Record<PreviewLimitKey, [number, number]>
+  updated_at: string | null
+  updated_by: string | null
+}
+export interface PreviewLimitsWrite {
+  kill_switch?: boolean
+  defaults?: Partial<PreviewLimitValues>
+}
+export interface PreviewOrgLimits {
+  organization_id: string
+  enabled: boolean
+  overrides: Partial<PreviewLimitValues>
+  effective: PreviewLimitValues
+  kill_switch: boolean
+  allow_above_default: boolean
+  note: string | null
+  updated_at: string | null
+}
+export interface PreviewOrgLimitsWrite {
+  enabled?: boolean
+  allow_above_default?: boolean
+  overrides?: Partial<PreviewLimitValues>
+  note?: string | null
+}
+export interface PreviewOrgLimitsRow {
+  organization_id: string
+  organization_name: string
+  organization_slug: string
+  enabled: boolean
+  allow_above_default: boolean
+  overrides: Partial<PreviewLimitValues>
+  note?: string | null
+  updated_at?: string | null
+}
+export interface PreviewUsage {
+  live: number
+  running: number
+  by_state: Record<string, number>
+  orgs_with_overrides: number
+  kill_switch: boolean
+}

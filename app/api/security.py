@@ -15,7 +15,6 @@ from fastapi import Depends, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.behavior_service import ACTOR_ROLE
 from app.config import Settings, get_settings
 from app.core import platform_authz as authz
 from app.core import rls
@@ -27,6 +26,7 @@ from app.models.platform import Organization, OrganizationMember
 from app.models.project import Project
 from app.services import access_service, audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
+from app.services.behavior_service import ACTOR_ROLE
 from app.services.ops import scope as ops_scope
 from app.services.platform_auth_service import RequestInfo
 

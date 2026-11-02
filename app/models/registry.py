@@ -10,6 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.models.base import Base
 from app.models.mixins import UUIDPrimaryKeyMixin, _utcnow
 
+
 def _project_fk() -> ForeignKey:
     return ForeignKey("projects.id", ondelete="CASCADE")
 

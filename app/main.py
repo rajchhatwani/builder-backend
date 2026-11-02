@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import re
@@ -12,14 +13,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api import (
-    ai_registry,
-    advisor,
     account,
     admin,
+    advisor,
+    ai_registry,
     auth,
     authorization,
     behavior,
     billing,
+    dependencies,
     deployment,
     documents,
     entities,
@@ -42,6 +44,9 @@ from app.api import (
     status,
     storage,
     wellknown,
+    workspaces,
+    admin_previews,
+    previews,
 )
 from app.api.body_limit import SpecWriteLimit
 from app.api.input_guard import reject_nul_characters
@@ -208,6 +213,23 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise RuntimeError(f"BUILDER_BOOTSTRAP_ADMIN_* is invalid: {exc.message}") from exc
         if admin_user is not None:
             log.info("bootstrap_admin_created", email=admin_user.email)
+    scheduler: asyncio.Task[None] | None = None
+    if settings.preview_scheduler_enabled:
+        from app.services import preview_service
+
+        scheduler = asyncio.create_task(
+            preview_service.scheduler_loop(settings.preview_sweep_interval_seconds)
+        )
+    try:
+        async with _mcp_lifespan(app):
+            yield
+    finally:
+        if scheduler is not None:
+            scheduler.cancel()
+
+
+@asynccontextmanager
+async def _mcp_lifespan(app: FastAPI) -> AsyncIterator[None]:
     # The MCP sub-app has its own lifespan that starts the Streamable-HTTP session
     # manager's task group. A mounted Starlette app's lifespan is NOT run automatically,
     # so we drive it here. Without this, every /mcp request raises
@@ -254,6 +276,8 @@ def create_app() -> FastAPI:
     app.include_router(account.router)
     app.include_router(impersonation.router)  # "view as" banner, writes switch, end
     app.include_router(admin.router)
+    app.include_router(admin_previews.router)  # preview limits: require_admin
+    app.include_router(previews.public_router)  # preview proxy/logs: per-preview token
     app.include_router(orgs.router)  # organization routes authenticate via current_principal
     app.include_router(wellknown.router)  # RFC 9728 discovery, no auth
     app.include_router(billing.router)  # Stripe webhook: authenticated by its signature
@@ -287,6 +311,9 @@ def create_app() -> FastAPI:
         generate.router,
         migration_plan.router,
         ai_registry.router,
+        workspaces.router,
+        dependencies.router,
+        previews.project_router,
     ):
         app.include_router(router, dependencies=guarded)
 

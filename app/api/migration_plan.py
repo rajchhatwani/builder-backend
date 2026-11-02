@@ -6,8 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.security import forbidden
 from app.db import get_session
 from app.models.enums import MemberRole
-from app.services.access_service import ROLE_LEVEL
 from app.schemas.migration_plan import MigrationPlanRequest, MigrationPlanResponse
+from app.services.access_service import ROLE_LEVEL
 from app.services.generation_service import GenerationService
 
 router = APIRouter(tags=["generate"])

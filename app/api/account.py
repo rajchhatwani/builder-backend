@@ -51,8 +51,8 @@ from app.schemas.account import (
     VerifyEmailRequest,
 )
 from app.schemas.sso import LoginDiscoverRead, LoginDiscoverRequest
-from app.services.access_service import Principal
 from app.services import mail_service
+from app.services.access_service import Principal
 from app.services.api_token_service import ApiTokenService
 from app.services.mfa_service import MfaService
 from app.services.platform_auth_service import MfaChallenge, PlatformAuthService, Session

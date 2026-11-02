@@ -27,11 +27,11 @@ from app.models.platform import ProjectMember
 from app.models.project import Project
 from app.services import audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
+from app.services.behavior_service import ACTOR_ROLE
 from app.services.generation_service import GenerationService
 from app.services.ops.scope import Actor
-from app.services.platform_auth_service import is_staff
 from app.services.ops.service import OpsService
-from app.services.behavior_service import ACTOR_ROLE
+from app.services.platform_auth_service import is_staff
 from app.services.spec_service import SpecService
 
 MAX_RESPONSE_CHARS = 50_000

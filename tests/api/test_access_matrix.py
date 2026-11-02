@@ -55,6 +55,13 @@ PUBLIC = {
     ("POST", "/sso/saml/{slug}/acs"),
     ("GET", "/sso/oidc/{slug}/callback"),
 }
+# B3-10 preview runtime: authenticated by the per-preview token (X-Preview-Token, SHA-256 at
+# rest, constant-time compare), not by a session. Without it every one of these answers 401.
+PUBLIC |= {
+    (m, p)
+    for p in ("/previews/{preview_id}", "/previews/{preview_id}/{path:path}")
+    for m in ("GET", "POST", "PUT", "PATCH", "DELETE")
+} | {("GET", "/previews/{preview_id}/-/logs")}
 ID_PARAMS = {
     "project_id",
     "entity_id",
@@ -173,6 +180,9 @@ async def test_customer_b_cannot_see_or_touch_customer_a(client_for: ClientFor) 
         ("GET", f"/projects/{p}/generate/download"),
         ("POST", f"/projects/{p}/generate/preview"),
         ("GET", f"/projects/{p}/generations"),
+        ("GET", f"/projects/{p}/previews"),
+        ("POST", f"/projects/{p}/previews"),
+        ("GET", f"/projects/{p}/generate/self-host-kit"),
         ("GET", f"/projects/{p}/auth"),
         ("PUT", f"/projects/{p}/auth/secrets"),
         ("GET", f"/projects/{p}/auth/secrets/status"),
