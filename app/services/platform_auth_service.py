@@ -16,6 +16,7 @@ Security behaviour worth knowing (each one has a test):
 """
 
 import re
+import secrets
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -36,6 +37,7 @@ from app.models.enums import (
 )
 from app.models.platform import (
     ApiToken,
+    EmailVerificationToken,
     MfaRecoveryCode,
     Organization,
     OrganizationMember,
@@ -116,16 +118,37 @@ class PlatformAuthService:
 
     async def register(
         self, *, email: str, password: str, name: str, info: RequestInfo
-    ) -> PlatformUser:
+    ) -> tuple[PlatformUser, str] | None:
+        """Sign up. Returns (user, raw verification token) for a new address, None when the
+        address already has an account. The caller answers the same "check your inbox" either
+        way (F-5: no account-existence oracle), so both branches validate the input first and
+        both spend one password hash."""
         if self.settings.signup_mode != "open":
             raise AppError(
                 code="signup_closed",
                 message="sign-up is closed; ask an administrator",
                 status_code=403,
             )
-        user = await self.create_user(
-            email=email, password=password, name=name, role=PlatformRole.customer, info=info
-        )
+        email = self._check_signup_input(email, password)
+        taken = (
+            await self.db.execute(select(PlatformUser.id).where(PlatformUser.email == email))
+        ).scalar_one_or_none()
+        if taken is not None:
+            sec.burn_password_check(password)
+            return None
+        try:
+            user = await self.create_user(
+                email=email,
+                password=password,
+                name=name,
+                role=PlatformRole.customer,
+                info=info,
+                verified=False,
+            )
+        except AppError as exc:
+            if exc.status_code == 409:  # lost a race with a parallel sign-up: same answer
+                return None
+            raise
         # Every account gets a personal org on sign-up. One account model: an 'individual'
         # account is just an Organization with kind='personal' and one owner.
         from app.services.organization_service import OrganizationService
@@ -142,20 +165,114 @@ class PlatformAuthService:
             client_ip=info.client_ip,
             request_id=info.request_id,
         )
+        token = await self.issue_verification_token(user)
+        await self.db.commit()
+        return user, token
+
+    # -- e-mail verification (CO3-7) -----------------------------------------------------
+
+    async def issue_verification_token(self, user: PlatformUser) -> str:
+        """A fresh single-use link token; older unused ones stop working (no commit)."""
+        await self.db.execute(
+            delete(EmailVerificationToken).where(
+                EmailVerificationToken.user_id == user.id,
+                EmailVerificationToken.used_at.is_(None),
+            )
+        )
+        token = "bb_ev_" + secrets.token_urlsafe(32)
+        now = _now()
+        self.db.add(
+            EmailVerificationToken(
+                user_id=user.id,
+                token_hash=sec.hash_token(token),
+                created_at=now,
+                expires_at=now + timedelta(hours=self.settings.email_verification_hours),
+            )
+        )
+        await self.db.flush()
+        return token
+
+    def verification_url(self, token: str) -> str:
+        base = self.settings.public_app_url.rstrip("/")
+        return f"{base}/verify-email?token={token}"
+
+    async def verify_email(self, *, token: str, info: RequestInfo) -> PlatformUser:
+        """Consume a token. Unknown, replayed and expired tokens all answer the same error."""
+        failure = AppError(
+            code="invalid_verification_token",
+            message="this link is invalid or has expired",
+            status_code=400,
+        )
+        digest = sec.hash_token(token)
+        row = (
+            await self.db.execute(
+                select(EmailVerificationToken).where(EmailVerificationToken.token_hash == digest)
+            )
+        ).scalar_one_or_none()
+        if row is None or not sec.tokens_equal(row.token_hash, digest):
+            raise failure
+        # Single use, atomically: of two racing requests only one flips used_at.
+        claimed = (
+            await self.db.execute(
+                update(EmailVerificationToken)
+                .where(
+                    EmailVerificationToken.id == row.id,
+                    EmailVerificationToken.used_at.is_(None),
+                    EmailVerificationToken.expires_at > _now(),
+                )
+                .values(used_at=_now())
+                .returning(EmailVerificationToken.user_id)
+            )
+        ).scalar_one_or_none()
+        if claimed is None:
+            await self.db.rollback()
+            raise failure
+        user = await self.db.get(PlatformUser, claimed)
+        if user is None:
+            await self.db.rollback()
+            raise failure
+        if user.email_verified_at is None:
+            user.email_verified_at = _now()
+        await audit_service.record(
+            self.db,
+            action="account.email_verified",
+            actor_id=user.id,
+            actor_email=user.email,
+            target_type="user",
+            target_id=user.id,
+            client_ip=info.client_ip,
+            request_id=info.request_id,
+        )
         await self.db.commit()
         return user
 
-    async def create_user(
-        self,
-        *,
-        email: str,
-        password: str,
-        name: str,
-        role: PlatformRole,
-        info: RequestInfo,
-        must_change_password: bool = False,
-    ) -> PlatformUser:
-        """Validate and insert (flush, no commit). Used by sign-up, admin creation, bootstrap."""
+    async def resend_verification(self, *, email: str) -> tuple[PlatformUser, str] | None:
+        """A new link for an unverified, active account, at most one per cooldown. None (and
+        the caller answers the same generic reply) for everything else."""
+        user = (
+            await self.db.execute(
+                select(PlatformUser).where(PlatformUser.email == normalize_email(email))
+            )
+        ).scalar_one_or_none()
+        if user is None or user.email_verified_at is not None:
+            return None
+        if user.status is not AccountStatus.active:
+            return None
+        latest = (
+            await self.db.execute(
+                select(func.max(EmailVerificationToken.created_at)).where(
+                    EmailVerificationToken.user_id == user.id
+                )
+            )
+        ).scalar_one()
+        wait = timedelta(seconds=self.settings.email_verification_resend_seconds)
+        if latest is not None and _now() - latest < wait:
+            return None
+        token = await self.issue_verification_token(user)
+        await self.db.commit()
+        return user, token
+
+    def _check_signup_input(self, email: str, password: str) -> str:
         email = normalize_email(email)
         if not _EMAIL_RE.match(email) or len(email) > 254:
             raise AppError(
@@ -168,12 +285,31 @@ class PlatformAuthService:
                 message="password " + "; ".join(problems),
                 status_code=422,
             )
+        return email
+
+    async def create_user(
+        self,
+        *,
+        email: str,
+        password: str,
+        name: str,
+        role: PlatformRole,
+        info: RequestInfo,
+        must_change_password: bool = False,
+        verified: bool = True,
+    ) -> PlatformUser:
+        """Validate and insert (flush, no commit). Used by sign-up, admin creation, bootstrap.
+
+        `verified`: an administrator vouches for accounts they create; only public sign-up
+        passes False and then has to prove the mailbox (CO3-7)."""
+        email = self._check_signup_input(email, password)
         user = PlatformUser(
             email=email,
             name=name.strip()[:100],
             password_hash=sec.hash_password(password),
             platform_role=role,
             must_change_password=must_change_password,
+            email_verified_at=_now() if verified else None,
         )
         self.db.add(user)
         try:

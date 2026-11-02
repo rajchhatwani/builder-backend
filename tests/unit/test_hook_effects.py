@@ -274,7 +274,8 @@ def test_outbound_per_minute_window_slides(ledger: Any) -> None:
     for _ in range(3):
         led.charge("h", lim, {}, "email", 1, clock.now)
     assert code_of(mod, lambda: led.charge("h", lim, {}, "email", 1, clock.now)) == "rate"
-    led.charge("other", lim, {}, "email", 1, clock.now)  # per hook
+    assert code_of(mod, lambda: led.charge("other", lim, {}, "email", 1, clock.now)) == "rate"  # per tenant, not per hook
+    led.charge("other", lim, {}, "email", 1, clock.now, "tenant-b")  # another tenant has its own window
     clock.now += 61
     led.charge("h", lim, {}, "email", 1, clock.now)
 

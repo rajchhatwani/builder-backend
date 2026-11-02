@@ -28,7 +28,7 @@ test('notifications: empty, example, edit, preview, validation, save, matrix, lo
 
   // empty: the spec declares no types
   await expect(page.getByTestId('notif-empty')).toBeVisible()
-  await expect(page.getByTestId('notif-readonly-note')).toContainText('no endpoint that stores it')
+  await expect(page.getByTestId('notif-note')).toContainText('saved to the project spec')
   await axeClean(page, `${info.project.name} empty`)
 
   // example, keyboard activation
@@ -57,7 +57,8 @@ test('notifications: empty, example, edit, preview, validation, save, matrix, lo
   await body.fill('Thanks {{ customer_name }}, total {{ total }}')
   await expect(page.getByTestId('nt-preview-subject')).toHaveText('Order Sample order number is confirmed')
   await page.getByRole('button', { name: 'Save template' }).click()
-  await expect(page.getByTestId('nt-saved')).toContainText('order_confirmed / email')
+  // example mode never writes to the project (a real block is saved with PUT /behavior/notifications)
+  await expect(page.getByRole('alert').filter({ hasText: 'nothing is saved' })).toBeVisible()
 
   // another channel has no subject
   await page.getByLabel('Channel').selectOption('sms')

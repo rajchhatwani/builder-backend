@@ -86,17 +86,6 @@ describe('Payments form page', () => {
     await act(async () => { btn(/Try again/).click() })
     expect(host.querySelector('[data-schema-form]')).not.toBeNull()
   })
-
-  it('"Use the classic panel" turns the page flag off', async () => {
-    localStorage.setItem('ui.payments', 'v2')
-    m.getPayments.mockResolvedValue(PAY)
-    const reload = vi.fn()
-    Object.defineProperty(window, 'location', { configurable: true, value: { ...window.location, reload } })
-    await mount(createElement(PaymentsFormPage, { projectId: 'p' }))
-    await act(async () => { btn(/classic panel/).click() })
-    expect(localStorage.getItem('ui.payments')).toBe('classic')
-    expect(reload).toHaveBeenCalled()
-  })
 })
 
 describe('versioned pages (Deploy)', () => {

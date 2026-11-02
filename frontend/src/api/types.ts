@@ -625,6 +625,14 @@ export interface UserAccount {
   default_organization_id?: string | null
   /** TOTP is turned on for this account. */
   mfa_enabled?: boolean
+  /** Null until the person confirmed the e-mail link. */
+  email_verified_at?: string | null
+}
+
+/** `POST /account/register` and `/account/verify-email/resend`: the same answer for any address. */
+export interface VerificationSent {
+  status: string
+  message: string
 }
 
 export interface SessionResponse {

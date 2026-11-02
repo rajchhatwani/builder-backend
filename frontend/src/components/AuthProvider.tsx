@@ -31,7 +31,8 @@ interface AuthApi {
   signIn: (email: string, password: string) => Promise<MfaChallenge | null>
   /** Finish a sign-in whose second step returned a session. */
   completeSignIn: (session: SessionResponse) => void
-  signUp: (email: string, password: string, name: string) => Promise<void>
+  /** Registers; no session is issued (the person confirms the e-mailed link first). Returns the server's message. */
+  signUp: (email: string, password: string, name: string) => Promise<string>
   signOut: () => Promise<void>
   /** After a password change or profile update the server returns a fresh user. */
   setUser: (user: UserAccount) => void
@@ -113,8 +114,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signUp = useCallback(async (email: string, password: string, name: string) => {
-    const session = await api.register({ email, password, name })
-    setState({ status: 'user', user: session.user })
+    const sent = await api.register({ email, password, name })
+    return sent.message
   }, [])
 
   const signOut = useCallback(async () => {

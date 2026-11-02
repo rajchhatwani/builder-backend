@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
 export const API = `http://localhost:${process.env.E2E_API_PORT ?? '8765'}`
@@ -11,14 +12,26 @@ export function uniqueEmail(tag = 'u'): string {
   return `${tag}-${Date.now()}-${counter}-${Math.floor(Math.random() * 1e6)}@example.com`
 }
 
-/** Create a customer account through the API (setup only; the UI sign-up journey is separate). */
+/** Test setup only: marks an account's e-mail as confirmed straight in the throwaway e2e database (there is no
+ *  test bypass in the product). The container is the one stack.sh starts. */
+export function markEmailVerified(email: string): void {
+  const sql = `update platform_users set email_verified_at = now() where email = '${email.toLowerCase().replace(/'/g, "''")}'`
+  execFileSync('docker', ['exec', 'bb-e2e-pg', 'psql', '-U', 'builder', '-d', 'builder', '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'pipe' })
+}
+
+/** Create a customer account through the API (setup only; the UI sign-up journey is separate).
+ *  Register answers 202 without a session, so: register, mark verified in the database, then log in. */
 export async function registerViaApi(request: APIRequestContext, email = uniqueEmail()) {
   const r = await request.post(`${API}/account/register`, {
     data: { email, password: PASSWORD, name: 'E2E User' },
     headers: H,
   })
-  expect(r.status(), await r.text()).toBe(201)
-  const body = await r.json()
+  expect(r.status(), await r.text()).toBe(202)
+  markEmailVerified(email)
+  const login = await request.post(`${API}/account/login`, { data: { email, password: PASSWORD }, headers: H })
+  expect(login.status(), await login.text()).toBe(200)
+  const body = await login.json()
+  expect(body.mfa_required, 'a fresh account has no second step').toBeFalsy() // LoginResult is a session or an MFA challenge
   const token: string = body.access_token
   const auth = { ...H, Authorization: `Bearer ${token}` }
   return {

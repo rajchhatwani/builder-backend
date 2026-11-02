@@ -28,6 +28,8 @@ _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 _OWNER_ONLY: tuple[tuple[str, str], ...] = (
     ("DELETE", "/projects/{project_id}"),
     ("POST", "/projects/{project_id}/members"),
+    # Registry (B3-8): recording block versions, hooks, locked deps and approvals is owner-only.
+    ("POST", "/projects/{project_id}/registry/"),
     ("PATCH", "/projects/{project_id}/members/"),
     ("DELETE", "/projects/{project_id}/members/"),
     # MCP access grant: only an owner may enable/disable MCP for a member.
@@ -122,6 +124,11 @@ ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
     # §9 per-org data export: owners, from a session (see ORG_ROUTES_SESSION_ONLY).
     ("GET", "/orgs/{slug}/export"): OrgRole.owner,
     # Enterprise SSO (§8 "SSO & SCIM", admins). Handlers also refuse API tokens.
+    # AI cost ledger, BYO key and budget (B3-7); org registry view (B3-8).
+    ("GET", "/orgs/{slug}/ai/cost"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/ai/settings"): OrgRole.admin,
+    ("PUT", "/orgs/{slug}/ai/settings"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/registry/projects"): OrgRole.admin,
     ("GET", "/orgs/{slug}/sso"): OrgRole.admin,
     ("PUT", "/orgs/{slug}/sso"): OrgRole.admin,
     ("DELETE", "/orgs/{slug}/sso"): OrgRole.admin,
@@ -150,6 +157,7 @@ ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
 ORG_ROUTES_SESSION_ONLY: frozenset[tuple[str, str]] = frozenset(
     {
         ("DELETE", "/orgs/{slug}"),
+        ("PUT", "/orgs/{slug}/ai/settings"),
         ("POST", "/orgs/{slug}/deletion/cancel"),
         ("PATCH", "/orgs/{slug}/members/{user_id}"),
         ("DELETE", "/orgs/{slug}/members/{user_id}"),

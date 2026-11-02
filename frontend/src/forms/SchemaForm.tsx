@@ -14,6 +14,8 @@ export interface SchemaFormProps {
   readOnly?: boolean
   /** Prefix for element ids; defaults to a generated one. */
   idPrefix?: string
+  /** Called with the paths of free-form JSON fields whose text is not valid JSON right now (empty = all fine). */
+  onInvalidChange?: (paths: string[]) => void
 }
 
 interface Ctx {
@@ -22,6 +24,7 @@ interface Ctx {
   readOnly: boolean
   messages: (p: Path) => string[]
   touch: (p: Path) => void
+  report: (key: string, bad: boolean) => void
 }
 const FormCtx = createContext<Ctx>(null as unknown as Ctx)
 const useForm = () => useContext(FormCtx)
@@ -29,10 +32,17 @@ const useForm = () => useContext(FormCtx)
 const idOf = (c: Ctx, p: Path) => `${c.prefix}-${p.join('-') || 'form'}`
 
 /** Renders a JSON Schema (Pydantic dialect) as an accessible form. Controlled: the parent owns `value`. */
-export function SchemaForm({ schema, value, onChange, externalErrors, readOnly = false, idPrefix }: SchemaFormProps) {
+export function SchemaForm({ schema, value, onChange, externalErrors, readOnly = false, idPrefix, onInvalidChange }: SchemaFormProps) {
   const auto = useId().replace(/:/g, '')
   const prefix = idPrefix ?? `sf${auto}`
   const [touched, setTouched] = useState<ReadonlySet<string>>(new Set())
+  const [badJson, setBadJson] = useState<ReadonlySet<string>>(new Set())
+  const report = useMemo(
+    () => (key: string, bad: boolean) =>
+      setBadJson((b) => (b.has(key) === bad ? b : bad ? new Set(b).add(key) : new Set([...b].filter((x) => x !== key)))),
+    [],
+  )
+  useEffect(() => { onInvalidChange?.([...badJson]) }, [badJson, onInvalidChange])
   const client = useMemo(() => validateValue(schema, schema, value), [schema, value])
 
   const ctx = useMemo<Ctx>(
@@ -46,9 +56,10 @@ export function SchemaForm({ schema, value, onChange, externalErrors, readOnly =
         if (ext?.length) return ext
         return touched.has(k) ? (client[k] ?? []) : []
       },
+      report,
       touch: (p) => setTouched((t) => (t.has(pathKey(p)) ? t : new Set(t).add(pathKey(p)))),
     }),
-    [schema, prefix, readOnly, externalErrors, touched, client],
+    [schema, prefix, readOnly, externalErrors, touched, client, report],
   )
 
   const root = resolve(schema, schema)
@@ -93,6 +104,8 @@ function Node(p: NodeProps) {
     return <div role="alert" data-variant="danger" className="bh-alert" data-testid="schema-too-deep" data-field-path={pathKey(p.path)}>{p.label ? `${p.label}: ` : ''}{TOO_DEEP_MSG}</div>
   }
   if (s.type === 'object' && s.properties) return <ObjectField {...p} s={s} />
+  // Free-form objects (and any object value without a known shape) are edited as JSON, never printed as text.
+  if (s.type === 'object' || (s.type !== 'array' && p.value !== null && typeof p.value === 'object')) return <JsonObjectField {...p} s={s} />
   if (s.type === 'array') return <ArrayField {...p} s={s} />
   return <ScalarField {...p} s={s} />
 }
@@ -158,6 +171,57 @@ function ScalarField({ s, path, value, onChange, required, label, schema }: Node
           {msgs.join(' ')}
         </small>
       )}
+    </div>
+  )
+}
+
+/** A free-form object (additionalProperties / no declared properties) as a labelled JSON textarea.
+ *  Valid JSON objects are emitted as objects; invalid text is kept locally, flagged, and reported so the page can block Save. */
+function JsonObjectField({ s, path, value, onChange, required, label, schema }: NodeProps & { s: Resolved }) {
+  const c = useForm()
+  const id = idOf(c, path)
+  const key = pathKey(path)
+  const show = (v: unknown) => (v === null || v === undefined ? '' : JSON.stringify(v, null, 2))
+  const [text, setText] = useState(() => show(value))
+  const [own, setOwn] = useState('')
+  const last = useRef(JSON.stringify(value ?? null))
+  const msgs = c.messages(path)
+  useEffect(() => {
+    // The value changed from outside (discard, reload): show it. Our own edits are skipped.
+    const now = JSON.stringify(value ?? null)
+    if (now !== last.current) { last.current = now; setText(show(value)); setOwn('') }
+  }, [value])
+  useEffect(() => { c.report(key, own !== ''); return () => c.report(key, false) }, [own, key, c])
+
+  function edit(next: string) {
+    setText(next)
+    if (next.trim() === '') {
+      setOwn('')
+      last.current = JSON.stringify(s.nullable ? null : {})
+      onChange(s.nullable ? null : {})
+      return
+    }
+    try {
+      const parsed: unknown = JSON.parse(next)
+      if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) { setOwn('Must be a JSON object, like {"key": "value"}.'); return }
+      setOwn('')
+      last.current = JSON.stringify(parsed)
+      onChange(parsed)
+    } catch {
+      setOwn('Not valid JSON. Fix it before saving.')
+    }
+  }
+  const shown = [own, ...msgs].filter(Boolean)
+  const helpText = uiOf(schema).help ?? s.description ?? 'Free-form JSON object'
+  const bad = shown.length > 0
+  return (
+    <div className="bh-field" data-invalid={bad || undefined} data-field-path={key}>
+      <label htmlFor={id}>{label}{required && !s.nullable && <span aria-hidden="true"> *</span>}</label>
+      <textarea id={id} rows={4} spellCheck={false} readOnly={c.readOnly} value={text} aria-invalid={bad || undefined}
+        aria-describedby={[`${id}-help`, bad && `${id}-err`].filter(Boolean).join(' ')}
+        onBlur={() => c.touch(path)} onChange={(e) => edit(e.target.value)} />
+      <Help id={`${id}-help`} text={helpText} />
+      {bad && <small id={`${id}-err`} className="bh-error" data-testid="field-error">{shown.join(' ')}</small>}
     </div>
   )
 }

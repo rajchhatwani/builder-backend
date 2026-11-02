@@ -55,3 +55,13 @@ async def send_invitation(*, to: str, org_name: str, inviter: str, url: str) -> 
         "The link works once and expires in 14 days. If you didn't expect this, ignore it.\n"
     )
     return await send(to, f"You're invited to {org_name}", body)
+
+
+async def send_verification(*, to: str, url: str, hours: int) -> bool:
+    # The link is the credential: never log it (send() logs only the exception class).
+    body = (
+        "Confirm your e-mail address to finish setting up your Backend Builder account.\n\n"
+        f"Confirm: {url}\n\n"
+        f"The link works once and expires in {hours} hours. If you didn't sign up, ignore it.\n"
+    )
+    return await send(to, "Confirm your e-mail address", body)

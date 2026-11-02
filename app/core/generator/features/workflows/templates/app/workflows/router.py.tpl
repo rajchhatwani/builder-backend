@@ -8,7 +8,7 @@ from typing import Annotated, Any
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.auth.deps import CurrentPrincipal, get_principal
 from app.core.errors import AppError, NotFoundError
@@ -24,6 +24,13 @@ class StartIn(BaseModel):
 
     input: dict[str, Any] = Field(default_factory=dict)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def _no_nul(cls, value: str | None) -> str | None:
+        if value is not None and "\x00" in value:
+            raise ValueError("must not contain NUL characters")
+        return value
 
 
 class StepOut(BaseModel):
@@ -108,6 +115,19 @@ async def cancel_run(run_id: uuid.UUID, session: SessionDep, principal: CurrentP
     row = await engine.cancel(session, run_id, principal.tenant_id)
     if row is None:
         raise NotFoundError("workflow run not found")
+    await session.commit()
+    return _out(row)
+
+
+@router.post("/runs/{run_id}/resume-undo", response_model=RunOut, status_code=202)
+async def resume_undo(run_id: uuid.UUID, session: SessionDep, principal: CurrentPrincipal) -> RunOut:
+    """Retry the undo of a run in `compensation_failed`. Any other status is a 409."""
+    await _own_run(session, principal, run_id)
+    row = await engine.resume_undo(session, run_id, principal.tenant_id)
+    if row is None:
+        raise NotFoundError("workflow run not found")
+    if row.status != "compensating":
+        raise AppError("conflict", "only a run whose undo failed can be resumed", 409)
     await session.commit()
     return _out(row)
 

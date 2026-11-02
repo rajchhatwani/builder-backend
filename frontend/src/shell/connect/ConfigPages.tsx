@@ -14,7 +14,7 @@ const asCfg = (x: unknown) => x as Cfg
 const switchNote = (what: string) => (c: Cfg) => (
   <>
     {what} is currently <strong>{c.enabled ? 'switched on' : 'switched off'}</strong>. Saving here keeps that as it is. To switch
-    it on or off (it shows what will change first), use the classic panel.
+    it on or off (it shows what will change first), use the classic shell (?ui.shell=v1).
   </>
 )
 
@@ -50,6 +50,6 @@ export function DeploymentFormPage({ projectId }: { projectId: string }) {
   const save = useCallback(async (b: Cfg) => asCfg(await api.putDeployment(projectId, b as unknown as DeploymentWrite)), [projectId])
   return (
     <ConfigFormPage title="Deploy" flag="deployment" schema={deployment as JsonSchema} load={load} save={save} versioned
-      intro="Cloud, region and one row per environment. The classic panel also previews the sizing plan for these settings." />
+      intro="Cloud, region and one row per environment. The classic shell (?ui.shell=v1) also previews the sizing plan for these settings." />
   )
 }

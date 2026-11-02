@@ -31,8 +31,12 @@ async def _register(anon: AsyncClient, email: str) -> dict[str, str]:
     r = await anon.post(
         "/account/register", json={"email": email, "password": ATTACKER_PASSWORD, "name": "x"}
     )
-    assert r.status_code == 201, r.text
-    return {"Authorization": f"Bearer {r.json()['access_token']}"}
+    assert r.status_code == 202, r.text  # CO3-7: sign-up issues no session; sign in with it
+    login = await anon.post(
+        "/account/login", json={"email": email, "password": ATTACKER_PASSWORD}
+    )
+    assert login.status_code == 200, login.text
+    return {"Authorization": f"Bearer {login.json()['access_token']}"}
 
 
 async def _user(factory: Factory, email: str) -> PlatformUser:

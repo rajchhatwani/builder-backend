@@ -817,6 +817,18 @@
       "title": "Email",
       "type": "string"
      },
+     "email_verified_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email Verified At"
+     },
      "failed_logins": {
       "title": "Failed Logins",
       "type": "integer"
@@ -926,6 +938,242 @@
      }
     },
     "title": "AdminUserUpdate",
+    "type": "object"
+   },
+   "AdvisorResult": {
+    "properties": {
+     "queue": {
+      "$ref": "#/components/schemas/QueueAdvice"
+     },
+     "workflow": {
+      "$ref": "#/components/schemas/WorkflowAdvice"
+     }
+    },
+    "required": [
+     "queue",
+     "workflow"
+    ],
+    "title": "AdvisorResult",
+    "type": "object"
+   },
+   "AiCostSummary": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/AiLedgerRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "month_cost_micro_usd": {
+      "title": "Month Cost Micro Usd",
+      "type": "integer"
+     },
+     "month_start": {
+      "format": "date-time",
+      "title": "Month Start",
+      "type": "string"
+     },
+     "monthly_budget_micro_usd": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Monthly Budget Micro Usd"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     },
+     "total_cost_micro_usd": {
+      "title": "Total Cost Micro Usd",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "month_start",
+     "month_cost_micro_usd",
+     "total_cost_micro_usd",
+     "monthly_budget_micro_usd",
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "AiCostSummary",
+    "type": "object"
+   },
+   "AiLedgerRead": {
+    "properties": {
+     "cache_read_tokens": {
+      "title": "Cache Read Tokens",
+      "type": "integer"
+     },
+     "cache_write_tokens": {
+      "title": "Cache Write Tokens",
+      "type": "integer"
+     },
+     "cost_micro_usd": {
+      "title": "Cost Micro Usd",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "input_tokens": {
+      "title": "Input Tokens",
+      "type": "integer"
+     },
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "output_tokens": {
+      "title": "Output Tokens",
+      "type": "integer"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     },
+     "run_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Run Id"
+     },
+     "task_class": {
+      "title": "Task Class",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "run_id",
+     "model",
+     "task_class",
+     "input_tokens",
+     "output_tokens",
+     "cache_read_tokens",
+     "cache_write_tokens",
+     "cost_micro_usd",
+     "created_at"
+    ],
+    "title": "AiLedgerRead",
+    "type": "object"
+   },
+   "AiSettingsRead": {
+    "properties": {
+     "api_key_hint": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Api Key Hint"
+     },
+     "has_api_key": {
+      "title": "Has Api Key",
+      "type": "boolean"
+     },
+     "monthly_budget_micro_usd": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Monthly Budget Micro Usd"
+     }
+    },
+    "required": [
+     "has_api_key",
+     "api_key_hint",
+     "monthly_budget_micro_usd"
+    ],
+    "title": "AiSettingsRead",
+    "type": "object"
+   },
+   "AiSettingsWrite": {
+    "properties": {
+     "api_key": {
+      "anyOf": [
+       {
+        "format": "password",
+        "maxLength": 300,
+        "minLength": 8,
+        "type": "string",
+        "writeOnly": true
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Api Key"
+     },
+     "clear_api_key": {
+      "default": false,
+      "title": "Clear Api Key",
+      "type": "boolean"
+     },
+     "clear_budget": {
+      "default": false,
+      "title": "Clear Budget",
+      "type": "boolean"
+     },
+     "monthly_budget_micro_usd": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Monthly Budget Micro Usd"
+     }
+    },
+    "title": "AiSettingsWrite",
     "type": "object"
    },
    "ApiEdgeRead": {
@@ -2765,6 +3013,72 @@
     "title": "BehaviorIssues",
     "type": "object"
    },
+   "BlockVersionRead": {
+    "properties": {
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "version": {
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "version",
+     "content_hash",
+     "id",
+     "created_at"
+    ],
+    "title": "BlockVersionRead",
+    "type": "object"
+   },
+   "BlockVersionWrite": {
+    "properties": {
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "version": {
+      "maxLength": 50,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "version",
+     "content_hash"
+    ],
+    "title": "BlockVersionWrite",
+    "type": "object"
+   },
    "CheckoutCreate": {
     "properties": {
      "plan_id": {
@@ -2866,6 +3180,76 @@
     ],
     "title": "DeletionMode",
     "type": "string"
+   },
+   "DepLockRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "hash": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Hash",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "package": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Package",
+      "type": "string"
+     },
+     "version": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "package",
+     "version",
+     "hash",
+     "id",
+     "created_at"
+    ],
+    "title": "DepLockRead",
+    "type": "object"
+   },
+   "DepLockWrite": {
+    "properties": {
+     "hash": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Hash",
+      "type": "string"
+     },
+     "package": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Package",
+      "type": "string"
+     },
+     "version": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "package",
+     "version",
+     "hash"
+    ],
+    "title": "DepLockWrite",
+    "type": "object"
    },
    "Dependent": {
     "properties": {
@@ -4558,6 +4942,85 @@
      }
     },
     "title": "HookEffectsWrite",
+    "type": "object"
+   },
+   "HookEntryRead": {
+    "properties": {
+     "approved_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Approved By"
+     },
+     "author": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Author",
+      "type": "string"
+     },
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "hook_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Hook Name",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "hook_name",
+     "content_hash",
+     "author",
+     "id",
+     "approved_by",
+     "created_at"
+    ],
+    "title": "HookEntryRead",
+    "type": "object"
+   },
+   "HookEntryWrite": {
+    "properties": {
+     "author": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Author",
+      "type": "string"
+     },
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "hook_name": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Hook Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "hook_name",
+     "content_hash",
+     "author"
+    ],
+    "title": "HookEntryWrite",
     "type": "object"
    },
    "HookFieldBody": {
@@ -9792,6 +10255,49 @@
     "title": "ProvidersWrite",
     "type": "object"
    },
+   "QueueAdvice": {
+    "properties": {
+     "reasons": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+     },
+     "recommended": {
+      "enum": [
+       "postgres",
+       "redis_celery",
+       "rabbitmq",
+       "kafka"
+      ],
+      "title": "Recommended",
+      "type": "string"
+     },
+     "upgrade_path": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Upgrade Path",
+      "type": "array"
+     },
+     "warnings": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "recommended",
+     "reasons",
+     "warnings",
+     "upgrade_path"
+    ],
+    "title": "QueueAdvice",
+    "type": "object"
+   },
    "RecommendRequest": {
     "description": "Answers to the wizard. Every field has a neutral default so a partial form still works.",
     "properties": {
@@ -9934,6 +10440,55 @@
      "password"
     ],
     "title": "RegisterRequest",
+    "type": "object"
+   },
+   "RegistryProjectRead": {
+    "properties": {
+     "block_versions": {
+      "title": "Block Versions",
+      "type": "integer"
+     },
+     "dependencies": {
+      "title": "Dependencies",
+      "type": "integer"
+     },
+     "hooks": {
+      "title": "Hooks",
+      "type": "integer"
+     },
+     "hooks_unapproved": {
+      "title": "Hooks Unapproved",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "slug": {
+      "title": "Slug",
+      "type": "string"
+     },
+     "spec_version": {
+      "title": "Spec Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "name",
+     "slug",
+     "spec_version",
+     "block_versions",
+     "hooks",
+     "hooks_unapproved",
+     "dependencies"
+    ],
+    "title": "RegistryProjectRead",
     "type": "object"
    },
    "RelationCreate": {
@@ -10161,6 +10716,21 @@
      "to"
     ],
     "title": "RenameHint",
+    "type": "object"
+   },
+   "ResendVerificationRequest": {
+    "properties": {
+     "email": {
+      "maxLength": 254,
+      "minLength": 3,
+      "title": "Email",
+      "type": "string"
+     }
+    },
+    "required": [
+     "email"
+    ],
+    "title": "ResendVerificationRequest",
     "type": "object"
    },
    "ResolvedEnvironment": {
@@ -17348,6 +17918,18 @@
       "title": "Email",
       "type": "string"
      },
+     "email_verified_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Email Verified At"
+     },
      "id": {
       "format": "uuid",
       "title": "Id",
@@ -17482,6 +18064,38 @@
     "title": "ValidationReport",
     "type": "object"
    },
+   "VerificationSentRead": {
+    "description": "The one answer to sign-up and to a resend, whether or not the address has an account.",
+    "properties": {
+     "message": {
+      "default": "If the address can be used, a confirmation link is on its way. Check your inbox.",
+      "title": "Message",
+      "type": "string"
+     },
+     "status": {
+      "default": "verification_sent",
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "title": "VerificationSentRead",
+    "type": "object"
+   },
+   "VerifyEmailRequest": {
+    "properties": {
+     "token": {
+      "maxLength": 200,
+      "minLength": 10,
+      "title": "Token",
+      "type": "string"
+     }
+    },
+    "required": [
+     "token"
+    ],
+    "title": "VerifyEmailRequest",
+    "type": "object"
+   },
    "VonageSecretsWrite": {
     "properties": {
      "api_key": {
@@ -17586,6 +18200,50 @@
      }
     },
     "title": "WebhooksWrite",
+    "type": "object"
+   },
+   "WorkflowAdvice": {
+    "properties": {
+     "implemented": {
+      "title": "Implemented",
+      "type": "boolean"
+     },
+     "next_step": {
+      "title": "Next Step",
+      "type": "string"
+     },
+     "reasons": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+     },
+     "recommended": {
+      "enum": [
+       "queue",
+       "state_machine",
+       "workflow"
+      ],
+      "title": "Recommended",
+      "type": "string"
+     },
+     "warnings": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "recommended",
+     "reasons",
+     "warnings",
+     "implemented",
+     "next_step"
+    ],
+    "title": "WorkflowAdvice",
     "type": "object"
    },
    "WorkflowsRead": {
@@ -18324,6 +18982,7 @@
   },
   "/account/register": {
    "post": {
+    "description": "Always the same \"check your inbox\" answer for a new and an existing address. No session\nis issued: the person signs in after confirming the e-mail link (unverified accounts are\nlimited meanwhile). Input errors (bad e-mail, weak password) are 422 for every address.",
     "operationId": "register_account_register_post",
     "requestBody": {
      "content": {
@@ -18336,11 +18995,11 @@
      "required": true
     },
     "responses": {
-     "201": {
+     "202": {
       "content": {
        "application/json": {
         "schema": {
-         "$ref": "#/components/schemas/SessionRead"
+         "$ref": "#/components/schemas/VerificationSentRead"
         }
        }
       },
@@ -18458,6 +19117,90 @@
      }
     },
     "summary": "Revoke Token",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/verify-email": {
+   "post": {
+    "description": "Consume a confirmation link token (single use, expires). Unknown, used and expired\ntokens all answer the same 400.",
+    "operationId": "verify_email_account_verify_email_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/VerifyEmailRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UserRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Verify Email",
+    "tags": [
+     "account"
+    ]
+   }
+  },
+  "/account/verify-email/resend": {
+   "post": {
+    "description": "Same generic answer whether or not a mail goes out; one link per cooldown per account.",
+    "operationId": "resend_verification_account_verify_email_resend_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ResendVerificationRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "202": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/VerificationSentRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Resend Verification",
     "tags": [
      "account"
     ]
@@ -21325,6 +22068,122 @@
     ]
    }
   },
+  "/orgs/{slug}/ai/cost": {
+   "get": {
+    "operationId": "ai_cost_orgs__slug__ai_cost_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AiCostSummary"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Ai Cost",
+    "tags": [
+     "ai"
+    ]
+   }
+  },
+  "/orgs/{slug}/ai/settings": {
+   "get": {
+    "operationId": "get_ai_settings_orgs__slug__ai_settings_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AiSettingsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Ai Settings",
+    "tags": [
+     "ai"
+    ]
+   },
+   "put": {
+    "operationId": "put_ai_settings_orgs__slug__ai_settings_put",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AiSettingsWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AiSettingsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Ai Settings",
+    "tags": [
+     "ai"
+    ]
+   }
+  },
   "/orgs/{slug}/audit": {
    "get": {
     "operationId": "org_audit_orgs__slug__audit_get",
@@ -22262,6 +23121,31 @@
     ]
    }
   },
+  "/orgs/{slug}/registry/projects": {
+   "get": {
+    "operationId": "registry_projects_orgs__slug__registry_projects_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/RegistryProjectRead"
+         },
+         "title": "Response Registry Projects Orgs  Slug  Registry Projects Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Registry Projects",
+    "tags": [
+     "ai"
+    ]
+   }
+  },
   "/orgs/{slug}/scim": {
    "delete": {
     "operationId": "delete_scim_orgs__slug__scim_delete",
@@ -23031,6 +23915,240 @@
     "summary": "Update Project",
     "tags": [
      "projects"
+    ]
+   }
+  },
+  "/projects/{project_id}/advisor": {
+   "get": {
+    "operationId": "get_advice_projects__project_id__advisor_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "steps",
+      "required": false,
+      "schema": {
+       "default": 1,
+       "maximum": 1000,
+       "minimum": 1,
+       "title": "Steps",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "needs_compensation",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Needs Compensation",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "human_wait",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Human Wait",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "longest_step_seconds",
+      "required": false,
+      "schema": {
+       "default": 1.0,
+       "maximum": 1000000000,
+       "minimum": 0,
+       "title": "Longest Step Seconds",
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fire_and_forget",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Fire And Forget",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status_only",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Status Only",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "outside_systems",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "maximum": 1000,
+       "minimum": 0,
+       "title": "Outside Systems",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "throughput_per_sec",
+      "required": false,
+      "schema": {
+       "default": 10.0,
+       "maximum": 10000000,
+       "minimum": 0,
+       "title": "Throughput Per Sec",
+       "type": "number"
+      }
+     },
+     {
+      "in": "query",
+      "name": "latency_ms_p99",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maximum": 3600000,
+         "minimum": 0,
+         "type": "number"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Latency Ms P99"
+      }
+     },
+     {
+      "in": "query",
+      "name": "ordering",
+      "required": false,
+      "schema": {
+       "default": "none",
+       "enum": [
+        "none",
+        "per_key",
+        "global"
+       ],
+       "title": "Ordering",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "durability",
+      "required": false,
+      "schema": {
+       "default": "durable",
+       "enum": [
+        "best_effort",
+        "durable"
+       ],
+       "title": "Durability",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "fanout",
+      "required": false,
+      "schema": {
+       "default": "single",
+       "enum": [
+        "single",
+        "multi_consumer"
+       ],
+       "title": "Fanout",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "replay_needed",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Replay Needed",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "delayed_jobs",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Delayed Jobs",
+       "type": "boolean"
+      }
+     },
+     {
+      "in": "query",
+      "name": "expected_backlog",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "maximum": 1000000000000,
+       "minimum": 0,
+       "title": "Expected Backlog",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "cross_service",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Cross Service",
+       "type": "boolean"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AdvisorResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Queue and workflow advice",
+    "tags": [
+     "advisor"
     ]
    }
   },
@@ -27132,6 +28250,353 @@
     ]
    }
   },
+  "/projects/{project_id}/registry/blocks": {
+   "get": {
+    "operationId": "list_blocks_projects__project_id__registry_blocks_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/BlockVersionRead"
+         },
+         "title": "Response List Blocks Projects  Project Id  Registry Blocks Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Blocks",
+    "tags": [
+     "registry"
+    ]
+   },
+   "post": {
+    "operationId": "add_block_projects__project_id__registry_blocks_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/BlockVersionWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BlockVersionRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Block",
+    "tags": [
+     "registry"
+    ]
+   }
+  },
+  "/projects/{project_id}/registry/deps": {
+   "get": {
+    "operationId": "list_deps_projects__project_id__registry_deps_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/DepLockRead"
+         },
+         "title": "Response List Deps Projects  Project Id  Registry Deps Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Deps",
+    "tags": [
+     "registry"
+    ]
+   },
+   "post": {
+    "operationId": "add_dep_projects__project_id__registry_deps_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/DepLockWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DepLockRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Dep",
+    "tags": [
+     "registry"
+    ]
+   }
+  },
+  "/projects/{project_id}/registry/hooks": {
+   "get": {
+    "operationId": "list_hooks_projects__project_id__registry_hooks_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/HookEntryRead"
+         },
+         "title": "Response List Hooks Projects  Project Id  Registry Hooks Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Hooks",
+    "tags": [
+     "registry"
+    ]
+   },
+   "post": {
+    "operationId": "add_hook_projects__project_id__registry_hooks_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/HookEntryWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HookEntryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Add Hook",
+    "tags": [
+     "registry"
+    ]
+   }
+  },
+  "/projects/{project_id}/registry/hooks/{entry_id}/approve": {
+   "post": {
+    "operationId": "approve_hook_projects__project_id__registry_hooks__entry_id__approve_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entry_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Entry Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HookEntryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Approve Hook",
+    "tags": [
+     "registry"
+    ]
+   }
+  },
   "/projects/{project_id}/relations": {
    "get": {
     "operationId": "list_relations_projects__project_id__relations_get",
@@ -27419,6 +28884,25 @@
        "format": "uuid",
        "title": "Project Id",
        "type": "string"
+      }
+     },
+     {
+      "description": "The project version the caller last read. If it is no longer current the write is refused with 409 (details[0].current_version). Omitted: last write wins.",
+      "in": "query",
+      "name": "expected_version",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "minimum": 1,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "The project version the caller last read. If it is no longer current the write is refused with 409 (details[0].current_version). Omitted: last write wins.",
+       "title": "Expected Version"
       }
      }
     ],

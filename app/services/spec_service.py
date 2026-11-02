@@ -357,7 +357,12 @@ class SpecService:
         return validate(await self.assemble(project_id))
 
     async def replace(
-        self, project_id: uuid.UUID, spec: Spec, *, validate_spec: bool = True
+        self,
+        project_id: uuid.UUID,
+        spec: Spec,
+        *,
+        validate_spec: bool = True,
+        expected_version: int | None = None,
     ) -> Spec:
         """Replace the project's entities, fields and relations with the spec's.
 
@@ -370,6 +375,26 @@ class SpecService:
         only to return to a state the project already had (undo, redo, restore).
         """
         project = await self._get_project_or_404(project_id)
+        if expected_version is not None:
+            # Lock the row so two writers holding the same version cannot both pass the check.
+            locked = (
+                await self.session.execute(
+                    select(Project)
+                    .where(Project.id == project_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one()
+            current_version = locked.version
+            if current_version != expected_version:
+                await self.session.rollback()
+                raise AppError(
+                    code="version_conflict",
+                    message="the spec was changed by someone else; refetch and retry",
+                    status_code=409,
+                    details=[{"current_version": current_version}],
+                )
+            project = locked
         issues = validate(spec) if validate_spec else []
         if issues:
             raise AppError(

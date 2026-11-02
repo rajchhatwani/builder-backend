@@ -2,6 +2,7 @@ import { useCallback, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
 import type { LoginDiscovery, MfaChallenge } from '../api/types'
 import { useAuth } from '../components/AuthProvider'
+import { CheckInbox } from '../components/CheckInbox'
 import { MfaStep } from '../components/MfaStep'
 import { ssoErrorText } from '../api/ssoErrors'
 
@@ -36,6 +37,7 @@ export function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(ssoErrorFromHash)
   const [busy, setBusy] = useState(false)
+  const [sent, setSent] = useState<string | null>(null) // sign-up answered 202: the server's message
 
   const restart = useCallback((reason: string | null) => {
     setPassword('')
@@ -59,7 +61,10 @@ export function LoginPage() {
     setBusy(true)
     setError(null)
     try {
-      if (mode === 'signup') await signUp(email, password, name)
+      if (mode === 'signup') {
+        setSent(await signUp(email, password, name))
+        setPassword('')
+      }
       else if (step.kind === 'email') await discover()
       else {
         const challenge = await signIn(email, password)
@@ -89,6 +94,17 @@ export function LoginPage() {
       <span>Backend Builder</span>
     </div>
   )
+
+  if (mode === 'signup' && sent !== null) {
+    return (
+      <div className="auth-page">
+        <div className="card auth-card">
+          {brand}
+          <CheckInbox email={email} message={sent} onBack={() => { setSent(null); setMode('signin'); setStep({ kind: 'email' }) }} />
+        </div>
+      </div>
+    )
+  }
 
   if (mode === 'signin' && step.kind === 'mfa') {
     return (

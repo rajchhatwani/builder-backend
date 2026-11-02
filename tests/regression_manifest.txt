@@ -77,3 +77,10 @@ tests/unit/test_hook_effects.py
 tests/e2e/test_hooks_effects_stack.py
 tests/unit/test_behavior_blocks.py
 tests/api/test_behavior_blocks.py
+tests/unit/test_co3_4_hardening.py
+tests/api/test_co3_4_spec_write.py
+tests/unit/test_ai_provider.py
+tests/api/test_ai_cost_registry.py
+tests/unit/test_email_verification.py
+tests/api/test_email_verification.py
+tests/e2e/test_cycle2_exit_demo.py

@@ -59,7 +59,7 @@ def _charge(effect: str, size: int) -> HookEnv:
         log.warning("hook_effect_refused", hook=env.hook, effect=effect, reason="breached")
         raise BudgetExceeded("breached")
     try:
-        budget.LEDGER.charge(env.hook, LIMITS.get(env.hook), env.effect_calls, effect, size, env.t0)
+        budget.LEDGER.charge(env.hook, LIMITS.get(env.hook), env.effect_calls, effect, size, env.t0, str(_tenant(env)))
     except budget.OverBudget as over:
         env.breached = True
         log.warning("hook_effect_refused", hook=env.hook, effect=effect, reason=over.code)

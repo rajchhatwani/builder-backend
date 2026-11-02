@@ -15,6 +15,21 @@ class RegisterRequest(BaseModel):
     name: str = Field(default="", max_length=100)
 
 
+class VerificationSentRead(BaseModel):
+    """The one answer to sign-up and to a resend, whether or not the address has an account."""
+
+    status: str = "verification_sent"
+    message: str = "If the address can be used, a confirmation link is on its way. Check your inbox."
+
+
+class VerifyEmailRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=200, repr=False)
+
+
+class ResendVerificationRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=254)
+
+
 class LoginRequest(BaseModel):
     email: str = Field(min_length=1, max_length=254)
     password: str = _PASSWORD
@@ -36,6 +51,8 @@ class UserRead(BaseModel):
     must_change_password: bool
     created_at: datetime
     last_login_at: datetime | None
+    # CO3-7: null until the person proved the mailbox; unverified accounts are limited.
+    email_verified_at: datetime | None = None
     # §3.2: where the UI lands someone who belongs to several orgs.
     default_organization_id: uuid.UUID | None = None
     # §4.4: built-in TOTP is on (People tables show it as "2FA on/off").

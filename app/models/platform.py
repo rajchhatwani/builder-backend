@@ -108,6 +108,24 @@ class MfaRecoveryCode(UUIDPrimaryKeyMixin, Base):
     __table_args__ = (Index("ix_mfa_recovery_codes_user", "user_id"),)
 
 
+class EmailVerificationToken(UUIDPrimaryKeyMixin, Base):
+    """One e-mail verification link: single use, expiring, only its sha256 is stored."""
+
+    __tablename__ = "platform_email_verification_tokens"
+
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="CASCADE"), nullable=False
+    )
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (Index("ix_platform_email_verification_user", "user_id"),)
+
+
 class RefreshToken(UUIDPrimaryKeyMixin, Base):
     """One rotation step of a login session. A `family` is the whole chain from one login."""
 

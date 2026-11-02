@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import Pagination, pagination
+from app.api.deps import Pagination, pagination, require_verified_email
 from app.api.security import forbidden
 from app.db import get_session
 from app.models.enums import MemberRole
@@ -15,7 +15,11 @@ from app.services.generation_service import GenerationService
 router = APIRouter(tags=["generate"])
 
 
-@router.post("/projects/{project_id}/generate/preview", response_model=PreviewResponse)
+@router.post(
+    "/projects/{project_id}/generate/preview",
+    response_model=PreviewResponse,
+    dependencies=[Depends(require_verified_email)],
+)
 async def preview(
     project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
 ) -> PreviewResponse:
@@ -26,6 +30,7 @@ async def preview(
     "/projects/{project_id}/generate/download",
     response_class=Response,
     responses={200: {"content": {"application/zip": {}}}},
+    dependencies=[Depends(require_verified_email)],
 )
 async def download(
     request: Request,

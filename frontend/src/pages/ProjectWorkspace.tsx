@@ -36,7 +36,6 @@ import { statusKey, useProjectStatus } from '../shell/home/useProjectStatus'
 import { ShellV2 } from '../shell/ShellV2'
 import { MachinesPage } from '../shell/machines/MachinesPage'
 import type { AnySection } from '../shell/pages'
-import { pageFlagOn } from '../shell/pageFlag'
 
 // F1-6A pages: own chunks, kept out of the main bundle
 const SettingsPage = lazy(() => import('../shell/behavior/SettingsPage').then((m) => ({ default: m.SettingsPage })))
@@ -47,7 +46,7 @@ const TimelinePage = lazy(() => import('../shell/timeline/TimelinePage').then((m
 const HooksPage = lazy(() => import('../shell/behavior/HooksPage').then((m) => ({ default: m.HooksPage })))
 const HomePage = lazy(() => import('../shell/home/HomePage').then((m) => ({ default: m.HomePage })))
 const RulesPage = lazy(() => import('../shell/rules/RulesPage').then((m) => ({ default: m.RulesPage })))
-// F2-2 / F2-3 pages: own chunks. The first four replace an existing panel and sit behind their own flag (ui.<name>=v2).
+// F2-2 / F2-3 pages: own chunks. All sit behind the single flag ui.shell=v2.
 const PaymentsFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.PaymentsFormPage })))
 const StorageFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.StorageFormPage })))
 const ObservabilityFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.ObservabilityFormPage })))
@@ -412,12 +411,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'payments' && v2 && pageFlagOn('payments') && (
+      {section === 'payments' && v2 && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <PaymentsFormPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'payments' && !(v2 && pageFlagOn('payments')) && (
+      {section === 'payments' && !v2 && (
         <>
           <PageTitle title="Payments">
             Take card payments through a hosted checkout, with refunds, an audit trail and servers sized for your traffic.
@@ -433,12 +432,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'storage' && v2 && pageFlagOn('storage') && (
+      {section === 'storage' && v2 && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <StorageFormPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'storage' && !(v2 && pageFlagOn('storage')) && (
+      {section === 'storage' && !v2 && (
         <>
           <PageTitle title="File uploads">
             Accept files of any type, scanned for malware before they are stored in S3 or a MinIO-compatible bucket, with
@@ -471,12 +470,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'observability' && v2 && pageFlagOn('observability') && (
+      {section === 'observability' && v2 && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <ObservabilityFormPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'observability' && !(v2 && pageFlagOn('observability')) && (
+      {section === 'observability' && !v2 && (
         <>
           <PageTitle title="Observability">
             Traces, metrics and trace-correlated logs from your generated backend, through OpenTelemetry, with secrets kept out.
@@ -494,12 +493,12 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'deployment' && v2 && pageFlagOn('deployment') && (
+      {section === 'deployment' && v2 && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <DeploymentFormPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'deployment' && !(v2 && pageFlagOn('deployment')) && (
+      {section === 'deployment' && !v2 && (
         <>
           <PageTitle title="Deploy">
             GitHub Actions pipelines and Terraform that put your backend on AWS, Azure or Google Cloud, with no stored cloud credentials.

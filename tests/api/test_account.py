@@ -26,6 +26,15 @@ async def register(c: AsyncClient, email: str = "new@example.com", password: str
     )
 
 
+async def signed_up(c: AsyncClient, email: str = "new@example.com"):  # noqa: ANN201
+    """Sign up, then sign in (sign-up itself issues no session since CO3-7); the sign-in
+    response is what sign-up used to return: access token in the body, refresh cookie set."""
+    assert (await register(c, email)).status_code == 202
+    r = await login(c, email)
+    assert r.status_code == 200, r.text
+    return r
+
+
 async def login(c: AsyncClient, email: str = "new@example.com", password: str = GOOD):  # noqa: ANN201
     return await c.post("/account/login", json={"email": email, "password": password})
 
@@ -33,26 +42,22 @@ async def login(c: AsyncClient, email: str = "new@example.com", password: str = 
 # -- registration ------------------------------------------------------------------------
 
 
-async def test_register_returns_session_and_a_locked_down_cookie(anon_client: AsyncClient) -> None:
+async def test_register_issues_no_session_and_a_generic_answer(anon_client: AsyncClient) -> None:
     r = await register(anon_client)
-    assert r.status_code == 201
+    assert r.status_code == 202
     body = r.json()
-    assert body["user"]["email"] == "new@example.com"
-    assert body["user"]["platform_role"] == "customer"
-    assert "password" not in r.text.lower().replace("must_change_password", "")
-    assert "hash" not in r.text.lower()
-    assert r.headers["cache-control"] == "no-store"
-    cookie = r.headers["set-cookie"].lower()
-    assert "bb_refresh=" in cookie
-    assert "httponly" in cookie and "samesite=strict" in cookie and "path=/account" in cookie
-    assert "refresh_token" not in body  # the refresh token is never in the body
+    assert body["status"] == "verification_sent"
+    assert "access_token" not in body and "user" not in body
+    assert "set-cookie" not in r.headers
 
 
-async def test_registered_user_can_use_the_access_token(anon_client: AsyncClient) -> None:
-    token = (await register(anon_client)).json()["access_token"]
+async def test_registered_user_can_sign_in_but_is_unverified(anon_client: AsyncClient) -> None:
+    await register(anon_client)
+    token = (await login(anon_client)).json()["access_token"]
     me = await anon_client.get("/account/me", headers={"Authorization": f"Bearer {token}"})
     assert me.status_code == 200
     assert me.json()["email"] == "new@example.com"
+    assert me.json()["email_verified_at"] is None
 
 
 @pytest.mark.parametrize(
@@ -74,9 +79,10 @@ async def test_register_validation(
 
 
 async def test_register_duplicate_email_case_insensitive(anon_client: AsyncClient) -> None:
-    assert (await register(anon_client, "Mixed@Example.com")).status_code == 201
-    r = await register(anon_client, "mixed@example.COM")
-    assert r.status_code == 409
+    first = await register(anon_client, "Mixed@Example.com")
+    again = await register(anon_client, "mixed@example.COM")
+    assert first.status_code == again.status_code == 202  # F-5: no 409 oracle
+    assert first.json() == again.json()
 
 
 async def test_signup_can_be_closed(anon_client: AsyncClient) -> None:
@@ -244,7 +250,7 @@ async def _tokens(session_factory: async_sessionmaker[AsyncSession]) -> list[Ref
 async def test_refresh_rotates_and_old_token_is_spent(
     anon_client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     first_cookie = anon_client.cookies.get("bb_refresh")
     r = await anon_client.post("/account/refresh", headers=CSRF)
     assert r.status_code == 200
@@ -257,7 +263,7 @@ async def test_refresh_rotates_and_old_token_is_spent(
 async def test_refresh_reuse_inside_grace_is_refused_but_keeps_the_session(
     anon_client: AsyncClient,
 ) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     stolen = anon_client.cookies.get("bb_refresh")
     assert (await anon_client.post("/account/refresh", headers=CSRF)).status_code == 200
     legit = anon_client.cookies.get("bb_refresh")
@@ -270,7 +276,7 @@ async def test_refresh_reuse_inside_grace_is_refused_but_keeps_the_session(
 async def test_refresh_reuse_after_grace_revokes_the_whole_family(
     anon_client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    reg = await register(anon_client)
+    reg = await signed_up(anon_client)
     access = reg.json()["access_token"]
     stolen = anon_client.cookies.get("bb_refresh")
     assert (await anon_client.post("/account/refresh", headers=CSRF)).status_code == 200
@@ -295,7 +301,7 @@ async def test_refresh_reuse_after_grace_revokes_the_whole_family(
 
 
 async def test_refresh_requires_csrf_header_and_known_origin(anon_client: AsyncClient) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     assert (await anon_client.post("/account/refresh")).status_code == 403
     r = await anon_client.post(
         "/account/refresh", headers={**CSRF, "Origin": "https://evil.example"}
@@ -312,7 +318,7 @@ async def test_refresh_without_cookie_is_401(anon_client: AsyncClient) -> None:
 
 
 async def test_logout_kills_the_session(anon_client: AsyncClient) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     cookie = anon_client.cookies.get("bb_refresh")
     assert (await anon_client.post("/account/logout", headers=CSRF)).status_code == 204
     anon_client.cookies.set("bb_refresh", cookie, path="/account", domain="testserver.local")
@@ -320,7 +326,7 @@ async def test_logout_kills_the_session(anon_client: AsyncClient) -> None:
 
 
 async def test_admin_cookie_cannot_refresh_a_customer_session(anon_client: AsyncClient) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     token = anon_client.cookies.get("bb_refresh")
     anon_client.cookies.set("bb_admin_refresh", token, path="/admin", domain="testserver.local")
     assert (await anon_client.post("/admin/refresh", headers=CSRF)).status_code == 401
@@ -330,7 +336,7 @@ async def test_admin_cookie_cannot_refresh_a_customer_session(anon_client: Async
 
 
 async def test_change_password_flow(anon_client: AsyncClient) -> None:
-    reg = await register(anon_client)
+    reg = await signed_up(anon_client)
     headers = {"Authorization": f"Bearer {reg.json()['access_token']}"}
     wrong = await anon_client.post(
         "/account/password",
@@ -528,7 +534,7 @@ async def test_a_users_tokens_are_private(client_for: ClientFor) -> None:
 async def test_audit_log_records_events_and_never_a_secret(
     anon_client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
 ) -> None:
-    await register(anon_client)
+    await signed_up(anon_client)
     await login(anon_client, "new@example.com", "wrong-password-123")
     await login(anon_client, "ghost@example.com", "ghost-secret-password")
     async with session_factory() as s:

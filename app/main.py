@@ -12,6 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.api import (
+    ai_registry,
+    advisor,
     account,
     admin,
     auth,
@@ -41,6 +43,7 @@ from app.api import (
     storage,
     wellknown,
 )
+from app.api.body_limit import SpecWriteLimit
 from app.api.input_guard import reject_nul_characters
 from app.api.security import guard
 from app.config import Settings, get_settings
@@ -238,6 +241,7 @@ def create_app() -> FastAPI:
         allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID"],
         expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash", "X-Request-ID"],
     )
+    app.add_middleware(SpecWriteLimit, max_bytes=settings.max_spec_write_bytes)
     app.add_middleware(SecurityMiddleware, settings=settings)
     register_exception_handlers(app)
 
@@ -257,6 +261,7 @@ def create_app() -> FastAPI:
     app.include_router(sso.org_router)  # SSO settings: org_context like every /orgs route
     app.include_router(scim.router)  # SCIM 2.0: authenticated by the org's SCIM bearer token
     app.include_router(scim.org_router)  # SCIM settings: org_context like every /orgs route
+    app.include_router(ai_registry.org_router)  # AI cost/settings, org registry: org_context
 
     # Everything else sits behind the request guard (authentication + project membership).
     guarded = [Depends(guard)]
@@ -276,10 +281,12 @@ def create_app() -> FastAPI:
         fields.router,
         relations.router,
         spec.router,
+        advisor.router,
         spec_ops.router,
         status.router,
         generate.router,
         migration_plan.router,
+        ai_registry.router,
     ):
         app.include_router(router, dependencies=guarded)
 

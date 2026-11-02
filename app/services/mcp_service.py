@@ -29,6 +29,7 @@ from app.services import audit_service
 from app.services.access_service import ROLE_LEVEL, Principal
 from app.services.generation_service import GenerationService
 from app.services.ops.scope import Actor
+from app.services.platform_auth_service import is_staff
 from app.services.ops.service import OpsService
 from app.services.behavior_service import ACTOR_ROLE
 from app.services.spec_service import SpecService
@@ -526,6 +527,13 @@ class McpService:
     ) -> dict[str, object]:
         member = await self._resolve_membership(principal, project_id)
         await self._require_editor(member)
+        # CO3-7: same rule as the REST generate routes (SENTINEL-CO3-7 MEDIUM).
+        if principal.user.email_verified_at is None and not is_staff(principal.user):
+            raise AppError(
+                code="email_not_verified",
+                message="confirm your e-mail address first",
+                status_code=403,
+            )
         # download() renders the zip and stores a Generation record; we return only the URL.
         _zip_bytes, _hash, generation = await GenerationService(self.db).download(project_id)
         download_url = f"/projects/{project_id}/generate/download"

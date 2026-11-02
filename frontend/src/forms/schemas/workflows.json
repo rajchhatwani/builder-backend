@@ -1,0 +1,149 @@
+{
+  "$defs": {
+    "SpecWorkflow": {
+      "additionalProperties": false,
+      "description": "A durable saga: ordered `steps` run one at a time and each completed step is recorded in Postgres,\nso a crashed or restarted worker resumes after the last completed step. `on_failure`: `compensate`\nundoes completed steps in reverse order, `fail` stops and leaves them. `roles` may start, inspect and\ncancel runs (default deny: at least one is required).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "on_failure": {
+          "default": "compensate",
+          "title": "On Failure",
+          "type": "string"
+        },
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Roles",
+          "type": "array"
+        },
+        "steps": {
+          "items": {
+            "$ref": "#/$defs/SpecWorkflowStep"
+          },
+          "title": "Steps",
+          "type": "array"
+        },
+        "timeout_seconds": {
+          "default": 3600,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecWorkflow",
+      "type": "object"
+    },
+    "SpecWorkflowRetry": {
+      "additionalProperties": false,
+      "description": "How a failing workflow step is tried again before the workflow counts it as failed.",
+      "properties": {
+        "backoff": {
+          "default": "exponential",
+          "title": "Backoff",
+          "type": "string"
+        },
+        "backoff_seconds": {
+          "default": 5,
+          "title": "Backoff Seconds",
+          "type": "integer"
+        },
+        "max_attempts": {
+          "default": 3,
+          "title": "Max Attempts",
+          "type": "integer"
+        }
+      },
+      "title": "SpecWorkflowRetry",
+      "type": "object"
+    },
+    "SpecWorkflowStep": {
+      "additionalProperties": false,
+      "description": "One step. `kind: hook` runs the function you write in app/hooks/workflows.py for (workflow, step);\n`kind: job` enqueues the declared background job `job` (atomically with recording the step) and counts\nas done once enqueued. `compensate` says the step has an undo function (run in reverse order when a\nlater step fails or the run is cancelled); set it false only for a step that needs no undo.",
+      "properties": {
+        "compensate": {
+          "default": true,
+          "title": "Compensate",
+          "type": "boolean"
+        },
+        "job": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Job"
+        },
+        "kind": {
+          "default": "hook",
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "retry": {
+          "$ref": "#/$defs/SpecWorkflowRetry"
+        },
+        "timeout_seconds": {
+          "default": 60,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecWorkflowStep",
+      "type": "object"
+    },
+    "SpecWorkflowWorker": {
+      "additionalProperties": false,
+      "description": "The worker process that executes runs (`python -m app.workflows.worker`).",
+      "properties": {
+        "concurrency": {
+          "default": 2,
+          "title": "Concurrency",
+          "type": "integer"
+        }
+      },
+      "title": "SpecWorkflowWorker",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Durable workflows (C12), off unless `enabled`. `runtime`: `postgres` is the built-in durable\nrunner; `dbos` and `temporal` are accepted by the schema and refused by validation (not_yet_implemented).",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "runtime": {
+      "default": "postgres",
+      "title": "Runtime",
+      "type": "string"
+    },
+    "worker": {
+      "$ref": "#/$defs/SpecWorkflowWorker"
+    },
+    "workflows": {
+      "items": {
+        "$ref": "#/$defs/SpecWorkflow"
+      },
+      "title": "Workflows",
+      "type": "array"
+    }
+  },
+  "title": "SpecWorkflows",
+  "type": "object"
+}

@@ -327,3 +327,50 @@ describe('hardening: untrusted backend locations and schemas', () => {
     expect(scalarHint(s, 'A'.repeat(10_001), false)).toBeNull()
   })
 })
+
+describe('free-form objects', () => {
+  const schema = {
+    type: 'object',
+    properties: { adapters: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, settings: { type: 'object', additionalProperties: { type: 'string' } } } } } },
+  } as unknown as JsonSchema
+  const init = { adapters: [{ name: 'acme', settings: { region: 'eu', n: 3, nested: { a: [1, 2] } } }] }
+  const area = () => host.querySelector<HTMLTextAreaElement>('[data-field-path="adapters.0.settings"] textarea')!
+  const edit = (v: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area(), v)
+    area().dispatchEvent(new Event('input', { bubbles: true }))
+  })
+
+  it('renders as a JSON textarea, never as [object Object]', async () => {
+    await mount(schema, init)
+    expect(area().value).toContain('"region": "eu"')
+    const values = [...host.querySelectorAll<HTMLInputElement>('input,textarea,select')].map((e) => e.value)
+    expect(values.some((v) => v.includes('[object Object]'))).toBe(false)
+  })
+
+  it('round-trips unchanged when nothing is edited, and emits an object when edited', async () => {
+    await mount(schema, init)
+    expect(latest).toEqual(init)
+    await edit('{"region": "us", "limit": 2}')
+    expect(latest).toEqual({ adapters: [{ name: 'acme', settings: { region: 'us', limit: 2 } }] })
+    expect(typeof (latest as typeof init).adapters[0].settings).toBe('object')
+  })
+
+  it('invalid JSON keeps the last good object, shows an error and reports the field', async () => {
+    const seen: string[][] = []
+    host = document.createElement('div'); document.body.appendChild(host); root = createRoot(host)
+    function H() {
+      const [v, setV] = useState<unknown>(init)
+      latest = v
+      return createElement(SchemaForm, { schema, value: v, onChange: setV, idPrefix: 't', onInvalidChange: (p: string[]) => seen.push(p) })
+    }
+    await act(async () => root!.render(createElement(H)))
+    await edit('{"region": ')
+    expect(latest).toEqual(init)
+    expect(host.querySelector('[data-testid="field-error"]')?.textContent).toContain('Not valid JSON')
+    expect(seen[seen.length - 1]).toEqual(['adapters.0.settings'])
+    await edit('[1]')
+    expect(host.querySelector('[data-testid="field-error"]')?.textContent).toContain('JSON object')
+    await edit('{}')
+    expect(seen[seen.length - 1]).toEqual([])
+  })
+})

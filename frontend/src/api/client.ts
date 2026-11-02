@@ -41,6 +41,7 @@ import type {
   ApiErrorBody,
   LoginDiscovery,
   LoginResult,
+  VerificationSent,
   MfaStatus,
   OrgMfaDetail,
   OrgPolicies,
@@ -117,6 +118,10 @@ import type {
 } from './types'
 import { isMfaChallenge } from './types'
 import type { SpecBlocks } from '../shell/connect/specTypes'
+
+/** The ONE place that names the advisor route (returns { queue, workflow }). */
+export const ADVISOR_PATH = (projectId: string) => `/projects/${projectId}/advisor`
+export interface AdvisorResult { queue?: Record<string, unknown> | null; workflow?: Record<string, unknown> | null }
 
 export class ApiError extends Error {
   code: string
@@ -696,6 +701,12 @@ export const api = {
       body: JSON.stringify(data),
     }),
   /** The whole assembled spec as loose JSON (F2-6 reads only its `notifications` block). */
+  /** B2-11 per-block endpoints: GET/PUT /projects/{id}/behavior/{name}. The answer is `{ <key>: block|null, version }`. */
+  getBlock: (projectId: string, name: string) => request<Record<string, unknown>>(`/projects/${projectId}/behavior/${name}`),
+  putBlock: (projectId: string, name: string, body: Record<string, unknown>) =>
+    request<Record<string, unknown>>(`/projects/${projectId}/behavior/${name}`, { method: 'PUT', body: JSON.stringify(body) }),
+  /** Queue and workflow advisor. The path lives in ONE place: ADVISOR_PATH (CO3-2; the backend route must match it). */
+  getAdvisor: (projectId: string) => request<AdvisorResult>(ADVISOR_PATH(projectId)),
   getSpecJson: (projectId: string) => request<Record<string, unknown>>(`/projects/${projectId}/spec`),
   getSpecForPolicies: (projectId: string) =>
     request<SpecForPolicies>(`/projects/${projectId}/spec`),
@@ -773,15 +784,15 @@ export const api = {
 
   // ── Accounts ─────────────────────────────────────────────────────────────
 
-  register: async (data: { email: string; password: string; name?: string }) =>
-    adopt(
-      'app',
-      await request<SessionResponse>(
-        '/account/register',
-        { method: 'POST', body: json(data) },
-        { anonymous: true },
-      ),
-    ),
+  /** 202: a confirmation link was e-mailed (if the address can be used). No session is issued. */
+  register: (data: { email: string; password: string; name?: string }) =>
+    request<VerificationSent>('/account/register', { method: 'POST', body: json(data) }, { anonymous: true }),
+  /** Consumes the one-time token from the e-mailed link. The token is never logged. */
+  verifyEmail: (token: string) =>
+    request<UserAccount>('/account/verify-email', { method: 'POST', body: json({ token }) }, { anonymous: true }),
+  /** Same generic answer for any address; the server allows one mail per 60 s per account. */
+  resendVerification: (email: string) =>
+    request<VerificationSent>('/account/verify-email/resend', { method: 'POST', body: json({ email }) }, { anonymous: true }),
   login: async (email: string, password: string) =>
     adoptLogin(
       'app',

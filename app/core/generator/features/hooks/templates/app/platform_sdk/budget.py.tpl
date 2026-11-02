@@ -8,8 +8,16 @@ One `Ledger` per API process. `charge` is called before every outbound effect an
   payload       one call carries more bytes than `payload_bytes`
   calls         more calls of this effect type in one invocation than `calls_per_effect`
   rate          more outbound calls in the last 60 seconds than `outbound_per_minute`
+
+The `rate` window is kept per TENANT (all hooks of one tenant share it; a hook compares the tenant's count
+with its own `outbound_per_minute`), so one tenant cannot use up another's allowance and a second hook does
+not give a tenant a second allowance. The window lives in this process. With N API replicas each process
+enforces ceil(limit / N), where N is the `EFFECT_REPLICAS` environment variable (default 1, max 1000), so the
+fleet-wide bound for one tenant is at most limit + N - 1 calls per minute. Set EFFECT_REPLICAS to the number
+of API replicas; an unset or invalid value means 1 (the limit is then per process, up to limit x replicas).
 """
 
+import os
 import threading
 import time
 from collections import deque
@@ -17,6 +25,14 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 WINDOW_SECONDS = 60.0
+NO_TENANT = "-"
+
+
+def replicas() -> int:
+    try:
+        return min(1000, max(1, int(os.environ.get("EFFECT_REPLICAS", "1"))))
+    except ValueError:
+        return 1
 
 
 class OverBudget(Exception):
@@ -41,7 +57,8 @@ class Ledger:
         self._sent: dict[str, deque[float]] = {}
 
     def charge(
-        self, hook: str, limits: EffectLimits | None, calls: dict[str, int], effect: str, size: int, started: float
+        self, hook: str, limits: EffectLimits | None, calls: dict[str, int], effect: str, size: int, started: float,
+        tenant: str = NO_TENANT,
     ) -> None:
         """Count one call of `effect` (payload `size` bytes) for an invocation that began at `started`.
         `calls` is that invocation's counter. Nothing is counted when the call is refused."""
@@ -55,10 +72,11 @@ class Ledger:
         if calls.get(effect, 0) + 1 > limits.calls_per_effect:
             raise OverBudget("calls")
         with self._lock:
-            window = self._sent.setdefault(hook, deque())
+            window = self._sent.setdefault(tenant or NO_TENANT, deque())
             while window and now - window[0] >= WINDOW_SECONDS:
                 window.popleft()
-            if len(window) >= limits.outbound_per_minute:
+            share = -(-limits.outbound_per_minute // replicas())  # ceil
+            if len(window) >= share:
                 raise OverBudget("rate")
             window.append(now)
         calls[effect] = calls.get(effect, 0) + 1

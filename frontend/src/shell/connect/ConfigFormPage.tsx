@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { ApiError } from '../../api/client'
 import { SchemaForm, defaultFor, issuesFromDetail, validateValue, type JsonSchema, type PathErrors } from '../../forms'
-import { setPageFlag, type PageFlag } from '../pageFlag'
 import { ConflictBanner, LoadFailed, SaveBar } from '../behavior/ui'
 import { PageHeader } from './BlockUi'
 
@@ -11,7 +10,8 @@ export interface ConfigFormProps {
   title: string
   intro: string
   schema: JsonSchema
-  flag: PageFlag
+  /** Short id used for form element ids. */
+  flag: string
   load: () => Promise<Config>
   save: (body: Config) => Promise<Config>
   /** The write body carries `expected_version` (optimistic locking) when the backend row has a `version`. */
@@ -44,6 +44,7 @@ export function ConfigFormPage({ title, intro, schema, flag, load, save, version
   const [note, setNote] = useState('')
   const [error, setError] = useState('')
   const [ext, setExt] = useState<PathErrors>({})
+  const [badJson, setBadJson] = useState<string[]>([])
   // Payments and storage answer 404 until their settings were saved once: start from the schema's defaults.
   const [fresh, setFresh] = useState(false)
   const alive = useRef(true)
@@ -86,6 +87,10 @@ export function ConfigFormPage({ title, intro, schema, flag, load, save, version
   const hints = useMemo(() => validateValue(schema, schema, value), [schema, value])
 
   async function onSave() {
+    if (badJson.length) {
+      setError('Fix the JSON fields marked in red before saving.')
+      return
+    }
     if (Object.keys(hints).length) {
       setError('Fix the highlighted fields before saving.')
       return
@@ -115,18 +120,9 @@ export function ConfigFormPage({ title, intro, schema, flag, load, save, version
     }
   }
 
-  function classic() {
-    setPageFlag(flag, 'classic')
-    window.location.reload()
-  }
-
   return (
     <>
       <PageHeader title={title}>{intro}</PageHeader>
-      <div className="bh-actions">
-        <button className="outline small" onClick={classic} data-testid="use-classic">Use the classic panel</button>
-        <small className="muted">The classic panel stays available; both edit the same saved settings.</small>
-      </div>
       {state.s === 'loading' && <p className="empty-state" role="status">Loading…</p>}
       {state.s === 'error' && <LoadFailed what={title.toLowerCase()} message={state.message} onRetry={() => void reload()} />}
       {state.s === 'ready' && (
@@ -140,8 +136,9 @@ export function ConfigFormPage({ title, intro, schema, flag, load, save, version
             onChange={(v) => { setValue(v as Config); setDirty(true); setNote(''); setExt({}) }}
             externalErrors={ext}
             idPrefix={`cf-${flag}`}
+            onInvalidChange={setBadJson}
           />
-          <SaveBar dirty={dirty || fresh} saving={saving} onSave={() => void onSave()} onDiscard={() => void reload()} note={note} error={error} />
+          <SaveBar dirty={dirty || fresh || badJson.length > 0} saving={saving} onSave={() => void onSave()} onDiscard={() => void reload()} note={note} error={error} />
         </>
       )}
     </>

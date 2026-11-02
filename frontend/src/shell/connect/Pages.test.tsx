@@ -1,15 +1,16 @@
 import { act, createElement } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { validateValue, type JsonSchema } from '../../forms'
 import { JobsPage } from '../operate/JobsPage'
 import { WorkersPage } from '../operate/WorkersPage'
 import { WorkflowsPage } from '../operate/WorkflowsPage'
+import { ApiError } from '../../api/client'
 import { ProvidersPage } from './ProvidersPage'
 import { WebhooksPage } from './WebhooksPage'
 
-const m = vi.hoisted(() => ({ getSpecBlocks: vi.fn(), validateProject: vi.fn() }))
-vi.mock('../../api/client', () => ({ api: m }))
+const m = vi.hoisted(() => ({ getSpecBlocks: vi.fn(), validateProject: vi.fn(), getBlock: vi.fn(), putBlock: vi.fn(), getAdvisor: vi.fn() }))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: m }))
 vi.mock('../../components/Ui', () => ({ useUi: () => ({ confirm: vi.fn(), toast: vi.fn() }) }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -37,77 +38,106 @@ const SPEC = {
   webhooks: { enabled: true, events: ['order.created'], inbound: [{ name: 'stripe' }] },
 }
 
-describe('spec-reading pages', () => {
-  it('Jobs: tables, ReadOnly notice, validator issues', async () => {
-    m.getSpecBlocks.mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: false, issues: [{ path: 'jobs.jobs[0]', code: 'x', message: 'handler missing' }, { path: 'entities', code: 'y', message: 'other' }] })
-    await mount(createElement(JobsPage, { projectId: 'p' }))
-    expect(host.querySelector('h1')?.textContent).toBe('Jobs and schedules')
-    expect(q('readonly-notice')).not.toBeNull()
-    expect(q('jobs-table')?.textContent).toContain('send_mail')
-    expect(q('sched-table')?.textContent).toContain('Europe/Paris')
-    expect(q('block-issues')?.textContent).toContain('handler missing')
-    expect(q('block-issues')?.textContent).not.toContain('other')
-  })
-
-  it('Jobs: off state when the block is missing', async () => {
-    m.getSpecBlocks.mockResolvedValue({})
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(JobsPage, { projectId: 'p' }))
-    expect(q('block-off')).not.toBeNull()
-  })
-
-  it('shows a retryable error when the spec cannot be loaded', async () => {
-    m.getSpecBlocks.mockRejectedValueOnce(new Error('offline')).mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(JobsPage, { projectId: 'p' }))
-    expect(q('block-error')?.textContent).toContain('offline')
-    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid=block-error] button')!.click() })
-    expect(q('jobs-table')).not.toBeNull()
-  })
-
-  it('Workers: placement, unserved queue warning, queue advisor note', async () => {
+const BLOCKS: Record<string, { key: string; path: string; Page: (p: { projectId: string }) => ReturnType<typeof createElement>; title: string }> = {
+  jobs: { key: 'jobs', path: 'jobs', Page: (p) => createElement(JobsPage, p), title: 'Jobs and schedules' },
+  workflows: { key: 'workflows', path: 'workflows', Page: (p) => createElement(WorkflowsPage, p), title: 'Workflows' },
+  providers: { key: 'providers', path: 'providers', Page: (p) => createElement(ProvidersPage, p), title: 'Provider integrations' },
+  webhooks: { key: 'webhooks', path: 'webhooks', Page: (p) => createElement(WebhooksPage, { ...p, origin: null }), title: 'Webhooks' },
+}
+const btn = (re: RegExp) => [...host.querySelectorAll('button')].find((b) => re.test(b.textContent ?? ''))!
+describe.each(Object.keys(BLOCKS))('%s page (editable block)', (name) => {
+  const { key, path, Page, title } = BLOCKS[name]
+  const block = SPEC[key as keyof typeof SPEC]
+  beforeEach(() => {
     m.getSpecBlocks.mockResolvedValue(SPEC)
     m.validateProject.mockResolvedValue({ valid: true, issues: [] })
+    m.getBlock.mockResolvedValue({ [key]: block, version: 2 })
+  })
+
+  it('loads the block from its own endpoint into a form', async () => {
+    await mount(Page({ projectId: 'p' }))
+    expect(host.querySelector('h1')?.textContent).toBe(title)
+    expect(m.getBlock).toHaveBeenCalledWith('p', path)
+    expect(host.querySelector('[data-schema-form]')).not.toBeNull()
+  })
+
+  it('save success sends the block with the loaded version', async () => {
+    m.putBlock.mockImplementation(async (_p: string, _n: string, b: Record<string, unknown>) => ({ [key]: b[key], version: 3 }))
+    await mount(Page({ projectId: 'p' }))
+    const toggle = host.querySelector<HTMLInputElement>('input[type=checkbox]')!
+    await act(async () => { toggle.click() })
+    await act(async () => { btn(/^Save$/).click() })
+    expect(m.putBlock).toHaveBeenCalledTimes(1)
+    const [pid, n, body] = m.putBlock.mock.calls[0]
+    expect([pid, n]).toEqual(['p', path])
+    expect(body.expected_version).toBe(2)
+    expect(body[key]).toBeTypeOf('object')
+    expect(body[key]).not.toHaveProperty('version')
+    expect(host.querySelector('[data-testid=save-note]')?.textContent).toContain('version 3')
+  })
+
+  it('shows the backend 422 message', async () => {
+    m.putBlock.mockRejectedValue(new ApiError(422, { code: 'secret_in_spec', message: 'a secret must not be stored in the spec', details: [] }))
+    await mount(Page({ projectId: 'p' }))
+    await act(async () => { host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click() })
+    await act(async () => { btn(/^Save$/).click() })
+    expect(host.querySelector('[role=alert]')?.textContent).toContain('a secret must not be stored')
+  })
+
+  it('shows the conflict banner on 409 and reloads on request', async () => {
+    m.putBlock.mockRejectedValue(new ApiError(409, { code: 'conflict', message: 'stale', details: [] }))
+    await mount(Page({ projectId: 'p' }))
+    await act(async () => { host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click() })
+    await act(async () => { btn(/^Save$/).click() })
+    expect(q('conflict')).not.toBeNull()
+    const calls = m.getBlock.mock.calls.length
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid=conflict] button')!.click() })
+    expect(m.getBlock.mock.calls.length).toBe(calls + 1)
+  })
+
+  it('shows a retryable load error', async () => {
+    m.getBlock.mockReset()
+    m.getBlock.mockRejectedValueOnce(new Error('offline')).mockResolvedValue({ [key]: block, version: 2 })
+    await mount(Page({ projectId: 'p' }))
+    expect(host.querySelector('[role=alert]')?.textContent).toContain('offline')
+    await act(async () => { btn(/Try again/).click() })
+    expect(host.querySelector('[data-schema-form]')).not.toBeNull()
+  })
+})
+
+describe('Webhooks live panel', () => {
+  it('says so when no preview API is configured, and shows the panel when one exists', async () => {
+    m.getSpecBlocks.mockResolvedValue(SPEC)
+    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
+    m.getBlock.mockResolvedValue({ webhooks: SPEC.webhooks, version: 1 })
+    await mount(createElement(WebhooksPage, { projectId: 'p', origin: null }))
+    expect(q('wh-no-origin')).not.toBeNull()
+    act(() => root?.unmount()); host.remove()
+    await mount(createElement(WebhooksPage, { projectId: 'p', origin: 'http://localhost:9999' }))
+    expect(q('wh-live')).not.toBeNull()
+  })
+})
+
+describe('Workers page', () => {
+  beforeEach(() => {
+    m.getSpecBlocks.mockResolvedValue(SPEC)
+    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
+  })
+  it('placement, unserved queue warning and the advisor result', async () => {
+    m.getAdvisor.mockResolvedValue({ queue: { recommended_backend: 'postgres', reason: 'low volume' }, workflow: { runtime: 'postgres' } })
     await mount(createElement(WorkersPage, { projectId: 'p' }))
     expect(q('workers-table')?.textContent).toContain('Separate server')
     expect(q('workers-unserved')?.textContent).toContain('mail')
-    expect(q('queue-advisor')?.textContent).toContain('no builder endpoint yet')
+    expect(q('advisor-queue')?.textContent).toContain('low volume')
+    expect(q('advisor-workflow')?.textContent).toContain('postgres')
   })
-
-  it('Workflows: steps and a job step that names an undeclared job', async () => {
-    m.getSpecBlocks.mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(WorkflowsPage, { projectId: 'p' }))
-    expect(q('wf-card')?.textContent).toContain('onboarding')
-    expect(host.querySelectorAll('ol li')).toHaveLength(2)
-    expect(q('wf-problems')?.textContent).toContain('"missing" is not declared')
-  })
-
-  it('Providers: never prints a secret-looking setting', async () => {
-    m.getSpecBlocks.mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(ProvidersPage, { projectId: 'p' }))
-    expect(q('pv-table')?.textContent).toContain('mail.example.com')
-    expect(host.textContent).not.toContain('SHOULD_NOT_SHOW')
-  })
-
-  it('Webhooks: spec summary, and says so when no preview API is configured', async () => {
-    m.getSpecBlocks.mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(WebhooksPage, { projectId: 'p', origin: null }))
-    expect(q('wh-events')?.textContent).toContain('order.created')
-    expect(q('wh-inbound')?.textContent).toContain('/webhooks/in/stripe')
-    expect(q('wh-no-origin')).not.toBeNull()
-    expect(q('wh-live')).toBeNull()
-  })
-
-  it('Webhooks: the live panel appears when a preview origin exists', async () => {
-    m.getSpecBlocks.mockResolvedValue(SPEC)
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    await mount(createElement(WebhooksPage, { projectId: 'p', origin: 'http://localhost:9999' }))
-    expect(q('wh-live')).not.toBeNull()
-    expect(host.querySelector<HTMLInputElement>('#wh-token')?.type).toBe('password')
+  it('shows a retryable advisor error without hiding the page', async () => {
+    m.getAdvisor.mockRejectedValueOnce(new Error('no advisor')).mockResolvedValue({ queue: {}, workflow: {} })
+    await mount(createElement(WorkersPage, { projectId: 'p' }))
+    expect(q('workers-table')).not.toBeNull()
+    expect(q('advisor-error')?.textContent).toContain('no advisor')
+    await act(async () => { host.querySelector<HTMLButtonElement>('[data-testid=advisor-error] button')!.click() })
+    expect(q('advisor-queue')).not.toBeNull()
   })
 })
 
@@ -120,5 +150,33 @@ describe('validateValue with an unset optional object', () => {
     } as unknown as JsonSchema
     expect(validateValue(schema, schema, { thing: null })).toEqual({})
     expect(validateValue(schema, schema, { thing: {} })['thing.a']).toBeDefined()
+  })
+})
+
+describe('providers page: free-form settings', () => {
+  const area = () => host.querySelector<HTMLTextAreaElement>('textarea')!
+  const edit = (v: string) => act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(area(), v)
+    area().dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  beforeEach(() => {
+    m.getBlock.mockResolvedValue({ providers: { enabled: true, adapters: [{ kind: 'email', name: 'acme_mail', settings: { region: 'eu' } }] }, version: 1 })
+  })
+  it('shows settings as JSON (no [object Object]) and saves them back as an object', async () => {
+    m.putBlock.mockImplementation(async (_p: string, _n: string, b: Record<string, unknown>) => ({ providers: b.providers, version: 2 }))
+    await mount(createElement(ProvidersPage, { projectId: 'p' }))
+    expect(area().value).toContain('"region": "eu"')
+    expect(host.textContent).not.toContain('[object Object]')
+    await edit('{"region": "us"}')
+    await act(async () => { btn(/^Save$/).click() })
+    const sent = m.putBlock.mock.calls[0][2] as { providers: { adapters: { settings: unknown }[] } }
+    expect(sent.providers.adapters[0].settings).toEqual({ region: 'us' })
+  })
+  it('invalid JSON blocks Save', async () => {
+    await mount(createElement(ProvidersPage, { projectId: 'p' }))
+    await edit('{oops')
+    await act(async () => { btn(/^Save$/).click() })
+    expect(m.putBlock).not.toHaveBeenCalled()
+    expect(host.textContent).toContain('Fix the JSON fields')
   })
 })

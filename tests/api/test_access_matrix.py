@@ -27,6 +27,9 @@ PUBLIC = {
     ("GET", "/health"),
     ("GET", "/ready"),
     ("POST", "/account/register"),
+    # CO3-7: the e-mail link token / the address itself is the credential; generic answers.
+    ("POST", "/account/verify-email"),
+    ("POST", "/account/verify-email/resend"),
     ("POST", "/account/login"),
     ("POST", "/account/refresh"),
     ("POST", "/account/logout"),

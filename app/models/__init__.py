@@ -1,3 +1,4 @@
+from app.models.ai_ledger import AiCostLedger, AiOrgSettings
 from app.models.auth_config import ProjectAuthConfig
 from app.models.auth_custom_field import AuthCustomField
 from app.models.auth_secrets import ProjectAuthSecrets
@@ -19,11 +20,13 @@ from app.models.platform import (
     MfaRecoveryCode,
     PlatformUser,
     ProjectMember,
+    EmailVerificationToken,
     RefreshToken,
 )
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
+from app.models.registry import RegistryBlockVersion, RegistryDepLock, RegistryHookEntry
 from app.models.relation import Relation
 from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
 from app.models.spec_op import SpecOp
@@ -31,6 +34,11 @@ from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
 
 __all__ = [
+    "AiCostLedger",
+    "AiOrgSettings",
+    "RegistryBlockVersion",
+    "RegistryDepLock",
+    "RegistryHookEntry",
     "ApiToken",
     "AuditLog",
     "ImpersonationSession",
@@ -55,6 +63,7 @@ __all__ = [
     "ProjectPermission",
     "ProjectRole",
     "ProjectStorageConfig",
+    "EmailVerificationToken",
     "RefreshToken",
     "ScimDirectory",
     "ScimGroup",

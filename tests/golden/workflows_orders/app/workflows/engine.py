@@ -14,6 +14,7 @@ WORKFLOWS_LEASE_GRACE_SECONDS.
 import asyncio
 import datetime as _dt
 import json
+import re
 import uuid
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
@@ -98,6 +99,8 @@ def _json_size(value: object, what: str, limit: int) -> None:
         raise ValueError(f"{what} must be JSON (no NaN, no custom objects)") from None
     if size > limit:
         raise ValueError(f"{what} is at most {limit} bytes")
+    if re.search(r"(?<!\\)(?:\\\\)*\\u0000", json.dumps(value)):  # Postgres JSONB cannot store NUL: refuse it as input, never a 500
+        raise ValueError(f"{what} must not contain NUL characters")
 
 
 # --- start / cancel ---------------------------------------------------------------------------
@@ -125,6 +128,8 @@ async def start(
     _json_size(body, "a workflow input", config.MAX_INPUT_BYTES)
     if dedupe_key is not None and not 0 < len(dedupe_key) <= 200:
         raise ValueError("dedupe_key is 1 to 200 characters")
+    if dedupe_key is not None and "\x00" in dedupe_key:
+        raise ValueError("dedupe_key must not contain NUL characters")
     stamp = now or utcnow()
     run_id = uuid.uuid4()
     stmt = (
@@ -189,7 +194,41 @@ async def cancel(
     if row.status == PENDING and row.lease_token is None:
         row.status = CANCELLED
         row.finished_at = stamp
+    elif row.status == RUNNING and row.lease_token is None:
+        # Released and waiting for a retry: no worker will look at it before the backoff ends, so settle it now.
+        declared = definitions.WORKFLOWS.get(row.workflow)
+        if declared is not None and declared["on_failure"] == "compensate" and row.cursor > 0:
+            row.status = COMPENSATING
+            row.reason = "cancel"
+            row.cursor = row.cursor - 1
+            row.attempt = 0
+            row.next_run_at = stamp
+        else:
+            row.status = CANCELLED
+            row.finished_at = stamp
     row.cancel_requested = True
+    row.updated_at = stamp
+    return row
+
+
+async def resume_undo(
+    session: AsyncSession, run_id: uuid.UUID, tenant_id: uuid.UUID | None, *, now: _dt.datetime | None = None
+) -> Run | None:
+    """Retry the undo of a run whose compensation failed: it goes back to `compensating` at the step that
+    failed, with a fresh attempt count, and a worker picks it up. None = no such run for this tenant; a run in
+    any other status is returned unchanged (the caller answers 409). The caller commits."""
+    stamp = now or utcnow()
+    row = (
+        await session.execute(sa.select(Run).where(Run.id == run_id, tenant_clause(tenant_id)).with_for_update())
+    ).scalar_one_or_none()
+    if row is None or row.status != COMPENSATION_FAILED:
+        return row
+    row.status = COMPENSATING
+    row.attempt = 0
+    row.finished_at = None
+    row.lease_token = None
+    row.lease_expires_at = None
+    row.next_run_at = stamp
     row.updated_at = stamp
     return row
 

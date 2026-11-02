@@ -16,6 +16,7 @@ import { InvitationsPage } from './pages/InvitationsPage'
 import { OrgConsole, type OrgTab } from './pages/OrgConsole'
 import { ProjectsPage } from './pages/ProjectsPage'
 import { ProjectWorkspace } from './pages/ProjectWorkspace'
+import { VerifyEmailPage } from './pages/VerifyEmailPage'
 
 const TailwindSpike = lazy(() => import('./spike/TailwindSpike'))
 
@@ -26,6 +27,7 @@ type Route =
   | { page: 'org'; slug: string; tab: OrgTab }
   | { page: 'invitations'; token?: string }
   | { page: 'sso-complete' }
+  | { page: 'verify-email' }
   | { page: 'admin'; section: AdminSection }
   | { page: 'project'; projectId: string; section: AnySection }
 
@@ -39,6 +41,7 @@ export function parseHash(hash: string): Route {
   if (hash.startsWith('#/invitations')) return { page: 'invitations' }
   // The API sends a finished SSO sign-in here with the refresh cookie already set (§4.2).
   if (hash.startsWith('#/sso/complete')) return { page: 'sso-complete' }
+  if (hash.startsWith('#/verify-email')) return { page: 'verify-email' }
   const invite = hash.match(/^#\/invite\/([^/?]+)/)
   if (invite) return { page: 'invitations', token: decodeURIComponent(invite[1]) }
   // #/org/<slug> → People (§8.1); /invites, /projects, /plan, /audit, /sso, /policies are the other tabs.
@@ -143,6 +146,8 @@ function App() {
         <Suspense fallback={null}>
           <TailwindSpike />
         </Suspense>
+      ) : route.page === 'verify-email' ? (
+        <VerifyEmailPage />
       ) : route.page === 'admin' ? (
         <AdminApp section={route.section} />
       ) : (

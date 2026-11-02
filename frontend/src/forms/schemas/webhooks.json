@@ -1,0 +1,96 @@
+{
+  "$defs": {
+    "SpecWebhookInbound": {
+      "additionalProperties": false,
+      "description": "One incoming webhook receiver, served at POST /webhooks/in/<name>. Requests must carry a valid\nStandard Webhooks signature (raw body, HMAC-SHA256) made with a secret the admin stored for this\nendpoint; the handler is a function you write in app/hooks/webhooks.py.",
+      "properties": {
+        "dedupe_days": {
+          "default": 7,
+          "title": "Dedupe Days",
+          "type": "integer"
+        },
+        "max_body_bytes": {
+          "default": 262144,
+          "title": "Max Body Bytes",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "tolerance_seconds": {
+          "default": 300,
+          "title": "Tolerance Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecWebhookInbound",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Webhooks out and in (C13). Off unless `enabled`. Needs events (the source of outgoing webhooks),\njobs (retries with backoff: declare a job `webhook_delivery`) and providers (the vault that keeps\nthe signing secrets). Nothing secret lives in the spec. Only `events` listed here can be subscribed\nto (default deny); URLs must pass the SSRF guard (public addresses only, no redirects followed).",
+  "properties": {
+    "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+    },
+    "allow_http": {
+      "default": false,
+      "title": "Allow Http",
+      "type": "boolean"
+    },
+    "allowed_ports": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Allowed Ports",
+      "type": "array"
+    },
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "events": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "inbound": {
+      "items": {
+        "$ref": "#/$defs/SpecWebhookInbound"
+      },
+      "title": "Inbound",
+      "type": "array"
+    },
+    "max_consecutive_failures": {
+      "default": 5,
+      "title": "Max Consecutive Failures",
+      "type": "integer"
+    },
+    "max_payload_bytes": {
+      "default": 262144,
+      "title": "Max Payload Bytes",
+      "type": "integer"
+    },
+    "secret_overlap_hours": {
+      "default": 24,
+      "title": "Secret Overlap Hours",
+      "type": "integer"
+    },
+    "timeout_seconds": {
+      "default": 10.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    }
+  },
+  "title": "SpecWebhooks",
+  "type": "object"
+}

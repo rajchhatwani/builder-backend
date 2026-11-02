@@ -17,6 +17,7 @@ from app.workflows import config, definitions, engine, registry, worker
 from app.workflows.models import (
     CANCELLED,
     COMPENSATED,
+    COMPENSATING,
     COMPENSATION_FAILED,
     FAILED,
     PENDING,
@@ -237,6 +238,47 @@ async def test_an_undo_that_keeps_failing_is_visible_not_silent(monkeypatch: pyt
     calls.fail_undo.add(NAMES[-2])
     run = await _pump(await _start())
     assert run.status == COMPENSATION_FAILED and run.failed_step == NAMES[-2] and run.finished_at is not None
+
+
+async def test_a_failed_undo_can_be_resumed_and_then_finishes(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = Calls(monkeypatch)
+    _fast_retry(monkeypatch, WF)
+    monkeypatch.setitem(definitions.WORKFLOWS[WF], "on_failure", "compensate")
+    calls.fail[NAMES[-1]] = 99
+    calls.fail_undo.add(NAMES[-2])
+    run = await _pump(await _start())
+    assert run.status == COMPENSATION_FAILED
+    calls.fail_undo.clear()
+    async with session_factory() as session:
+        resumed = await engine.resume_undo(session, run.id, None)
+        await session.commit()
+    assert resumed is not None and resumed.status == COMPENSATING and resumed.finished_at is None
+    done = await _pump(run.id)
+    assert done.status == COMPENSATED
+    async with session_factory() as session:  # a run that is not in compensation_failed is left as it is
+        again = await engine.resume_undo(session, run.id, None)
+    assert again is not None and again.status == COMPENSATED
+
+
+async def test_cancelling_a_run_waiting_for_a_retry_ends_cancelled_not_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = Calls(monkeypatch)
+    _fast_retry(monkeypatch, WF, attempts=3)
+    calls.fail[NAMES[0]] = 1
+    run_id = await _start()
+    claimed = await _claim()
+    assert await engine.drive(session_factory, claimed) == "released"
+    async with session_factory() as session:
+        row = await engine.cancel(session, run_id, None)
+        await session.commit()
+    assert row is not None and row.status == CANCELLED and row.finished_at is not None
+    assert (await _run(run_id)).status == CANCELLED
+
+
+async def test_a_dedupe_key_with_a_nul_character_is_refused_not_a_500() -> None:
+    with pytest.raises(ValueError):
+        await engine.start(WF, {}, dedupe_key="a\x00b")
+    with pytest.raises(ValueError):
+        await engine.start(WF, {"note": "a\x00b"})
 
 
 async def test_a_crashed_worker_resumes_after_the_last_recorded_step(monkeypatch: pytest.MonkeyPatch) -> None:

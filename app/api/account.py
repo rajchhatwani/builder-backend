@@ -5,9 +5,11 @@ SameSite=Strict cookie scoped to /account, so page scripts can never read it and
 sends it here. The short-lived access token is returned in the body for the app to keep in memory.
 """
 
+import asyncio
+import time
 import uuid
 
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.security import (
@@ -39,14 +41,18 @@ from app.schemas.account import (
     PasswordChangeRequest,
     RecoveryCodesRead,
     RegisterRequest,
+    ResendVerificationRequest,
     SessionRead,
     SessionWithRecoveryCodesRead,
     TotpSetupRead,
     TotpSetupRequest,
     UserRead,
+    VerificationSentRead,
+    VerifyEmailRequest,
 )
 from app.schemas.sso import LoginDiscoverRead, LoginDiscoverRequest
 from app.services.access_service import Principal
+from app.services import mail_service
 from app.services.api_token_service import ApiTokenService
 from app.services.mfa_service import MfaService
 from app.services.platform_auth_service import MfaChallenge, PlatformAuthService, Session
@@ -89,36 +95,84 @@ def _no_store(response: Response) -> None:
     response.headers["Cache-Control"] = "no-store"
 
 
+async def _send_verification(service: PlatformAuthService, to: str, token: str) -> None:
+    """Background task: the SMTP wait must not show in the response time (F-5 timing)."""
+    await mail_service.send_verification(
+        to=to,
+        url=service.verification_url(token),
+        hours=service.settings.email_verification_hours,
+    )
+
+
 @router.post(
     "/register",
-    response_model=SessionRead,
-    status_code=status.HTTP_201_CREATED,
+    response_model=VerificationSentRead,
+    status_code=status.HTTP_202_ACCEPTED,
     dependencies=[Depends(rate_limit_auth)],
 )
 async def register(
     body: RegisterRequest,
     request: Request,
-    response: Response,
+    background: BackgroundTasks,
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
-) -> SessionRead:
+) -> VerificationSentRead:
+    """Always the same "check your inbox" answer for a new and an existing address. No session
+    is issued: the person signs in after confirming the e-mail link (unverified accounts are
+    limited meanwhile). Input errors (bad e-mail, weak password) are 422 for every address."""
     service = PlatformAuthService(db, settings)
-    info = request_info(request)
-    await service.register(email=body.email, password=body.password, name=body.name, info=info)
-    session = await service.login(
-        email=body.email, password=body.password, audience=TokenAudience.app, info=info
+    started = time.monotonic()
+    created = await service.register(
+        email=body.email, password=body.password, name=body.name, info=request_info(request)
     )
-    assert isinstance(session, Session)  # a brand-new customer account has no MFA yet
-    set_refresh_cookie(
-        response,
-        APP_COOKIE,
-        APP_COOKIE_PATH,
-        session.refresh_token,
-        session.refresh_max_age,
-        settings,
+    # F-5: pad to a floor so "new" and "already registered" take the same time.
+    spare = settings.signup_response_floor_ms / 1000 - (time.monotonic() - started)
+    if spare > 0:
+        await asyncio.sleep(spare)
+    if created is not None:
+        user, token = created
+        background.add_task(_send_verification, service, user.email, token)
+    return VerificationSentRead()
+
+
+@router.post(
+    "/verify-email",
+    response_model=UserRead,
+    dependencies=[Depends(rate_limit_auth)],
+)
+async def verify_email(
+    body: VerifyEmailRequest,
+    request: Request,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> UserRead:
+    """Consume a confirmation link token (single use, expires). Unknown, used and expired
+    tokens all answer the same 400."""
+    user = await PlatformAuthService(db, settings).verify_email(
+        token=body.token, info=request_info(request)
     )
-    _no_store(response)
-    return session_body(session)
+    return UserRead.model_validate(user)
+
+
+@router.post(
+    "/verify-email/resend",
+    response_model=VerificationSentRead,
+    status_code=status.HTTP_202_ACCEPTED,
+    dependencies=[Depends(rate_limit_auth)],
+)
+async def resend_verification(
+    body: ResendVerificationRequest,
+    background: BackgroundTasks,
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> VerificationSentRead:
+    """Same generic answer whether or not a mail goes out; one link per cooldown per account."""
+    service = PlatformAuthService(db, settings)
+    resent = await service.resend_verification(email=body.email)
+    if resent is not None:
+        user, token = resent
+        background.add_task(_send_verification, service, user.email, token)
+    return VerificationSentRead()
 
 
 @router.post(

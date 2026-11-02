@@ -1,6 +1,6 @@
 /** Feature flag `ui.shell`. The old shell is the default; `v2` switches the project workspace to the new shell.
  *  Set with `localStorage.setItem('ui.shell', 'v2')` or by opening the app once with `?ui.shell=v2`
- *  (persisted; `?ui.shell=v1` turns it off). Nothing else reads the flag. */
+ *  (persisted; `?ui.shell=v1` turns it off). This is the ONE flag: it turns every new page on (no per-feature flags). */
 const KEY = 'ui.shell'
 
 export function shellV2Enabled(): boolean {

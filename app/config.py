@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     # Only turn on behind a proxy that overwrites X-Forwarded-For; otherwise clients can spoof it.
     trust_proxy_headers: bool = False
     max_request_bytes: int = 10 * 1024 * 1024
+    # Cap for spec writes (PUT /spec and the per-block PUTs), on the bytes actually received. 413 above it.
+    max_spec_write_bytes: int = 1024 * 1024
     # /docs and /openapi.json: on in `local`, off elsewhere unless asked for.
     enable_docs: bool | None = None
 
@@ -57,6 +59,12 @@ class Settings(BaseSettings):
     smtp_password: SecretStr | None = None
     smtp_from: str = "Backend Builder <no-reply@localhost>"
     smtp_starttls: bool = True
+    # CO3-7: how long an e-mail verification link works, and the wait between two resends.
+    email_verification_hours: int = 24
+    email_verification_resend_seconds: int = 60
+    # Sign-up answers no faster than this, so a new address (org + token rows) and an existing
+    # one (nothing to write) cost the caller the same time. Must exceed the slower branch.
+    signup_response_floor_ms: int = 300
     # Phase C: signing secret(s) of the Stripe webhook endpoint (whsec_...). Comma-separate
     # two during a secret roll. Unset → POST /billing/stripe/webhook answers 503.
     stripe_webhook_secret: SecretStr | None = None
@@ -98,6 +106,17 @@ class Settings(BaseSettings):
     security_digest_webhook_url: SecretStr | None = None
     security_digest_email: str | None = None
     security_digest_hours: int = 24
+
+    # -- AI model providers (B3-7). Keys are BYO per org (encrypted at rest), never in config.
+    ai_provider: Literal["claude", "fake"] = "claude"
+    ai_small_model: str = "claude-haiku-5-5"
+    ai_large_model: str = "claude-sonnet-5-5"
+    # Override or extend the price table: {"model": {"input": n, "output": n, "cache_read": n,
+    # "cache_write": n}} in micro-USD per million tokens. Unknown model = refused, not free.
+    ai_price_table: dict[str, dict[str, int]] = {}
+    # Per-org monthly cap in micro-USD when the org set none. None = no cap.
+    ai_default_monthly_budget_micro_usd: int | None = None
+    ai_request_timeout_seconds: float = 120.0
 
     @property
     def sso_require_https(self) -> bool:

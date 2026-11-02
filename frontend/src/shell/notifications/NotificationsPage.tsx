@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { api } from '../../api/client'
+import { ApiError, api } from '../../api/client'
 import {
-  CELL_TEXT, EXAMPLE_DELIVERIES, EXAMPLE_TYPES, checkTemplate, loadDrafts, maskAddress, preferenceMatrix, readNotifications,
-  renderPreview, renderSubject, sampleValues, saveDrafts, tplKey, type Drafts, type NBlock, type NTemplate, type NType,
+  CELL_TEXT, EXAMPLE_DELIVERIES, EXAMPLE_TYPES, checkTemplate, maskAddress, preferenceMatrix, readNotifications,
+  renderPreview, renderSubject, sampleValues, tplKey, type NBlock, type NTemplate, type NType,
 } from './notificationsLogic'
 
-type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; block: NBlock }
+type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; block: NBlock; raw: Raw; version: number }
+type Raw = Record<string, unknown> | null
 type Tab = 'templates' | 'preferences' | 'deliveries'
 const TABS: { id: Tab; label: string }[] = [
   { id: 'templates', label: 'Templates' },
@@ -14,8 +15,8 @@ const TABS: { id: Tab; label: string }[] = [
 ]
 const HAS_SUBJECT = new Set(['email', 'push'])
 
-/** Connect > Notifications. Spec-side: the types and channels come from the spec's `notifications` block (read
- *  through GET /spec). The builder has no endpoint that stores this block, so edits are drafts kept in this browser. */
+/** Connect > Notifications. The types and channels come from the spec's `notifications` block (GET /behavior/notifications);
+ *  "Save template" writes the block back with PUT /behavior/notifications and the section version (409 = someone else saved). */
 export function NotificationsPage({ projectId }: { projectId: string }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [tab, setTab] = useState<Tab>('templates')
@@ -24,7 +25,9 @@ export function NotificationsPage({ projectId }: { projectId: string }) {
   const reload = useCallback(async () => {
     setLoad({ status: 'loading' })
     try {
-      setLoad({ status: 'ready', block: readNotifications(await api.getSpecJson(projectId)) })
+      const r = await api.getBlock(projectId, 'notifications')
+      const raw = (r.notifications as Raw) ?? null
+      setLoad({ status: 'ready', block: readNotifications({ notifications: raw }), raw, version: typeof r.version === 'number' ? r.version : 0 })
     } catch (err) {
       setLoad({ status: 'error', message: err instanceof Error ? err.message : 'Could not load the spec' })
     }
@@ -45,19 +48,35 @@ export function NotificationsPage({ projectId }: { projectId: string }) {
       <>
         {header}
         <div role="alert" data-variant="danger" className="bh-alert" data-testid="notif-error">
-          Could not load the spec: {load.message} <button className="small" onClick={() => void reload()}>Try again</button>
+          Could not load notifications: {load.message} <button className="small" onClick={() => void reload()}>Try again</button>
         </div>
       </>
     )
+  }
+
+  async function saveTemplate(typeName: string, tpl: NTemplate) {
+    if (load.status !== 'ready') throw new Error('The page is still loading.')
+    if (example && load.block.types.length === 0) throw new Error('This is an example: nothing is saved.')
+    const raw = load.raw ?? {}
+    const list = Array.isArray(raw.types) ? (raw.types as Record<string, unknown>[]) : []
+    const types = list.map((t) => {
+      if (t.name !== typeName) return t
+      const templates = Array.isArray(t.templates) ? (t.templates as Record<string, unknown>[]) : []
+      const entry = { channel: tpl.channel, subject: tpl.subject, body: tpl.body, html: tpl.html }
+      const has = templates.some((x) => x.channel === tpl.channel)
+      return { ...t, templates: has ? templates.map((x) => (x.channel === tpl.channel ? { ...x, ...entry } : x)) : [...templates, entry] }
+    })
+    const r = await api.putBlock(projectId, 'notifications', { notifications: { ...raw, types }, expected_version: load.version })
+    const next = (r.notifications as Raw) ?? null
+    setLoad({ status: 'ready', block: readNotifications({ notifications: next }), raw: next, version: typeof r.version === 'number' ? r.version : load.version + 1 })
   }
 
   const types = example && load.block.types.length === 0 ? EXAMPLE_TYPES : load.block.types
   return (
     <>
       {header}
-      <p className="muted" data-testid="notif-readonly-note">
-        The builder reads the notifications block from the spec but has no endpoint that stores it yet. Template edits on this page are
-        drafts kept in this browser; the spec is not changed. Preferences and the delivery log live in the generated app.
+      <p className="muted" data-testid="notif-note">
+        Templates are saved to the project spec. Preferences and the delivery log live in the generated app.
       </p>
       {types.length === 0 ? (
         <div className="empty-state" data-testid="notif-empty">
@@ -72,7 +91,7 @@ export function NotificationsPage({ projectId }: { projectId: string }) {
               <button key={t.id} className={t.id === tab ? '' : 'outline'} aria-pressed={t.id === tab} onClick={() => setTab(t.id)}>{t.label}</button>
             ))}
           </nav>
-          {tab === 'templates' && <Templates key={example ? 'ex' : 'spec'} projectId={example ? `${projectId}.example` : projectId} types={types} />}
+          {tab === 'templates' && <Templates key={example ? 'ex' : 'spec'} types={types} onSave={(t, tpl) => saveTemplate(t, tpl)} />}
           {tab === 'preferences' && <Preferences types={types} />}
           {tab === 'deliveries' && <Deliveries example={example && load.block.types.length === 0} />}
         </>
@@ -81,19 +100,20 @@ export function NotificationsPage({ projectId }: { projectId: string }) {
   )
 }
 
-function Templates({ projectId, types }: { projectId: string; types: NType[] }) {
+function Templates({ types, onSave }: { types: NType[]; onSave: (typeName: string, tpl: NTemplate) => Promise<void> }) {
   const [typeName, setTypeName] = useState(types[0].name)
   const type = types.find((t) => t.name === typeName) ?? types[0]
   const [channel, setChannel] = useState(type.channels[0] ?? '')
-  const [drafts, setDrafts] = useState<Drafts>(() => loadDrafts(projectId))
   const ch = type.channels.includes(channel) ? channel : (type.channels[0] ?? '')
   const key = tplKey(type.name, ch)
   const base: NTemplate = type.templates.find((t) => t.channel === ch) ?? { channel: ch, subject: '', body: '', html: false }
-  const saved = drafts[key] ?? base
+  const saved = base
   const [edit, setEdit] = useState<NTemplate>(saved)
+  const [saving, setSaving] = useState(false)
+  const [conflict, setConflict] = useState(false)
   const [note, setNote] = useState('')
   const [err, setErr] = useState('')
-  useEffect(() => { setEdit(drafts[key] ?? base); setNote(''); setErr('') }, [key])
+  useEffect(() => { setEdit(base); setNote(''); setErr(''); setConflict(false) }, [key])
 
   const dirty = edit.body !== saved.body || edit.subject !== saved.subject || edit.html !== saved.html
   const subjectCheck = checkTemplate(edit.subject, type.variables)
@@ -106,11 +126,16 @@ function Templates({ projectId, types }: { projectId: string; types: NType[] }) 
   const values = useMemo(() => sampleValues(type.variables), [type.variables])
   const subjectOn = HAS_SUBJECT.has(ch)
 
-  function save() {
+  async function save() {
     if (problems.length) { setErr('Fix the problems above before saving.'); setNote(''); return }
-    const next = { ...drafts, [key]: { ...edit, channel: ch } }
-    if (!saveDrafts(projectId, next)) { setErr('Could not keep the draft: this browser blocks storage.'); setNote(''); return }
-    setDrafts(next); setErr(''); setNote(`Saved the ${type.name} / ${ch} template as a draft in this browser.`)
+    setSaving(true); setErr(''); setNote(''); setConflict(false)
+    try {
+      await onSave(type.name, { ...edit, channel: ch })
+      setNote(`Saved the ${type.name} / ${ch} template.`)
+    } catch (e) {
+      if (e instanceof ApiError && e.status === 409) setConflict(true)
+      else setErr(e instanceof Error ? e.message : 'Could not save')
+    } finally { setSaving(false) }
   }
 
   return (
@@ -159,10 +184,15 @@ function Templates({ projectId, types }: { projectId: string; types: NType[] }) 
             <ul id="nt-problems" className="bh-error" data-testid="nt-problems">{problems.map((p) => <li key={p}>{p}</li>)}</ul>
           )}
           <div className="bh-savebar">
-            <button onClick={save} disabled={!dirty}>Save template</button>
+            <button onClick={() => void save()} disabled={!dirty || saving}>{saving ? 'Saving…' : 'Save template'}</button>
             <button className="outline" onClick={() => setEdit(saved)} disabled={!dirty}>Discard changes</button>
             {dirty && <small className="muted">Unsaved changes</small>}
             <span role="status" aria-live="polite">{note && <small data-testid="nt-saved">{note}</small>}</span>
+            {conflict && (
+              <div role="alert" data-variant="warning" className="bh-conflict" data-testid="conflict">
+                Someone else changed the notifications since you opened this page, so your save was not applied. Reload the page to see their version.
+              </div>
+            )}
             {err && <div role="alert" data-variant="danger" className="bh-alert">{err}</div>}
           </div>
           <h2 id="nt-preview-h">Preview</h2>
