@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_prefix="BUILDER_", extra="ignore")
+    model_config = SettingsConfigDict(env_file=(".env", ".env.local"), env_prefix="BUILDER_", extra="ignore")
 
     environment: str = "local"
     log_level: str = "INFO"
@@ -117,6 +117,16 @@ class Settings(BaseSettings):
     # Per-org monthly cap in micro-USD when the org set none. None = no cap.
     ai_default_monthly_budget_micro_usd: int | None = None
     ai_request_timeout_seconds: float = 120.0
+    # The owner's own key (BUILDER_AI_API_KEY in the git-ignored .env.local). Used ONLY for orgs
+    # whose ID (uuid string, never the slug: slugs are user-chosen) is listed in ai_platform_key_orgs and that have no key of their own; the
+    # platform cap bounds the total spend either way.
+    ai_api_key: SecretStr | None = None
+    ai_platform_key_orgs: list[str] = []
+    # Platform-wide, all-time hard cap on REAL model spend (micro-USD), all orgs, all callers.
+    # Every call reserves its worst-case cost first and is refused if it could pass the cap.
+    # Default 4.50 USD under a 5 USD console limit. Only a config change raises it; an admin can
+    # only lower it (ai_platform_budget.cap_override_micro_usd). None = no platform cap.
+    ai_platform_cap_micro_usd: int | None = 4_500_000
 
     @property
     def sso_require_https(self) -> bool:

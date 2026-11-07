@@ -163,6 +163,55 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'intake',
+    label: 'Describe your app',
+    icon: (
+      <>
+        <path d="M4 5h16v11H9l-5 4z" />
+        <path d="M8 9h8M8 12h5" />
+      </>
+    ),
+  },
+  {
+    id: 'plan',
+    label: 'Review the plan',
+    icon: (
+      <>
+        <path d="M6 3h9l3 3v15H6z" />
+        <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+  },
+  {
+    id: 'build',
+    label: 'Build progress',
+    icon: (
+      <>
+        <path d="M13 3L5 14h6l-1 7 8-11h-6z" />
+      </>
+    ),
+  },
+  {
+    id: 'see',
+    label: 'See it work',
+    icon: (
+      <>
+        <path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3" />
+      </>
+    ),
+  },
+  {
+    id: 'approvals',
+    label: 'Approvals',
+    icon: (
+      <>
+        <path d="M4 13l3-8h10l3 8v6H4z" />
+        <path d="M4 13h5l1 2h4l1-2h5" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

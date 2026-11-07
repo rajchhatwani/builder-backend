@@ -7,6 +7,7 @@ UUID hex we generated, never from user text; git runs with hooks and global conf
 """
 
 import asyncio
+import json
 import logging
 import os
 import re
@@ -20,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
 from app.config import Settings, get_settings
 from app.core.generator import InvalidSpecError, generate
-from app.core.spec_models import spec_hash
+from app.core.spec_models import Spec, spec_hash
 from app.exceptions import AppError
 from app.models.project import Project
 from app.models.spec_op import SpecOp
@@ -361,6 +362,34 @@ class WorkspaceService:
             raise AppError("workspace_bad_path", "generated path not allowed", 500)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="\n")
+
+    async def sync_generated(self, project_id: uuid.UUID, ws_id: uuid.UUID, spec: Spec | None = None) -> int:
+        """Rewrite the GENERATED-zone files of the draft from the current spec (agent spec edits
+        flow into the draft this way). Custom and seeded files are never touched, so an edit to a
+        generated file is overwritten, not kept. `spec` is the run's draft spec (H2); default the live one.
+        Returns the number of files written."""
+        ws = await self._get(project_id, ws_id)
+        if ws.state != "active" or not ws.worktree_path:
+            raise AppError("workspace_inactive", "the workspace is not active", 409)
+        files = generate(spec if spec is not None else await SpecService(self.session).assemble(project_id))
+        try:
+            zones_doc = json.loads(files.get("platform/zones.json", "{}"))
+        except ValueError:
+            zones_doc = {}
+        zones = zones_doc.get("zones") or {}
+        wt, written = Path(ws.worktree_path), 0
+        for rel, content in files.items():
+            target = wt / rel
+            if zones.get(rel, "generated") != "generated":
+                if not target.exists() and not target.is_symlink():  # custom/seeded: create, never overwrite
+                    self._write_generated(wt, rel, content)
+                    written += 1
+                continue
+            if target.is_file() and not target.is_symlink() and target.read_text("utf-8") == content:
+                continue
+            self._write_generated(wt, rel, content)
+            written += 1
+        return written
 
     # -- checkpoints -----------------------------------------------------------------------
     async def _take_checkpoint(

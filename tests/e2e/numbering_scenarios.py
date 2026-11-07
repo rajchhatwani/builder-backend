@@ -13,9 +13,9 @@ import re
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from tests._auth_support import outbox, sign_in  # noqa: F401
 
 from app.main import app
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 
 @pytest.fixture
@@ -49,7 +49,7 @@ async def test_numbers_are_distinct_and_consecutive_across_tenants(http, tenants
     year = dt.datetime.now(dt.UTC).year
     assert sorted(count(r["invoice_no"]) for r in rows) == list(range(1, 17))
     assert len({r["invoice_no"] for r in rows}) == 16
-    assert all(re.fullmatch(rf"INV-\d{{5}}", r["invoice_no"]) for r in rows)
+    assert all(re.fullmatch(r"INV-\d{5}", r["invoice_no"]) for r in rows)
     assert all(re.fullmatch(rf"ORD-{year}-\d{{4}}", r["order_no"]) for r in rows)
     assert sorted(r["ticket_no"] for r in rows) == list(range(100, 116))  # a bare counter is a number
 

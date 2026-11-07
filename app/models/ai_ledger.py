@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -50,3 +50,19 @@ class AiCostLedger(UUIDPrimaryKeyMixin, Base):
     )
 
     __table_args__ = (Index("ix_ai_cost_ledger_org_created", "organization_id", "created_at"),)
+
+
+class AiPlatformBudget(Base):
+    """Singleton row (id = 1): all-time real model spend + in-flight reservations, platform-wide."""
+
+    __tablename__ = "ai_platform_budget"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    spent_micro_usd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
+    reserved_micro_usd: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
+    cap_override_micro_usd: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, server_default=func.now()
+    )

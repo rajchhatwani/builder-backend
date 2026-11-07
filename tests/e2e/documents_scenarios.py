@@ -11,9 +11,9 @@ import io
 import pytest
 from httpx import ASGITransport, AsyncClient
 from pypdf import PdfReader
-from tests._auth_support import outbox, sign_in  # noqa: F401
 
 from app.main import app
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 
 @pytest.fixture

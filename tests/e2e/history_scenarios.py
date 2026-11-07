@@ -17,17 +17,17 @@ import uuid
 from pathlib import Path
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import select, update
-from tests._auth_support import outbox, sign_in  # noqa: F401
-
 from app.auth.models import AuthUser
 from app.change_history import purge
 from app.change_history.hooks import MARKER
 from app.change_history.models import Change
+from app.state_machines.models import StateTransition
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
+
 from app.db import session_factory
 from app.main import app
-from app.state_machines.models import StateTransition
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 SECRET_TEXT = "the-private-note-must-never-be-logged"

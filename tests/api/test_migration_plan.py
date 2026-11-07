@@ -248,9 +248,9 @@ async def test_accepting_an_unreadable_baseline_needs_editor_and_mcp_never_does(
     assert (await viewer.post(f"/projects/{pid}/migration-plan", params=flag, json={})).status_code == 403
     assert (await viewer.get(f"/projects/{pid}/generate/download", params=flag)).status_code == 403
     # the MCP generate path never passes the flag: it fails closed
-    from app.services.generation_service import GenerationService
-
     import inspect
+
+    from app.services.generation_service import GenerationService
 
     sig = inspect.signature(GenerationService.download)
     assert sig.parameters["accept_unreadable_baseline"].default is False

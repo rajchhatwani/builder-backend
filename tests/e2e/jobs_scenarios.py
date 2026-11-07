@@ -21,10 +21,10 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
+from app.jobs.models import DEAD, PENDING, SUCCEEDED, Job
 
 from app.db import session_factory
 from app.jobs import cron, definitions, queue, scheduler
-from app.jobs.models import DEAD, PENDING, SUCCEEDED, Job
 
 ROOT = Path(__file__).resolve().parent.parent
 

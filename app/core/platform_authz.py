@@ -130,6 +130,7 @@ ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
     # Enterprise SSO (§8 "SSO & SCIM", admins). Handlers also refuse API tokens.
     # AI cost ledger, BYO key and budget (B3-7); org registry view (B3-8).
     ("GET", "/orgs/{slug}/ai/cost"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/ai/platform-budget"): OrgRole.member,
     ("GET", "/orgs/{slug}/ai/settings"): OrgRole.admin,
     ("PUT", "/orgs/{slug}/ai/settings"): OrgRole.admin,
     ("GET", "/orgs/{slug}/registry/projects"): OrgRole.admin,

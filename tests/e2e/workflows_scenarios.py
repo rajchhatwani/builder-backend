@@ -20,10 +20,10 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-
-from app.db import session_factory
 from app.workflows import engine
 from app.workflows.models import COMPENSATED, SUCCEEDED, Run, StepRecord
+
+from app.db import session_factory
 
 ROOT = Path(__file__).resolve().parent.parent
 FLOW = "order_flow"

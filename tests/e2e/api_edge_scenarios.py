@@ -20,11 +20,11 @@ from pathlib import Path
 import httpx
 import pytest
 import sqlalchemy as sa
-from tests._auth_support import outbox, sign_in  # noqa: F401
+from httpx import ASGITransport, AsyncClient
 
 from app.db import session_factory
 from app.main import app
-from httpx import ASGITransport, AsyncClient
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 

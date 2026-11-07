@@ -14,6 +14,14 @@ _SPEC_WRITE = re.compile(
 )
 
 
+_INTAKE = re.compile(r"^/projects/[^/]+/requirements/intake/?$")
+INTAKE_MAX_BYTES = 13 * 1024 * 1024  # 5 files x 5 MB is capped to 12 MB of files, plus form overhead
+
+
+def is_intake(method: str, path: str) -> bool:
+    return method.upper() == "POST" and _INTAKE.match(path) is not None
+
+
 def is_spec_write(method: str, path: str) -> bool:
     return method.upper() == "PUT" and _SPEC_WRITE.match(path) is not None
 
@@ -24,12 +32,19 @@ class SpecWriteLimit:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not is_spec_write(scope["method"], scope.get("path", "")):
+        if scope["type"] == "http" and is_intake(scope["method"], scope.get("path", "")):
+            limit = INTAKE_MAX_BYTES
+        elif scope["type"] == "http" and is_spec_write(scope["method"], scope.get("path", "")):
+            limit = self.max_bytes
+        else:
             await self.app(scope, receive, send)
             return
+        await self._limited(scope, receive, send, limit)
+
+    async def _limited(self, scope: Scope, receive: Receive, send: Send, limit: int) -> None:
         headers = {k.lower(): v for k, v in scope["headers"]}
         declared = headers.get(b"content-length", b"")
-        if declared.isdigit() and int(declared) > self.max_bytes:
+        if declared.isdigit() and int(declared) > limit:
             await self._too_large(send)
             return
         chunks: list[bytes] = []
@@ -40,7 +55,7 @@ class SpecWriteLimit:
                 return
             chunk = message.get("body", b"")
             total += len(chunk)
-            if total > self.max_bytes:
+            if total > limit:
                 await self._too_large(send)
                 return
             chunks.append(chunk)
@@ -60,7 +75,7 @@ class SpecWriteLimit:
 
     async def _too_large(self, send: Send) -> None:
         body = (
-            b'{"code":"payload_too_large","message":"spec write is too large","details":[]}'
+            b'{"code":"payload_too_large","message":"request body is too large","details":[]}'
         )
         await send(
             {

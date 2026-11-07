@@ -12,7 +12,7 @@ from pypdf import PdfReader
 
 from app.core import doc_library as lib
 from tests.api._auth_helpers import make_project
-from tests.api.conftest import add_to_project_org, ClientFor
+from tests.api.conftest import ClientFor, add_to_project_org
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 

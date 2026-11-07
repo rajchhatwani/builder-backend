@@ -18,13 +18,12 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-import pytest
+from app.seed.definitions import DEFINITIONS
+from app.seed.plan import PROFILES
 from sqlalchemy import func, insert, select, text, update
 
 from app.db import session_factory
 from app.models import Base
-from app.seed.definitions import DEFINITIONS
-from app.seed.plan import PROFILES
 
 ROOT = Path(__file__).resolve().parent.parent
 TABLES = ("auth_tenants", "customers", "invoices", "state_transitions", "seed_rows")

@@ -10,11 +10,11 @@ import uuid
 from typing import Any
 
 import pytest
-
-from app import db
 from app.core.errors import AppError
 from app.hooks_gen import contracts, registry, runtime
 from app.platform_sdk import budget, notify, send_email, send_sms
+
+from app import db
 
 BASE = registry.HOOKS["announce_order"]
 

@@ -11,17 +11,16 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from tests._auth_support import outbox, sign_in  # noqa: F401
-
 from app.auth import authorize
 from app.auth.models import AuthUser
 from app.auth.policy_data import POLICY_DATA
+from app.hooks_gen import contracts, registry, runtime
+from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from app.db import session_factory
-from app.hooks_gen import contracts, registry, runtime
 from app.main import app
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 sdk = importlib.import_module("app.platform_sdk")
 

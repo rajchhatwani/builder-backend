@@ -1096,6 +1096,48 @@
     "title": "AiLedgerRead",
     "type": "object"
    },
+   "AiPlatformBudgetRead": {
+    "properties": {
+     "cap_micro_usd": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cap Micro Usd"
+     },
+     "remaining_micro_usd": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Remaining Micro Usd"
+     },
+     "reserved_micro_usd": {
+      "title": "Reserved Micro Usd",
+      "type": "integer"
+     },
+     "spent_micro_usd": {
+      "title": "Spent Micro Usd",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "cap_micro_usd",
+     "spent_micro_usd",
+     "reserved_micro_usd",
+     "remaining_micro_usd"
+    ],
+    "title": "AiPlatformBudgetRead",
+    "type": "object"
+   },
    "AiSettingsRead": {
     "properties": {
      "api_key_hint": {
@@ -1526,6 +1568,175 @@
      "revoked_at"
     ],
     "title": "ApiTokenRead",
+    "type": "object"
+   },
+   "ApprovalDecision": {
+    "properties": {
+     "approve": {
+      "title": "Approve",
+      "type": "boolean"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "plan": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Plan"
+     }
+    },
+    "required": [
+     "approve"
+    ],
+    "title": "ApprovalDecision",
+    "type": "object"
+   },
+   "ApprovalRead": {
+    "properties": {
+     "bound_commit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Bound Commit"
+     },
+     "bound_spec_hash": {
+      "title": "Bound Spec Hash",
+      "type": "string"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "decided_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided At"
+     },
+     "decided_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided By"
+     },
+     "decision_note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decision Note"
+     },
+     "expires_at": {
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "payload": {
+      "additionalProperties": true,
+      "title": "Payload",
+      "type": "object"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "requires_owner": {
+      "default": false,
+      "title": "Requires Owner",
+      "type": "boolean"
+     },
+     "risk_flags": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Risk Flags",
+      "type": "array"
+     },
+     "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "subject": {
+      "title": "Subject",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "run_id",
+     "project_id",
+     "kind",
+     "subject",
+     "payload",
+     "risk_flags",
+     "state",
+     "bound_spec_hash",
+     "bound_commit",
+     "decided_by",
+     "decided_at",
+     "decision_note",
+     "expires_at",
+     "created_at"
+    ],
+    "title": "ApprovalRead",
     "type": "object"
    },
    "ApprovedPin": {
@@ -3118,6 +3329,32 @@
     "title": "BlockVersionWrite",
     "type": "object"
    },
+   "Body_intake_projects__project_id__requirements_intake_post": {
+    "properties": {
+     "files": {
+      "default": [],
+      "items": {
+       "contentMediaType": "application/octet-stream",
+       "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+     },
+     "prompt": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prompt"
+     }
+    },
+    "title": "Body_intake_projects__project_id__requirements_intake_post",
+    "type": "object"
+   },
    "CheckoutCreate": {
     "properties": {
      "plan_id": {
@@ -3213,6 +3450,44 @@
      "created_at"
     ],
     "title": "CheckpointRead",
+    "type": "object"
+   },
+   "Coverage": {
+    "properties": {
+     "covered": {
+      "title": "Covered",
+      "type": "integer"
+     },
+     "open": {
+      "title": "Open",
+      "type": "integer"
+     },
+     "open_questions": {
+      "title": "Open Questions",
+      "type": "integer"
+     },
+     "out_of_scope": {
+      "title": "Out Of Scope",
+      "type": "integer"
+     },
+     "percent_covered": {
+      "title": "Percent Covered",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "total",
+     "open",
+     "covered",
+     "out_of_scope",
+     "percent_covered",
+     "open_questions"
+    ],
+    "title": "Coverage",
     "type": "object"
    },
    "CoverageResponse": {
@@ -6081,6 +6356,169 @@
     "title": "InvitationRead",
     "type": "object"
    },
+   "ItemRead": {
+    "properties": {
+     "covered_by": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Covered By"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "actor",
+       "entity",
+       "workflow",
+       "rule",
+       "integration",
+       "compliance",
+       "nonfunctional",
+       "out_of_scope"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "source_doc": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Doc"
+     },
+     "source_page": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Page"
+     },
+     "source_section": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Source Section"
+     },
+     "status": {
+      "enum": [
+       "open",
+       "covered",
+       "out_of_scope"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "subject": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "required": [
+     "id",
+     "kind",
+     "text",
+     "subject",
+     "value",
+     "source_doc",
+     "source_page",
+     "source_section",
+     "status",
+     "covered_by"
+    ],
+    "title": "ItemRead",
+    "type": "object"
+   },
+   "ItemUpdate": {
+    "properties": {
+     "covered_by": {
+      "anyOf": [
+       {
+        "maxLength": 200,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Covered By"
+     },
+     "status": {
+      "anyOf": [
+       {
+        "enum": [
+         "open",
+         "covered",
+         "out_of_scope"
+        ],
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     },
+     "text": {
+      "anyOf": [
+       {
+        "maxLength": 600,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Text"
+     }
+    },
+    "title": "ItemUpdate",
+    "type": "object"
+   },
    "JobsRead": {
     "properties": {
      "jobs": {
@@ -8805,6 +9243,37 @@
     "title": "Page[RelationRead]",
     "type": "object"
    },
+   "Page_RunRead_": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/RunRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "Page[RunRead]",
+    "type": "object"
+   },
    "Page_SpecOpRead_": {
     "properties": {
      "items": {
@@ -9531,6 +10000,37 @@
      "operation"
     ],
     "title": "PermissionEntry",
+    "type": "object"
+   },
+   "PhaseRead": {
+    "properties": {
+     "items": {
+      "title": "Items",
+      "type": "integer"
+     },
+     "kinds": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Kinds",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "number": {
+      "title": "Number",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "number",
+     "name",
+     "kinds",
+     "items"
+    ],
+    "title": "PhaseRead",
     "type": "object"
    },
    "PlanRead": {
@@ -11235,6 +11735,75 @@
     "title": "ProvidersWrite",
     "type": "object"
    },
+   "QuestionAnswer": {
+    "properties": {
+     "accept_assumption": {
+      "default": false,
+      "title": "Accept Assumption",
+      "type": "boolean"
+     },
+     "answer": {
+      "anyOf": [
+       {
+        "maxLength": 2000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Answer"
+     }
+    },
+    "title": "QuestionAnswer",
+    "type": "object"
+   },
+   "QuestionRead": {
+    "properties": {
+     "answer": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Answer"
+     },
+     "assumption": {
+      "title": "Assumption",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "state": {
+      "enum": [
+       "open",
+       "answered",
+       "assumed"
+      ],
+      "title": "State",
+      "type": "string"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "text",
+     "assumption",
+     "answer",
+     "state"
+    ],
+    "title": "QuestionRead",
+    "type": "object"
+   },
    "QueueAdvice": {
     "properties": {
      "reasons": {
@@ -11698,6 +12267,100 @@
     "title": "RenameHint",
     "type": "object"
    },
+   "RequirementsRead": {
+    "properties": {
+     "coverage": {
+      "$ref": "#/components/schemas/Coverage"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ItemRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "phases": {
+      "items": {
+       "$ref": "#/components/schemas/PhaseRead"
+      },
+      "title": "Phases",
+      "type": "array"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "questions": {
+      "items": {
+       "$ref": "#/components/schemas/QuestionRead"
+      },
+      "title": "Questions",
+      "type": "array"
+     },
+     "sources": {
+      "items": {
+       "$ref": "#/components/schemas/SourceRead"
+      },
+      "title": "Sources",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "status",
+     "items",
+     "questions",
+     "sources",
+     "coverage",
+     "phases",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "RequirementsRead",
+    "type": "object"
+   },
    "ResendVerificationRequest": {
     "properties": {
      "email": {
@@ -11841,6 +12504,318 @@
     ],
     "title": "RowRule",
     "type": "string"
+   },
+   "RunCreate": {
+    "properties": {
+     "goal": {
+      "maxLength": 8000,
+      "minLength": 1,
+      "title": "Goal",
+      "type": "string"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "required": [
+     "goal"
+    ],
+    "title": "RunCreate",
+    "type": "object"
+   },
+   "RunDetail": {
+    "properties": {
+     "budgets": {
+      "additionalProperties": true,
+      "title": "Budgets",
+      "type": "object"
+     },
+     "cost_micro_usd": {
+      "title": "Cost Micro Usd",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "goal": {
+      "title": "Goal",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "phase": {
+      "title": "Phase",
+      "type": "string"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "repairs_used": {
+      "title": "Repairs Used",
+      "type": "integer"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "steps": {
+      "items": {
+       "$ref": "#/components/schemas/StepRead"
+      },
+      "title": "Steps",
+      "type": "array"
+     },
+     "steps_total": {
+      "title": "Steps Total",
+      "type": "integer"
+     },
+     "steps_used": {
+      "title": "Steps Used",
+      "type": "integer"
+     },
+     "stop_code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stop Code"
+     },
+     "stop_detail": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stop Detail"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "workspace_id",
+     "goal",
+     "state",
+     "phase",
+     "budgets",
+     "steps_used",
+     "repairs_used",
+     "cost_micro_usd",
+     "stop_code",
+     "stop_detail",
+     "started_at",
+     "finished_at",
+     "created_at",
+     "updated_at",
+     "steps",
+     "steps_total",
+     "limit",
+     "offset"
+    ],
+    "title": "RunDetail",
+    "type": "object"
+   },
+   "RunRead": {
+    "properties": {
+     "budgets": {
+      "additionalProperties": true,
+      "title": "Budgets",
+      "type": "object"
+     },
+     "cost_micro_usd": {
+      "title": "Cost Micro Usd",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "finished_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Finished At"
+     },
+     "goal": {
+      "title": "Goal",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "phase": {
+      "title": "Phase",
+      "type": "string"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "repairs_used": {
+      "title": "Repairs Used",
+      "type": "integer"
+     },
+     "started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Started At"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "steps_used": {
+      "title": "Steps Used",
+      "type": "integer"
+     },
+     "stop_code": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stop Code"
+     },
+     "stop_detail": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stop Detail"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "workspace_id",
+     "goal",
+     "state",
+     "phase",
+     "budgets",
+     "steps_used",
+     "repairs_used",
+     "cost_micro_usd",
+     "stop_code",
+     "stop_detail",
+     "started_at",
+     "finished_at",
+     "created_at",
+     "updated_at"
+    ],
+    "title": "RunRead",
+    "type": "object"
    },
    "ScimConfigRead": {
     "properties": {
@@ -13127,6 +14102,39 @@
      "password"
     ],
     "title": "SmtpSecretsWrite",
+    "type": "object"
+   },
+   "SourceRead": {
+    "properties": {
+     "chars": {
+      "title": "Chars",
+      "type": "integer"
+     },
+     "chunks": {
+      "title": "Chunks",
+      "type": "integer"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "pages": {
+      "title": "Pages",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "kind",
+     "pages",
+     "chunks",
+     "chars"
+    ],
+    "title": "SourceRead",
     "type": "object"
    },
    "Spec-Input": {
@@ -18185,6 +19193,36 @@
     "title": "SsoTestStart",
     "type": "object"
    },
+   "StartRun": {
+    "properties": {
+     "accept_assumptions": {
+      "default": false,
+      "title": "Accept Assumptions",
+      "type": "boolean"
+     },
+     "phase": {
+      "default": 1,
+      "maximum": 10.0,
+      "minimum": 1.0,
+      "title": "Phase",
+      "type": "integer"
+     },
+     "workspace_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Workspace Id"
+     }
+    },
+    "title": "StartRun",
+    "type": "object"
+   },
    "StateMachineBody": {
     "properties": {
      "entity": {
@@ -18316,6 +19354,132 @@
      "issue_count"
     ],
     "title": "StatusSection",
+    "type": "object"
+   },
+   "StepRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "input": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Input"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Model"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "output": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Output"
+     },
+     "prompt_hash": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prompt Hash"
+     },
+     "seq": {
+      "title": "Seq",
+      "type": "integer"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "tool_call_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tool Call Id"
+     },
+     "tool_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tool Name"
+     },
+     "tool_set_hash": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Tool Set Hash"
+     }
+    },
+    "required": [
+     "id",
+     "seq",
+     "kind",
+     "tool_name",
+     "tool_call_id",
+     "state",
+     "ok",
+     "input",
+     "output",
+     "model",
+     "prompt_hash",
+     "tool_set_hash",
+     "created_at"
+    ],
+    "title": "StepRead",
     "type": "object"
    },
    "StorageBackend": {
@@ -19326,6 +20490,97 @@
      }
     },
     "title": "WorkspaceCreate",
+    "type": "object"
+   },
+   "WorkspaceFileEntry": {
+    "properties": {
+     "editable": {
+      "title": "Editable",
+      "type": "boolean"
+     },
+     "path": {
+      "title": "Path",
+      "type": "string"
+     },
+     "size": {
+      "title": "Size",
+      "type": "integer"
+     },
+     "zone": {
+      "title": "Zone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "zone",
+     "size",
+     "editable"
+    ],
+    "title": "WorkspaceFileEntry",
+    "type": "object"
+   },
+   "WorkspaceFileRead": {
+    "properties": {
+     "content": {
+      "title": "Content",
+      "type": "string"
+     },
+     "editable": {
+      "title": "Editable",
+      "type": "boolean"
+     },
+     "path": {
+      "title": "Path",
+      "type": "string"
+     },
+     "sha256": {
+      "title": "Sha256",
+      "type": "string"
+     },
+     "zone": {
+      "title": "Zone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "zone",
+     "content",
+     "editable",
+     "sha256"
+    ],
+    "title": "WorkspaceFileRead",
+    "type": "object"
+   },
+   "WorkspaceFileWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "content": {
+      "maxLength": 262144,
+      "title": "Content",
+      "type": "string"
+     },
+     "expected_sha256": {
+      "maxLength": 64,
+      "minLength": 64,
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Expected Sha256",
+      "type": "string"
+     },
+     "path": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+     }
+    },
+    "required": [
+     "path",
+     "content",
+     "expected_sha256"
+    ],
+    "title": "WorkspaceFileWrite",
     "type": "object"
    },
    "WorkspaceRead": {
@@ -23473,6 +24728,28 @@
     ]
    }
   },
+  "/orgs/{slug}/ai/platform-budget": {
+   "get": {
+    "description": "Platform-wide real-model spend against the hard cap (what the build view budget bar shows).",
+    "operationId": "get_platform_budget_orgs__slug__ai_platform_budget_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AiPlatformBudgetRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Platform Budget",
+    "tags": [
+     "ai"
+    ]
+   }
+  },
   "/orgs/{slug}/ai/settings": {
    "get": {
     "operationId": "get_ai_settings_orgs__slug__ai_settings_get",
@@ -25539,6 +26816,513 @@
     "summary": "Queue and workflow advice",
     "tags": [
      "advisor"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/approvals": {
+   "get": {
+    "operationId": "list_approvals_projects__project_id__agent_approvals_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "state",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "State"
+      }
+     },
+     {
+      "in": "query",
+      "name": "run_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Run Id"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/ApprovalRead"
+         },
+         "title": "Response List Approvals Projects  Project Id  Agent Approvals Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Approvals",
+    "tags": [
+     "agent-approvals"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/approvals/{approval_id}": {
+   "get": {
+    "operationId": "get_approval_projects__project_id__agent_approvals__approval_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "approval_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Approval Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApprovalRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Approval",
+    "tags": [
+     "agent-approvals"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/approvals/{approval_id}/decision": {
+   "post": {
+    "operationId": "decide_approval_projects__project_id__agent_approvals__approval_id__decision_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "approval_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Approval Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApprovalDecision"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApprovalRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Decide Approval",
+    "tags": [
+     "agent-approvals"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs": {
+   "get": {
+    "operationId": "list_runs_projects__project_id__agent_runs_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Page_RunRead_"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Runs",
+    "tags": [
+     "agent"
+    ]
+   },
+   "post": {
+    "operationId": "create_run_projects__project_id__agent_runs_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RunCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Run",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs/{run_id}": {
+   "get": {
+    "operationId": "get_run_projects__project_id__agent_runs__run_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "run_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Run Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 100,
+       "maximum": 500,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Run",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs/{run_id}/cancel": {
+   "post": {
+    "operationId": "cancel_run_projects__project_id__agent_runs__run_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "run_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Run Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel Run",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs/{run_id}/resume": {
+   "post": {
+    "operationId": "resume_run_projects__project_id__agent_runs__run_id__resume_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "run_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Run Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Resume Run",
+    "tags": [
+     "agent"
     ]
    }
   },
@@ -30742,6 +32526,280 @@
     ]
    }
   },
+  "/projects/{project_id}/requirements": {
+   "get": {
+    "operationId": "get_requirements_projects__project_id__requirements_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RequirementsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Requirements",
+    "tags": [
+     "requirements"
+    ]
+   }
+  },
+  "/projects/{project_id}/requirements/intake": {
+   "post": {
+    "operationId": "intake_projects__project_id__requirements_intake_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_intake_projects__project_id__requirements_intake_post"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RequirementsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Intake",
+    "tags": [
+     "requirements"
+    ]
+   }
+  },
+  "/projects/{project_id}/requirements/items/{item_id}": {
+   "put": {
+    "operationId": "update_item_projects__project_id__requirements_items__item_id__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "item_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Item Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ItemUpdate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RequirementsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Item",
+    "tags": [
+     "requirements"
+    ]
+   }
+  },
+  "/projects/{project_id}/requirements/questions/{question_id}/answer": {
+   "post": {
+    "operationId": "answer_question_projects__project_id__requirements_questions__question_id__answer_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "question_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Question Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/QuestionAnswer"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RequirementsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Answer Question",
+    "tags": [
+     "requirements"
+    ]
+   }
+  },
+  "/projects/{project_id}/requirements/start-run": {
+   "post": {
+    "operationId": "start_run_projects__project_id__requirements_start_run_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/StartRun"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Start Run",
+    "tags": [
+     "requirements"
+    ]
+   }
+  },
   "/projects/{project_id}/roles": {
    "get": {
     "operationId": "list_roles_projects__project_id__roles_get",
@@ -32072,6 +34130,188 @@
      }
     },
     "summary": "Create Checkpoint",
+    "tags": [
+     "workspaces"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces/{ws_id}/files": {
+   "get": {
+    "operationId": "list_files_projects__project_id__workspaces__ws_id__files_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/WorkspaceFileEntry"
+         },
+         "title": "Response List Files Projects  Project Id  Workspaces  Ws Id  Files Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Files",
+    "tags": [
+     "workspaces"
+    ]
+   }
+  },
+  "/projects/{project_id}/workspaces/{ws_id}/files/content": {
+   "get": {
+    "operationId": "read_file_projects__project_id__workspaces__ws_id__files_content_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "path",
+      "required": true,
+      "schema": {
+       "maxLength": 500,
+       "minLength": 1,
+       "title": "Path",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceFileRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Read File",
+    "tags": [
+     "workspaces"
+    ]
+   },
+   "put": {
+    "operationId": "write_file_projects__project_id__workspaces__ws_id__files_content_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "ws_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Ws Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/WorkspaceFileWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/WorkspaceFileRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Write File",
     "tags": [
      "workspaces"
     ]

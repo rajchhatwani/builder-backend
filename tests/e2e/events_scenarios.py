@@ -20,15 +20,15 @@ from pathlib import Path
 
 import pytest
 import sqlalchemy as sa
-from httpx import ASGITransport, AsyncClient
-from tests._auth_support import outbox, sign_in  # noqa: F401
-
 from app.auth.models import AuthUser
 from app.crud.orders import OrderRepository
-from app.db import session_factory
 from app.events import bus
 from app.events.models import DELIVERED, PENDING, OutboxEvent
+from httpx import ASGITransport, AsyncClient
+
+from app.db import session_factory
 from app.main import app
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 ROOT = Path(__file__).resolve().parent.parent
 

@@ -1,0 +1,39 @@
+{
+	admin off
+	auto_https off
+}
+# One origin for dashboard + API (the refresh cookie is SameSite=Strict).
+http://:8081 {
+	bind 127.0.0.1
+	@static {
+		path / /assets/* /favicon.svg /index.html
+	}
+	handle @static {
+		root * /srv
+		file_server
+	}
+	handle {
+		reverse_proxy 127.0.0.1:8000
+	}
+}
+# Workbench preview origin (must differ from the dashboard origin): only /previews/*.
+http://:8799 {
+	bind 127.0.0.1
+	# The API's CORS preflight does not allow the X-Preview-Token header the Workbench sends cross-origin
+	# (finding for ATLAS), so this proxy answers the preflight itself, only for the dashboard origin.
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "{$BB_ORIGIN}"
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"
+		header Access-Control-Allow-Headers "X-Preview-Token, Content-Type, Accept, Authorization"
+		header Access-Control-Max-Age "600"
+		header Vary "Origin"
+		respond 204
+	}
+	handle /previews/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		respond "not found" 404
+	}
+}

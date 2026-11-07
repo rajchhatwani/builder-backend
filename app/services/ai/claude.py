@@ -43,8 +43,8 @@ def build_payload(model: str, request: CompletionRequest, stream: bool) -> dict[
         if request.cache_prefix:
             tools[-1]["cache_control"] = _CACHE
         payload["tools"] = tools
-    if request.temperature is not None:
-        payload["temperature"] = request.temperature
+    # `temperature` is NOT sent: the current Claude models reject it ("deprecated for this model",
+    # found in the first real call, CP-E). CompletionRequest.temperature stays for other providers.
     if stream:
         payload["stream"] = True
     return payload

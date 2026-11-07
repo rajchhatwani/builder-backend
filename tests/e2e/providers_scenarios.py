@@ -9,13 +9,13 @@ import sys
 
 import pytest
 import sqlalchemy as sa
-from httpx import AsyncClient
-
-from app.db import session_factory
 from app.providers import client as provider_client
 from app.providers import definitions, schemas, vault
 from app.providers.errors import CircuitOpen, Retryable
 from app.providers.models import ProviderCredential
+from httpx import AsyncClient
+
+from app.db import session_factory
 from tests._auth_support import outbox, sign_in, sign_in_plain  # noqa: F401
 from tests._providers_support import KEY_1, KEY_2, emulator, vault_env  # noqa: F401
 

@@ -30,7 +30,15 @@ async def reject_nul_characters(request: Request) -> None:
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if content_type not in _CHECKED_BODIES:
         return
-    body = await request.body()  # cached by Starlette: the handler reads the same bytes
+    try:
+        body = await request.body()  # cached by Starlette: the handler reads the same bytes
+    except RuntimeError:
+        # FastAPI already consumed the stream to parse form fields; check the cached form instead.
+        if content_type == "application/x-www-form-urlencoded":
+            form = await request.form()
+            if any("\x00" in k or (isinstance(v, str) and "\x00" in v) for k, v in form.multi_items()):
+                raise _refuse() from None
+        return
     if b"\x00" in body or (content_type == "application/x-www-form-urlencoded" and b"%00" in body):
         raise _refuse()
     if content_type != "application/x-www-form-urlencoded" and _JSON_NUL.search(body):

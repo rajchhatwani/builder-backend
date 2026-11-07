@@ -4,14 +4,10 @@ Every behaviour we require from the organizations layer gets a test here. Writte
 on purpose, so the service and migration below answer every one of them.
 """
 
-import uuid
 
-from httpx import ASGITransport, AsyncClient
+from httpx import AsyncClient
 
-from app.main import app
-from app.models.enums import PlatformRole
-from tests.api.conftest import ClientFor, MakeUser, bearer_for
-
+from tests.api.conftest import ClientFor
 
 # -- the "my orgs" list ------------------------------------------------------------------
 
@@ -111,7 +107,7 @@ async def test_admin_invites_and_invitee_accepts(
     pending_body = pending.json()
     assert len(pending_body["items"]) >= 1
 
-    accept = await bob.post(f"/orgs/invitations/accept", json={"token": token})
+    accept = await bob.post("/orgs/invitations/accept", json={"token": token})
     assert accept.status_code == 200
     joined = accept.json()
     assert joined["slug"] == "acme"
@@ -134,8 +130,9 @@ async def test_invitation_cannot_exceed_plan_seat_cap(
     assert r.status_code == 201
 
     # Force the subscription to a 1-seat cap, same as a 'free'-plan team would be.
-    from app.models.platform import Organization, Subscription
     from sqlalchemy import select
+
+    from app.models.platform import Organization, Subscription
 
     async with session_factory() as session:
         org = (
@@ -168,6 +165,8 @@ async def test_only_admins_may_invite(
 ) -> None:
     """A plain org_member cannot send invites (and seeing 'members' is enough visibility)."""
     await client.post("/orgs", json={"name": "Acme", "slug": "acme"})
+    from sqlalchemy import select
+
     from app.models.enums import OrgRole
     from app.models.platform import (
         Organization,
@@ -175,7 +174,6 @@ async def test_only_admins_may_invite(
         PlatformUser,
     )
     from app.services.platform_auth_service import normalize_email
-    from sqlalchemy import select
 
     other = await client_for("member@example.com")
 

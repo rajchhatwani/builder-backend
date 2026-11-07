@@ -1,0 +1,118 @@
+{
+  "id": "commission_hook",
+  "title": "Write a commission hook",
+  "goal": "Compute a 10 percent sales commission on every Sale before it is saved.",
+  "starting_spec": {
+    "entities": [
+      {
+        "name": "Sale",
+        "table_name": "sales",
+        "plural_path": "sales",
+        "options": {},
+        "fields": [
+          {
+            "name": "amount",
+            "type": "decimal",
+            "required": true
+          },
+          {
+            "name": "commission",
+            "type": "decimal",
+            "required": false
+          }
+        ]
+      }
+    ]
+  },
+  "transcript": [
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "plan",
+        "plan": {
+          "entities": [
+            "Sale"
+          ],
+          "hooks": [
+            "commission"
+          ],
+          "zones": [],
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "tool": "set_section",
+      "input": {
+        "section": "hooks",
+        "items": [
+          {
+            "name": "commission",
+            "point": "Sale.before_save",
+            "kind": "pure",
+            "input": {
+              "name": "CommissionInput",
+              "fields": [
+                {
+                  "name": "amount",
+                  "type": "decimal",
+                  "required": true
+                }
+              ]
+            },
+            "output": {
+              "name": "CommissionResult",
+              "fields": [
+                {
+                  "name": "commission",
+                  "type": "decimal",
+                  "required": true
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "tool": "create_custom_hook",
+      "input": {
+        "name": "commission",
+        "purpose": "ten percent commission"
+      }
+    },
+    {
+      "tool": "replace_function_body",
+      "input": {
+        "hook": "commission",
+        "body": "return CommissionResult(commission=data.amount / 10)"
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "built"
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "apply"
+      }
+    }
+  ],
+  "expect": {
+    "state": "applied",
+    "max_repairs": 0,
+    "spec": [
+      {
+        "path": "hooks[name=commission].point",
+        "equals": "Sale.before_save"
+      },
+      {
+        "path": "hooks[name=commission].author",
+        "equals": "ai"
+      }
+    ]
+  }
+}

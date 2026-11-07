@@ -84,6 +84,13 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "registry_deps_lock",
     "workspaces",
     "workspace_checkpoints",
+    "ai_runs",
+    "ai_steps",
+    "ai_approvals",
+    "ai_draft_ops",
+    "requirements_maps",
+    "requirement_items",
+    "requirement_questions",
     "dependency_requests",
     "previews",
 )

@@ -9,7 +9,7 @@ from typing import Any
 from httpx import AsyncClient
 
 from tests.api._auth_helpers import make_auth, make_entity, make_project, make_role
-from tests.api.conftest import add_to_project_org, ClientFor
+from tests.api.conftest import ClientFor, add_to_project_org
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 

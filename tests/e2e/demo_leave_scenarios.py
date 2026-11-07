@@ -14,12 +14,12 @@ import re
 from pathlib import Path
 
 import pytest
+from app.runtime_config import sequences
 from httpx import ASGITransport, AsyncClient
-from tests._auth_support import outbox, sign_in  # noqa: F401
 
 from app.db import session_factory
 from app.main import app
-from app.runtime_config import sequences
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 TRANSCRIPT = Path(__file__).resolve().parent.parent / "demo_transcript.log"
 

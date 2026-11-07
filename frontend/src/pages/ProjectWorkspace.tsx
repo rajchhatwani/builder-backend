@@ -56,6 +56,12 @@ const ProvidersPage = lazy(() => import('../shell/connect/ProvidersPage').then((
 const JobsPage = lazy(() => import('../shell/operate/JobsPage').then((m) => ({ default: m.JobsPage })))
 const WorkersPage = lazy(() => import('../shell/operate/WorkersPage').then((m) => ({ default: m.WorkersPage })))
 const WorkflowsPage = lazy(() => import('../shell/operate/WorkflowsPage').then((m) => ({ default: m.WorkflowsPage })))
+// F3 pages (intake, plan review, build view): own chunk, same single flag.
+const IntakePage = lazy(() => import('../shell/ai/IntakePage').then((m) => ({ default: m.IntakePage })))
+const PlanReviewPage = lazy(() => import('../shell/ai/PlanReviewPage').then((m) => ({ default: m.PlanReviewPage })))
+const ApprovalsPage = lazy(() => import('../shell/ai/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
+const SeeItWork = lazy(() => import('../shell/ai/SeeItWork').then((m) => ({ default: m.SeeItWork })))
+const BuildPage = lazy(() => import('../shell/ai/BuildPage').then((m) => ({ default: m.BuildPage })))
 const HistoryPage = lazy(() => import('../shell/behavior/HistoryPage').then((m) => ({ default: m.HistoryPage })))
 
 /** The organization that owns this project (one call: projects carry `organization_id`). */
@@ -514,6 +520,16 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'jobs' && <JobsPage projectId={project.id} />}
           {section === 'workers' && <WorkersPage projectId={project.id} />}
           {section === 'workflows' && <WorkflowsPage projectId={project.id} />}
+        </Suspense>
+      )}
+
+      {v2 && (section === 'intake' || section === 'plan' || section === 'build' || section === 'approvals' || section === 'see') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          {section === 'intake' && <IntakePage projectId={project.id} />}
+          {section === 'plan' && <PlanReviewPage projectId={project.id} />}
+          {section === 'build' && <BuildPage projectId={project.id} orgSlug={org?.slug} />}
+          {section === 'see' && <SeeItWork projectId={project.id} />}
+          {section === 'approvals' && <ApprovalsPage projectId={project.id} />}
         </Suspense>
       )}
 

@@ -86,3 +86,17 @@ tests/api/test_email_verification.py
 tests/e2e/test_cycle2_exit_demo.py
 tests/e2e/test_sandbox_hostile.py
 tests/e2e/test_preview_stack.py
+tests/unit/test_agent_budgets.py
+tests/unit/test_agent_tools.py
+tests/unit/test_agent_approvals.py
+tests/unit/test_agent_gates.py
+tests/api/test_agent_runs.py
+tests/api/test_agent_approvals.py
+tests/api/test_agent_tools_api.py
+tests/api/test_agent_e2e.py
+tests/unit/test_agent_eval_report.py
+tests/api/test_agent_eval.py
+tests/unit/test_requirements_reader.py
+tests/api/test_requirements.py
+tests/api/test_ai_platform_cap.py
+tests/api/test_workspace_files.py

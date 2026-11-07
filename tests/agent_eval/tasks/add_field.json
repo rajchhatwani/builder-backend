@@ -1,0 +1,82 @@
+{
+  "id": "add_field",
+  "title": "Add a field",
+  "goal": "Add a decimal amount field to Invoice.",
+  "starting_spec": {
+    "entities": [
+      {
+        "name": "Invoice",
+        "table_name": "invoices",
+        "plural_path": "invoices",
+        "options": {},
+        "fields": [
+          {
+            "name": "invoice_no",
+            "type": "string",
+            "required": true,
+            "max_length": 40
+          }
+        ]
+      }
+    ]
+  },
+  "transcript": [
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "plan",
+        "plan": {
+          "entities": [
+            "Invoice"
+          ],
+          "hooks": [],
+          "zones": [],
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "tool": "add_field",
+      "input": {
+        "entity": "Invoice",
+        "field": {
+          "name": "amount",
+          "type": "money"
+        }
+      }
+    },
+    {
+      "tool": "add_field",
+      "input": {
+        "entity": "Invoice",
+        "field": {
+          "name": "amount",
+          "type": "decimal",
+          "required": true
+        }
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "built"
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "apply"
+      }
+    }
+  ],
+  "expect": {
+    "state": "applied",
+    "max_repairs": 1,
+    "spec": [
+      {
+        "path": "entities[name=Invoice].fields[name=amount].type",
+        "equals": "decimal"
+      }
+    ]
+  }
+}

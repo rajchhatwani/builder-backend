@@ -1,4 +1,5 @@
-from app.models.ai_ledger import AiCostLedger, AiOrgSettings
+from app.models.agent import AiApproval, AiDraftOp, AiRun, AiStep  # noqa: F401
+from app.models.ai_ledger import AiCostLedger, AiOrgSettings, AiPlatformBudget
 from app.models.auth_config import ProjectAuthConfig
 from app.models.auth_custom_field import AuthCustomField
 from app.models.auth_secrets import ProjectAuthSecrets
@@ -24,21 +25,23 @@ from app.models.platform import (
     ProjectMember,
     RefreshToken,
 )
+from app.models.preview import Preview, PreviewOrgLimits, PreviewPlatformSettings
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.registry import RegistryBlockVersion, RegistryDepLock, RegistryHookEntry
 from app.models.relation import Relation
+from app.models.requirements import RequirementItem, RequirementQuestion, RequirementsMap  # noqa: F401
 from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
 from app.models.spec_op import SpecOp
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
-from app.models.preview import Preview, PreviewOrgLimits, PreviewPlatformSettings
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 
 __all__ = [
     "AiCostLedger",
     "AiOrgSettings",
+    "AiPlatformBudget",
     "DependencyRequest",
     "Preview",
     "PreviewOrgLimits",

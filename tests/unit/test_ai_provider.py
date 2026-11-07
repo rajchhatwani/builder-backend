@@ -208,3 +208,8 @@ async def test_provider_error_never_leaks_the_key(caplog: pytest.LogCaptureFixtu
     with pytest.raises(ProviderError) as exc2:
         await q.complete("m", _req())
     assert FAKE_KEY not in str(exc2.value) and exc2.value.__cause__ is None
+
+
+def test_claude_payload_never_sends_temperature() -> None:
+    req = CompletionRequest(system="s", messages=[Message("user", "hi")], temperature=0)
+    assert "temperature" not in build_payload("claude-haiku-5-5", req, False)

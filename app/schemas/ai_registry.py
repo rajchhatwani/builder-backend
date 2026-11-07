@@ -109,3 +109,10 @@ class RegistryProjectRead(BaseModel):
     hooks: int
     hooks_unapproved: int
     dependencies: int
+
+
+class AiPlatformBudgetRead(BaseModel):
+    cap_micro_usd: int | None
+    spent_micro_usd: int
+    reserved_micro_usd: int
+    remaining_micro_usd: int | None

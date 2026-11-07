@@ -1,6 +1,7 @@
 """AI cost/settings (org admins) and the project registry (B3-7, B3-8).
 
     GET  /orgs/{slug}/ai/cost                      cost ledger page + month/total spend (admin)
+    GET  /orgs/{slug}/ai/platform-budget           platform-wide spend vs hard cap
     GET  /orgs/{slug}/ai/settings                  key hint + budget (the key is never returned)
     PUT  /orgs/{slug}/ai/settings                  set/clear the BYO key and the budget (session)
     GET  /orgs/{slug}/registry/projects            projects registry view (admin)
@@ -24,6 +25,7 @@ from app.models.enums import AuditResult
 from app.schemas.ai_registry import (
     AiCostSummary,
     AiLedgerRead,
+    AiPlatformBudgetRead,
     AiSettingsRead,
     AiSettingsWrite,
     BlockVersionRead,
@@ -37,6 +39,7 @@ from app.schemas.ai_registry import (
 from app.services import audit_service
 from app.services.access_service import Principal
 from app.services.ai.ledger import AiLedgerService, month_start
+from app.services.ai.platform_cap import PlatformCap
 from app.services.registry_service import RegistryService
 
 org_router = APIRouter(prefix="/orgs", tags=["ai"])
@@ -81,6 +84,21 @@ async def get_ai_settings(
     settings: Settings = Depends(get_settings),
 ) -> AiSettingsRead:
     return _settings_read(await AiLedgerService(db, settings).get_settings(ctx.org.id))
+
+
+@org_router.get("/{slug}/ai/platform-budget", response_model=AiPlatformBudgetRead)
+async def get_platform_budget(
+    ctx: OrgContext = Depends(org_context),
+    db: AsyncSession = Depends(get_session),
+    settings: Settings = Depends(get_settings),
+) -> AiPlatformBudgetRead:
+    """Platform-wide real-model spend against the hard cap (what the build view budget bar shows)."""
+    st = await PlatformCap(db, settings).status()
+    cap, spent, reserved = st["cap"], int(st["spent"] or 0), int(st["reserved"] or 0)
+    remaining = None if cap is None else max(cap - spent - reserved, 0)
+    return AiPlatformBudgetRead(
+        cap_micro_usd=cap, spent_micro_usd=spent, reserved_micro_usd=reserved, remaining_micro_usd=remaining
+    )
 
 
 @org_router.put("/{slug}/ai/settings", response_model=AiSettingsRead)

@@ -90,6 +90,42 @@ class OpsService:
         applied: Applied = await self._transaction(project_id, actor, body)
         return applied
 
+    async def apply_batch(
+        self,
+        project_id: uuid.UUID,
+        ops: list[tuple[str, dict[str, Any]]],
+        actor: Actor,
+        *,
+        base_seq: int,
+        expect_before: str,
+        expect_after: str,
+        guard: Any = None,
+    ) -> int:
+        """All-or-nothing replay of several operations in ONE transaction under the project lock:
+        the live spec must still be exactly (`base_seq`, `expect_before`) once the lock is held and
+        must equal `expect_after` at the end, else nothing is written (no undo step is ever needed,
+        so a person's concurrent edit can never be rolled back). `guard`, if given, is awaited under
+        the lock and may raise to abort (e.g. the run was cancelled)."""
+
+        async def body(scope: OpScope) -> int:
+            top = (
+                await self.session.execute(
+                    select(func.coalesce(func.max(SpecOp.seq), 0)).where(SpecOp.project_id == project_id)
+                )
+            ).scalar_one()
+            if int(top) != base_seq or canonical_hash(await scope.assemble()) != expect_before:
+                raise _err("apply_conflict", "the live spec changed since the plan; nothing was applied")
+            if guard is not None:
+                await guard()
+            for op_type, payload in ops:
+                await self._run(scope, op_type, payload, actor, "do", None, True)
+            if canonical_hash(await scope.assemble()) != expect_after:
+                raise _err("apply_mismatch", "the applied spec differs from the reviewed draft")
+            return len(ops)
+
+        n: int = await self._transaction(project_id, actor, body)
+        return n
+
     async def _run(
         self,
         scope: OpScope,

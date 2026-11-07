@@ -15,7 +15,10 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api import (
     account,
     admin,
+    admin_previews,
     advisor,
+    agent_approvals,
+    agent_runs,
     ai_registry,
     auth,
     authorization,
@@ -35,8 +38,10 @@ from app.api import (
     observability,
     orgs,
     payments,
+    previews,
     projects,
     relations,
+    requirements,
     scim,
     spec,
     spec_ops,
@@ -45,8 +50,6 @@ from app.api import (
     storage,
     wellknown,
     workspaces,
-    admin_previews,
-    previews,
 )
 from app.api.body_limit import SpecWriteLimit
 from app.api.input_guard import reject_nul_characters
@@ -245,6 +248,10 @@ async def _mcp_lifespan(app: FastAPI) -> AsyncIterator[None]:
 def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
+    from app.services.agent.run_service import configure_agent_deps
+    from app.services.agent.wiring import default_deps
+
+    configure_agent_deps(default_deps())
 
     app = FastAPI(
         title="Backend Builder",
@@ -312,6 +319,9 @@ def create_app() -> FastAPI:
         migration_plan.router,
         ai_registry.router,
         workspaces.router,
+        agent_runs.router,
+        agent_approvals.router,
+        requirements.router,
         dependencies.router,
         previews.project_router,
     ):

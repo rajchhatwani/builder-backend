@@ -13,15 +13,15 @@ import uuid
 from decimal import Decimal
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from sqlalchemy import func, select
-from tests._auth_support import outbox, sign_in  # noqa: F401
-
 from app.auth.models import AuthUser
-from app.db import session_factory
-from app.main import app
 from app.models.orders import Order
 from app.runtime_config import sequences, settings
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy import func, select
+
+from app.db import session_factory
+from app.main import app
+from tests._auth_support import outbox, sign_in  # noqa: F401
 
 PARALLEL = 60
 

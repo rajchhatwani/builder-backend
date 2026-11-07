@@ -96,7 +96,7 @@ SESSION_KEY = "ops_scope"
 
 @dataclass(frozen=True)
 class Actor:
-    kind: Literal["user", "mcp", "system"]
+    kind: Literal["user", "mcp", "system", "agent"]
     user_id: uuid.UUID | None = None
 
 

@@ -14,10 +14,12 @@ from app.services.ai.base import (
     ProviderError,
     StreamEvent,
     TaskClass,
+    Usage,
 )
 from app.services.ai.claude import ClaudeProvider
 from app.services.ai.fake import FakeProvider
 from app.services.ai.ledger import AiLedgerService
+from app.services.ai.platform_cap import PlatformCap, Reservation
 from app.services.ai.pricing import price_table
 from app.services.ai.routing import route_model
 
@@ -34,9 +36,34 @@ class ModelGateway:
         self.settings = settings
         self.ledger = AiLedgerService(session, settings)
         self._factory = provider_factory
+        self._cap = PlatformCap(session, settings)
+        self._byo = False
+
+    async def _reserve(self, provider: ModelProvider, model: str, request: CompletionRequest) -> Reservation | None:
+        # Fake providers cost nothing real and are never counted against the platform cap.
+        if isinstance(provider, FakeProvider) or self._byo:
+            return None
+        return await self._cap.reserve(model, request)
+
+    async def _settle(
+        self, res: Reservation | None, model: str, usage: Usage | None, error: ProviderError | None = None
+    ) -> None:
+        if res is None:
+            return
+        if usage is None and (error is None or error.status_code is None):
+            # Outcome unknown (timeout, dropped stream): the call may have been billed, so the
+            # worst case stays counted.
+            await self._cap.settle_worst_case(res)
+        else:
+            await self._cap.settle(res, model, usage)
 
     async def _provider(self, org_id: uuid.UUID) -> ModelProvider:
         key = await self.ledger.api_key(org_id)
+        self._byo = key is not None  # the org pays with its own key: not the owner's budget
+        if key is None and self.settings.ai_api_key is not None:
+            # By org ID, never by slug: a slug is user-chosen and can be claimed by anyone.
+            if str(org_id) in self.settings.ai_platform_key_orgs:
+                key = self.settings.ai_api_key.get_secret_value()
         if self._factory is not None:
             return self._factory(key)
         if self.settings.ai_provider == "fake":
@@ -65,10 +92,16 @@ class ModelGateway:
         provider = await self._provider(org_id)
         model = route_model(task_class, self.settings)
         self._require_price(model)
+        res = await self._reserve(provider, model, request)
         try:
             result = await provider.complete(model, request)
         except ProviderError as exc:
+            await self._settle(res, model, None, exc)
             raise AppError("ai_provider_error", str(exc), 502) from None
+        except BaseException:
+            await self._settle(res, model, None)
+            raise
+        await self._settle(res, model, result.usage)
         await self.ledger.record(
             org_id,
             project_id=project_id,
@@ -92,9 +125,13 @@ class ModelGateway:
         provider = await self._provider(org_id)
         model = route_model(task_class, self.settings)
         self._require_price(model)
+        res = await self._reserve(provider, model, request)
+        settled = False
         try:
             async for event in provider.stream(model, request):
                 if event.kind == "done" and event.completion is not None:
+                    await self._settle(res, model, event.completion.usage)
+                    settled = True
                     await self.ledger.record(
                         org_id,
                         project_id=project_id,
@@ -105,4 +142,10 @@ class ModelGateway:
                     )
                 yield event
         except ProviderError as exc:
+            if not settled:
+                settled = True
+                await self._settle(res, model, None, exc)
             raise AppError("ai_provider_error", str(exc), 502) from None
+        finally:
+            if not settled:
+                await self._settle(res, model, None)

@@ -8,8 +8,8 @@ describe('v2 rail groups', () => {
     const grouped = RAIL_GROUPS.flatMap((g) => g.sections).sort()
     expect(grouped).toEqual([...SECTIONS.map((s) => s.id), ...V2_SECTIONS.map((s) => s.id)].sort())
   })
-  it('has the seven agreed groups in order', () => {
-    expect(RAIL_GROUPS.map((g) => g.label)).toEqual(['Home', 'Map', 'Build', 'Secure', 'Connect', 'Operate', 'Ship'])
+  it('has the eight agreed groups in order', () => {
+    expect(RAIL_GROUPS.map((g) => g.label)).toEqual(['Home', 'Map', 'Build with AI', 'Build', 'Secure', 'Connect', 'Operate', 'Ship'])
   })
 })
 

@@ -4,7 +4,15 @@ from decimal import Decimal
 
 import pytest
 
-from app.core.expr import ExprError, canonical, check_scoped, compile_python, rewrite_settings, settings_used, to_sql
+from app.core.expr import (
+    ExprError,
+    canonical,
+    check_scoped,
+    compile_python,
+    rewrite_settings,
+    settings_used,
+    to_sql,
+)
 from app.core.validation_behavior import check_expression
 
 FIELDS = {"amount": ("decimal", False), "days": ("int", True), "note": ("string", True)}

@@ -2,8 +2,8 @@
 local HTTP upstream; the real runsc stack is covered by tests/e2e/test_preview_stack.py."""
 
 import asyncio
-import os
 import json
+import os
 import uuid
 import zipfile
 from collections.abc import AsyncIterator
