@@ -177,7 +177,17 @@ class HookBudgetBody(BaseModel):
     outbound_calls: int = Field(default=0, ge=-1_000_000, le=1_000_000)
 
 
+class HookEffectBudgetBody(BaseModel):
+    calls_per_effect: int = Field(default=1, ge=-1_000_000, le=1_000_000)
+    payload_bytes: int = Field(default=10_000, ge=-1_000_000_000, le=1_000_000_000)
+    outbound_per_minute: int = Field(default=30, ge=-1_000_000, le=1_000_000)
+
+
 class HookBody(BaseModel):
+    """`effects` / `effect_budget` are OMITTED = keep the stored values; sent and different from the
+    stored ones = an effectful-hook change (owner only, CO-3). `author` is read-only: the server
+    keeps the stored mark (new hooks are 'trusted') and ignores whatever a client sends."""
+
     name: str = Field(max_length=80)
     point: str = Field(max_length=200)
     kind: str = Field(default="pure", max_length=20)
@@ -187,6 +197,9 @@ class HookBody(BaseModel):
     fallback: dict[str, str | int | float | bool] | None = Field(default=None, max_length=60)
     budget: HookBudgetBody = Field(default_factory=HookBudgetBody)
     reads: list[str] = Field(default_factory=list, max_length=50)
+    effects: list[str] | None = Field(default=None, max_length=20)
+    effect_budget: HookEffectBudgetBody | None = None
+    author: str | None = Field(default=None, max_length=20)  # read-only, ignored on write
 
 
 class HooksWrite(BaseModel):

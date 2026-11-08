@@ -36,6 +36,8 @@ class LimitsBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     max_live_per_user: int | None = None
+    max_live_total: int | None = None
+    max_live_per_org: int | None = None
     sleep_after_minutes: int | None = None
     delete_after_days: int | None = None
     cpus: float | None = None

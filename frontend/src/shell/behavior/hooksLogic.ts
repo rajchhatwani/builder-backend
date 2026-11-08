@@ -120,6 +120,10 @@ export interface HookRow {
   outputFields: HookFieldBody[]
   /** Fallback output values as typed text, by output field name. */
   fallback: Record<string, string>
+  /** Effectful-tier fields the form does not edit; carried through unchanged. */
+  effects?: string[]
+  effect_budget?: Record<string, number> | null
+  author?: string | null
 }
 
 const camel = (snake: string) => snake.split('_').filter(Boolean).map((p) => p[0].toUpperCase() + p.slice(1)).join('')
@@ -148,6 +152,9 @@ export function hookFromBody(b: HookBody): HookRow {
     inputFields: (b.input.fields ?? []).map((f) => ({ name: f.name, type: f.type ?? 'string', required: f.required ?? true })),
     outputFields: (b.output.fields ?? []).map((f) => ({ name: f.name, type: f.type ?? 'string', required: f.required ?? true })),
     fallback: Object.fromEntries(Object.entries(b.fallback ?? {}).map(([k, v]) => [k, String(v)])),
+    ...(b.effects !== undefined ? { effects: [...b.effects] } : {}),
+    ...(b.effect_budget !== undefined ? { effect_budget: b.effect_budget } : {}),
+    ...(b.author !== undefined ? { author: b.author } : {}),
   }
 }
 
@@ -181,6 +188,9 @@ export function hookToBody(r: HookRow): HookBody {
     fallback: r.policy === 'fallback' ? fallback : null,
     budget: { cpu_ms: num(r.cpu_ms), rows: num(r.rows), outbound_calls: num(r.outbound_calls) },
     reads: [...r.reads],
+    ...(r.effects !== undefined ? { effects: [...r.effects] } : {}),
+    ...(r.effect_budget !== undefined ? { effect_budget: r.effect_budget } : {}),
+    ...(r.author !== undefined ? { author: r.author } : {}),
   }
 }
 

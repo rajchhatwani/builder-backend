@@ -51,7 +51,7 @@ from app.api import (
     wellknown,
     workspaces,
 )
-from app.api.body_limit import SpecWriteLimit
+from app.api.body_limit import INTAKE_MAX_BYTES, SpecWriteLimit, is_intake
 from app.api.input_guard import reject_nul_characters
 from app.api.security import guard
 from app.config import Settings, get_settings
@@ -105,8 +105,14 @@ class SecurityMiddleware:
         scope.setdefault("state", {})["request_id"] = request_id
         structlog.contextvars.bind_contextvars(request_id=request_id)
 
+        # Requirements intake is allowed 12 MB of files (SpecWriteLimit enforces its own 13 MB cap).
+        max_bytes = (
+            max(self.max_bytes, INTAKE_MAX_BYTES)
+            if is_intake(scope["method"], scope.get("path", ""))
+            else self.max_bytes
+        )
         declared = headers.get("content-length")
-        if declared is not None and declared.isdigit() and int(declared) > self.max_bytes:
+        if declared is not None and declared.isdigit() and int(declared) > max_bytes:
             await self._too_large(send, request_id)
             return
 
@@ -118,7 +124,7 @@ class SecurityMiddleware:
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
-                if received > self.max_bytes:
+                if received > max_bytes:
                     too_large = True
                     return {"type": "http.disconnect"}
             return message
@@ -216,6 +222,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             raise RuntimeError(f"BUILDER_BOOTSTRAP_ADMIN_* is invalid: {exc.message}") from exc
         if admin_user is not None:
             log.info("bootstrap_admin_created", email=admin_user.email)
+    try:  # S2-007: free spend holds a dead process left behind (never blocks startup)
+        from app.services.ai.platform_cap import PlatformCap
+
+        async with get_session_factory()() as session:
+            freed = await PlatformCap(session, settings).reap_expired()
+        if freed:
+            log.info("ai_reservations_reaped", micro_usd=freed)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("ai_reservation_reap_failed", error=type(exc).__name__)
     scheduler: asyncio.Task[None] | None = None
     if settings.preview_scheduler_enabled:
         from app.services import preview_service
@@ -223,12 +238,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         scheduler = asyncio.create_task(
             preview_service.scheduler_loop(settings.preview_sweep_interval_seconds)
         )
+    sweeper: asyncio.Task[None] | None = None
+    if settings.agent_sweeper_enabled and settings.environment != "test":  # B-003: crash-resume
+        from app.services.agent.sweeper import sweeper_loop
+
+        sweeper = asyncio.create_task(sweeper_loop(settings))
     try:
         async with _mcp_lifespan(app):
             yield
     finally:
-        if scheduler is not None:
-            scheduler.cancel()
+        for task in (scheduler, sweeper):
+            if task is not None:
+                task.cancel()
 
 
 @asynccontextmanager
@@ -267,8 +288,8 @@ def create_app() -> FastAPI:
         allow_origins=settings.cors_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
-        allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID"],
-        expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash", "X-Request-ID"],
+        allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID", "X-Preview-Token"],
+        expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash", "X-Request-ID", "X-Preview-Token"],
     )
     app.add_middleware(SpecWriteLimit, max_bytes=settings.max_spec_write_bytes)
     app.add_middleware(SecurityMiddleware, settings=settings)

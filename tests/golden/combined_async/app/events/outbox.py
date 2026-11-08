@@ -34,7 +34,7 @@ def _row(
     model = EVENT_TYPES.get(event_type)
     if model is None or not isinstance(payload, model):
         raise ValueError(f"{event_type!r} needs a payload of its own type")  # fail closed
-    now = utcnow()
+    now = sa.func.now()  # the database clock: the relay claims by the same clock
     row: dict[str, Any] = {
         "id": uuid.uuid4(),
         "aggregate_type": aggregate_type,
@@ -127,7 +127,7 @@ async def requeue_failed(session: AsyncSession, event_id: uuid.UUID | None = Non
     stmt = (
         sa.update(OutboxEvent)
         .where(OutboxEvent.status == FAILED)
-        .values(status=PENDING, attempts=0, next_attempt_at=utcnow(), last_error=None)
+        .values(status=PENDING, attempts=0, next_attempt_at=sa.func.now(), last_error=None)
     )
     if event_id is not None:
         stmt = stmt.where(OutboxEvent.id == event_id)

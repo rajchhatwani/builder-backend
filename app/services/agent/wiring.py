@@ -16,9 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_object_session
 from app.config import get_settings
 from app.core.spec_models import Spec, spec_hash
 from app.exceptions import AppError
-from app.models.agent import AiRun
+from app.models.agent import AiApproval, AiRun
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 from app.services.agent import gates as gate_lib
+from app.services.agent import promote as promote_lib
 from app.services.agent import tools as tool_lib
 from app.services.agent.approval_service import ApprovalService
 from app.services.agent.contract import (
@@ -69,6 +70,17 @@ class Toolbox:
 
     def tools(self, phase: Phase) -> list[Tool]:
         return tool_lib.tools_for(phase)
+
+    async def sync_draft(self, run: AiRun) -> None:
+        """Regenerate the draft's generated files after the loop itself changed the draft spec (an
+        approved D action); custom files are never rewritten."""
+        if run.workspace_id is None:
+            return
+        from app.services.workspace_service import WorkspaceService
+
+        session = _session(run)
+        draft = await run_spec(session, run.id, run.project_id)
+        await WorkspaceService(session).sync_generated(run.project_id, run.workspace_id, draft)
 
 
 async def _workspace(run: AiRun) -> Workspace | None:
@@ -141,10 +153,43 @@ class Approvals:
         after: Spec | None = None
         if request.kind == ApprovalKind.C and request.payload.get("final") is True:
             request, before, after = await self._final(run, request)
-        row = await ApprovalService(_session(run), get_settings()).request(
+        svc = await ApprovalService.for_project(_session(run), get_settings(), run.project_id)
+        row = await svc.request(
             run, request, spec_hash=digest, commit=commit, spec_before=before, spec_after=after
         )
         return row.id
+
+    async def validate_for_use(self, run: AiRun, approval: AiApproval, *, strict_payload: bool = False) -> None:
+        """Raise AppError unless THIS approved row is unexpired, bound to the spec hash and content hash
+        the run has NOW, and its payload still hashes to what was asked (S1-004)."""
+        digest, commit = await self._bound(run)
+        ApprovalService.check_usable(approval, spec_hash=digest, commit=commit, strict_payload=strict_payload)
+
+    async def prepare_promotion(self, run: AiRun) -> dict[str, bytes]:
+        """B-004, before apply: the custom-zone files the VALID final approval covers, re-read from the
+        worktree and checked against the approved hashes. AppError when any differs. Files outside the
+        approval are not in the result, so they are never promoted."""
+        digest, commit = await self._bound(run)
+        svc = await ApprovalService.for_project(_session(run), get_settings(), run.project_id)
+        row = await svc.require_valid(run.id, ApprovalKind.C, spec_hash=digest, commit=commit)
+        payload = row.payload or {}
+        ws = await _workspace(run)
+        if payload.get("final") is not True or ws is None or not ws.worktree_path:
+            return {}
+        return await asyncio.to_thread(promote_lib.collect, Path(ws.worktree_path), payload.get("file_hashes"))
+
+    async def promote(self, run: AiRun, files: dict[str, bytes]) -> dict[str, Any]:
+        """B-004, after apply: commit the verified files to the project's live code (idempotent)."""
+        if not files:
+            return {"promoted": [], "commit": None}
+        from app.services.workspace_service import WorkspaceService
+
+        ws = await _workspace(run)
+        sha = await WorkspaceService(_session(run)).promote_files(
+            run.project_id, files, f"agent run {run.id}: custom code approved in the final review",
+            base_branch=ws.branch if ws is not None else None,
+        )
+        return {"promoted": sorted(files), "commit": sha}
 
     async def _final(
         self, run: AiRun, request: ApprovalRequest
@@ -166,6 +211,11 @@ class Approvals:
             payload["hooks"] = hooks[:100]
         ws = await _workspace(run)
         payload["files"] = await _changed_files(session, ws)
+        if ws is not None and ws.worktree_path and Path(ws.worktree_path).is_dir():
+            # B-004: the custom-zone files this approval covers, with their hashes (bound by the payload hash)
+            payload["file_hashes"] = await asyncio.to_thread(
+                promote_lib.custom_file_hashes, Path(ws.worktree_path), payload["files"]
+            )
         payload["spec_diff"] = spec_changes(base, now)
         payload["empty_change"] = not payload["spec_diff"] and not payload["files"]  # nothing to apply
         payload["gates_green"] = True  # a finish is only accepted when G0-G9 are green

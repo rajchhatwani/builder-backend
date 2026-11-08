@@ -273,6 +273,32 @@ async def test_keys_are_scoped_to_the_caller_and_the_tenant(http: AsyncClient, c
     assert len({r.tenant_key for r in rows}) == 2  # two tenants: a key of one is invisible to the other
 
 
+async def test_a_replay_is_refused_when_the_caller_lost_access_since(client: AsyncClient) -> None:
+    from app.auth.models import AuthUser
+    from tests._auth_support import PASSWORD
+
+    email = "lost-access@example.com"
+    mine = client_for(await sign_in(client, email, roles=list(ALL_ROLES), n=3))
+    async with mine:
+        payload = await _factories.payload_customers(mine)
+        headers = {"Idempotency-Key": "revoked-key-0001"}
+        first = await mine.post(PATH, json=payload, headers=headers)
+        assert first.status_code == 201, first.text
+        async with session_factory() as session:
+            user = (await session.execute(sa.select(AuthUser).where(AuthUser.email == email))).scalar_one()
+            user.roles = []
+            await session.commit()
+        login = await client.post("/auth/login", json={"email": email, "password": PASSWORD})
+        assert login.status_code == 200, login.text
+        weaker = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        replay = await mine.post(PATH, json=payload, headers={**weaker, **headers})
+        assert replay.status_code == 403, replay.text  # the refusal, not the stored 201
+        assert replay.json()["code"] == "idempotency_access_changed"
+        assert "idempotent-replayed" not in replay.headers
+        assert replay.json() != first.json()
+        assert await _rows() == 1
+
+
 def _request(peer: str | None, forwarded: str | None = None) -> Request:
     headers = [(b"x-forwarded-for", forwarded.encode())] if forwarded is not None else []
     scope = {"type": "http", "headers": headers, "client": (peer, 5000) if peer else None, "method": "GET", "path": "/"}

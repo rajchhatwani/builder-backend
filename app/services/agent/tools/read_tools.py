@@ -1,6 +1,10 @@
 """Class R: read-only tools. Project content is returned wrapped as untrusted data."""
 
+import asyncio
+from pathlib import Path
 from typing import Any
+
+from sqlalchemy import select
 
 from app.core.generator.engine import module_registry
 from app.core.spec_models import Spec
@@ -75,9 +79,37 @@ async def read_file(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
     return ToolResult(ok=True, data={"path": rel, "truncated": truncated, "note": NOTE, "untrusted_data": text})
 
 
+GATE_FAILURE_CAP = 50
+LOG_LINES = 100
+LOG_CHARS = 6_000
+
+
 async def last_gate_report(ctx: ToolContext) -> dict[str, Any]:
-    """The last stored gate report of this run. The gates agent replaces this; {} = none yet."""
-    return {}
+    """The gate report of the draft AS IT IS NOW: G0-G8 plus the G9 replay, run live over the run's
+    worktree (the same pass the finish check uses; pure static analysis, nothing is executed).
+    {} = no draft to check."""
+    if not ctx.worktree or ctx.session is None or not Path(ctx.worktree).is_dir():
+        return {}
+    from app.services.agent import gates as gate_lib
+    from app.services.dependency_policy_service import DependencyPolicyService
+
+    root = Path(ctx.worktree)
+    spec = await run_spec(ctx.session, ctx.run_id, ctx.project_id)
+    pins = [
+        (r.package, r.version, r.hashes)
+        for r in await DependencyPolicyService(ctx.session).approved_pins(ctx.project_id)
+    ]
+    first = await asyncio.to_thread(gate_lib.run_gates, root, spec, approved_pins=pins)
+    second = await asyncio.to_thread(gate_lib.replay, root, spec, pins)
+    failures = [*first.failures, *second.failures]
+    report = gate_lib.GateReport(ok=not failures, failures=failures, gates=first.gates)
+    return {
+        "ok": report.ok,
+        "gates": dict(sorted(report.gates.items())),
+        "failure_count": len(failures),
+        "failures": [f.as_dict() for f in failures[:GATE_FAILURE_CAP]],
+        "report_hash": gate_lib.report_hash(report),
+    }
 
 
 async def read_gate_report(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
@@ -86,9 +118,36 @@ async def read_gate_report(ctx: ToolContext, args: dict[str, Any]) -> ToolResult
 
 
 async def read_app_logs(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
-    # preview_service has no log reader that is safe to expose to the agent (logs may carry
-    # request data); the sandbox log tail arrives with the preview wiring.
-    return ToolResult(ok=True, data={"lines": [], "note": "no preview logs are available to the agent yet"})
+    """Tail of the log of the live preview of this run's workspace, redacted and wrapped as data.
+    No live preview: a typed `no_preview` result (the agent cannot start one; B-011)."""
+    if ctx.session is None or ctx.workspace_id is None:
+        return ToolResult(ok=True, data={"status": "no_preview", "lines": [], "note": "this run has no preview"})
+    from app.models.preview import LIVE_STATES, Preview
+    from app.services import preview_runtime, preview_service
+
+    row = (
+        await ctx.session.execute(
+            select(Preview)
+            .where(
+                Preview.project_id == ctx.project_id,
+                Preview.workspace_id == ctx.workspace_id,
+                Preview.state.in_(LIVE_STATES),
+            )
+            .order_by(Preview.created_at.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if row is None:
+        return ToolResult(
+            ok=True,
+            data={"status": "no_preview", "lines": [], "note": "no preview is running for this draft; ask the user to start one"},
+        )
+    raw = await preview_service.get_sandbox(ctx.settings).logs(row.app_sandbox, tail=LOG_LINES)
+    text = preview_runtime.redact(raw)[-LOG_CHARS:]
+    return ToolResult(
+        ok=True,
+        data={"status": "ok", "note": NOTE, "untrusted_data": text, "preview_state": row.state},
+    )
 
 
 def _s(props: dict[str, Any], required: list[str]) -> dict[str, Any]:

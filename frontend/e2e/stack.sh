@@ -43,7 +43,7 @@ export BUILDER_BOOTSTRAP_ADMIN_EMAIL="e2e-admin@example.com" BUILDER_BOOTSTRAP_A
 ( cd "$ROOT" && uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$LOG/api.log" 2>&1 ) & pids+=($!)
 for _ in $(seq 1 90); do curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && break; sleep 1; done
 curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" || { echo "api did not start, see $LOG/api.log"; exit 1; }
-( cd "$ROOT/frontend" && VITE_API_BASE_URL="http://localhost:${API_PORT}" npx vite build --outDir "$HERE/.dist" --emptyOutDir >"$LOG/build.log" 2>&1 )
+( cd "$ROOT/frontend" && VITE_API_BASE_URL="http://localhost:${API_PORT}" VITE_PREVIEW_API_ORIGIN="${E2E_PREVIEW_ORIGIN:-${VITE_PREVIEW_API_ORIGIN:-}}" npx vite build --outDir "$HERE/.dist" --emptyOutDir >"$LOG/build.log" 2>&1 )
 ( cd "$ROOT/frontend" && npx vite preview --outDir "$HERE/.dist" --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$LOG/web.log" 2>&1 ) & pids+=($!)
 echo "e2e stack up: web $ORIGIN api http://localhost:${API_PORT}"
 wait

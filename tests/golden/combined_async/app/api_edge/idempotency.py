@@ -7,9 +7,10 @@ transaction, and the middleware commits both together with the business write. S
   * a crash or a rolled-back write leaves no stored success, and a stored success always has its write;
   * only 2xx responses are stored. Keys are scoped to tenant and caller, so nobody replays another's.
 
-Known limit (tracked for Cycle 3): a replay is served BEFORE the route's own authorization runs
-again. A user whose role was revoked can therefore replay THEIR OWN earlier response (never anyone
-else's) until its TTL ends. The spec caps `idempotency.ttl_hours` at 168 (7 days) to bound that."""
+A replay is refused (403) when the caller no longer holds every role it held when the response was made:
+a user whose role was revoked cannot read their earlier response. Keys are scoped to tenant and caller, so
+no other principal can reach a stored response. Not re-evaluated on a replay: per-record policies (ABAC),
+which only the route can decide."""
 
 import datetime as dt
 import hashlib
@@ -93,6 +94,7 @@ async def claim(
                     method=method,
                     path=path[:500],
                     request_hash=req_hash,
+                    caller_roles=list(caller.roles),
                     status=IN_PROGRESS,
                     created_at=at,
                     expires_at=at + dt.timedelta(hours=cfg["ttl_hours"]),
@@ -117,6 +119,12 @@ async def claim(
     if stored.request_hash != req_hash:
         raise AppError(
             "idempotency_key_reused", "This Idempotency-Key was already used for a different request", 422
+        )
+    if not set(stored.caller_roles or ()) <= set(caller.roles):  # the route's own authorization is not run on a replay: this is its stand-in
+        raise AppError(
+            "idempotency_access_changed",
+            "This Idempotency-Key was used with access you no longer hold: send the request again with a new key",
+            403,
         )
     if stored.status != COMPLETED or stored.response_status is None or stored.response_body is None:
         raise AppError(

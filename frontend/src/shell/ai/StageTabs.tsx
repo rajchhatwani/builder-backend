@@ -9,7 +9,7 @@ const TABS = [{ id: 'code', label: 'Code' }, { id: 'run', label: 'Run & logs' },
 type TabId = (typeof TABS)[number]['id']
 
 /** The Stage: Code, Run & logs and Data for one draft workspace / preview. The preview token is memory-only state. */
-export function StageTabs({ projectId, workspaceId, previewId, token: initialToken = '' }: { projectId: string; workspaceId: string; previewId?: string; token?: string }) {
+export function StageTabs({ projectId, workspaceId, previewId, token: initialToken = '', onDirtyChange }: { projectId: string; workspaceId: string; previewId?: string; token?: string; onDirtyChange?: (dirty: boolean) => void }) {
   const [tab, setTab] = useState<TabId>('code')
   const [token, setToken] = useState(initialToken)
   const [tokenError, setTokenError] = useState<string | null>(null)
@@ -47,7 +47,7 @@ export function StageTabs({ projectId, workspaceId, previewId, token: initialTok
             {tokenError && <span role="alert" className="error-text small-text">{tokenError}</span>}
           </div>
         )}
-        {tab === 'code' && <CodeView projectId={projectId} workspaceId={workspaceId} />}
+        {tab === 'code' && <CodeView projectId={projectId} workspaceId={workspaceId} onDirtyChange={onDirtyChange} />}
         {tab === 'run' && previewId && <RunLogs previewId={previewId} token={token} />}
         {tab === 'data' && previewId && <DataBrowser previewId={previewId} token={token} />}
       </div>

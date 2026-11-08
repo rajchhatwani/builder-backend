@@ -190,3 +190,165 @@ async def test_platform_key_only_for_listed_orgs(client: AsyncClient, session_fa
         async with session_factory() as s:
             await ModelGateway(s, cfg, factory).complete(org, TaskClass.route, _req())
     assert seen == [None, None, pk]
+
+
+# -- S2-007: reservations expire ------------------------------------------------------------
+
+
+async def test_orphaned_reservation_is_freed_after_ttl_but_live_one_is_not(
+    client: AsyncClient, session_factory: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.ai import platform_cap as pc
+
+    cfg = _settings(25_000)
+    cfg.ai_reservation_ttl_seconds = 600
+    t0 = datetime.now(UTC)
+    clock = {"t": t0}
+    monkeypatch.setattr(pc, "now", lambda: clock["t"])
+    async with session_factory() as s:
+        cap = PlatformCap(s, cfg)
+        await cap.reserve("claude-haiku-5-5", _req())  # "process dies" here: never settled
+        await cap.reserve("claude-haiku-5-5", _req())
+        with pytest.raises(AppError) as exc:  # cap is now full: 2 holds of ~10_000 each
+            await cap.reserve("claude-haiku-5-5", _req())
+        assert exc.value.code == "ai_platform_cap"
+        clock["t"] = t0 + timedelta(seconds=300)  # still inside the TTL: nothing may be freed
+        assert await cap.reap_expired() == 0
+        assert (await cap.status())["reserved"] > 0
+        with pytest.raises(AppError):
+            await cap.reserve("claude-haiku-5-5", _req())
+        clock["t"] = t0 + timedelta(seconds=601)
+        live = None
+        # lazy sweep on reserve: the orphans are freed and the cap is usable again
+        live = await cap.reserve("claude-haiku-5-5", _req())
+        st = await cap.status()
+        assert st["reserved"] == live.micro_usd and st["spent"] == 0
+        # a late settle of an already-reaped reservation never drives the counter negative or double-frees
+        await cap.settle(live, "claude-haiku-5-5", Usage(100, 50))
+    st = await _status(session_factory, cfg)
+    assert st["reserved"] == 0 and st["spent"] == 600
+
+
+async def test_late_settle_of_a_reaped_reservation_does_not_free_someone_elses_hold(
+    client: AsyncClient, session_factory: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.ai import platform_cap as pc
+
+    cfg = _settings(1_000_000)
+    cfg.ai_reservation_ttl_seconds = 60
+    t0 = datetime.now(UTC)
+    clock = {"t": t0}
+    monkeypatch.setattr(pc, "now", lambda: clock["t"])
+    async with session_factory() as s:
+        cap = PlatformCap(s, cfg)
+        old = await cap.reserve("claude-haiku-5-5", _req())
+        clock["t"] = t0 + timedelta(seconds=120)
+        fresh = await cap.reserve("claude-haiku-5-5", _req())  # reaps `old`
+        await cap.settle(old, "claude-haiku-5-5", Usage(100, 50))  # slow call finally finishes
+        assert (await cap.status())["reserved"] == fresh.micro_usd  # the live hold is untouched
+
+
+async def test_parallel_platform_reserves_never_exceed_the_cap(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    import asyncio
+
+    cfg = _settings(25_000)
+
+    async def one() -> bool:
+        async with session_factory() as s:
+            try:
+                await PlatformCap(s, cfg).reserve("claude-haiku-5-5", _req())
+                return True
+            except AppError:
+                return False
+
+    got = await asyncio.gather(*[one() for _ in range(8)])
+    assert sum(got) == 2
+
+
+# -- S2-009: org budget reserved under a row lock -------------------------------------------
+
+
+class Slow(Scripted):
+    async def complete(self, model: str, request: CompletionRequest) -> Completion:
+        import asyncio
+
+        await asyncio.sleep(0.3)  # keep all callers in flight together
+        return await super().complete(model, request)
+
+
+async def test_parallel_calls_cannot_overshoot_the_org_budget(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    import asyncio
+
+    from app.models.ai_ledger import AiCostLedger, AiSpendReservation
+    from sqlalchemy import func, select
+
+    org = await _org(client)
+    await client.put("/orgs/cap/ai/settings", json={"monthly_budget_micro_usd": 25_000})
+    cfg = _settings(None)
+
+    async def one() -> bool:
+        async with session_factory() as s:
+            try:
+                await ModelGateway(s, cfg, lambda k: Slow()).complete(org, TaskClass.route, _req())
+                return True
+            except AppError as exc:
+                assert exc.code == "ai_budget_exceeded"
+                return False
+
+    got = await asyncio.gather(*[one() for _ in range(8)])
+    assert sum(got) == 2  # worst case ~10_0xx each: a third would not fit under 25_000
+    async with session_factory() as s:
+        assert (await s.execute(select(func.count()).select_from(AiCostLedger))).scalar_one() == 2
+        assert (await s.execute(select(func.count()).select_from(AiSpendReservation))).scalar_one() == 0
+
+
+async def test_ledger_row_survives_a_rolled_back_request_session(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    from app.models.ai_ledger import AiCostLedger
+    from sqlalchemy import func, select
+
+    org = await _org(client)
+    await client.put("/orgs/cap/ai/settings", json={"monthly_budget_micro_usd": 1_000_000})
+    async with session_factory() as s:
+        await ModelGateway(s, _settings(None), lambda k: Scripted()).complete(org, TaskClass.route, _req())
+        await s.rollback()  # the request later fails and rolls back
+    async with session_factory() as s:
+        total = (await s.execute(select(func.coalesce(func.sum(AiCostLedger.cost_micro_usd), 0)))).scalar_one()
+    assert total == 600
+
+
+async def test_unknown_outcome_is_charged_worst_case_to_the_org_and_orphaned_org_hold_expires(
+    client: AsyncClient, session_factory: Factory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from app.services.ai import platform_cap as pc
+    from app.services.ai.ledger import AiLedgerService
+
+    org = await _org(client)
+    await client.put("/orgs/cap/ai/settings", json={"monthly_budget_micro_usd": 25_000})
+    cfg = _settings(None)
+    async with session_factory() as s:
+        with pytest.raises(AppError):
+            await ModelGateway(s, cfg, lambda k: Scripted(error=ProviderError("timeout"))).complete(
+                org, TaskClass.route, _req()
+            )
+        led = AiLedgerService(s, cfg)
+        assert await led.spent(org) >= 10_000
+        # crash between reserve and settle for the org hold, then the clock passes the TTL
+        orphan = await led.reserve_budget(org, 5_000)
+        assert orphan.id is not None
+        with pytest.raises(AppError):
+            await led.reserve_budget(org, 12_000)  # 10_0xx spent + 5_000 held + 12_000 > 25_000
+        t = datetime.now(UTC) + timedelta(seconds=cfg.ai_reservation_ttl_seconds + 1)
+        monkeypatch.setattr(pc, "now", lambda: t)
+        await led.reserve_budget(org, 12_000)  # only fits once the orphan expired

@@ -132,6 +132,9 @@ class ToolContext:
     plan: Plan | None
     workspace_id: uuid.UUID | None = None
     worktree: str | None = None  # absolute path of the draft git worktree
+    # True when this tool call is run AGAIN after a crash (its step was still pending): the effects of
+    # the first attempt may already be on disk, so a handler must not lose the approval it owed (S1-008).
+    reexecution: bool = False
 
 
 ToolHandler = Callable[[ToolContext, dict[str, Any]], Awaitable[ToolResult]]

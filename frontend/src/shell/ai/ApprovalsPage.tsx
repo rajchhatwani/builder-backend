@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { ApiError } from '../../api/client'
 import { aiApi } from './aiApi'
-import { approvalIdFromHash, approvalsLink, decisionGate, describePayload, effectiveState, expiryText, kindLabel, noteValid, reviewHref, riskLabel, stateLabel, type Tab } from './approvalLogic'
+import { approvalFingerprint, approvalIdFromHash, approvalList, approvalsLink, confirmMatches, decideFailure, decisionGate, describePayload, effectiveState, expiryText, gateDInfo, kindLabel, noteValid, reviewHref, riskLabel, stateLabel, type Tab } from './approvalLogic'
 import { Proposed, ProvenanceBadge } from './Provenance'
 import type { Approval } from './types'
 import { errMsg } from './useRunParam'
 import { useMyRole } from './useMyRole'
+import { useNow } from './useNow'
+
+/** Stable callback ref: moves focus to a message when it appears (so a screen reader announces it and focus is not lost to body). */
+const focusOnce = (el: HTMLElement | null) => { el?.focus() }
+const TABS: Tab[] = ['pending', 'decided']
 
 function useApprovalParam(): string | null {
   const [id, setId] = useState(() => approvalIdFromHash(window.location.hash))
@@ -24,7 +30,7 @@ function Risks({ flags }: { flags: string[] }) {
 /** F3-4: inbox of approvals. The review screen opens in place when `?approval=<id>` is set. */
 export function ApprovalsPage({ projectId }: { projectId: string }) {
   const approvalId = useApprovalParam()
-  return approvalId ? <ReviewScreen projectId={projectId} approvalId={approvalId} /> : <Inbox projectId={projectId} />
+  return approvalId ? <ReviewScreen key={approvalId} projectId={projectId} approvalId={approvalId} /> : <Inbox projectId={projectId} />
 }
 
 function Inbox({ projectId }: { projectId: string }) {
@@ -34,14 +40,24 @@ function Inbox({ projectId }: { projectId: string }) {
   const [error, setError] = useState('')
   const myRole = useMyRole(projectId)
 
+  const seq = useRef(0)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+  const onTabKey = (e: KeyboardEvent) => {
+    const i = TABS.indexOf(tab)
+    const n = e.key === 'ArrowRight' ? (i + 1) % TABS.length : e.key === 'ArrowLeft' ? (i + TABS.length - 1) % TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? TABS.length - 1 : -1
+    if (n < 0) return
+    e.preventDefault(); setTab(TABS[n]); tabRefs.current[TABS[n]]?.focus()
+  }
   const load = useCallback(async () => {
+    const mine = ++seq.current // S3-006: only the newest request may write
     setLoading(true)
     try {
       // the server's "decided" is every closed state; list all and split here so expired ones land in the right tab
-      const all = await aiApi.listApprovals(projectId, tab === 'pending' ? { state: 'pending' } : {})
+      const all = approvalList(await aiApi.listApprovals(projectId, tab === 'pending' ? { state: 'pending' } : {}))
+      if (mine !== seq.current) return
       setItems(all.filter((a) => (tab === 'pending' ? effectiveState(a) === 'pending' : effectiveState(a) !== 'pending')))
       setError('')
-    } catch (e) { setError(errMsg(e)) } finally { setLoading(false) }
+    } catch (e) { if (mine === seq.current) setError(errMsg(e)) } finally { if (mine === seq.current) setLoading(false) }
   }, [projectId, tab])
   useEffect(() => { void load() }, [load])
 
@@ -50,9 +66,9 @@ function Inbox({ projectId }: { projectId: string }) {
       <h1>Approvals</h1>
       <p className="muted">Things the agent asked a person to decide. Nothing here changes until someone approves it.</p>
       {error && <p className="bh-error" role="alert">{error}</p>}
-      <div role="tablist" aria-label="Approvals" className="bh-tabs">
-        {(['pending', 'decided'] as Tab[]).map((t) => (
-          <button key={t} role="tab" id={`apptab-${t}`} aria-selected={tab === t} aria-controls="approvals-panel" className={tab === t ? '' : 'outline'} data-testid={`tab-${t}`} onClick={() => setTab(t)}>
+      <div role="tablist" aria-label="Approvals" className="bh-tabs" onKeyDown={onTabKey}>
+        {TABS.map((t) => (
+          <button key={t} ref={(el) => { tabRefs.current[t] = el }} tabIndex={tab === t ? 0 : -1} role="tab" id={`apptab-${t}`} aria-selected={tab === t} aria-controls="approvals-panel" className={tab === t ? '' : 'outline'} data-testid={`tab-${t}`} onClick={() => setTab(t)}>
             {t === 'pending' ? 'Waiting for you' : 'Decided'}
           </button>
         ))}
@@ -105,12 +121,17 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
   const [busy, setBusy] = useState(false)
   const [denyTried, setDenyTried] = useState(false)
   const [done, setDone] = useState('')
+  const [typed, setTyped] = useState('')
+  const [changed, setChanged] = useState(false)
   const myRole = useMyRole(projectId)
+  const now = useNow()
 
   useEffect(() => {
     let off = false
+    // S3-004: a different approval id starts from a blank screen
+    setA(null); setLoading(true); setError(''); setNote(''); setTyped(''); setDone(''); setChanged(false); setDenyTried(false)
     aiApi.getApproval(projectId, approvalId).then((x) => {
-      if (!off) setA(x)
+      if (!off) setA(approvalList([x])[0] ?? null)
     }, (e) => { if (!off) setError(errMsg(e)) }).finally(() => { if (!off) setLoading(false) })
     return () => { off = true }
   }, [projectId, approvalId])
@@ -118,11 +139,26 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
   const decide = async (approve: boolean) => {
     if (!a) return
     if (!noteValid(approve, note)) { setDenyTried(true); return }
+    if (approve && a.kind === 'D' && !confirmMatches(typed, gateDInfo(a.payload).phrase)) return
     setBusy(true); setError('')
     try {
-      setA(await aiApi.decide(projectId, a.id, approve, note.trim()))
+      // S3-005: decide only on what was seen. If the request changed since it was loaded, show the new one and ask again.
+      const fresh = approvalList([await aiApi.getApproval(projectId, a.id)])[0]
+      if (fresh && approvalFingerprint(fresh) !== approvalFingerprint(a)) {
+        setA(fresh); setTyped(''); setChanged(true)
+        return
+      }
+      setChanged(false)
+      setA(await aiApi.decide(projectId, a.id, approve, note.trim(), undefined, a))
       setDone(approve ? 'Approved. Resume the run from the build view to continue.' : 'Denied.')
-    } catch (e) { setError(errMsg(e)) } finally { setBusy(false) }
+    } catch (e) {
+      const f = decideFailure(e instanceof ApiError ? e.code : undefined, errMsg(e))
+      setError(f.text)
+      if (f.reload) {
+        setChanged(true)
+        try { const x = approvalList([await aiApi.getApproval(projectId, a.id)])[0]; if (x) setA(x) } catch { /* keep what is shown */ }
+      }
+    } finally { setBusy(false) }
   }
 
   const back = <a href={approvalsLink(projectId)} data-testid="back-to-inbox">Back to approvals</a>
@@ -130,8 +166,11 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
   if (!a) return <section data-testid="review-page"><h1>Review</h1>{error && <p className="bh-error" role="alert">{error}</p>}<p className="empty-state" data-testid="review-missing">This approval was not found.</p>{back}</section>
   if (a.kind === 'A') return <section data-testid="review-page"><h1>Review</h1><p>The plan is reviewed on its own page. <a href={reviewHref(projectId, a)}>Open the plan</a></p>{back}</section>
 
-  const st = effectiveState(a)
-  const gate = decisionGate(a, myRole)
+  const st = effectiveState(a, now)
+  const gate = decisionGate(a, myRole, now)
+  const isD = a.kind === 'D'
+  const dInfo = isD ? gateDInfo(a.payload) : null
+  const confirmOk = !dInfo || confirmMatches(typed, dInfo.phrase)
   const d = describePayload(a.payload)
   const open = st === 'pending'
   const Wrap = open ? Proposed : 'div'
@@ -142,9 +181,10 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
       <p>{back}</p>
       <h1>{kindLabel(a.kind)} review</h1>
       <p className="muted">{INTRO[a.kind] ?? ''}</p>
-      {error && <p className="bh-error" role="alert" data-testid="review-error">{error}</p>}
+      {error && <p className="bh-error" role="alert" data-testid="review-error" ref={focusOnce} tabIndex={-1}>{error}</p>}
+      {changed && <p className="card" role="status" data-testid="review-changed" ref={focusOnce} tabIndex={-1}>This request changed since you opened it. Review it again before you decide.</p>}
       {st !== 'pending' && (
-        <p className="card" role="status" data-testid="review-state" data-state={st}>
+        <p className="card" role="status" data-testid="review-state" data-state={st} ref={focusOnce} tabIndex={-1}>
           <strong>{stateLabel(st)}.</strong>{' '}
           {st === 'expired' && 'It was not decided in time, so it can no longer be approved. The agent has to ask again.'}
           {st === 'superseded' && 'The spec or the agent moved on. Look for the newer request in the inbox.'}
@@ -203,6 +243,14 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
             <dl className="bh-summary" data-testid="review-facts">{d.facts.map((f) => <div key={f.key}><dt>{f.key}</dt><dd>{f.value}</dd></div>)}</dl>
           )}
         </Wrap>
+        {dInfo && (
+          <div data-testid="gate-d" className="card">
+            <h3>What would change</h3>
+            <p data-testid="gate-d-headline"><strong>{dInfo.headline}</strong></p>
+            {dInfo.rows.length > 0 && <dl className="bh-summary" data-testid="gate-d-rows">{dInfo.rows.map((r) => <div key={r.key}><dt>{r.key}</dt><dd>{r.value}</dd></div>)}</dl>}
+            <p className="muted small-text">Another person may be required to decide this: the organisation can forbid the person who started the run from approving it.</p>
+          </div>
+        )}
         {a.kind === 'C' && (
           <p data-testid="review-gates">
             Gate results: {d.gatesGreen && <strong data-testid="gates-green">G0-G9 green. </strong>}{d.gateHash ? <>report <code>{d.gateHash.slice(0, 12)}</code>. The checks ran against exactly this change.</> : <span className="muted">not attached to this request.</span>}
@@ -219,14 +267,20 @@ export function ReviewScreen({ projectId, approvalId }: { projectId: string; app
             <small id="note-help" className={denyTried && !note.trim() ? 'bh-error' : 'muted'} data-testid="note-help">
               {denyTried && !note.trim() ? 'Say why you are denying so the agent can adjust.' : 'Optional when you approve.'}
             </small>
+            {dInfo && (
+              <>
+                <label htmlFor="review-confirm">Type <code>{dInfo.phrase}</code> to confirm</label>
+                <input id="review-confirm" value={typed} autoComplete="off" onChange={(e) => setTyped(e.target.value)} aria-invalid={typed !== '' && !confirmOk} data-testid="review-confirm" />
+              </>
+            )}
             {!gate.canDecide && <p className="muted" role="note" id="gate-reason" data-testid="gate-reason">{gate.reason}</p>}
             <div className="hstack">
-              <button disabled={busy || !gate.canDecide} aria-describedby={!gate.canDecide ? 'gate-reason' : undefined} onClick={() => void decide(true)} data-testid="review-approve">Approve</button>
+              <button disabled={busy || !gate.canDecide || !confirmOk} aria-describedby={!gate.canDecide ? 'gate-reason' : undefined} onClick={() => void decide(true)} data-testid="review-approve">Approve</button>
               <button className="outline" disabled={busy || !gate.canDecide} onClick={() => void decide(false)} data-testid="review-deny">Deny</button>
             </div>
           </>
         )}
-        {done && <p role="status" data-testid="review-done">{done} <a href={`#/p/${projectId}/build?run=${a.run_id}`}>Back to the build</a></p>}
+        {done && <p role="status" data-testid="review-done" ref={focusOnce} tabIndex={-1}>{done} <a href={`#/p/${projectId}/build?run=${a.run_id}`}>Back to the build</a></p>}
       </div>
     </section>
   )

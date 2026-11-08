@@ -23,7 +23,6 @@ from sqlalchemy.orm import aliased
 from app.events import adapters, bus, config, definitions
 from app.events.models import DELIVERED, FAILED, PENDING, OutboxEvent
 from app.events.outbox import purge_delivered
-from app.models._base import utcnow
 
 logger = structlog.get_logger()
 
@@ -83,7 +82,7 @@ async def deliver_one(
     """Claim and deliver one due event in its own transaction. False when nothing was due."""
     limit = max_attempts if max_attempts is not None else config.max_attempts()
     async with factory() as session:
-        now = utcnow()
+        now = (await session.execute(sa.select(sa.func.now()))).scalar_one()  # the database clock
         row = (await session.scalars(_claim_statement(now))).first()
         if row is None:
             await session.rollback()
@@ -106,7 +105,7 @@ async def deliver_one(
             await session.commit()
             return True
         row.status = DELIVERED
-        row.delivered_at = utcnow()
+        row.delivered_at = sa.func.now()  # type: ignore[assignment]
         row.last_error = None
         await session.commit()
         return True

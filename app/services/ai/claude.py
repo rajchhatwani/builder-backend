@@ -28,12 +28,24 @@ _CACHE = {"type": "ephemeral"}
 
 def build_payload(model: str, request: CompletionRequest, stream: bool) -> dict[str, Any]:
     """The request body. System and tools come first and are byte-stable; the cache marker sits
-    on the last tool and on the system block, so the whole prefix is cacheable."""
+    on the last tool, the system block and the last history message (three of the four allowed)."""
     payload: dict[str, Any] = {
         "model": model,
         "max_tokens": request.max_tokens,
         "messages": [{"role": m.role, "content": m.content} for m in request.messages],
     }
+    if request.cache_prefix and payload["messages"]:
+        # B-010: a breakpoint on the history's last message, so each turn re-reads the earlier
+        # transcript from cache instead of billing it again. Copies only; the request is untouched.
+        last = payload["messages"][-1]
+        content = last["content"]
+        if isinstance(content, str):
+            blocks: list[dict[str, Any]] = [{"type": "text", "text": content}] if content else []
+        else:
+            blocks = [dict(b) for b in content]
+        if blocks:
+            blocks[-1]["cache_control"] = dict(_CACHE)
+            payload["messages"][-1] = {"role": last["role"], "content": blocks}
     system_block: dict[str, Any] = {"type": "text", "text": request.system}
     if request.cache_prefix:
         system_block["cache_control"] = _CACHE

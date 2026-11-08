@@ -37,6 +37,12 @@ describe('declared hook <-> API body', () => {
       expect(back.failure_policy).toBe(h.failure_policy ?? defaultPolicy(parsePoint(h.point)!.stage, h.kind!))
     }
   })
+  it('keeps effectful-tier fields (effects, effect_budget, author) through load -> edit -> save', () => {
+    const h = { ...fixtureHooks[0], effects: ['email', 'webhook'], effect_budget: { emails: 5 }, author: 'ai' }
+    expect(hookToBody(hookFromBody(h))).toMatchObject({ effects: ['email', 'webhook'], effect_budget: { emails: 5 }, author: 'ai' })
+    expect(hookToBody({ ...hookFromBody(h), name: 'renamed' })).toMatchObject({ name: 'renamed', effects: ['email', 'webhook'], author: 'ai' })
+    expect(hookToBody(hookFromBody(fixtureHooks[0]))).not.toHaveProperty('effects')
+  })
   it('turns fallback text into typed values and drops them for other policies', () => {
     const row = hookFromBody({
       name: 'x', point: 'Note.after_commit', kind: 'effect', failure_policy: 'fallback',

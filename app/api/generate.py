@@ -56,6 +56,7 @@ async def download(
         project_id,
         allow_destructive=allow_destructive,
         accept_unreadable_baseline=accept_unreadable_baseline,
+        owner_secrets=request.state.member_role == MemberRole.owner,
     )
     return Response(
         content=content,

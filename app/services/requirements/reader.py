@@ -6,12 +6,14 @@ free text and any tool call it might emit are discarded, and the result never go
 agent's tool layer. Source text reaches the model only inside an escaped <untrusted_document> block.
 """
 
+import asyncio
 import io
 import json
 import re
 import time
 import uuid
 from collections.abc import AsyncIterator
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -31,6 +33,12 @@ MAX_CHUNKS = 24  # also the cap on model calls per intake
 MAX_PAGE_CHARS = 20_000
 MAX_TOTAL_CHARS = MAX_CHUNKS * MAX_CHUNK_CHARS
 EXTRACT_SECONDS = 20.0
+PARSE_WALL_SECONDS = 25.0  # hard wall for one document, counted from the moment we start waiting
+# Parsing runs in a small dedicated pool, not the default executor, so abandoned parses can never
+# starve the rest of the app. A Python thread cannot be killed: on timeout we stop WAITING and the
+# thread finishes (or loops) on its own; it is bounded by MAX_FILE_BYTES, MAX_PAGES, MAX_PAGE_CHARS
+# and the in-loop EXTRACT_SECONDS deadline, and the per-user intake limit bounds how many we start.
+_PARSE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="intake-parse")
 MAX_PROMPT_CHARS = 60_000
 MAX_ITEMS_PER_CHUNK = 60
 MAX_QUESTIONS_PER_CHUNK = 10
@@ -267,6 +275,18 @@ def read_document(filename: str, data: bytes) -> ReadDoc:
     raise AppError("file_type_not_supported", f"{name}: only PDF, TXT and MD files are accepted", 415)
 
 
+async def read_document_async(filename: str, data: bytes) -> ReadDoc:
+    """read_document off the event loop, with a wall timeout that stops waiting (see _PARSE_POOL)."""
+    loop = asyncio.get_running_loop()
+    fut = loop.run_in_executor(_PARSE_POOL, read_document, filename, data)
+    try:
+        return await asyncio.wait_for(fut, timeout=PARSE_WALL_SECONDS)
+    except TimeoutError:
+        raise AppError(
+            "file_parse_timeout", f"{_safe_name(filename)} took too long to read", 422
+        ) from None
+
+
 def read_prompt(prompt: str) -> ReadDoc:
     text = prompt.strip()
     if len(text) > MAX_PROMPT_CHARS:
@@ -277,8 +297,11 @@ def read_prompt(prompt: str) -> ReadDoc:
     return doc
 
 
+_CLOSE_UNTRUSTED = re.compile(r"</\s*untrusted_document", re.IGNORECASE)
+
+
 def wrap_untrusted(chunk: Chunk) -> str:
-    body = chunk.text.replace("</untrusted_document", "<\\/untrusted_document")
+    body = _CLOSE_UNTRUSTED.sub("<\\/untrusted_document", chunk.text)
     pages = f' pages="{chunk.page_start}-{chunk.page_end}"' if chunk.page_start else ""
     return f'<untrusted_document name="{_safe_name(chunk.doc)}"{pages}>\n{body}\n</untrusted_document>'
 

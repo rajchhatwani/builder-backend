@@ -46,6 +46,78 @@ _REDACT = [
 ]
 
 
+_WEAK_WORDS = ("test", "password", "secret", "changeme", "example", "dummy", "placeholder", "default")
+
+
+def _random_secret() -> str:
+    """64 URL-safe chars (48 random bytes) that the generated vault's placeholder check accepts."""
+    while True:
+        value = secrets.token_urlsafe(48)
+        if not any(w in value.lower() for w in _WEAK_WORDS):
+            return value
+
+
+def _rsa_pem() -> str:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    return key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    ).decode("ascii")
+
+
+def _uses_rs256(code_dir: Path) -> bool:
+    try:
+        text = (code_dir / "app" / "auth" / "config.py").read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return "auth_jwt_private_key" in text
+
+
+def preview_secrets(code_dir: Path) -> dict[str, str]:
+    """Fresh secrets for ONE launch of ONE preview (F-001 / S2-002).
+
+    Random per launch and never stored, logged or derived from anything (not SECRET_KEY, not the
+    project id), so no two previews, tenants or wakes ever share a value and a hook in one
+    preview cannot mint tokens valid in another. Generated apps refuse to start without these.
+    """
+    out = {
+        "AUTH_JWT_SECRET": _random_secret(),
+        "PROVIDER_VAULT_KEY": _random_secret(),
+        "STORAGE_ACCESS_KEY_ID": "pv" + secrets.token_hex(8),
+        "STORAGE_SECRET_ACCESS_KEY": _random_secret(),
+    }
+    if _uses_rs256(code_dir):
+        out["AUTH_JWT_PRIVATE_KEY"] = _rsa_pem()
+    return out
+
+
+# Not secrets, but required by generated settings; the network is --internal so nothing real
+# can reach or be reached from them. 192.0.2.0/24 is TEST-NET-1 (no webhook can match it).
+PREVIEW_STATIC_ENV = {
+    "PAYMENTS_WEBHOOK_IP_ALLOWLIST": "192.0.2.0/24",
+    "KEYCLOAK_PUBLIC_URL": "http://keycloak.invalid",
+}
+
+_MISSING_RE = re.compile(
+    r"(?m)^\s*([A-Za-z][A-Za-z0-9_]{2,60})\s*\n\s*Field required"
+    r"|\b([A-Z][A-Z0-9_]{3,60}) (?:is not set|is empty|must be set)"
+)
+
+
+def missing_settings(log_text: str) -> list[str]:
+    """Names of required settings a crashed app complained about (from its own log tail)."""
+    names: list[str] = []
+    for m in _MISSING_RE.finditer(log_text):
+        name = (m.group(1) or m.group(2)).upper()
+        if name not in names:
+            names.append(name)
+    return names[:5]
+
+
 def redact(text: str, secrets_in_use: tuple[str, ...] = ()) -> str:
     """Remove known secret values and anything that looks like a credential from log text."""
     for value in secrets_in_use:
@@ -129,12 +201,25 @@ async def _wait_db(box: DockerSandbox, sandbox: str, timeout: float) -> None:
     raise SandboxError("preview database did not become ready in time")
 
 
-async def _wait_app(box: DockerSandbox, sandbox: str, ip: str, timeout: float) -> None:
+async def _wait_app(
+    box: DockerSandbox,
+    sandbox: str,
+    ip: str,
+    timeout: float,
+    secrets_in_use: tuple[str, ...] = (),
+) -> None:
     deadline = time.monotonic() + timeout
     async with httpx.AsyncClient(timeout=2.0, trust_env=False) as client:
         while time.monotonic() < deadline:
             if not await box.is_running(sandbox):
-                tail = redact((await box.logs(sandbox, tail=15)).strip())[-400:]
+                raw = (await box.logs(sandbox, tail=40)).strip()
+                tail = redact(raw, secrets_in_use)[-400:]
+                missing = missing_settings(raw)
+                if missing:
+                    raise SandboxError(
+                        "preview app could not start: missing required setting "
+                        + ", ".join(missing)
+                    )
                 raise SandboxError(f"preview app exited during start: {tail}")
             try:
                 r = await client.get(f"http://{ip}:{APP_PORT}/health")
@@ -150,6 +235,8 @@ async def launch(box: DockerSandbox, spec: StackSpec, settings: Settings) -> str
     """Start the stack; returns the app container's address. Cleans up after itself on failure."""
     async with _LAUNCH_SLOTS:
         password = secrets.token_urlsafe(18)
+        app_secrets = preview_secrets(spec.code_dir)
+        in_use = (password, *app_secrets.values())
         try:
             await box.check_runtime()
             limits = Limits(ttl_seconds=spec.ttl_seconds)
@@ -175,6 +262,8 @@ async def launch(box: DockerSandbox, spec: StackSpec, settings: Settings) -> str
                         "PYTHONUNBUFFERED": "1",
                         "LOG_LEVEL": "INFO",
                         "CORS_ORIGINS": '["*"]',
+                        **PREVIEW_STATIC_ENV,
+                        **app_secrets,
                     },
                     command=app_command(spec.seed_profile),
                     limits=app_limits(spec),
@@ -183,10 +272,16 @@ async def launch(box: DockerSandbox, spec: StackSpec, settings: Settings) -> str
             ip = await box.ip_of(spec.app_sandbox, net)
             if ip is None:
                 raise SandboxError("could not resolve the preview app address")
-            await _wait_app(box, spec.app_sandbox, ip, timeout=settings.preview_wake_timeout_seconds)
+            await _wait_app(
+                box, spec.app_sandbox, ip, timeout=settings.preview_wake_timeout_seconds,
+                secrets_in_use=in_use,
+            )
             return ip
-        except BaseException:
+        except BaseException as exc:
             await asyncio.shield(teardown(box, spec.db_sandbox, spec.app_sandbox))
+            if isinstance(exc, SandboxError):
+                # Any message that carries a launch secret is scrubbed before it travels on.
+                exc.args = (redact(str(exc), in_use),)
             raise
 
 

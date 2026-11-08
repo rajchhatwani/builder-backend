@@ -13,6 +13,7 @@ from pathlib import Path
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core import hook_gates
 from app.core.generator.zones import zone_for
 from app.exceptions import AppError
 from app.models.agent import AiRun
@@ -25,6 +26,7 @@ from app.schemas.workspace_files import (
     WorkspaceFileRead,
 )
 from app.services import audit_service
+from app.services.dependency_policy_service import is_dependency_manifest
 from app.services.workspace_service import WorkspaceService
 
 _BUSY_STATES = ("running", "applying")
@@ -152,8 +154,11 @@ class WorkspaceFileService:
     ) -> WorkspaceFileRead:
         wt = await self._worktree(project_id, ws_id, lock=True)  # row lock held until commit
         zone = zone_for(path)
-        if zone != "custom":
+        if zone != "custom" or any(part in hook_gates.SKIP_DIRS for part in path.split("/")):
             raise AppError("file_not_editable", "only custom-zone files can be edited", 403)
+        if hook_gates.is_guarded_path(path) or is_dependency_manifest(path):
+            # same rule as the agent: packages come in through the dependency policy, not a file
+            raise AppError("dependency_manifest_denied", "dependencies are added with a dependency request", 403)
         busy = (
             await self.session.execute(
                 select(AiRun.id)

@@ -1,12 +1,13 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react'
 import { aiApi } from './aiApi'
-import { reviewHref } from './approvalLogic'
+import { approvalList, effectiveState, reviewHref } from './approvalLogic'
 import { ProvenanceBadge } from './Provenance'
-import { STAGE_TABS, TAB_READY, budgetRows, canSeeItWork, friendlyStep, pendingFor, platformRow, pollInterval, runActions, runStateLabel, stepLine, stopInfo, type StageTab } from './buildLogic'
+import { POLL_MS, STAGE_TABS, TAB_READY, budgetRows, canSeeItWork, friendlyStep, pendingFor, platformRow, pollInterval, runActions, runStateLabel, stepLine, stopInfo, type StageTab } from './buildLogic'
 import { PLAN_KEYS, PLAN_LABEL, phasesOf, planRows } from './planLogic'
 import { tokenFor } from './seeItLogic'
 import type { Approval, PlatformBudget, Preview, RunDetail } from './types'
-import { errMsg, useRunParam } from './useRunParam'
+import { useNow } from './useNow'
+import { errMsg, useRunParam, runLink } from './useRunParam'
 
 const StageTabs = lazy(() => import('./StageTabs').then((m) => ({ default: m.StageTabs })))
 const TAB_LABEL: Record<StageTab, string> = { gates: 'Gates', details: 'Details', plan: 'Plan', diagrams: 'Diagrams', api: 'API', stage: 'Code, logs and data' }
@@ -52,9 +53,32 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   const [platform, setPlatform] = useState<PlatformBudget | null>(null)
   const [platformError, setPlatformError] = useState(false)
   const [stagePreview, setStagePreview] = useState<Preview | null>(null)
-  const inflight = useRef(false)
+  const inflight = useRef<string | null>(null) // S3-002: the run a refresh is in flight for
+  const current = useRef<string | null>(runId)
 
-  useEffect(() => { if (paramRun) setRunId(paramRun) }, [paramRun])
+  const codeDirty = useRef(false) // S3-010: the code view reports unsaved edits
+  const now = useNow()
+  const onDirty = useCallback((d: boolean) => { codeDirty.current = d }, [])
+  const takeRef = useRef<HTMLDivElement>(null)
+  const takeBtn = useRef<HTMLButtonElement>(null)
+  const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
+
+  useEffect(() => {
+    if (!paramRun) return
+    if (paramRun !== current.current && current.current && codeDirty.current && !window.confirm('Discard your unsaved code changes and open another run?')) {
+      window.location.hash = runLink(projectId, 'build', current.current) // stay on the run being edited
+      return
+    }
+    codeDirty.current = false
+    setRunId(paramRun)
+  }, [paramRun, projectId])
+  useEffect(() => { if (confirmTake) takeRef.current?.focus() }, [confirmTake])
+  const closeTake = () => { setConfirmTake(false); takeBtn.current?.focus() }
+  // switching runs: forget the old run's data so it is never shown under the new id
+  useEffect(() => {
+    current.current = runId
+    if (runId) { setRun(null); setApprovals([]); setError(''); setLoading(true) }
+  }, [runId])
 
   // no ?run=: show the latest run
   useEffect(() => {
@@ -65,12 +89,16 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   }, [projectId, runId])
 
   const refresh = useCallback(async () => {
-    if (!runId || inflight.current) return
-    inflight.current = true
+    if (!runId || inflight.current === runId) return
+    inflight.current = runId
     try {
       const [r, a] = await Promise.all([aiApi.getRun(projectId, runId), aiApi.listApprovals(projectId, { run_id: runId })])
-      setRun(r); setApprovals(a); setError('')
-    } catch (e) { setError(errMsg(e)) } finally { inflight.current = false; setLoading(false) }
+      if (current.current !== runId) return // a newer run was opened while this was loading
+      setRun(r); setApprovals(approvalList(a)); setError('')
+    } catch (e) { if (current.current === runId) setError(errMsg(e)) } finally {
+      if (inflight.current === runId) inflight.current = null
+      if (current.current === runId) setLoading(false)
+    }
   }, [projectId, runId])
 
   useEffect(() => { void refresh() }, [refresh])
@@ -91,17 +119,24 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
     return () => { off = true }
   }, [tab, workspaceId, projectId])
   useEffect(() => {
-    const ms = pollInterval(runState ? { state: runState } : null, false)
+    // S3-001: a resumed `stopped` run is driven inside the resume request; poll while that request is open
+    const ms = pollInterval(runState ? { state: runState } : null, false) ?? (busy && runState ? POLL_MS : null)
     if (ms === null) return
     const t = window.setInterval(() => { if (!document.hidden) void refresh() }, ms)
     return () => window.clearInterval(t)
-  }, [runState, refresh])
+  }, [runState, refresh, busy])
 
-  const act = async (fn: () => Promise<unknown>, background = false) => {
+  const act = async (fn: () => Promise<unknown>, background = false): Promise<boolean> => {
     setBusy(true); setError('')
-    const p = fn().then(() => refresh(), (e) => setError(errMsg(e))).finally(() => setBusy(false))
+    const p = fn().then(() => { void refresh(); return true }, (e) => { setError(errMsg(e)); return false }).finally(() => setBusy(false))
     // resume drives the run inside the request: keep the page live instead of waiting for it
-    if (!background) await p
+    return background ? true : p
+  }
+  const onTabKey = (e: KeyboardEvent) => {
+    const i = STAGE_TABS.indexOf(tab)
+    const n = e.key === 'ArrowRight' ? (i + 1) % STAGE_TABS.length : e.key === 'ArrowLeft' ? (i + STAGE_TABS.length - 1) % STAGE_TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? STAGE_TABS.length - 1 : -1
+    if (n < 0) return
+    e.preventDefault(); setTab(STAGE_TABS[n]); tabRefs.current[STAGE_TABS[n]]?.focus()
   }
 
   if (loading) return <section data-testid="build-page"><h1>Build</h1><p className="empty-state">Loading…</p></section>
@@ -116,7 +151,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   }
 
   const stop = stopInfo(run.stop_code, run.stop_detail)
-  const pending = pendingFor(approvals, run.id)
+  const pending = pendingFor(approvals, run.id, now)
   const actions = runActions(run, pending.length)
   const gateA = approvals.find((a) => a.kind === 'A')
   const scope = gateA ? planRows(gateA.payload) : []
@@ -135,15 +170,15 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
         <span className="grow" />
         {actions.resume && <button disabled={busy} onClick={() => void act(() => aiApi.resumeRun(projectId, run.id), true)} data-testid="run-resume">{actions.resumeLabel}</button>}
         {actions.cancel && <button className="outline" disabled={busy} onClick={() => void act(() => aiApi.cancelRun(projectId, run.id))} data-testid="run-cancel">Cancel</button>}
-        {actions.cancel && <button className="outline" disabled={busy} onClick={() => setConfirmTake(true)} data-testid="run-takeover">Take over</button>}
+        {actions.cancel && <button ref={takeBtn} className="outline" disabled={busy} onClick={() => setConfirmTake(true)} data-testid="run-takeover">Take over</button>}
       </div>
       {confirmTake && (
-        <div className="card" role="alertdialog" aria-labelledby="takeover-title" aria-describedby="takeover-text" data-testid="takeover-confirm">
+        <div className="card" role="alertdialog" ref={takeRef} tabIndex={-1} onKeyDown={(e) => { if (e.key === 'Escape') closeTake() }} aria-labelledby="takeover-title" aria-describedby="takeover-text" data-testid="takeover-confirm">
           <h2 id="takeover-title">Take over from the agent?</h2>
           <p id="takeover-text">This cancels the run. The agent stops and does nothing more; requests it left open can no longer lead to changes. You can then work on the project yourself.</p>
           <div className="hstack">
-            <button disabled={busy} onClick={() => void act(() => aiApi.cancelRun(projectId, run.id)).then(() => setConfirmTake(false))} data-testid="takeover-yes">Stop the run and take over</button>
-            <button className="outline" disabled={busy} onClick={() => setConfirmTake(false)} data-testid="takeover-no">Keep the agent running</button>
+            <button disabled={busy} onClick={() => void act(() => aiApi.cancelRun(projectId, run.id)).then((ok) => { if (ok) setConfirmTake(false) })} data-testid="takeover-yes">Stop the run and take over</button>
+            <button className="outline" disabled={busy} onClick={closeTake} data-testid="takeover-no">Keep the agent running</button>
           </div>
         </div>
       )}
@@ -201,17 +236,17 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
       </ol>
       {run.steps_total > run.steps.length && <p className="muted small-text">Showing the first {run.steps.length} of {run.steps_total} steps.</p>}
 
-      <div role="tablist" aria-label="Stage" className="bh-tabs">
+      <div role="tablist" aria-label="Stage" className="bh-tabs" onKeyDown={onTabKey}>
         {STAGE_TABS.map((t) => (
-          <button key={t} role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls="stage-panel" className={tab === t ? '' : 'outline'} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
+          <button key={t} ref={(el) => { tabRefs.current[t] = el }} tabIndex={tab === t ? 0 : -1} role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls="stage-panel" className={tab === t ? '' : 'outline'} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
         ))}
       </div>
       <div role="tabpanel" id="stage-panel" aria-labelledby={`tab-${tab}`} data-testid="stage-panel">
-        {!TAB_READY.includes(tab) && <p className="empty-state" data-testid="tab-soon">{TAB_LABEL[tab]} comes in the next checkpoint.</p>}
+        {!TAB_READY.includes(tab) && <p className="empty-state" data-testid="tab-soon">{TAB_LABEL[tab]} — coming in a later cycle.</p>}
         {tab === 'stage' && (
           !workspaceId ? <p className="empty-state" data-testid="stage-none">This run has no draft workspace to show.</p> : (
             <Suspense fallback={<p className="empty-state">Loading…</p>}>
-              <StageTabs projectId={projectId} workspaceId={workspaceId} previewId={stagePreview?.id} token={stagePreview ? (tokenFor(stagePreview.id) ?? '') : ''} />
+              <StageTabs projectId={projectId} workspaceId={workspaceId} previewId={stagePreview?.id} token={stagePreview ? (tokenFor(stagePreview.id) ?? '') : ''} onDirtyChange={onDirty} />
             </Suspense>
           )
         )}
@@ -219,7 +254,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
           approvals.length === 0 ? <p className="empty-state">No approvals asked for yet.</p> : (
             <table data-testid="gates-table">
               <thead><tr><th>Gate</th><th>What</th><th>State</th></tr></thead>
-              <tbody>{approvals.map((a) => <tr key={a.id}><td>{a.kind}</td><td>{a.subject}</td><td>{a.state}</td></tr>)}</tbody>
+              <tbody>{approvals.map((a) => <tr key={a.id}><td>{a.kind}</td><td>{a.subject}</td><td>{effectiveState(a, now)}</td></tr>)}</tbody>
             </table>
           )
         )}

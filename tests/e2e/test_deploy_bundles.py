@@ -61,6 +61,10 @@ def bundle(cloud: str, tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, 
         target = root / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="\n")
+    # pytest creates the temp dirs 0700; the tool containers run as a non-root user and must
+    # be able to read the bundle that is mounted into them
+    for entry in [root, *root.rglob("*")]:
+        entry.chmod(0o755 if entry.is_dir() else 0o644)
     return root, files
 
 

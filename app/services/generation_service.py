@@ -46,18 +46,22 @@ class GenerationService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def _render(self, project_id: uuid.UUID) -> tuple[Spec, FileTree]:
+    async def _render(
+        self, project_id: uuid.UUID, *, owner_secrets: bool = False
+    ) -> tuple[Spec, FileTree]:
         spec = await SpecService(self.session).assemble(project_id)
 
-        # Inject decrypted secrets into the spec before generation.
+        # Inject decrypted secrets into the spec before generation, ONLY for an owner (S2-018:
+        # `PUT /auth/secrets` is owner-only, `generate/download` is viewer-level; a template that
+        # embedded spec.auth.secrets would otherwise hand them to viewers).
         # spec.auth.secrets has exclude=True so they never reach the DB
         # snapshot or any HTTP response body.
-        if spec.auth is not None:
+        if owner_secrets and spec.auth is not None:
             raw_secrets = await AuthSecretsService(self.session).get_for_generator(project_id)
             spec.auth.secrets = SpecAuthSecrets(**raw_secrets)
 
         try:
-            return spec, generate(spec)
+            files = generate(spec)
         except InvalidSpecError as exc:
             raise AppError(
                 code="spec_invalid",
@@ -65,6 +69,18 @@ class GenerationService:
                 status_code=422,
                 details=[issue.model_dump() for issue in exc.issues],
             ) from exc
+        return spec, await self._with_promoted(project_id, files)
+
+    async def _with_promoted(self, project_id: uuid.UUID, files: FileTree) -> FileTree:
+        """B-004: custom-zone files a reviewed agent run promoted replace the generated stubs, so the
+        download carries the approved hook bodies. No repository configured or readable: unchanged."""
+        from app.services.workspace_service import WorkspaceService
+
+        try:
+            promoted = await WorkspaceService(self.session).promoted_files(project_id)
+        except Exception:
+            return files
+        return {**files, **promoted} if promoted else files
 
     async def _old_spec(
         self,
@@ -161,7 +177,7 @@ class GenerationService:
         return self._response(plan, old, new, gen, unusable)
 
     async def preview(self, project_id: uuid.UUID) -> PreviewResponse:
-        spec, files = await self._render(project_id)
+        spec, files = await self._render(project_id)  # a file list only: never needs secrets
         old, gen, unusable = await self._old_spec(project_id, spec, None, None)
         plan, _ = self._plan(old, spec, [])
         entries = manifest(files)
@@ -178,12 +194,13 @@ class GenerationService:
         project_id: uuid.UUID,
         allow_destructive: bool = False,
         accept_unreadable_baseline: bool = False,
+        owner_secrets: bool = False,
     ) -> tuple[bytes, str, Generation]:
         """Render, record the generation (spec snapshot + manifest) and return the zip.
 
         A plan with a destructive step against the last generation is refused (409, with the plan)
         unless the caller explicitly passes `allow_destructive`."""
-        spec, files = await self._render(project_id)
+        spec, files = await self._render(project_id, owner_secrets=owner_secrets)
         old, gen, unusable = await self._old_spec(
             project_id, spec, None, accept_unreadable_baseline
         )

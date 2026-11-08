@@ -14,7 +14,9 @@ async function getJson(previewId: string, path: string, token: string, doFetch: 
 /** Read-only browser over the preview's list endpoints (GET only, through the proxy). */
 export function DataBrowser({ previewId, token, doFetch = fetch }: { previewId: string; token: string; doFetch?: typeof fetch }) {
   const [entities, setEntities] = useState<Entity[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
+  const [listError, setListError] = useState<string | null>(null)
+  const [rowsError, setRowsError] = useState<string | null>(null)
+  const error = listError ?? rowsError
   const [sel, setSel] = useState<Entity | null>(null)
   const [page, setPage] = useState(0)
   const [data, setData] = useState<RowsPage | null | 'loading'>('loading')
@@ -23,23 +25,25 @@ export function DataBrowser({ previewId, token, doFetch = fetch }: { previewId: 
   useEffect(() => {
     if (!token) return
     const ctl = new AbortController()
-    setEntities(null); setError(null)
+    setEntities(null); setListError(null)
     getJson(previewId, '/openapi.json', token, doFetch, ctl.signal).then((doc) => {
       const list = discoverEntities(doc)
-      setEntities(list); setSel(list[0] ?? null); setPage(0)
-    }, (e: unknown) => { if (!ctl.signal.aborted) setError(e instanceof Error ? e.message : 'Could not load the API description') })
+      setEntities(list)
+      // keep the selected entity and page across a Retry
+      setSel((cur) => { const same = list.find((x) => x.listPath === cur?.listPath); if (!same) setPage(0); return same ?? list[0] ?? null })
+    }, (e: unknown) => { if (!ctl.signal.aborted) setListError(e instanceof Error ? e.message : 'Could not load the API description') })
     return () => ctl.abort()
   }, [previewId, token, doFetch, attempt])
 
   useEffect(() => {
     if (!token || !sel) return
     const ctl = new AbortController()
-    setData('loading'); setError(null)
+    setData('loading'); setRowsError(null)
     getJson(previewId, `${sel.listPath}?${pageQuery(page)}`, token, doFetch, ctl.signal).then((b) => {
       const r = extractRows(b)
-      if (!r) setError('This endpoint does not return a list of records.')
+      if (!r) setRowsError('This endpoint does not return a list of records.')
       setData(r)
-    }, (e: unknown) => { if (!ctl.signal.aborted) { setError(e instanceof Error ? e.message : 'Could not load the records'); setData(null) } })
+    }, (e: unknown) => { if (!ctl.signal.aborted) { setRowsError(e instanceof Error ? e.message : 'Could not load the records'); setData(null) } })
     return () => ctl.abort()
   }, [previewId, token, sel, page, doFetch, attempt])
 

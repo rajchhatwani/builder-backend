@@ -6,8 +6,9 @@ only matches while the lease token is still ours: a worker that stalled past its
 cannot overwrite the outcome of the worker that has it now. A job whose lease ran out (the worker died) is
 claimed again, and after `max_attempts` starts it is parked as `dead` instead of being run for ever.
 
-Times come from `now` (default: the clock of this host). Keep hosts on NTP; a lease is at least the job's
-timeout plus JOBS_LEASE_GRACE_SECONDS, which is far more than any sane skew.
+Every time that decides scheduling, visibility or a lease (run_at, lease expiry, retry delay, retention) comes
+from the DATABASE clock (`now()` of the session's own transaction), never from the clock of the host, so
+workers with skewed clocks agree on what is due and whose lease ran out. `now` is only a test override.
 """
 
 import datetime as _dt
@@ -24,7 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.jobs import config, definitions
 from app.jobs.models import DEAD, PENDING, RUNNING, SUCCEEDED, Job, ScheduleFire
-from app.models._base import utcnow
 
 logger = structlog.get_logger()
 
@@ -53,6 +53,11 @@ def backoff_delay(retry: Mapping[str, Any], attempt: int) -> float:
     if retry["backoff"] == "fixed":
         return min(base, config.BACKOFF_CAP_SECONDS)
     return min(base * 2 ** max(attempt - 1, 0), config.BACKOFF_CAP_SECONDS)
+
+
+async def db_now(session: AsyncSession) -> _dt.datetime:
+    """The database clock (SELECT now()): the one time source for claiming, leases and retries."""
+    return (await session.execute(sa.select(sa.func.now()))).scalar_one()
 
 
 def lease_seconds(job_name: str) -> float:
@@ -95,9 +100,29 @@ async def enqueue(
         raise ValueError(f"a job payload is at most {config.MAX_PAYLOAD_BYTES} bytes")
     if dedupe_key is not None and not 0 < len(dedupe_key) <= 200:
         raise ValueError("dedupe_key is 1 to 200 characters")
-    stamp = now or utcnow()
     if run_at is not None and run_at.tzinfo is None:
         raise ValueError("run_at must be timezone-aware")
+    if session is not None:
+        return await _insert_job(session, name, declared, body, run_at, dedupe_key, tenant_id, now)
+    from app.db import session_factory
+
+    async with session_factory() as own:
+        job_id = await _insert_job(own, name, declared, body, run_at, dedupe_key, tenant_id, now)
+        await own.commit()
+        return job_id
+
+
+async def _insert_job(
+    session: AsyncSession,
+    name: str,
+    declared: Mapping[str, Any],
+    body: dict[str, Any],
+    run_at: _dt.datetime | None,
+    dedupe_key: str | None,
+    tenant_id: uuid.UUID | None,
+    now: _dt.datetime | None,
+) -> uuid.UUID | None:
+    stamp = now or await db_now(session)
     values = {
         "id": uuid.uuid4(),
         "name": name,
@@ -113,14 +138,7 @@ async def enqueue(
     }
     # no conflict target: either partial unique index (tenant-less / per tenant) may decide
     stmt = pg_insert(Job).values(**values).on_conflict_do_nothing().returning(Job.id)
-    if session is not None:
-        return (await session.execute(stmt)).scalar_one_or_none()
-    from app.db import session_factory
-
-    async with session_factory() as own:
-        job_id = (await own.execute(stmt)).scalar_one_or_none()
-        await own.commit()
-        return job_id
+    return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def claim(
@@ -133,7 +151,7 @@ async def claim(
     """Take the next due job of `queues` (or one whose lease ran out) under a fresh lease. None if none is due."""
     while True:
         async with factory() as session:
-            stamp = now or utcnow()
+            stamp = now or await db_now(session)
             due = sa.or_(
                 sa.and_(Job.status == PENDING, Job.run_at <= stamp),
                 sa.and_(Job.status == RUNNING, Job.lease_expires_at <= stamp),
@@ -182,8 +200,8 @@ async def claim(
 
 async def complete(factory: SessionFactory, job: Claimed, *, now: _dt.datetime | None = None) -> bool:
     """Mark the job succeeded, only if the lease is still ours. False = the lease was lost (ignored)."""
-    stamp = now or utcnow()
     async with factory() as session:
+        stamp = now or await db_now(session)
         result = await session.execute(
             sa.update(Job)
             .where(Job.id == job.id, Job.lease_token == job.lease_token, Job.status == RUNNING)
@@ -207,16 +225,20 @@ async def fail(
     factory: SessionFactory, job: Claimed, error: BaseException | str, *, now: _dt.datetime | None = None
 ) -> str:
     """Record a failed run: retry with backoff, or dead after the cap. Returns retry | dead | lost."""
-    stamp = now or utcnow()
     text = error if isinstance(error, str) else _describe(error)
     retry = definitions.JOBS[job.name]["retry"]
     last = job.attempt >= job.max_attempts
-    values: dict[str, Any] = {"last_error": text[: config.MAX_ERROR_CHARS], "lease_token": None, "lease_expires_at": None}
-    if last:
-        values.update(status=DEAD, finished_at=stamp)
-    else:
-        values.update(status=PENDING, run_at=stamp + _dt.timedelta(seconds=backoff_delay(retry, job.attempt)))
     async with factory() as session:
+        stamp = now or await db_now(session)
+        values: dict[str, Any] = {
+            "last_error": text[: config.MAX_ERROR_CHARS],
+            "lease_token": None,
+            "lease_expires_at": None,
+        }
+        if last:
+            values.update(status=DEAD, finished_at=stamp)
+        else:
+            values.update(status=PENDING, run_at=stamp + _dt.timedelta(seconds=backoff_delay(retry, job.attempt)))
         result = await session.execute(
             sa.update(Job)
             .where(Job.id == job.id, Job.lease_token == job.lease_token, Job.status == RUNNING)
@@ -241,7 +263,7 @@ async def list_dead(session: AsyncSession, limit: int = 100) -> list[Job]:
 
 async def requeue_dead(session: AsyncSession, job_id: uuid.UUID | None = None, *, now: _dt.datetime | None = None) -> int:
     """Give dead jobs a fresh set of attempts (one job, or all of them). The caller commits."""
-    stamp = now or utcnow()
+    stamp = now or await db_now(session)
     stmt = sa.update(Job).where(Job.status == DEAD)
     if job_id is not None:
         stmt = stmt.where(Job.id == job_id)
@@ -256,7 +278,7 @@ async def purge_succeeded(session: AsyncSession, *, now: _dt.datetime | None = N
     schedule-fire records older than JOBS_SCHEDULE_FIRE_RETENTION_DAYS (default 30). The newest fire of
     each schedule is always kept: the scheduler never fires a tick earlier than it. Returns the number
     of jobs removed."""
-    stamp = now or utcnow()
+    stamp = now or await db_now(session)
     cutoff = stamp - _dt.timedelta(days=config.retention_days())
     result = await session.execute(
         sa.delete(Job).where(Job.status == SUCCEEDED, Job.finished_at < cutoff)

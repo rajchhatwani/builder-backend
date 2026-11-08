@@ -25,6 +25,8 @@ class ApiIdempotency(_models_base.Base):
     method: _orm.Mapped[str] = _orm.mapped_column(_sa.String(8), nullable=False)
     path: _orm.Mapped[str] = _orm.mapped_column(_sa.String(500), nullable=False)
     request_hash: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False)
+    # the roles the caller held when the response was made: a replay needs them all again
+    caller_roles: _orm.Mapped[list[str]] = _orm.mapped_column(_sa.JSON(), nullable=False, default=list)
     status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(16), nullable=False, default=IN_PROGRESS)
     response_status: _orm.Mapped[int | None] = _orm.mapped_column(_sa.Integer(), nullable=True)
     # only content-type and location are kept: never an Authorization or Set-Cookie header

@@ -16,6 +16,7 @@ from app.models.agent import AiApproval, AiRun
 from app.models.platform import AuditLog
 from app.services.agent.approval_service import ApprovalService
 from app.services.agent.contract import ApprovalKind, ApprovalRequest
+from tests.api._approval_hash import reviewer_sends_hash  # noqa: F401  (isort: skip)
 from tests.api._auth_helpers import make_project
 from tests.api.conftest import ClientFor, add_to_project_org
 
@@ -201,10 +202,14 @@ async def test_double_decide_and_race(
         )
     assert users
 
+    seen_hash = (await client.get(_url(pid, aid2))).json()["payload_hash"]
+
     async def go(approve: bool) -> str:
         async with session_factory() as s:
             try:
-                await ApprovalService(s, Settings()).decide(uuid.UUID(pid), aid2, users[0], approve, None)
+                await ApprovalService(s, Settings()).decide(
+                    uuid.UUID(pid), aid2, users[0], approve, None, expected_payload_hash=seen_hash
+                )
                 await s.commit()
                 return "ok"
             except AppError as exc:
@@ -411,3 +416,74 @@ async def test_plan_extension_for_hook_zone_or_dependency_is_owner_only(
         assert (await ed.post(_url(pid, aid, "/decision"), json=YES)).status_code == 403
     ent = await _ask(session_factory, pid, run, "A", {"extend": {"kind": "entity", "name": "Payroll"}})
     assert (await ed.post(_url(pid, ent, "/decision"), json=YES)).status_code == 200
+
+
+# -- S3-004/S3-005: a decision is bound to what the reviewer saw ---------------------------------
+async def _state(sf: async_sessionmaker[AsyncSession], aid: uuid.UUID) -> str:
+    async with sf() as s:
+        row = await s.get(AiApproval, aid)
+        assert row is not None
+        return row.state
+
+
+async def test_approve_with_seen_hash_ok_and_read_model_serves_it(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    pid = await make_project(client)
+    aid = await _ask(session_factory, pid, await _run(session_factory, pid))
+    seen = (await client.get(_url(pid, aid))).json()
+    assert len(seen["payload_hash"]) == 64
+    body = {"approve": True, "expected_payload_hash": seen["payload_hash"], "expected_spec_hash": seen["bound_spec_hash"]}
+    r = await client.post(_url(pid, aid, "/decision"), json=body)
+    assert r.status_code == 200 and r.json()["state"] == "approved"
+
+
+async def test_wrong_hash_is_409_and_stays_pending(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    pid = await make_project(client)
+    aid = await _ask(session_factory, pid, await _run(session_factory, pid))
+    seen = (await client.get(_url(pid, aid))).json()
+    r = await client.post(
+        _url(pid, aid, "/decision"),
+        json={"approve": True, "expected_payload_hash": seen["payload_hash"], "expected_spec_hash": H2},
+    )
+    assert r.status_code == 409 and r.json()["code"] == "approval_changed"  # right payload, wrong spec
+    r = await client.post(_url(pid, aid, "/decision"), json={"approve": True, "expected_payload_hash": "0" * 64})
+    assert r.status_code == 409 and "approval_changed" in r.text
+    assert await _state(session_factory, aid) == "pending"
+
+
+async def test_approve_without_hash_is_refused(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    pid = await make_project(client)
+    aid = await _ask(session_factory, pid, await _run(session_factory, pid))
+    r = await client.post(_url(pid, aid, "/decision"), json={"approve": True}, headers={"x-raw-decision": "1"})
+    assert r.status_code == 422 and "payload_hash_required" in r.text
+    assert await _state(session_factory, aid) == "pending"
+
+
+async def test_deny_without_hash_is_fine(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    pid = await make_project(client)
+    aid = await _ask(session_factory, pid, await _run(session_factory, pid))
+    r = await client.post(_url(pid, aid, "/decision"), json={"approve": False})
+    assert r.status_code == 200 and r.json()["state"] == "denied"
+
+
+async def test_payload_mutated_after_reading_refuses_old_hash(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    pid = await make_project(client)
+    aid = await _ask(session_factory, pid, await _run(session_factory, pid))
+    old = (await client.get(_url(pid, aid))).json()["payload_hash"]
+    async with session_factory() as s:  # the agent re-requests / someone widens the payload
+        await s.execute(
+            update(AiApproval).where(AiApproval.id == aid).values(payload={"summary": "wider"}, payload_hash="f" * 64)
+        )
+        await s.commit()
+    r = await client.post(_url(pid, aid, "/decision"), json={"approve": True, "expected_payload_hash": old})
+    assert r.status_code == 409 and "approval_changed" in r.text
+    assert await _state(session_factory, aid) == "pending"

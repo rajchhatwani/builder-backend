@@ -1151,6 +1151,16 @@
       ],
       "title": "Api Key Hint"
      },
+     "approval_policy": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ApprovalPolicyOverride"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "has_api_key": {
       "title": "Has Api Key",
       "type": "boolean"
@@ -1182,7 +1192,7 @@
        {
         "format": "password",
         "maxLength": 300,
-        "minLength": 8,
+        "minLength": 20,
         "type": "string",
         "writeOnly": true
        },
@@ -1191,6 +1201,16 @@
        }
       ],
       "title": "Api Key"
+     },
+     "approval_policy": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ApprovalPolicyOverride"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "clear_api_key": {
       "default": false,
@@ -1576,6 +1596,30 @@
       "title": "Approve",
       "type": "boolean"
      },
+     "expected_payload_hash": {
+      "anyOf": [
+       {
+        "maxLength": 64,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Payload Hash"
+     },
+     "expected_spec_hash": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Spec Hash"
+     },
      "note": {
       "anyOf": [
        {
@@ -1593,9 +1637,15 @@
        {
         "additionalProperties": {
          "items": {
+          "maxLength": 120,
           "type": "string"
          },
+         "maxItems": 100,
          "type": "array"
+        },
+        "maxProperties": 8,
+        "propertyNames": {
+         "maxLength": 40
         },
         "type": "object"
        },
@@ -1610,6 +1660,88 @@
      "approve"
     ],
     "title": "ApprovalDecision",
+    "type": "object"
+   },
+   "ApprovalPolicyOverride": {
+    "additionalProperties": false,
+    "description": "An org's override of the agent approval policy (B-001). It can only TIGHTEN the platform policy:\na longer lifetime, a role below the floor, auto-approval on or separation of duties off are ignored\nwhen applied (and refused here where the value is plainly looser).",
+    "properties": {
+     "auto_plan_small_edit": {
+      "anyOf": [
+       {
+        "const": false,
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Auto Plan Small Edit"
+     },
+     "roles": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "const": "owner",
+         "type": "string"
+        },
+        "propertyNames": {
+         "enum": [
+          "A",
+          "B",
+          "C",
+          "D",
+          "E"
+         ]
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Roles"
+     },
+     "separation_of_duties": {
+      "anyOf": [
+       {
+        "const": true,
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Separation Of Duties"
+     },
+     "ttl_hours": {
+      "anyOf": [
+       {
+        "maximum": 168.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ttl Hours"
+     },
+     "ttl_plan_hours": {
+      "anyOf": [
+       {
+        "maximum": 168.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ttl Plan Hours"
+     }
+    },
+    "title": "ApprovalPolicyOverride",
     "type": "object"
    },
    "ApprovalRead": {
@@ -1687,6 +1819,17 @@
       "additionalProperties": true,
       "title": "Payload",
       "type": "object"
+     },
+     "payload_hash": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Payload Hash"
      },
      "project_id": {
       "format": "uuid",
@@ -5404,9 +5547,47 @@
     "type": "object"
    },
    "HookBody": {
+    "description": "`effects` / `effect_budget` are OMITTED = keep the stored values; sent and different from the\nstored ones = an effectful-hook change (owner only, CO-3). `author` is read-only: the server\nkeeps the stored mark (new hooks are 'trusted') and ignores whatever a client sends.",
     "properties": {
+     "author": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Author"
+     },
      "budget": {
       "$ref": "#/components/schemas/HookBudgetBody"
+     },
+     "effect_budget": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/HookEffectBudgetBody"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "effects": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 20,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Effects"
      },
      "failure_policy": {
       "anyOf": [
@@ -5513,6 +5694,33 @@
      }
     },
     "title": "HookBudgetBody",
+    "type": "object"
+   },
+   "HookEffectBudgetBody": {
+    "properties": {
+     "calls_per_effect": {
+      "default": 1,
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Calls Per Effect",
+      "type": "integer"
+     },
+     "outbound_per_minute": {
+      "default": 30,
+      "maximum": 1000000.0,
+      "minimum": -1000000.0,
+      "title": "Outbound Per Minute",
+      "type": "integer"
+     },
+     "payload_bytes": {
+      "default": 10000,
+      "maximum": 1000000000.0,
+      "minimum": -1000000000.0,
+      "title": "Payload Bytes",
+      "type": "integer"
+     }
+    },
+    "title": "HookEffectBudgetBody",
     "type": "object"
    },
    "HookEffectsRead": {
@@ -6981,6 +7189,17 @@
       ],
       "title": "Delete After Days"
      },
+     "max_live_per_org": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Live Per Org"
+     },
      "max_live_per_user": {
       "anyOf": [
        {
@@ -6991,6 +7210,17 @@
        }
       ],
       "title": "Max Live Per User"
+     },
+     "max_live_total": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Live Total"
      },
      "memory_mb": {
       "anyOf": [

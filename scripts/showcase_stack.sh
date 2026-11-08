@@ -2,6 +2,7 @@
 # Persistent local stack for the demo/showcase (NOT the Playwright stack): Postgres (docker volume)
 # + API + built dashboard. Usage: scripts/showcase_stack.sh start|stop|status
 # Ports: postgres 55434, api 8780, web 5180 (override with SC_PG_PORT / SC_API_PORT / SC_WEB_PORT).
+# Env: SC_ADMIN_EMAIL/SC_ADMIN_PASSWORD (seed login), SC_PREVIEW_ORIGIN, SC_ALLOW_PUBLIC, SC_ADMIN_MFA.
 # The model key comes from the git-ignored .env.local (BUILDER_AI_API_KEY); only orgs listed in
 # BUILDER_AI_PLATFORM_KEY_ORGS may use it, and the platform hard cap bounds the spend.
 set -euo pipefail
@@ -12,11 +13,23 @@ PG_NAME="bb-showcase-pg"; DATA="$ROOT/.showcase-data"; mkdir -p "$DATA/ws" "$DAT
 OWNER_URL="postgresql+asyncpg://builder:builder@127.0.0.1:${PG_PORT}/builder"
 APP_URL="postgresql+asyncpg://builder_app:builder_app@127.0.0.1:${PG_PORT}/builder"
 PUBLIC_WEB="${SC_PUBLIC_WEB:-http://localhost:${WEB_PORT}}"; PUBLIC_API="${SC_PUBLIC_API:-http://localhost:${API_PORT}}"
+# Open sign-up and no admin MFA are only safe on localhost: refuse a public URL unless explicitly allowed.
+for u in "$PUBLIC_WEB" "$PUBLIC_API"; do
+  # exact host match (a prefix match let http://localhost:x@evil.com and http://127.0.0.1.evil.com through)
+  if ! printf "%s" "$u" | grep -Eq '^http://(localhost|127\.0\.0\.1)(:[0-9]+)?/?$'; then
+    [ "${SC_ALLOW_PUBLIC:-0}" = 1 ] || { echo "refusing non-local $u (open sign-up, no admin MFA); set SC_ALLOW_PUBLIC=1 to override"; exit 2; }
+  fi
+done
+# Workbench preview origin is OPT-IN: this stack has no proxy on :8799. Set SC_PREVIEW_ORIGIN (e.g. the Caddy
+# origin of docker/manual/Caddyfile) to enable the Workbench; unset leaves it inert with an explanatory message.
+PREVIEW_ORIGIN="${SC_PREVIEW_ORIGIN:-}"
+# Admin MFA is off for the local demo only; SC_ADMIN_MFA=true keeps it on.
+ADMIN_MFA_REQUIRED="${SC_ADMIN_MFA:-false}"
 
 env_up() {
   export BUILDER_DATABASE_URL="$APP_URL" BUILDER_MIGRATIONS_DATABASE_URL="$OWNER_URL"
   export SECRET_KEY="${SC_SECRET_KEY:-$(cat "$SECRETS/secret_key" 2>/dev/null || (head -c 32 /dev/urandom | base64 | tr -d '/+=' | tee "$SECRETS/secret_key"))}"
-  export BUILDER_ENVIRONMENT=local BUILDER_SIGNUP_MODE=open BUILDER_ADMIN_MFA_REQUIRED=false
+  export BUILDER_ENVIRONMENT=local BUILDER_SIGNUP_MODE=open BUILDER_ADMIN_MFA_REQUIRED="$ADMIN_MFA_REQUIRED"
   export BUILDER_CORS_ORIGINS="[\"${PUBLIC_WEB}\",\"http://localhost:${WEB_PORT}\"]"
   export BUILDER_PUBLIC_APP_URL="$PUBLIC_WEB" BUILDER_PUBLIC_API_URL="$PUBLIC_API"
   export BUILDER_WORKSPACE_ROOT="$DATA/ws" BUILDER_WORKSPACE_DB_ADMIN_URL="$OWNER_URL"
@@ -38,7 +51,7 @@ case "${1:-}" in
     nohup uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$DATA/logs/api.log" 2>&1 & echo $! >"$DATA/api.pid"
     for _ in $(seq 1 90); do curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && break; sleep 1; done
     curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" || { echo "api did not start: $DATA/logs/api.log"; exit 1; }
-    ( cd frontend && VITE_API_BASE_URL="$PUBLIC_API" VITE_PREVIEW_API_ORIGIN="${SC_PREVIEW_ORIGIN:-http://localhost:8799}" npx vite build --outDir "$DATA/dist" --emptyOutDir >"$DATA/logs/build.log" 2>&1 )
+    ( cd frontend && VITE_API_BASE_URL="$PUBLIC_API" VITE_PREVIEW_API_ORIGIN="$PREVIEW_ORIGIN" npx vite build --outDir "$DATA/dist" --emptyOutDir >"$DATA/logs/build.log" 2>&1 )
     ( cd frontend && nohup npx vite preview --outDir "$DATA/dist" --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$DATA/logs/web.log" 2>&1 & echo $! >"$DATA/web.pid" )
     echo "showcase stack up: web http://localhost:${WEB_PORT}  api http://localhost:${API_PORT}" ;;
   stop)

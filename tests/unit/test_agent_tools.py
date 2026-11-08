@@ -119,7 +119,7 @@ def test_hash_ignores_registration_order(monkeypatch: pytest.MonkeyPatch) -> Non
 
 def test_golden_digests() -> None:
     got = {p.value: agent_tools.tool_set_hash(p) for p in Phase}
-    assert got == GOLDEN, f"tool set changed; new digests: {got}"
+    assert got == GOLDEN, f"tool set changed: review the diff of tool names/schemas before updating GOLDEN; got {got}"
 
 
 def test_no_forbidden_tools_or_imports() -> None:

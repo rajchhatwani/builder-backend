@@ -145,6 +145,23 @@ async def test_a_job_can_wait_for_its_run_at() -> None:
     assert claimed is not None and claimed.id == job_id
 
 
+async def test_scheduling_and_leases_use_the_database_clock_not_the_host_clock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A host whose clock is a day ahead must not change when a job is due or when its lease ends."""
+    skewed = _now() + dt.timedelta(days=1)
+    for module in (queue, scheduler):  # a host-clock helper, if one ever comes back, is skewed here
+        if hasattr(module, "utcnow"):
+            monkeypatch.setattr(module, "utcnow", lambda: skewed)
+    job_id = await _add()
+    claimed = await queue.claim(session_factory, [QUEUE], "w")  # no injected time: the database decides
+    assert claimed is not None and claimed.id == job_id
+    row = await _row(job_id)
+    async with session_factory() as session:
+        db_now = await queue.db_now(session)
+    assert row.lease_expires_at is not None
+    assert abs((row.lease_expires_at - db_now).total_seconds() - queue.lease_seconds(NAME)) < 30
+    assert abs((row.run_at - db_now).total_seconds()) < 30
+
+
 # --- exactly once ------------------------------------------------------------------------------
 
 

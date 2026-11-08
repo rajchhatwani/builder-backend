@@ -93,15 +93,20 @@ export interface SequenceRow {
   per_tenant: boolean
   reset_yearly: boolean
   view_roles: string
+  /** Counter bound to an entity field (spec SequenceBody.entity/field); not edited here, but kept on save. */
+  entity: string | null
+  field: string | null
 }
 
 export const blankSequence = (): SequenceRow => ({
   k: newKey(), name: '', prefix: '', padding: '0', start: '1', per_tenant: false, reset_yearly: false, view_roles: '',
+  entity: null, field: null,
 })
 
 export const sequenceFromBody = (b: SequenceBody): SequenceRow => ({
   k: newKey(), name: b.name, prefix: b.prefix ?? '', padding: str(b.padding ?? 0), start: str(b.start ?? 1),
   per_tenant: !!b.per_tenant, reset_yearly: !!b.reset_yearly, view_roles: rolesToText(b.view_roles),
+  entity: b.entity ?? null, field: b.field ?? null,
 })
 
 export const sequenceToBody = (r: SequenceRow): SequenceBody => ({
@@ -112,6 +117,9 @@ export const sequenceToBody = (r: SequenceRow): SequenceBody => ({
   per_tenant: r.per_tenant,
   reset_yearly: r.reset_yearly,
   view_roles: textToRoles(r.view_roles),
+  // only sent when set, so a plain sequence keeps its old payload
+  ...(r.entity != null ? { entity: r.entity } : {}),
+  ...(r.field != null ? { field: r.field } : {}),
 })
 
 /** What the next number looks like, from the same rule the generated helper uses (prefix + year- + padded counter). */

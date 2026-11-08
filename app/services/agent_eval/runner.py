@@ -203,7 +203,10 @@ async def _decide_all(client: Any, pid: str, res: TaskResult) -> None:
     pend = (await client.get(f"/projects/{pid}/agent/approvals?state=pending")).json()
     items = pend["items"] if isinstance(pend, dict) else pend
     for item in items:
-        await _ok(client.post(f"/projects/{pid}/agent/approvals/{item['id']}/decision", json={"approve": True}), 200)
+        body: dict[str, Any] = {"approve": True}
+        if item.get("payload_hash"):  # S3-005: bind the decision to what was read
+            body["expected_payload_hash"] = item["payload_hash"]
+        await _ok(client.post(f"/projects/{pid}/agent/approvals/{item['id']}/decision", json=body), 200)
         res.approvals += 1
 
 

@@ -54,6 +54,8 @@ export interface Approval {
   state: string
   requires_owner: boolean
   bound_spec_hash: string
+  bound_commit?: string | null
+  payload_hash?: string | null
   decided_by?: string | null
   decided_at: string | null
   decision_note: string | null

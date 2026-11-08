@@ -8,6 +8,7 @@ from httpx import AsyncClient
 
 from app.core.spec_models import Spec
 from tests.api._auth_helpers import make_project
+from tests.api.conftest import ClientFor, add_to_project_org
 
 FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 
@@ -111,3 +112,90 @@ async def test_an_unknown_project_is_not_found(client: AsyncClient) -> None:
     ghost = "00000000-0000-0000-0000-000000000000"
     assert (await client.get(f"/projects/{ghost}/behavior/hooks")).status_code == 404
     assert (await client.put(f"/projects/{ghost}/behavior/hooks", json={"hooks": []})).status_code == 404
+
+
+# -- effects / effect_budget / author survive a normal editor save (FB4x) ---------------------
+
+
+async def _seed_hook(
+    session_factory: Any, pid: str, **extra: Any
+) -> dict[str, Any]:
+    """Store one effectful hook authored by the AI straight in the section (as the agent does)."""
+    from sqlalchemy import select
+
+    from app.models.behavior_config import ProjectBehavior
+
+    hook = {**example()["hooks"][0], "name": "mail_it", "kind": "effect", "point": "Invoice.after_commit"}
+    hook.update(effects=["email"], effect_budget={"calls_per_effect": 2, "payload_bytes": 500, "outbound_per_minute": 5}, author="ai", **extra)
+    async with session_factory() as s:
+        row = (await s.execute(select(ProjectBehavior).where(ProjectBehavior.project_id == pid))).scalar_one_or_none()
+        if row is None:
+            row = ProjectBehavior(project_id=pid, version=1, sections={})
+            s.add(row)
+        row.sections = {**row.sections, "hooks": [hook]}
+        await s.commit()
+    return hook
+
+
+async def _editor(client: AsyncClient, client_for: ClientFor, pid: str) -> AsyncClient:
+    await add_to_project_org(pid, "ed@example.com")
+    ed = await client_for("ed@example.com")
+    await add_to_project_org(pid, "ed@example.com")
+    r = await client.post(f"/projects/{pid}/members", json={"email": "ed@example.com", "role": "editor"})
+    assert r.status_code == 201, r.text
+    return ed
+
+
+async def test_get_returns_author_effects_and_budget(
+    client: AsyncClient, session_factory: Any
+) -> None:
+    pid = await make_project(client)
+    await _seed_hook(session_factory, pid)
+    got = (await client.get(f"/projects/{pid}/behavior/hooks")).json()["hooks"][0]
+    assert got["author"] == "ai" and got["effects"] == ["email"]
+    assert got["effect_budget"]["calls_per_effect"] == 2
+
+
+async def test_editor_save_omitting_the_fields_keeps_them(
+    client: AsyncClient, client_for: ClientFor, session_factory: Any
+) -> None:
+    pid = await make_project(client)
+    hook = await _seed_hook(session_factory, pid)
+    ed = await _editor(client, client_for, pid)
+    body = {k: v for k, v in hook.items() if k not in ("effects", "effect_budget", "author")}
+    res = await ed.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [{**body, "reads": ["Invoice"]}]})
+    assert res.status_code == 200, res.text
+    got = res.json()["hooks"][0]
+    assert got["author"] == "ai" and got["effects"] == ["email"] and got["effect_budget"]["payload_bytes"] == 500
+    assert got["reads"] == ["Invoice"]
+
+
+async def test_a_client_cannot_launder_the_author(
+    client: AsyncClient, client_for: ClientFor, session_factory: Any
+) -> None:
+    pid = await make_project(client)
+    hook = await _seed_hook(session_factory, pid)
+    ed = await _editor(client, client_for, pid)
+    res = await ed.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [{**hook, "author": "trusted"}]})
+    assert res.status_code == 200, res.text  # unchanged echo of effects is no change
+    assert res.json()["hooks"][0]["author"] == "ai"
+    fresh = {**example()["hooks"][0], "name": "brand_new", "author": "ai"}
+    both = await client.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [{**hook, "author": "external"}, fresh]})
+    byname = {h["name"]: h for h in both.json()["hooks"]}
+    assert byname["mail_it"]["author"] == "ai" and byname["brand_new"]["author"] == "trusted"
+
+
+async def test_changing_effects_is_owner_only(
+    client: AsyncClient, client_for: ClientFor, session_factory: Any
+) -> None:
+    pid = await make_project(client)
+    hook = await _seed_hook(session_factory, pid)
+    ed = await _editor(client, client_for, pid)
+    url = f"/projects/{pid}/behavior/hooks"
+    for change in ({"effects": ["sms"]}, {"effects": []}, {"effect_budget": {"calls_per_effect": 9}}):
+        res = await ed.put(url, json={"hooks": [{**hook, **change}]})
+        assert res.status_code == 403, (change, res.text)
+    assert (await client.get(url)).json()["hooks"][0]["effects"] == ["email"]
+    res = await client.put(url, json={"hooks": [{**hook, "effects": ["sms"]}]})
+    assert res.status_code == 200, res.text
+    assert res.json()["hooks"][0]["effects"] == ["sms"] and res.json()["hooks"][0]["author"] == "ai"

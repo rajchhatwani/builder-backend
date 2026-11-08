@@ -1465,6 +1465,8 @@ export interface SequenceBody {
   per_tenant?: boolean
   reset_yearly?: boolean
   view_roles?: string[]
+  entity?: string | null
+  field?: string | null
 }
 export interface ListItemBody {
   value: string
@@ -1520,6 +1522,10 @@ export interface HookBody {
   fallback?: Record<string, string | number | boolean> | null
   budget?: HookBudgetBody
   reads?: string[]
+  /** Effectful tier (spec SpecHook); kept on save so an edit never drops them. */
+  effects?: string[]
+  effect_budget?: Record<string, number> | null
+  author?: string | null
 }
 export interface HooksRead extends SectionRead { hooks: HookBody[] }
 

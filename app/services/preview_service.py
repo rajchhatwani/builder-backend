@@ -45,7 +45,7 @@ from app.models.project import Project
 from app.models.workspace import Workspace
 from app.schemas.preview import PreviewCreated, PreviewRead
 from app.services import audit_service, preview_runtime
-from app.services.preview_limits import Effective, effective
+from app.services.preview_limits import Effective, effective, resolve
 from app.services.sandbox import DockerSandbox, reap_expired
 from app.services.spec_service import SpecService
 
@@ -505,11 +505,47 @@ class PreviewService:
         spec_h, profile, files = await self._render(project_id)
         src_dir = await self._workspace_files(project_id, workspace_id) if workspace_id else None
 
-        # Quota under a per-user lock so two parallel requests cannot both slip under it.
+        # Quotas under advisory locks so parallel requests cannot both slip under them. The
+        # global lock is always taken before the user lock (one order, no deadlock).
+        await self.session.execute(
+            text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": "preview:global"}
+        )
         await self.session.execute(
             text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
             {"k": f"preview:{user.id}"},
         )
+        platform = await self.session.get(PreviewPlatformSettings, 1)
+        # Capacity is a platform decision: an org override of it is never applied.
+        cap = resolve(platform.limits if platform else None)
+        total = (
+            await self.session.execute(
+                select(func.count()).select_from(Preview).where(Preview.state.in_(LIVE_STATES))
+            )
+        ).scalar_one()
+        if total >= cap.max_live_total:
+            raise AppError(
+                "preview_capacity",
+                "the platform is at its live preview capacity; try again later or kill one",
+                503,
+            )
+        in_org = (
+            await self.session.execute(
+                select(func.count())
+                .select_from(Preview)
+                .join(Project, Project.id == Preview.project_id)
+                .where(
+                    Project.organization_id == project.organization_id,
+                    Preview.state.in_(LIVE_STATES),
+                )
+            )
+        ).scalar_one()
+        if project.organization_id is not None and in_org >= lim.max_live_per_org:
+            raise AppError(
+                "preview_org_capacity",
+                f"this organization already has {in_org} live preview(s); "
+                f"the limit is {lim.max_live_per_org}",
+                409,
+            )
         live = (
             await self.session.execute(
                 select(func.count())

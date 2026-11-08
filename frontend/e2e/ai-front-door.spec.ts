@@ -41,7 +41,7 @@ test('front door: rail group, intake box, empty plan review, build view with tab
   await expect(page.getByTestId('budget-steps')).toBeVisible()
   await expect(page.getByTestId('timeline')).toBeVisible()
   await page.getByRole('tab', { name: 'Diagrams' }).click()
-  await expect(page.getByTestId('tab-soon')).toContainText('next checkpoint')
+  await expect(page.getByTestId('tab-soon')).toContainText('coming in a later cycle')
   await page.getByRole('tab', { name: 'Gates' }).click()
   await page.getByTestId('run-cancel').click()
   await expect(page.getByTestId('chip-state')).toHaveText('Cancelled')

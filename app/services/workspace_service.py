@@ -13,14 +13,17 @@ import os
 import re
 import shutil
 import uuid
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
 from app.config import Settings, get_settings
 from app.core.generator import InvalidSpecError, generate
+from app.core.generator.zones import zone_for
 from app.core.spec_models import Spec, spec_hash
 from app.exceptions import AppError
 from app.models.project import Project
@@ -34,8 +37,11 @@ ACTIVE_STATES = ("active", "rolled_back")
 BUSY_STATES = ("creating", "checkpointing", "rolling_back")
 COUNTED_STATES = (*ACTIVE_STATES, *BUSY_STATES)
 BUSY_STALE = timedelta(minutes=10)  # a crashed worker's busy marker can be re-claimed after this
-_DB_IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,62}$")
+_DB_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,62}")
+_QUOTED = re.compile(r'"([^"]*)"')
+_Stmt = str | tuple[str, dict[str, str]]
 # git control files (.gitignore / .github are ordinary files and stay allowed)
+_PROMOTE_LOCK = asyncio.Lock()  # promotion commits to the shared main branch one at a time
 _UNSAFE_NAME = re.compile(r"^\.git(attributes|modules|config)?$", re.IGNORECASE)
 _GIT_IDENT = ["-c", "user.name=builder", "-c", "user.email=builder@localhost"]
 
@@ -87,7 +93,7 @@ class WorkspaceService:
         if not self.settings.workspace_root or self.settings.workspace_db_admin_url is None:
             raise _unavailable()
         template = self.settings.workspace_template_db
-        if template and not _DB_IDENT.match(template):
+        if template and not _DB_IDENT.fullmatch(template):
             log.error("workspace_template_db is not a plain identifier")
             raise _unavailable()
         return Path(self.settings.workspace_root).resolve()
@@ -125,8 +131,20 @@ class WorkspaceService:
             raise AppError("workspace_git_failed", "workspace git operation failed", 500)
         return out.decode().strip()
 
-    async def _admin(self, *statements: str) -> None:
-        """Run DDL on the preview server in autocommit (CREATE/DROP DATABASE)."""
+    async def _admin(self, *statements: _Stmt) -> None:
+        """Run DDL on the preview server in autocommit (CREATE/DROP DATABASE).
+
+        S2-017: every double-quoted DDL identifier is fullmatched against _DB_IDENT here, before
+        any connection is opened; values (datname) travel as bind parameters, not text."""
+        prepared: list[tuple[str, dict[str, str]]] = []
+        for stmt in statements:
+            sql, params = (stmt, {}) if isinstance(stmt, str) else stmt
+            if _QUOTED.sub("", sql).count('"'):  # unbalanced quote: refuse
+                raise AppError("workspace_bad_identifier", "unsafe database identifier", 500)
+            for ident in _QUOTED.findall(sql):
+                if not _DB_IDENT.fullmatch(ident):
+                    raise AppError("workspace_bad_identifier", "unsafe database identifier", 500)
+            prepared.append((sql, params))
         assert self.settings.workspace_db_admin_url is not None
         engine = create_async_engine(
             self.settings.workspace_db_admin_url.get_secret_value(),
@@ -134,19 +152,20 @@ class WorkspaceService:
         )
         try:
             async with engine.connect() as conn:
-                for stmt in statements:
-                    await conn.execute(text(stmt))
+                for sql, params in prepared:
+                    await conn.execute(text(sql), params)
         finally:
             await engine.dispose()
 
     @staticmethod
-    def _kick(db: str) -> str:
+    def _kick(db: str) -> _Stmt:
         return (
             "SELECT pg_terminate_backend(pid) FROM pg_stat_activity "
-            f"WHERE datname = '{db}' AND pid <> pg_backend_pid()"
+            "WHERE datname = :db AND pid <> pg_backend_pid()",
+            {"db": db},
         )
 
-    def _clone(self, new: str, source: str, kick: bool = True) -> list[str]:
+    def _clone(self, new: str, source: str, kick: bool = True) -> list[_Stmt]:
         # A shared template is never kicked: it must be idle (CREATE ... TEMPLATE fails if not).
         pre = [self._kick(source)] if kick else []
         return [*pre, f'CREATE DATABASE "{new}" TEMPLATE "{source}"']
@@ -314,6 +333,8 @@ class WorkspaceService:
             wt.parent.mkdir(parents=True, exist_ok=True)
             await self._git(repo, "worktree", "add", "-q", "-b", branch, str(wt), "main")
             for rel, content in files.items():
+                if zone_for(rel) == "custom" and (wt / rel).exists():
+                    continue  # B-004: promoted custom code from main wins over the generated stub
                 self._write_generated(wt, rel, content)
             template = self.settings.workspace_template_db
             if template:
@@ -362,6 +383,107 @@ class WorkspaceService:
             raise AppError("workspace_bad_path", "generated path not allowed", 500)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8", newline="\n")
+
+    async def promote_files(
+        self, project_id: uuid.UUID, files: dict[str, bytes], message: str, *, base_branch: str | None = None
+    ) -> str | None:
+        """Commit approved custom-zone files to `main` of the project's repo (B-004), the code every new
+        workspace starts from. Idempotent: identical content makes no commit (returns None). Paths are
+        checked like generated ones (no links, no escapes). One promotion at a time per project, across
+        processes (pg advisory lock) as well as inside this one.
+
+        N1: with `base_branch` (the run's workspace branch) a file that changed on `main` since that
+        branch forked is not overwritten: the promotion is refused as `base_changed` (nothing written)
+        so the change is reviewed again against the new main."""
+        repo = self._repo(project_id)
+        if not (repo / ".git").exists():
+            raise AppError("workspace_unavailable", "the project has no code repository yet", 409)
+        async with _PROMOTE_LOCK, self._project_lock(project_id):
+            rels = sorted(files)
+            decoded: dict[str, str] = {}
+            for rel in rels:
+                try:
+                    decoded[rel] = files[rel].decode("utf-8")
+                except UnicodeDecodeError as exc:
+                    raise AppError("promotion_refused", "a promoted file is not valid UTF-8", 409) from exc
+            if base_branch:
+                await self._refuse_if_base_changed(repo, base_branch, files)
+            for rel in rels:
+                self._write_generated(repo, rel, decoded[rel])
+            await self._git(repo, "add", "--", *rels)
+            if not await self._git(repo, "status", "--porcelain", "--", *rels):
+                return None
+            await self._git(repo, "commit", "-q", "-m", message[:200], "--", *rels)
+            return await self._git(repo, "rev-parse", "HEAD")
+
+    async def _blob(self, repo: Path, rev: str, rel: str) -> str | None:
+        try:
+            return await self._git(repo, "rev-parse", "--verify", "-q", f"{rev}:{rel}")
+        except AppError:
+            return None  # the file does not exist at that revision
+
+    async def _refuse_if_base_changed(self, repo: Path, branch: str, files: dict[str, bytes]) -> None:
+        try:
+            base = await self._git(repo, "merge-base", "main", branch)
+        except AppError as exc:
+            raise AppError("base_changed", "the run's starting point on main cannot be found: review again", 409) from exc
+        changed: list[str] = []
+        for rel in sorted(files):
+            now = await self._blob(repo, "main", rel)
+            if now == await self._blob(repo, base, rel):
+                continue  # main still holds what the run started from
+            new = await self._git_hash(repo, files[rel])
+            if now != new:  # main already holds exactly these bytes -> idempotent, not a conflict
+                changed.append(rel)
+        if changed:
+            raise AppError(
+                "base_changed",
+                f"{len(changed)} file(s) changed on main since this run started ({', '.join(changed)[:200]}): "
+                "nothing was promoted, review the change again",
+                409,
+            )
+
+    async def _git_hash(self, repo: Path, data: bytes) -> str:
+        env = {"PATH": os.environ.get("PATH", "/usr/bin:/bin"), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+        proc = await asyncio.create_subprocess_exec(
+            "git", "hash-object", "--stdin", cwd=repo, env=env,
+            stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
+        )  # fmt: skip
+        out, _ = await asyncio.wait_for(proc.communicate(data), 30)
+        return out.decode().strip()
+
+    @asynccontextmanager
+    async def _project_lock(self, project_id: uuid.UUID) -> AsyncIterator[None]:
+        """Cross-process lock on the project (pg advisory lock on its own connection)."""
+        bind = self.session.bind
+        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(self.session.get_bind())  # type: ignore[arg-type]
+        key = project_id.int % (2**62)
+        async with engine.connect() as conn:
+            await conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": key})
+            try:
+                yield
+            finally:
+                await conn.execute(text("SELECT pg_advisory_unlock(:k)"), {"k": key})
+                await conn.commit()
+
+    async def promoted_files(self, project_id: uuid.UUID) -> dict[str, str]:
+        """The custom-zone text files on `main` of the project's repo (what promotion put there).
+        Empty when no repository exists. Capped in count and size; anything else is ignored."""
+        repo = self._repo(project_id)
+        if not (repo / ".git").exists():
+            return {}
+        out: dict[str, str] = {}
+        for rel in (await self._git(repo, "ls-tree", "-r", "--name-only", "main")).splitlines()[:500]:
+            if zone_for(rel) != "custom":
+                continue
+            path = repo / rel
+            if path.is_symlink() or not path.is_file() or path.stat().st_size > 256 * 1024:
+                continue
+            try:
+                out[rel] = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+        return out
 
     async def sync_generated(self, project_id: uuid.UUID, ws_id: uuid.UUID, spec: Spec | None = None) -> int:
         """Rewrite the GENERATED-zone files of the draft from the current spec (agent spec edits

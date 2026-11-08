@@ -191,8 +191,9 @@ class DockerSandbox(Sandbox):
         s = settings or get_settings()
         self.runtime = s.sandbox_runtime
         self.docker = docker_bin or s.sandbox_docker_bin
-        # runc has no user-space kernel: allowed only for local development and tests.
-        self._allow_runc = s.environment in ("local", "test")
+        # runc has no user-space kernel: allowed only when the environment is EXPLICITLY local
+        # or test. An unset environment (which defaults to "local") never qualifies (S2-006).
+        self._allow_runc = s.environment_explicit and s.environment in ("local", "test")
         self._runtime_ok = False
         self.images = frozenset(s.sandbox_images)
 

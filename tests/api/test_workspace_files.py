@@ -44,7 +44,9 @@ _MADE: list[str] = []  # workspace URLs to discard so no draft/checkpoint databa
 async def _discard_workspaces(client: AsyncClient) -> Any:
     yield
     while _MADE:
-        await client.delete(_MADE.pop())
+        url = _MADE.pop()
+        r = await client.delete(url)
+        assert r.status_code in (200, 204, 404), f"workspace cleanup failed ({url}): {r.status_code}"
 
 
 async def _mk(client: AsyncClient, s: Settings) -> tuple[str, str, Path]:
@@ -208,3 +210,17 @@ async def test_busy_workspace_and_stale_approval_hash(
         await s.commit()
     assert (await client.put(f"{base}/files/content", json=body)).status_code == 200
     assert await content_hash(str(wt)) != before  # an approval bound to `before` is now stale
+
+
+async def test_cache_dir_file_is_not_editable_but_still_in_the_content_hash(client: AsyncClient, ws_settings: Settings) -> None:
+    """S1-002: no write through the API under tool/cache dirs; a file already there moves the approval hash."""
+    pid, base, wt = await _mk(client, ws_settings)
+    rel = "app/custom/__pycache__/evil.py"
+    (wt / rel).parent.mkdir(parents=True)
+    (wt / rel).write_text("a = 1\n")
+    h1 = await content_hash(str(wt))
+    r = await client.put(f"{base}/files/content", json={"path": rel, "content": "a = 2\n", "expected_sha256": _sha("a = 1\n")})
+    assert r.status_code == 403, r.text
+    assert (wt / rel).read_text() == "a = 1\n"
+    (wt / rel).write_text("a = 3\n")  # a change made outside the API
+    assert await content_hash(str(wt)) != h1

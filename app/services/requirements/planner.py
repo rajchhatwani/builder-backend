@@ -4,6 +4,7 @@ The goal is a structured summary of reader output (already schema-validated and 
 Large maps are split into phases; each phase is its own run and so its own Gate A approval.
 """
 
+import re
 from collections.abc import Sequence
 from typing import Protocol
 
@@ -62,9 +63,16 @@ def suggest_phases(items: Sequence[ItemLike]) -> list[dict[str, object]]:
     return phases
 
 
+_CLOSE_MAP = re.compile(r"</\s*requirements_map", re.IGNORECASE)
+
+
+def _esc(text: str) -> str:
+    return _CLOSE_MAP.sub("<\\/requirements_map", text)
+
+
 def _line(i: ItemLike) -> str:
     src = f" [{i.source_doc}{f' p.{i.source_page}' if i.source_page else ''}]" if i.source_doc else ""
-    return f"- {i.text[:ITEM_CAP]}{src}".replace("</requirements_map", "<\\/requirements_map")
+    return _esc(f"- {i.text[:ITEM_CAP]}{src}")
 
 
 def build_goal(
@@ -111,7 +119,7 @@ def build_goal(
             ans = q.answer if q.state == "answered" and q.answer else f"assumed: {q.assumption}"
             lines.append(f"- {q.text[:ITEM_CAP]} -> {ans[:ITEM_CAP]}")
     tail = "\n</requirements_map>"
-    goal = "\n".join(lines).replace("</requirements_map", "<\\/requirements_map")
+    goal = _esc("\n".join(lines))
     if len(goal) > GOAL_CAP:
         goal = goal[:GOAL_CAP].rsplit("\n", 1)[0] + "\n(map truncated; read the requirements map for the rest)"
     goal += tail

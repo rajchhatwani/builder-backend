@@ -9,6 +9,7 @@ import re
 
 from fastapi import Request
 
+from app.api.body_limit import is_intake
 from app.exceptions import AppError
 
 # `\u0000` in JSON text, unless the backslash is itself escaped (`\\u0000` is a literal backslash).
@@ -28,6 +29,21 @@ async def reject_nul_characters(request: Request) -> None:
     if "\x00" in request.url.path or b"%00" in request.scope.get("query_string", b""):
         raise _refuse()
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    if content_type == "multipart/form-data":
+        # D-1: only the intake route takes multipart (and the server parses it there anyway). Parsing
+        # a multipart body of any other route here would spool up to 13 MB before auth for nothing.
+        if not is_intake(request.method, request.url.path):
+            return
+        # Text fields only: uploaded files are binary and may legitimately hold NUL bytes.
+        form = await request.form()
+        if any(
+            "\x00" in k
+            or (isinstance(v, str) and "\x00" in v)
+            or (not isinstance(v, str) and "\x00" in (getattr(v, "filename", None) or ""))
+            for k, v in form.multi_items()
+        ):
+            raise _refuse()
+        return
     if content_type not in _CHECKED_BODIES:
         return
     try:

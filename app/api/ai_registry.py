@@ -51,6 +51,7 @@ def _settings_read(row: object | None) -> AiSettingsRead:
         has_api_key=bool(getattr(row, "api_key_enc", None)),
         api_key_hint=getattr(row, "api_key_hint", None),
         monthly_budget_micro_usd=getattr(row, "monthly_budget_micro_usd", None),
+        approval_policy=getattr(row, "approval_policy", None),
     )
 
 
@@ -115,6 +116,9 @@ async def put_ai_settings(
         clear_api_key=body.clear_api_key,
         budget=body.monthly_budget_micro_usd,
         clear_budget=body.clear_budget,
+        approval_policy=(
+            body.approval_policy.model_dump(exclude_none=True) if body.approval_policy is not None else None
+        ),
     )
     info = request_info(request)
     await audit_service.record(
@@ -134,6 +138,7 @@ async def put_ai_settings(
             "key_set": body.api_key is not None,
             "key_cleared": body.clear_api_key,
             "budget_changed": body.monthly_budget_micro_usd is not None or body.clear_budget,
+            "approval_policy_changed": body.approval_policy is not None,
         },
     )
     await db.commit()

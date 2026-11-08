@@ -9,15 +9,16 @@ other end of the run deletes them. Before the plan is approved there is no draft
 
 import uuid
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.spec_models import Spec
 from app.core.validation import ValidationIssue, validate
 from app.exceptions import AppError
-from app.models.agent import AiDraftOp, AiRun
+from app.models.agent import AiDraftOp, AiRun, AiStep
 from app.models.spec_op import SpecOp
 from app.services.ops.canon import canonical_hash
 from app.services.ops.registry import dump, plan
@@ -73,7 +74,13 @@ def _key(i: ValidationIssue) -> tuple[str, str, str]:
 
 
 async def add_draft_op(
-    session: AsyncSession, run_id: uuid.UUID, project_id: uuid.UUID, op_type: str, payload: dict[str, Any]
+    session: AsyncSession,
+    run_id: uuid.UUID,
+    project_id: uuid.UUID,
+    op_type: str,
+    payload: dict[str, Any],
+    *,
+    commit: bool = True,
 ) -> int:
     """Validate one operation against the draft (same rules as OpsService: 422 and nothing
     recorded when it adds a validation issue) and append it. Returns the draft sequence."""
@@ -103,11 +110,31 @@ async def add_draft_op(
     session.add(
         AiDraftOp(run_id=run_id, project_id=project_id, seq=seq, op_type=op_type, payload=dump(planned.payload))
     )
-    await session.commit()
+    if commit:
+        await session.commit()
+    else:  # the caller commits this together with its own writes (approved-action execution)
+        await session.flush()
     return seq
 
 
-async def drop_draft(session: AsyncSession, run_id: uuid.UUID) -> int:
+class LeaseLost(Exception):
+    """The caller no longer holds the run's lease: it must not touch the run's draft."""
+
+
+async def drop_draft(session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None) -> int:
+    """Delete the run's draft ops. With `owner`, only while that driver still holds the lease: the
+    check and the delete are one transaction under the run row lock (S1-001), else LeaseLost."""
+    if owner is not None:
+        held = (
+            await session.execute(
+                select(AiRun.id)
+                .where(AiRun.id == run_id, AiRun.lease_owner == owner, AiRun.state.in_(LIVE_STATES))
+                .with_for_update()
+            )
+        ).scalar_one_or_none()
+        if held is None:
+            await session.rollback()
+            raise LeaseLost()
     res = await session.execute(delete(AiDraftOp).where(AiDraftOp.run_id == run_id))
     await session.commit()
     return int(res.rowcount or 0)  # type: ignore[attr-defined]
@@ -120,14 +147,22 @@ class ApplyOutcome:
     ops: int = 0
 
 
-async def apply_draft(session: AsyncSession, run_id: uuid.UUID) -> ApplyOutcome:
+async def apply_draft(
+    session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None
+) -> ApplyOutcome:
     """Replay the draft onto the live project, only if the live spec is exactly the plan's base.
-    A person's (or another run's) change in between is a conflict: nothing is written."""
+    A person's (or another run's) change in between is a conflict: nothing is written.
+
+    The live spec, the draft deletion and the run's `applied` state commit in ONE transaction
+    (S1-005): a crash or a cancel can no longer leave a changed spec behind a run that is not
+    `applied`, and a repeated call on an applied run is a no-op."""
     from app.services.ops.service import OpsService
 
     run = await session.get(AiRun, run_id, populate_existing=True)
     if run is None:
         return ApplyOutcome("failed", "run not found")
+    if run.state == "applied":
+        return ApplyOutcome("applied", "already applied")
     project_id = run.project_id
     doc = run.plan if isinstance(run.plan, dict) else {}
     base, base_seq = _base(doc), doc.get("base_spec_seq")
@@ -137,12 +172,28 @@ async def apply_draft(session: AsyncSession, run_id: uuid.UUID) -> ApplyOutcome:
     rows = await _ops(session, run_id)
     expected = canonical_hash(_fold(base, rows))
 
-    async def still_applying() -> None:  # under the project lock: a cancel/stop that won the race wins
-        st = (
-            await session.execute(select(AiRun.state).where(AiRun.id == run_id).with_for_update())
-        ).scalar_one()
-        if st != "applying":
+    async def still_applying() -> None:
+        # Under the project lock. Claim the run row (state applying -> applied, lease cleared) in
+        # the batch's own transaction: a cancel/stop/takeover that won the race wins, and if the
+        # batch fails afterwards the claim is rolled back with it.
+        cond = [AiRun.id == run_id, AiRun.state == "applying"]
+        if owner is not None:
+            cond.append(AiRun.lease_owner == owner)
+        claimed = await session.execute(
+            update(AiRun)
+            .where(*cond)
+            .values(state="applied", finished_at=datetime.now(UTC), lease_owner=None, lease_until=None)
+            .execution_options(synchronize_session=False)
+        )
+        if claimed.rowcount == 0:  # type: ignore[attr-defined]
+            st = (await session.execute(select(AiRun.state).where(AiRun.id == run_id))).scalar_one()
             raise AppError("apply_cancelled", f"the run is {st}; nothing was applied", 409)
+        top = (await session.execute(select(func.max(AiStep.seq)).where(AiStep.run_id == run_id))).scalar_one()
+        session.add(
+            AiStep(run_id=run_id, project_id=project_id, seq=int(top or 0) + 1, kind="system",
+                   output={"draft": "applied", "ops": len(rows)})
+        )
+        await session.execute(delete(AiDraftOp).where(AiDraftOp.run_id == run_id))
 
     try:
         await OpsService(session).apply_batch(
@@ -164,5 +215,4 @@ async def apply_draft(session: AsyncSession, run_id: uuid.UUID) -> ApplyOutcome:
         await session.rollback()
         await session.get(AiRun, run_id, populate_existing=True)
         return ApplyOutcome("failed", type(exc).__name__, len(rows))
-    await drop_draft(session, run_id)
     return ApplyOutcome("applied", "", len(rows))

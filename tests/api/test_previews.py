@@ -644,3 +644,29 @@ async def test_org_override_cannot_exceed_default_without_the_flag_and_admin_lis
     assert u["live"] == 1 and u["running"] == 1 and u["by_state"]["running"] == 1
     assert u["orgs_with_overrides"] == 1 and u["kill_switch"] is False
     assert (await support.put(url, json={})).status_code == 403
+
+
+async def test_global_and_org_capacity_caps_are_admin_set_and_refuse_with_stable_codes(
+    client: AsyncClient, stack: dict[str, object], client_for: ClientFor
+) -> None:
+    # S2-004: the per-user quota (3) is NOT what stops these.
+    admin = await client_for("root@example.com", PlatformRole.platform_admin, audience=sec.AUDIENCE_ADMIN)
+    body = (await admin.get("/admin/preview-limits")).json()
+    assert body["defaults"]["max_live_total"] == 6 and "max_live_per_org" in body["defaults"]
+    pid = await _project_with_entity(client)
+    assert (await admin.put("/admin/preview-limits", json={"defaults": {"max_live_total": 2}})).status_code == 200
+    made = [await _create(client, pid), await _create(client, pid)]
+    r = await client.post(f"/projects/{pid}/previews", json={})
+    assert r.status_code == 503 and r.json()["code"] == "preview_capacity"
+    # raising the cap admits it again; a per-org cap below it then refuses with its own code
+    put = {"defaults": {"max_live_total": 20, "max_live_per_org": 2}}
+    assert (await admin.put("/admin/preview-limits", json=put)).status_code == 200
+    r = await client.post(f"/projects/{pid}/previews", json={})
+    assert r.status_code == 409 and r.json()["code"] == "preview_org_capacity"
+    # the global cap cannot be set per organization
+    org = await admin.put(
+        f"/admin/preview-limits/orgs/{uuid.uuid4()}", json={"overrides": {"max_live_total": 1}}
+    )
+    assert org.status_code in (404, 422)
+    for m in made:  # discard the previews
+        assert (await client.delete(f"/projects/{pid}/previews/{m['id']}")).status_code in (200, 204)

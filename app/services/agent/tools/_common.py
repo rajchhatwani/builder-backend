@@ -8,6 +8,7 @@ from app.core import hook_gates
 from app.core.generator.zones import zone_for
 from app.exceptions import AppError
 from app.services.agent.contract import RuleFailure, ToolContext, ToolResult
+from app.services.dependency_policy_service import is_dependency_manifest
 
 OUTPUT_CAP = 20_000  # characters of JSON a tool may hand back to the model
 INPUT_CAP = 100_000  # characters of JSON a call may carry
@@ -16,8 +17,9 @@ WRITE_CAP = 40_000  # bytes a code tool writes
 
 DENIED_SEGMENTS = frozenset(
     {".git", ".ssh", ".aws", ".gnupg", "secrets", "secret", ".secrets", "terraform", ".terraform",
-     ".github", ".gitlab", ".circleci", ".venv", "venv", "node_modules"}
-)  # fmt: skip
+     ".github", ".gitlab", ".circleci", ".venv", "venv", "node_modules",
+     "__pycache__", ".mypy_cache", ".pytest_cache", ".ruff_cache"}
+)  # fmt: skip  (the cache dirs: tool output nobody reviews; S1-002)
 DENIED_NAMES = frozenset({"id_rsa", "id_ed25519", ".netrc", ".npmrc", ".pypirc", "credentials", ".gitlab-ci.yml"})
 DENIED_SUFFIXES = (".pem", ".key", ".p12", ".pfx", ".tf", ".tfstate", ".tfvars")
 
@@ -156,6 +158,7 @@ def custom_write_path(ctx: ToolContext, rel: str, tool: str) -> tuple[Path, str]
     if (
         zone_for(norm) != "custom"
         or hook_gates.is_guarded_path(norm)
+        or is_dependency_manifest(norm)
         or norm.startswith("platform/")
         or norm.endswith((".yml", ".yaml", ".json", ".toml", ".ini", ".cfg", ".sh"))
         or "platform_gate" in norm

@@ -134,8 +134,14 @@ async def create_custom_hook(ctx: ToolContext, args: dict[str, Any]) -> ToolResu
         return fail("hook_no_stub", name, "a stub for this hook", "the generator renders none")
     target, norm = custom_write_path(ctx, stub_rel, "create_custom_hook")
     if target.exists():
+        owed = None
+        if ctx.reexecution and any(h.name == name and h.author == "ai" for h in spec.hooks):
+            # S1-008: this very call already wrote the stub before a crash; the owner review it owes must
+            # not be lost with the first attempt.
+            owed = _review(ctx, name, norm, target.read_bytes(), "created")
         return ToolResult(ok=True, data={"hook": name, "file": norm, "created": False,
-                                         "note": "the stub exists; use replace_function_body"})  # fmt: skip
+                                         "note": "the stub exists; use replace_function_body"},
+                          approval=owed)  # fmt: skip
     for rel, content in sorted(files.items()):
         if rel in REFRESH_FILES or rel.startswith(REFRESH_PREFIXES):
             _trusted_write(root, rel, content)

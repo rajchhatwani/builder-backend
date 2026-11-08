@@ -105,6 +105,23 @@ async def test_runc_refused_outside_local_test() -> None:
         await prod.check_runtime()
 
 
+async def test_runc_refused_when_environment_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    # S2-006: the default "local" must not unlock runc; only an explicit local/test does.
+    monkeypatch.delenv("BUILDER_ENVIRONMENT", raising=False)
+    unset = Settings(_env_file=None, sandbox_runtime="runc")  # type: ignore[call-arg]
+    assert unset.environment == "local" and not unset.environment_explicit
+    with pytest.raises(SandboxError, match="not isolated"):
+        await DockerSandbox(unset).check_runtime()
+    for env in ("local", "test"):
+        explicit = Settings(_env_file=None, environment=env, sandbox_runtime="runc")  # type: ignore[call-arg]
+        assert DockerSandbox(explicit)._allow_runc
+    monkeypatch.setenv("BUILDER_ENVIRONMENT", "local")
+    from_env = Settings(_env_file=None, sandbox_runtime="runc")  # type: ignore[call-arg]
+    assert DockerSandbox(from_env)._allow_runc
+    prod = Settings(_env_file=None, environment="production", sandbox_runtime="runc")  # type: ignore[call-arg]
+    assert not DockerSandbox(prod)._allow_runc
+
+
 async def test_unregistered_runtime_fails_closed() -> None:
     box = DockerSandbox(Settings(environment="local", sandbox_runtime="no-such-runtime"))
     with pytest.raises(SandboxError):

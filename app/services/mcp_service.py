@@ -535,7 +535,9 @@ class McpService:
                 status_code=403,
             )
         # download() renders the zip and stores a Generation record; we return only the URL.
-        _zip_bytes, _hash, generation = await GenerationService(self.db).download(project_id)
+        _zip_bytes, _hash, generation = await GenerationService(self.db).download(
+            project_id, owner_secrets=member.role == MemberRole.owner
+        )
         download_url = f"/projects/{project_id}/generate/download"
         await self._audit(
             principal,

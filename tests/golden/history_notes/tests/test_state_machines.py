@@ -47,10 +47,19 @@ async def test_tickets_unknown_transition_and_record(client: AsyncClient) -> Non
     assert missing.status_code == 404
 
 
+async def _make_in(client: AsyncClient, states: list[str]) -> dict[str, object]:
+    """Sample data can trip an automatic transition on create; create until the record is in `states` (any state when empty)."""
+    for _ in range(50):
+        created = await _factories.make_tickets(client)
+        if not states or created['status'] in states:
+            return created
+    raise AssertionError(f"no sample record was created in one of {states}")
+
+
 async def test_tickets_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
     """A transition that lists no roles is open to whoever may update Ticket, not to every reader
     (role `auditor` can read but not update); one that lists roles keeps its own role check."""
-    created = await _factories.make_tickets(client)
+    created = await _make_in(client, [])
     base = f"/tickets/{created['id']}"
     async with client_for(await sign_in(client, "sm-reader@example.com", roles=['auditor'])) as reader:
         assert (await reader.get(base)).status_code == 200  # the reader sees the record...

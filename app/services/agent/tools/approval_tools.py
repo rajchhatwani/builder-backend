@@ -1,6 +1,8 @@
 """S! (security-weakening or data-removing spec edits), C! (dependency request) and E (external effect).
 
-None of these acts. S! and E only return an ApprovalRequest that describes exactly what would run;
+None of these acts HERE. S! and E only return an ApprovalRequest that describes exactly what would run
+(`op_type` / `action` + the arguments); once a human approved it, `approved_effects.execute` runs exactly
+that, server-side, bound to the approval's spec hash, content hash and payload hash (B-002).
 request_dependency records a *request* with the dependency policy service and never installs."""
 
 from typing import Any
@@ -99,15 +101,15 @@ TOOLS: list[Tool] = [
               ["name", "version", "reason"]), PermissionClass.C_BANG, request_dependency),
     Tool("apply_migration", "Ask for approval to apply the migration to the dev environment.",
          _obj({"env": {"type": "string", "enum": ["dev"]}}, ["env"]), E,
-         _ask(ApprovalKind.E, "apply the migration to the dev environment")),
+         _ask(ApprovalKind.E, "apply the migration to the dev environment", action="apply_migration")),
     Tool("create_pr", "Ask for approval to open a pull request.",
          _obj({"title": {"type": "string", "minLength": 1, "maxLength": 200}}, ["title"]), E,
-         _ask(ApprovalKind.E, "open a pull request")),
+         _ask(ApprovalKind.E, "open a pull request", action="create_pr")),
     Tool("request_secret", "Ask a human to provide a secret by name. You never see its value.",
-         _obj({"name": _NAME}, ["name"]), E, _ask(ApprovalKind.E, "provide a secret")),
+         _obj({"name": _NAME}, ["name"]), E, _ask(ApprovalKind.E, "provide a secret", action="request_secret")),
     Tool("fetch_docs", "Ask for approval to fetch a documentation page.",
          _obj({"url": {"type": "string", "minLength": 1, "maxLength": 500}}, ["url"]), E,
-         _ask(ApprovalKind.E, "fetch a documentation page")),
+         _ask(ApprovalKind.E, "fetch a documentation page", action="fetch_docs")),
 ]  # fmt: skip
 SCOPES: dict[str, Any] = {
     "remove_entity": _scope_entity,

@@ -1,6 +1,5 @@
 """Requirements map persistence and the intake / answer / start-run flows (B3-6)."""
 
-import asyncio
 import uuid
 from dataclasses import dataclass
 
@@ -28,6 +27,7 @@ from app.services.requirements import planner
 from app.services.requirements import reader as rd
 
 _limiter = SlidingWindowLimiter(attempts=12, window_seconds=3600)  # intakes per project per hour
+_user_limiter = SlidingWindowLimiter(attempts=20, window_seconds=3600)  # intakes per user per hour
 _IN_FLIGHT: set[uuid.UUID] = set()
 
 
@@ -133,11 +133,19 @@ class RequirementsService:
             raise AppError("too_many_files", f"at most {rd.MAX_FILES} files per intake", 413)
         if sum(len(d) for _, d in files) > rd.MAX_TOTAL_BYTES:
             raise AppError("files_too_large", "the files together are too large", 413)
+        ukey = str(user_id)  # before any parsing: refused intakes must not cost CPU
+        if not _user_limiter.allow(ukey):
+            raise AppError(
+                "intake_user_rate_limited",
+                "too many intakes from you; try again later",
+                429,
+                headers={"Retry-After": str(_user_limiter.retry_after(ukey))},
+            )
         docs: list[rd.ReadDoc] = []
         if prompt and prompt.strip():
             docs.append(rd.read_prompt(prompt))
         for name, data in files:  # all validated before any model call; extraction off the loop
-            docs.append(await asyncio.to_thread(rd.read_document, name, data))
+            docs.append(await rd.read_document_async(name, data))
 
         if project_id in _IN_FLIGHT:
             raise AppError("intake_in_progress", "an intake is already running for this project", 409)

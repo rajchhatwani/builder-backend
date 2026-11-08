@@ -40,7 +40,7 @@ from app.core import hook_gates
 from app.core.generator import InvalidSpecError, generate
 from app.core.spec_models import Spec
 from app.services.agent.contract import RuleFailure
-from app.services.dependency_policy_service import Pin, check_requirements
+from app.services.dependency_policy_service import Pin, check_requirements, is_dependency_manifest
 
 GATE_ORDER = ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9")
 MAX_FILES = 5_000
@@ -123,7 +123,9 @@ def _scan_tree(root: Path, deadline: float) -> _Tree:
                 tree.hazard = True
                 tree.failures.append(_fail("g8.symlink", rel, "no symbolic links", "directory symlink",
                                            "remove the link; it is never followed"))
-            elif d not in _SKIP_DIRS:
+            elif d == ".git" and full.parent == root:
+                continue  # only the checkout's own git data; every other directory is scanned (S1-002)
+            else:
                 keep.append(d)
         dirnames[:] = keep
         for name in sorted(filenames):
@@ -148,6 +150,11 @@ def _scan_tree(root: Path, deadline: float) -> _Tree:
             else:
                 total += st.st_size
                 tree.files[rel] = st.st_size
+                if any(part in _SKIP_DIRS for part in rel.split("/")[:-1]):
+                    # Cache/tool dirs were once skipped by every check; a file here would bypass G8,
+                    # replay and the content hash. It is now covered by all three AND a failure.
+                    tree.failures.append(_fail("g8.cache_dir_file", rel, "no files in cache or tool directories",
+                                               "file under a skipped directory", "delete the directory"))
                 if total > MAX_TOTAL_BYTES:
                     tree.failures.append(_fail("g8.scan_limit", ".", f"at most {MAX_TOTAL_BYTES} bytes",
                                                "project too large"))
@@ -366,7 +373,12 @@ def _dependency_failures(
     pins = list(approved)
     for rel in sorted(tree.files):
         name = rel.rsplit("/", 1)[-1]
-        if not (name.startswith("requirements") and name.endswith(".txt")) or zones.get(rel) == "generated":
+        if zones.get(rel) == "generated":
+            continue
+        if not (name.startswith("requirements") and name.endswith(".txt")):
+            if is_dependency_manifest(rel):  # any other way to declare a package is refused outright
+                out.append(_fail("g8.dependency", rel, "no hand-written dependency manifest",
+                                 f"{name} can declare packages", "use request_dependency"))
             continue
         raw = _read(root, rel, tree.files[rel])
         if raw is None:

@@ -23,6 +23,7 @@ class Caller:
     principal_key: str  # "user:<id>", or "ip:<address>" for a caller without a valid token
     authenticated: bool
     ip: str
+    roles: tuple[str, ...] = ()  # what the caller holds NOW: a stored replay needs them all again
 
 
 def _address(text: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
@@ -69,5 +70,6 @@ async def resolve(request: Request, session: AsyncSession) -> Caller:
                 principal_key=f"user:{user.id}",
                 authenticated=True,
                 ip=ip,
+                roles=tuple(sorted(str(r) for r in (getattr(user, "roles", None) or ()))),
             )
     return Caller(tenant_key=NO_TENANT, principal_key=f"ip:{ip}", authenticated=False, ip=ip)

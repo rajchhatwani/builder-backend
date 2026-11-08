@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { MAX_RECONNECTS, backoffDelay, createSseParser, pushLines, type LogLine } from './stageLogic'
 import { TOKEN_HEADER, classifyStatus, previewUrl } from './previewAccess'
 
+/** A connection must stay open this long before the reconnect budget resets (a server that opens, emits, and closes must not loop forever). */
+export const STABLE_MS = 10_000
 type Status = 'idle' | 'connecting' | 'live' | 'reconnecting' | 'sleeping' | 'gone' | 'token' | 'ended' | 'error'
 const LABEL: Record<Status, string> = {
   idle: 'Not connected', connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', sleeping: 'Preview is sleeping or starting; logs resume when it runs',
@@ -32,6 +34,7 @@ export function RunLogs({ previewId, token, doFetch = fetch }: { previewId: stri
     const run = async () => {
       setStatus(attempt ? 'reconnecting' : 'connecting')
       let stop = false
+      let liveSince = 0
       try {
         const res = await doFetch(previewUrl(previewId, '/-/logs'), { headers: { [TOKEN_HEADER]: token, Accept: 'text/event-stream' }, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer', signal: ctl.signal })
         if (!res.ok || !res.body) {
@@ -40,7 +43,7 @@ export function RunLogs({ previewId, token, doFetch = fetch }: { previewId: stri
           if (f === 'token') { setStatus('token'); return }
           throw new Error(`status ${res.status}`)
         }
-        setStatus('live')
+        setStatus('live'); liveSince = Date.now()
         const parse = createSseParser()
         const reader = res.body.getReader()
         const dec = new TextDecoder()
@@ -48,7 +51,6 @@ export function RunLogs({ previewId, token, doFetch = fetch }: { previewId: stri
           const { done, value } = await reader.read()
           if (done) break
           for (const ev of parse(dec.decode(value, { stream: true }))) {
-            attempt = 0
             if (ev.event === 'state') { setStatus('sleeping'); add('state', `preview state: ${ev.data}`) }
             else if (ev.event === 'end') { add('end', ev.data); if (/switched off/i.test(ev.data)) stop = true }
             else if (ev.event === 'info') add('info', ev.data)
@@ -60,6 +62,7 @@ export function RunLogs({ previewId, token, doFetch = fetch }: { previewId: stri
         if (ctl.signal.aborted) return
       }
       if (ctl.signal.aborted) return
+      if (liveSince && Date.now() - liveSince >= STABLE_MS) attempt = 0
       if (attempt >= MAX_RECONNECTS) { setStatus('error'); return }
       timer = setTimeout(run, backoffDelay(attempt++))
       setStatus((s) => (s === 'sleeping' ? s : 'reconnecting'))

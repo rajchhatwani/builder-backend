@@ -41,6 +41,28 @@ _HASH_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _LINE_RE = re.compile(r"^(?P<name>[^=\s]+)\s*==\s*(?P<version>[^\s]+)(?P<rest>(?:\s+--hash=\S+)*)$")
 
 
+_MANIFEST_NAMES = frozenset(
+    {
+        "pyproject.toml", "setup.py", "setup.cfg", "pipfile", "pipfile.lock", "poetry.lock", "pdm.lock", "uv.lock",
+        "package.json", "package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml",
+        "environment.yml", "environment.yaml", "conda.yml", "pip.conf", "tox.ini",
+    }
+)
+
+
+def is_dependency_manifest(rel: str) -> bool:
+    """True for any file that can declare or pin third-party packages (requirements and constraints lists
+    in any spelling or folder, pyproject, setup, Pipfile, npm and lock files). Dependencies reach a project
+    only through the policy (allow-list or owner approval), never through such a file written by hand."""
+    parts = rel.replace("\\", "/").lower().split("/")
+    name = parts[-1]
+    if name in _MANIFEST_NAMES:
+        return True
+    if name.endswith((".txt", ".in")):
+        return "requirements" in name or "constraints" in name or "requirements" in parts[:-1]
+    return False
+
+
 def normalize_name(name: str) -> str:
     """PEP 503 normalised name; rejects anything outside plain ASCII package-name syntax
     (so unicode homoglyphs, URLs, paths, extras and markers never normalise into a name)."""

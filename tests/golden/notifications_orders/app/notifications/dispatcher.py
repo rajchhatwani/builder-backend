@@ -59,8 +59,8 @@ def backoff(attempt: int) -> float:
 
 
 async def claim(factory: SessionFactory, *, now: _dt.datetime | None = None) -> Claimed | None:
-    stamp = now or utcnow()
     async with factory() as session:
+        stamp = now or (await session.execute(sa.select(sa.func.now()))).scalar_one()  # database clock
         due = sa.or_(
             sa.and_(NotificationDelivery.status == QUEUED, NotificationDelivery.next_attempt_at <= stamp),
             sa.and_(NotificationDelivery.status == PROCESSING, NotificationDelivery.lease_expires_at <= stamp),
@@ -102,8 +102,11 @@ async def claim(factory: SessionFactory, *, now: _dt.datetime | None = None) -> 
 async def _finish(factory: SessionFactory, job: Claimed, status: str, **values: Any) -> bool:
     """Write the outcome only if the lease is still ours. Terminal states erase address and variables."""
     changes: dict[str, Any] = {"status": status, "lease_token": None, "lease_expires_at": None, **values}
+    retry_in = changes.pop("retry_in", None)
+    if retry_in is not None:
+        changes["next_attempt_at"] = sa.func.now() + _dt.timedelta(seconds=retry_in)  # database clock
     if status != QUEUED:
-        changes.update(address=None, variables=None, finished_at=utcnow())
+        changes.update(address=None, variables=None, finished_at=sa.func.now())
     async with factory() as session:
         won = (
             await session.execute(
@@ -154,16 +157,14 @@ async def process(factory: SessionFactory, job: Claimed) -> str:
         code = str(exc.code)[:40]
         # a paused provider (open breaker) is a wait, not a refusal
         if (exc.retryable or isinstance(exc, CircuitOpen)) and job.attempt < definitions.MAX_ATTEMPTS:
-            when = utcnow() + _dt.timedelta(seconds=backoff(job.attempt))
-            ok = await _finish(factory, job, QUEUED, error_code=code, next_attempt_at=when)
+            ok = await _finish(factory, job, QUEUED, error_code=code, retry_in=backoff(job.attempt))
             return "retry" if ok else "lost"
         ok = await _finish(factory, job, FAILED, error_code=code)
         return "failed" if ok else "lost"
     except Exception as exc:  # noqa: BLE001 - class only: a message may carry an address or a value
         logger.error("notification_error", id=str(job.id), error_class=type(exc).__name__)
         if job.attempt < definitions.MAX_ATTEMPTS:
-            when = utcnow() + _dt.timedelta(seconds=backoff(job.attempt))
-            ok = await _finish(factory, job, QUEUED, error_code="internal_error", next_attempt_at=when)
+            ok = await _finish(factory, job, QUEUED, error_code="internal_error", retry_in=backoff(job.attempt))
             return "retry" if ok else "lost"
         ok = await _finish(factory, job, FAILED, error_code="internal_error")
         return "failed" if ok else "lost"

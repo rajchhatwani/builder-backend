@@ -31,6 +31,12 @@ async function call<T>(path: string, init: RequestInit = {}, retried = false): P
 const json = (method: string, data?: unknown): RequestInit => ({ method, body: data === undefined ? undefined : JSON.stringify(data) })
 const P = (id: string) => `/projects/${id}`
 
+/** S3-004/5: the decision names the request that was reviewed; the server answers 409 approval_changed when it moved. */
+export const decisionBinding = (seen?: { payload_hash?: string | null; bound_spec_hash?: string }) => ({
+  ...(seen?.payload_hash ? { expected_payload_hash: seen.payload_hash } : {}),
+  ...(seen?.bound_spec_hash ? { expected_spec_hash: seen.bound_spec_hash } : {}),
+})
+
 export const aiApi = {
   getRequirements: (pid: string) => call<RequirementsMap>(`${P(pid)}/requirements`),
   intake: (pid: string, prompt: string, files: File[]) => {
@@ -56,8 +62,8 @@ export const aiApi = {
   },
   getApproval: (pid: string, aid: string) => call<Approval>(`${P(pid)}/agent/approvals/${encodeURIComponent(aid)}`),
   /** `plan` (Gate A only): the reviewer's edited plan; the server cleans it and answers 422 plan_empty when nothing is left. */
-  decide: (pid: string, aid: string, approve: boolean, note?: string, plan?: Record<string, string[]>) =>
-    call<Approval>(`${P(pid)}/agent/approvals/${aid}/decision`, json('POST', { approve, note: note || undefined, ...(plan ? { plan } : {}) })),
+  decide: (pid: string, aid: string, approve: boolean, note?: string, plan?: Record<string, string[]>, seen?: Pick<Approval, 'payload_hash' | 'bound_spec_hash'>) =>
+    call<Approval>(`${P(pid)}/agent/approvals/${aid}/decision`, json('POST', { approve, note: note || undefined, ...(plan ? { plan } : {}), ...decisionBinding(seen) })),
   platformBudget: (orgSlug: string) => call<PlatformBudget>(`/orgs/${encodeURIComponent(orgSlug)}/ai/platform-budget`),
 
   listPreviews: (pid: string) => call<Preview[]>(`${P(pid)}/previews`),

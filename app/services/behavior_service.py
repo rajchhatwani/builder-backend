@@ -8,7 +8,10 @@ so a stale write to one section never conflicts with a change to another. The ro
 each other's data. `row_version` (the old whole-row counter) is still bumped on every save and
 returned for compatibility, but it is no longer what `expected_version` is compared with."""
 
+import json
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any
 
@@ -89,14 +92,26 @@ def section_version(row: ProjectBehavior | None, key: str) -> int:
     return raw if isinstance(raw, int) and raw >= 0 else 0
 
 
-# Project role of whoever is making this request (set by the request guard / MCP); None outside a
-# request (CLI, tests), where nothing is restricted.
+# Project role of whoever is making this request (set by the request guard / MCP). None means
+# "no actor was established" and DENIES effectful-hook changes (S2-016): a worker, scheduler or
+# script must opt in with `system_actor()`, which sets the explicit SYSTEM_ACTOR marker.
 ACTOR_ROLE: ContextVar[str | None] = ContextVar("actor_role", default=None)
+SYSTEM_ACTOR = "system"
 
 
-def _effects_of(raw: Any) -> list[tuple[str, tuple[str, ...]]]:
+@contextmanager
+def system_actor() -> Iterator[None]:
+    """Run trusted, non-request code (migration scripts, tests of internals) as the system."""
+    token = ACTOR_ROLE.set(SYSTEM_ACTOR)
+    try:
+        yield
+    finally:
+        ACTOR_ROLE.reset(token)
+
+
+def _effects_of(raw: Any) -> list[tuple[str, tuple[str, ...], str]]:
     return sorted(
-        (h.get("name", ""), tuple(h["effects"]))
+        (h.get("name", ""), tuple(h["effects"]), json.dumps(h.get("effect_budget"), sort_keys=True))
         for h in (raw or [])
         if isinstance(h, dict) and h.get("effects")
     )
@@ -106,7 +121,7 @@ def _guard_effects(row: ProjectBehavior, key: str, new: Any) -> None:
     """CO-3: switching effectful hooks on, or changing a hook's `effects`, is owner-only, on every
     path (PUT /spec, typed ops, undo/redo/restore, MCP, the section routes)."""
     role = ACTOR_ROLE.get()
-    if role is None or role == "owner" or key not in ("hooks", "hook_effects"):
+    if role in ("owner", SYSTEM_ACTOR) or key not in ("hooks", "hook_effects"):
         return
     old = row.sections.get(key)
     if key == "hook_effects":
@@ -307,7 +322,46 @@ class BehaviorService:
         )
 
     async def put_hooks(self, project_id: uuid.UUID, data: HooksWrite) -> HooksRead:
-        items = [SpecHook.model_validate(m.model_dump()) for m in data.hooks]
+        row = await self._row(project_id)
+        stored = {
+            h["name"]: h
+            for h in (row.sections.get(HOOKS) or [] if row else [])
+            if isinstance(h, dict) and "name" in h
+        }
+        items: list[SpecHook] = []
+        # ND-2: a stored ai/external hook that is missing from this PUT may have been renamed. A new
+        # hook at the same point and kind (same input/output shape preferred) takes over its mark, once,
+        # so delete-and-recreate or rename cannot launder it into `trusted`. A new hook with no such
+        # removed hook (a legit addition) stays trusted.
+        submitted = {m.name for m in data.hooks}
+        removed = [
+            h for n, h in stored.items() if n not in submitted and h.get("author") not in (None, "trusted")
+        ]
+
+        def _shape(h: dict[str, Any]) -> str:
+            return json.dumps([h.get("input"), h.get("output")], sort_keys=True, default=str)
+
+        for m in data.hooks:
+            old = stored.get(m.name)
+            raw = m.model_dump(exclude={"effects", "effect_budget", "author"})
+            # author is never taken from the client: keep the stored mark, new hooks are human.
+            author = old.get("author") if old else "trusted"
+            if old is None and removed:
+                dumped = m.model_dump(mode="json")
+                cands = [h for h in removed if h.get("point") == m.point and h.get("kind", "pure") == m.kind]
+                best = next((h for h in cands if _shape(h) == _shape(dumped)), cands[0] if cands else None)
+                if best is not None:
+                    removed.remove(best)
+                    author = best.get("author")
+            raw["author"] = author
+            for key in ("effects", "effect_budget"):
+                if key in m.model_fields_set:
+                    raw[key] = m.model_dump(mode="json")[key]
+                elif old and key in old:
+                    raw[key] = old[key]
+            if raw.get("effects") is None:
+                raw.pop("effects", None)
+            items.append(SpecHook.model_validate(raw))
         await self._save(project_id, HOOKS, "hooks", data.expected_version, items)
         return await self.get_hooks(project_id)
 

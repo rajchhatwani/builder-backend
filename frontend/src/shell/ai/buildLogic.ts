@@ -1,3 +1,4 @@
+import { effectiveState } from './approvalLogic'
 import type { Approval, PlatformBudget, Run, Step } from './types'
 
 export const TERMINAL = ['applied', 'stopped', 'failed', 'cancelled']
@@ -47,8 +48,9 @@ export function stepLine(s: Step): { what: string; ok: boolean; cost: string } {
   return { what, ok: s.ok, cost: c }
 }
 
-export const pendingFor = (approvals: Approval[], runId?: string) =>
-  approvals.filter((a) => a.state === 'pending' && (!runId || a.run_id === runId))
+/** Still open for a decision: an expired-but-unmarked approval is not waiting for anyone. */
+export const pendingFor = (approvals: Approval[], runId?: string, now = Date.now()) =>
+  approvals.filter((a) => effectiveState(a, now) === 'pending' && (!runId || a.run_id === runId))
 
 export const RUN_STATE_LABEL: Record<string, string> = {
   created: 'Ready to start', planning: 'Planning', awaiting_approval: 'Waiting for you', running: 'Building', gating: 'Checking',

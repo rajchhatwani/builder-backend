@@ -33,6 +33,7 @@ from app.services.ai.base import (
     ToolDefinition,
     Usage,
 )
+from tests.api._approval_hash import reviewer_sends_hash  # noqa: F401  (isort: skip)
 from tests.api._auth_helpers import make_project
 from tests.api.conftest import ClientFor, add_to_project_org
 
@@ -126,6 +127,15 @@ class FakeApprovals:
             s.add(row)
             await s.commit()
             return row.id
+
+    async def validate_for_use(self, run: AiRun, approval: AiApproval, *, strict_payload: bool = False) -> None:
+        return None  # the real checks are covered with the real approvals (test_agent_fb2b.py)
+
+    async def prepare_promotion(self, run: AiRun) -> dict[str, bytes]:
+        return {}
+
+    async def promote(self, run: AiRun, files: dict[str, bytes]) -> dict[str, Any]:
+        return {"promoted": [], "commit": None}
 
 
 @pytest.fixture
@@ -337,6 +347,28 @@ async def test_resume_after_crash_does_not_rerun_done_tool_call(
     ids = [b["tool_use_id"] for b in msgs[2].content if b["type"] == "tool_result"]  # type: ignore[union-attr]
     assert ids == ["a1", "a2"] and "stored" in msgs[2].content[0]["content"]  # type: ignore[index]
     assert r.json()["state"] == "awaiting_approval"
+
+
+async def test_re_run_of_a_pending_tool_call_tells_the_tool_it_is_a_re_run(
+    client: AsyncClient, install: Any, session_factory: Factory
+) -> None:
+    """S1-008: only the crash re-run of a pending step sets ToolContext.reexecution."""
+    provider = ScriptedProvider(lambda n, r: call("write_thing", "fresh", n=3) if n == 1 else finish(n))
+    tb, _ = install(provider)
+    pid = await make_project(client)
+    rid = await _new(client, pid)
+    await _patch_run(session_factory, rid, state="running", phase="build",
+                     lease_owner="dead", lease_until=datetime.now(UTC) - timedelta(seconds=5))  # fmt: skip
+    async with session_factory() as s:
+        common = {"run_id": uuid.UUID(rid), "project_id": uuid.UUID(pid)}
+        s.add(AiStep(**common, seq=1, kind="model", output={"text": "", "tool_calls": [
+            {"id": "a2", "name": "write_thing", "input": {"n": 2}}]}))
+        s.add(AiStep(**common, seq=2, kind="tool", tool_name="write_thing", tool_call_id="a2",
+                     state="pending", input={"n": 2}))  # fmt: skip
+        await s.commit()
+    assert (await client.post(_url(pid, rid, "/resume"))).status_code == 200
+    assert [c.reexecution for c in tb.ctxs] == [True, False]  # a2 is the re-run, the model's new call is not
+    assert tb.ctxs[0].run_id == uuid.UUID(rid)
 
 
 async def test_live_lease_blocks_resume_and_expired_lease_does_not(

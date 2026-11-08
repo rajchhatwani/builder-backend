@@ -12,6 +12,8 @@ from app.exceptions import AppError
 # key -> (minimum, maximum), inclusive. Admins can move values inside these bounds only.
 BOUNDS: dict[str, tuple[float, float]] = {
     "max_live_per_user": (0, 20),
+    "max_live_total": (0, 200),  # platform-wide; an org cannot override it
+    "max_live_per_org": (0, 200),
     "sleep_after_minutes": (1, 24 * 60),
     "delete_after_days": (1, 30),
     "cpus": (0.1, 2.0),
@@ -24,6 +26,8 @@ BOUNDS: dict[str, tuple[float, float]] = {
 @dataclass(frozen=True)
 class PreviewLimits:
     max_live_per_user: int = 3
+    max_live_total: int = 6  # every live preview on the platform (S2-004)
+    max_live_per_org: int = 5
     sleep_after_minutes: int = 30
     delete_after_days: int = 14
     cpus: float = 0.5
@@ -35,6 +39,8 @@ class PreviewLimits:
         return asdict(self)
 
 
+# Capacity of the whole host: set by a platform admin only, never per organization.
+GLOBAL_KEYS = frozenset({"max_live_total"})
 KEYS = tuple(f.name for f in fields(PreviewLimits))
 _INT_KEYS = frozenset(k for k in KEYS if k != "cpus")
 
@@ -76,6 +82,8 @@ def resolve(
             continue
     base = dict(merged)
     for key, value in (org or {}).items():
+        if key in GLOBAL_KEYS:
+            continue
         try:
             ok = validate_limits({key: value})
         except AppError:
@@ -90,6 +98,9 @@ def check_org_overrides(
     platform: dict[str, object] | None, overrides: dict[str, float], allow_above_default: bool
 ) -> None:
     """Admin write check: without the explicit flag an override may not exceed the default."""
+    for key in overrides:
+        if key in GLOBAL_KEYS:
+            raise AppError("invalid_limit", f"{key} is platform-wide and cannot be overridden", 422)
     if allow_above_default:
         return
     base = resolve(platform).as_dict()

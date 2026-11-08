@@ -154,3 +154,130 @@ def test_state_machine_has_a_stopping_step() -> None:
     assert ps.can_transition("running", "stopping") and ps.can_transition("stopping", "sleeping")
     assert not ps.can_transition("running", "sleeping")  # teardown must finish first
     assert not ps.can_transition("stopping", "starting")  # no wake while stopping
+
+
+# -- F-001 / S2-002: per-launch secrets -----------------------------------------------------
+
+
+class _LaunchBox:
+    def __init__(self, logs_text: str = "", running: bool = True) -> None:
+        self.specs: list[object] = []
+        self._logs = logs_text
+        self._running = running
+        self.destroyed: list[str] = []
+
+    async def check_runtime(self) -> None: ...
+    async def create_network(self, sid: str, limits: object) -> str:
+        return "net-" + sid
+
+    async def start(self, spec: object) -> None:
+        self.specs.append(spec)
+
+    async def ip_of(self, sid: str, net: str) -> str:
+        return "10.0.0.2"
+
+    async def is_running(self, sid: str) -> bool:
+        return self._running
+
+    async def logs(self, sid: str, tail: int = 15) -> str:
+        return self._logs
+
+    async def destroy(self, sid: str) -> None:
+        self.destroyed.append(sid)
+
+
+def _spec(tmp_path: object) -> rt.StackSpec:
+    from pathlib import Path
+
+    return rt.StackSpec(
+        code_dir=Path(str(tmp_path)), db_sandbox="d" + uuid.uuid4().hex[:8],
+        app_sandbox="a" + uuid.uuid4().hex[:8], cpus=0.5, memory_mb=512, db_mb=256,
+        ttl_seconds=600, seed_profile=None,
+    )  # fmt: skip
+
+
+async def _run_launch(box: _LaunchBox, spec: rt.StackSpec, monkeypatch: pytest.MonkeyPatch) -> dict[str, str]:
+    from app.config import Settings
+
+    async def ok(*a: object, **k: object) -> None: ...
+
+    monkeypatch.setattr(rt, "_wait_db", ok)
+    monkeypatch.setattr(rt, "_wait_app", ok)
+    await rt.launch(box, spec, Settings(environment="test"))  # type: ignore[arg-type]
+    app_spec = box.specs[1]
+    return dict(app_spec.env)  # type: ignore[attr-defined]
+
+
+async def test_launch_gives_every_required_secret_fresh_per_launch(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SECRET_KEY", "platform-root-key-value-0123456789")
+    envs = []
+    for _ in range(2):
+        envs.append(await _run_launch(_LaunchBox(), _spec(tmp_path), monkeypatch))
+    a, b = envs
+    for name in ("AUTH_JWT_SECRET", "PROVIDER_VAULT_KEY", "STORAGE_SECRET_ACCESS_KEY"):
+        assert len(a[name]) >= 48, name
+        assert a[name] != b[name], f"{name} must differ between launches"
+        assert a[name] != "platform-root-key-value-0123456789"
+    assert a["AUTH_JWT_SECRET"] != a["PROVIDER_VAULT_KEY"]  # no value serves two purposes
+    assert a["PAYMENTS_WEBHOOK_IP_ALLOWLIST"] and a["KEYCLOAK_PUBLIC_URL"].startswith("http")
+    assert "AUTH_JWT_PRIVATE_KEY" not in a  # HS256 app: no RSA key is minted
+
+
+async def test_launch_mints_an_rsa_key_per_launch_for_rs256_apps(
+    tmp_path: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pathlib import Path
+
+    cfg = Path(str(tmp_path)) / "app" / "auth"
+    cfg.mkdir(parents=True)
+    (cfg / "config.py").write_text("auth_jwt_private_key: str = Field(min_length=200)\n")
+    a = await _run_launch(_LaunchBox(), _spec(tmp_path), monkeypatch)
+    b = await _run_launch(_LaunchBox(), _spec(tmp_path), monkeypatch)
+    for env in (a, b):
+        assert env["AUTH_JWT_PRIVATE_KEY"].startswith("-----BEGIN PRIVATE KEY-----")
+        assert len(env["AUTH_JWT_PRIVATE_KEY"]) >= 200
+    assert a["AUTH_JWT_PRIVATE_KEY"] != b["AUTH_JWT_PRIVATE_KEY"]
+
+
+async def test_missing_setting_is_named_and_secrets_are_redacted(
+    tmp_path: object,
+) -> None:
+    fake = "zq" + "Y7" * 20  # not a real secret; split so no full pattern sits in source
+    logs = (
+        "pydantic_core.ValidationError: 1 validation error for AuthSettings\n"
+        "auth_jwt_secret\n  Field required [type=missing]\n"
+        f"leaked={fake}\n"
+    )
+    box = _LaunchBox(logs_text=logs, running=False)
+    with pytest.raises(SandboxError) as ei:
+        await rt._wait_app(box, "x", "10.0.0.2", timeout=2, secrets_in_use=(fake,))  # type: ignore[arg-type]
+    assert "AUTH_JWT_SECRET" in str(ei.value) and fake not in str(ei.value)
+    other = _LaunchBox(logs_text=f"boom {fake}", running=False)
+    with pytest.raises(SandboxError) as ei2:
+        await rt._wait_app(other, "x", "10.0.0.2", timeout=2, secrets_in_use=(fake,))  # type: ignore[arg-type]
+    assert fake not in str(ei2.value) and "exited during start" in str(ei2.value)
+
+
+def test_missing_settings_parser() -> None:
+    assert rt.missing_settings("provider_vault_key\n  Field required") == ["PROVIDER_VAULT_KEY"]
+    assert rt.missing_settings("PROVIDER_VAULT_KEY is not set") == ["PROVIDER_VAULT_KEY"]
+    assert rt.missing_settings("all fine") == []
+
+
+# -- S2-004: capacity defaults ---------------------------------------------------------------
+
+
+def test_capacity_limits_are_small_by_default_and_global_is_not_org_overridable() -> None:
+    d = PreviewLimits()
+    assert d.max_live_total == 6 and d.max_live_per_org >= 1
+    assert resolve({"max_live_total": 40}).max_live_total == 40
+    assert resolve(None, {"max_live_total": 1}).max_live_total == 6  # org value ignored
+    with pytest.raises(AppError):
+        validate_limits({"max_live_total": 201})
+    from app.services.preview_limits import check_org_overrides
+
+    with pytest.raises(AppError) as e:
+        check_org_overrides(None, {"max_live_total": 1.0}, True)
+    assert e.value.status_code == 422

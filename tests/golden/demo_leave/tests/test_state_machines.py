@@ -46,16 +46,25 @@ async def test_leave_requests_unknown_transition_and_record(client: AsyncClient)
     assert missing.status_code == 404
 
 
+async def _make_in(client: AsyncClient, states: list[str]) -> dict[str, object]:
+    """Sample data can trip an automatic transition on create; create until the record is in `states` (any state when empty)."""
+    for _ in range(50):
+        created = await _factories.make_leave_requests(client)
+        if not states or created['state'] in states:
+            return created
+    raise AssertionError(f"no sample record was created in one of {states}")
+
+
 async def test_leave_requests_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
     """A transition that lists no roles is open to whoever may update LeaveRequest, not to every reader
     (role `employee` can read but not update); one that lists roles keeps its own role check."""
-    created = await _factories.make_leave_requests(client)
+    created = await _make_in(client, ['hr_review', 'manager_review', 'requested'])
     base = f"/leave_requests/{created['id']}"
     async with client_for(await sign_in(client, "sm-reader@example.com", roles=['employee'])) as reader:
         assert (await reader.get(base)).status_code == 200  # the reader sees the record...
         moved = await reader.post(f"{base}/transitions/cancel")
         assert moved.status_code == 200, moved.text  # listed role: unchanged, no update right needed
-        created = await _factories.make_leave_requests(client)
+        created = await _make_in(client, [])
         base = f"/leave_requests/{created['id']}"
     async with client_for({}) as anonymous:
         assert (await anonymous.post(f"{base}/transitions/cancel")).status_code in (401, 403)

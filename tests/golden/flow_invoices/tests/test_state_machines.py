@@ -46,10 +46,19 @@ async def test_invoices_unknown_transition_and_record(client: AsyncClient) -> No
     assert missing.status_code == 404
 
 
+async def _make_in(client: AsyncClient, states: list[str]) -> dict[str, object]:
+    """Sample data can trip an automatic transition on create; create until the record is in `states` (any state when empty)."""
+    for _ in range(50):
+        created = await _factories.make_invoices(client)
+        if not states or created['status'] in states:
+            return created
+    raise AssertionError(f"no sample record was created in one of {states}")
+
+
 async def test_invoices_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
     """A transition that lists no roles is open to whoever may update Invoice, not to every reader
     (role `approver` can read but not update); one that lists roles keeps its own role check."""
-    created = await _factories.make_invoices(client)
+    created = await _make_in(client, ['draft'])
     base = f"/invoices/{created['id']}"
     async with client_for(await sign_in(client, "sm-reader@example.com", roles=['approver'])) as reader:
         assert (await reader.get(base)).status_code == 200  # the reader sees the record...
@@ -59,7 +68,7 @@ async def test_invoices_transitions_without_roles_need_update_access(client: Asy
     async with client_for(await sign_in(client, "sm-roled@example.com", roles=['clerk'])) as roled:
         moved = await roled.post(f"{base}/transitions/submit")
         assert moved.status_code == 200, moved.text  # listed role: unchanged, no update right needed
-        created = await _factories.make_invoices(client)
+        created = await _make_in(client, ['draft'])
         base = f"/invoices/{created['id']}"
     async with client_for({}) as anonymous:
         assert (await anonymous.post(f"{base}/transitions/withdraw")).status_code in (401, 403)

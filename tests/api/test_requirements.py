@@ -258,3 +258,40 @@ async def test_one_intake_at_a_time_and_hourly_cap(
     assert (await intake(client, pid, prompt="Invoice flow")).status_code == 200
     r2 = await intake(client, pid, prompt="Invoice flow 2")
     assert r2.status_code == 429 and "retry-after" in r2.headers
+
+
+async def test_multipart_nul_in_prompt_field_is_4xx(client: AsyncClient, provider: Any) -> None:
+    """S2-019: the multipart path used to skip the NUL guard and reach the database as a 500."""
+    pid = await make_project(client)
+    r = await intake(client, pid, prompt="Invoice\x00flow")
+    assert r.status_code == 422 and r.json()["code"] == "validation_error"
+    assert provider.requests == []
+    # a NUL inside an uploaded file is binary content, not a text field: still accepted by the guard
+    ok = await intake(client, pid, prompt="Invoice flow", files=[("a.txt", b"Invoice\x00 flow")])
+    assert ok.status_code != 500
+
+
+async def test_intake_middleware_allows_11mb_refuses_14mb(client: AsyncClient, provider: Any) -> None:
+    """S2-019: SecurityMiddleware's 10 MB cap used to refuse the documented 12 MB intake allowance."""
+    pid = await make_project(client)
+    files = [("files", (f"{n}.txt", b"Invoice " + b"a" * (2_200_000), "text/plain")) for n in range(5)]
+    r = await client.post(url(pid, "/intake"), files=files)  # ~11 MB in total
+    assert r.json().get("code") != "payload_too_large", r.text  # reached the handler (it may refuse on chunks)
+    big = b"a" * (14 * 1024 * 1024)
+    r2 = await client.post(url(pid, "/intake"), files=[("files", ("a.txt", big, "text/plain"))])
+    assert r2.status_code == 413 and r2.json()["code"] == "payload_too_large"
+
+
+async def test_per_user_intake_limit_with_retry_after(
+    client: AsyncClient, provider: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services.requirements import service as svc
+
+    monkeypatch.setattr(svc._user_limiter, "attempts", 2)
+    svc._user_limiter.reset()
+    pids = [await make_project(client) for _ in range(3)]  # different projects: the project cap is not hit
+    assert (await intake(client, pids[0], prompt="Invoice flow")).status_code == 200
+    assert (await intake(client, pids[1], prompt="Invoice flow")).status_code == 200
+    r = await intake(client, pids[2], prompt="Invoice flow")
+    assert r.status_code == 429 and r.json()["code"] == "intake_user_rate_limited"
+    assert int(r.headers["retry-after"]) >= 1

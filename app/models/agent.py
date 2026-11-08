@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +20,21 @@ class AiRun(UUIDPrimaryKeyMixin, Base):
     """One agent run. State lives here, not in memory, so a crashed run resumes from its steps."""
 
     __tablename__ = "ai_runs"
-    __table_args__ = (Index("ix_ai_runs_project", "project_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_ai_runs_project", "project_id", "created_at"),
+        # S1-014: the workspace-busy guard filters (workspace_id, state)
+        Index("ix_ai_runs_workspace_state", "workspace_id", "state"),
+        # S1-006: one live run per workspace (two would overwrite each other's files)
+        Index(
+            "uq_ai_runs_live_workspace",
+            "workspace_id",
+            unique=True,
+            postgresql_where=text(
+                "workspace_id IS NOT NULL AND state IN "
+                "('created','planning','awaiting_approval','running','gating','applying')"
+            ),
+        ),
+    )
 
     project_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), _project_fk(), nullable=False)
     workspace_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -39,6 +53,10 @@ class AiRun(UUIDPrimaryKeyMixin, Base):
     steps_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     repairs_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_micro_usd: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    # Active driving time over the whole run (B-008): approvals and resumes cannot reset it.
+    wall_ms_used: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=0, server_default="0"
+    )
     stop_code: Mapped[str | None] = mapped_column(String(40), nullable=True)
     stop_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Resumability: one driver holds the lease; an expired lease means the driver died.
@@ -93,7 +111,11 @@ class AiApproval(UUIDPrimaryKeyMixin, Base):
     """A human decision (kinds A-E), bound to a spec hash and a commit, expiring."""
 
     __tablename__ = "ai_approvals"
-    __table_args__ = (Index("ix_ai_approvals_run", "run_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_ai_approvals_run", "run_id", "created_at"),
+        # S1-014: the inbox filters project_id (+ state) and orders by created_at
+        Index("ix_ai_approvals_project_state", "project_id", "state", "created_at"),
+    )
 
     run_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("ai_runs.id", ondelete="CASCADE"), nullable=False
@@ -107,6 +129,9 @@ class AiApproval(UUIDPrimaryKeyMixin, Base):
     state: Mapped[str] = mapped_column(String(12), nullable=False, default="pending")
     bound_spec_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     bound_commit: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # sha256 of the canonical payload when it was asked / last edited by a decision. An approval is
+    # only used while the payload still hashes to this (S1-004: a changed payload invalidates it).
+    payload_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     decided_by: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("platform_users.id", ondelete="SET NULL"), nullable=True
     )

@@ -9,6 +9,7 @@ model money (bounded by the platform hard cap and the per-run budget). Neutral e
 
 import argparse
 import json
+import os
 import sys
 import time
 from pathlib import Path
@@ -54,7 +55,7 @@ def make_pdf(lines: list[str]) -> bytes:
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8780")
-    ap.add_argument("--email", default="rajchhatwani39@gmail.com")
+    ap.add_argument("--email", default=os.environ.get("SC_ADMIN_EMAIL", "admin@example.test"))
     ap.add_argument("--project", default="Leave Desk (built by the agent)")
     ap.add_argument("--max-loops", type=int, default=30)
     a = ap.parse_args()
@@ -137,7 +138,10 @@ def main() -> int:
                         print("  NOTHING WAS BUILT: denying this final review instead of applying an empty change")
                         c.post(f"/projects/{pid}/agent/approvals/{ap_['id']}/decision", json={"approve": False, "note": "empty change"})
                         continue
-                d = c.post(f"/projects/{pid}/agent/approvals/{ap_['id']}/decision", json={"approve": True})
+                body = {"approve": True}
+                if ap_.get("payload_hash"):  # decisions are bound to the payload that was read
+                    body["expected_payload_hash"] = ap_["payload_hash"]
+                d = c.post(f"/projects/{pid}/agent/approvals/{ap_['id']}/decision", json=body)
                 if d.status_code != 200:
                     print("  decision failed", d.status_code, d.text[:300])
                     return 1

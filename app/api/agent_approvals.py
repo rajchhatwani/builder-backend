@@ -43,7 +43,7 @@ async def list_approvals(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> list[ApprovalRead]:
-    svc = ApprovalService(db, settings)
+    svc = await ApprovalService.for_project(db, settings, project_id)
     return [_read(svc, r) for r in await svc.list(project_id, state=state, run_id=run_id, limit=limit)]
 
 
@@ -54,7 +54,7 @@ async def get_approval(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> ApprovalRead:
-    svc = ApprovalService(db, settings)
+    svc = await ApprovalService.for_project(db, settings, project_id)
     return _read(svc, await svc.get(project_id, approval_id))
 
 
@@ -68,8 +68,13 @@ async def decide_approval(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> ApprovalRead:
-    svc = ApprovalService(db, settings)
-    row = await svc.decide(project_id, approval_id, principal.user.id, body.approve, body.note, body.plan)
+    svc = await ApprovalService.for_project(db, settings, project_id)
+    row = await svc.decide(project_id, approval_id, principal.user.id, body.approve,
+        body.note,
+        body.plan,
+        expected_payload_hash=body.expected_payload_hash,
+        expected_spec_hash=body.expected_spec_hash,
+    )
     project = await db.get(Project, project_id)
     info = request_info(request)
     await audit_service.record(

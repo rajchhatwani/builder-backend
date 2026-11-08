@@ -19,6 +19,21 @@ export function markEmailVerified(email: string): void {
   execFileSync('docker', ['exec', 'bb-e2e-pg', 'psql', '-U', 'builder', '-d', 'builder', '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'pipe' })
 }
 
+/** Test setup only: the e2e stack has no scripted model, so a run that is waiting on a person is seeded straight
+ *  in the throwaway database (same escape hatch as markEmailVerified): the run (made through the API) is moved to
+ *  awaiting_approval and one pending approval is inserted for it. Returns the approval id. */
+export function seedPendingApproval(runId: string, projectId: string, kind: 'A' | 'B' | 'C' | 'D' | 'E', subject: string, payload: Record<string, unknown>, riskFlags: string[] = []): string {
+  const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`
+  const uuid = (v: string) => { if (!/^[0-9a-f-]{36}$/i.test(v)) throw new Error('not a uuid'); return `'${v}'` }
+  const sql = `update ai_runs set state='awaiting_approval', phase='build' where id=${uuid(runId)};` +
+    `insert into ai_approvals (id, run_id, project_id, kind, subject, payload, risk_flags, state, bound_spec_hash, expires_at, created_at) ` +
+    `values (gen_random_uuid(), ${uuid(runId)}, ${uuid(projectId)}, '${kind}', '${subject.replace(/'/g, "''")}', ${lit(payload)}, ${lit(riskFlags)}, 'pending', '${'0'.repeat(64)}', now() + interval '1 day', now()) returning id`
+  const out = execFileSync('docker', ['exec', 'bb-e2e-pg', 'psql', '-U', 'builder', '-d', 'builder', '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], { stdio: 'pipe' }).toString()
+  const id = out.split('\n').find((l) => /^[0-9a-f-]{36}$/i.test(l.trim()))
+  if (!id) throw new Error(`approval not seeded: ${out}`)
+  return id.trim()
+}
+
 /** Create a customer account through the API (setup only; the UI sign-up journey is separate).
  *  Register answers 202 without a session, so: register, mark verified in the database, then log in. */
 export async function registerViaApi(request: APIRequestContext, email = uniqueEmail()) {

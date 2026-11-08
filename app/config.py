@@ -8,6 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=(".env", ".env.local"), env_prefix="BUILDER_", extra="ignore")
 
+    # Default stays "local" for dev ergonomics, but isolation decisions use `environment_explicit`:
+    # an UNSET environment never unlocks the runc fallback (S2-006).
     environment: str = "local"
     log_level: str = "INFO"
     # Owner role used only by Alembic and `python -m app.core.rls`. Unset = same as database_url.
@@ -117,6 +119,9 @@ class Settings(BaseSettings):
     # Per-org monthly cap in micro-USD when the org set none. None = no cap.
     ai_default_monthly_budget_micro_usd: int | None = None
     ai_request_timeout_seconds: float = 120.0
+    # A spend reservation not settled within this long is treated as orphaned (process died) and freed.
+    # Keep it well above ai_request_timeout_seconds so a slow live call is never freed under it.
+    ai_reservation_ttl_seconds: float = 900.0
     # The owner's own key (BUILDER_AI_API_KEY in the git-ignored .env.local). Used ONLY for orgs
     # whose ID (uuid string, never the slug: slugs are user-chosen) is listed in ai_platform_key_orgs and that have no key of their own; the
     # platform cap bounds the total spend either way.
@@ -168,6 +173,22 @@ class Settings(BaseSettings):
     preview_db_image: str = "postgres:16-alpine"
     # App-startup scheduler for the idle-sleep / expiry sweep + reaper. Off unless enabled.
     preview_scheduler_enabled: bool = False
+    # Agent runs: live runs per project (S1-006) and the crash-resume sweeper (B-003). The sweeper
+    # re-drives runs whose lease expired; it is never started when environment == "test".
+    agent_max_live_runs_per_project: int = 5
+    agent_sweeper_enabled: bool = True
+    agent_sweep_interval_seconds: int = 30
+    agent_sweep_max_runs: int = 3
+    agent_max_recoveries: int = 3
+    # Approval policy (B-001). Platform values; an org may only TIGHTEN them (ai_org_settings.approval_policy).
+    # Lifetimes in hours (clamped 1 min .. 7 days); roles kind->"owner" can only RAISE the built-in floor;
+    # auto-approval of a small plan edit is off; separation of duties (the run's creator may not approve
+    # their own run) is off, an org owner can switch it on.
+    ai_approval_ttl_hours: int = 24
+    ai_approval_ttl_plan_hours: int = 168
+    ai_approval_roles: dict[str, str] = {}
+    ai_approval_auto_plan_small_edit: bool = False
+    ai_approval_separation_of_duties: bool = False
     # Dependency approvals (B3-9) expire so a package is re-vetted periodically.
     dependency_approval_ttl_days: int = 90
     preview_sweep_interval_seconds: int = 60
@@ -178,6 +199,11 @@ class Settings(BaseSettings):
     preview_max_response_bytes: int = 8 * 1024**2
     preview_request_timeout_seconds: int = 30
     preview_log_stream_max_seconds: int = 60
+
+    @property
+    def environment_explicit(self) -> bool:
+        """True only when the environment was actually provided (env var, .env or constructor)."""
+        return "environment" in self.model_fields_set
 
     @property
     def is_local(self) -> bool:

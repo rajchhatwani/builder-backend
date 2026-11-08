@@ -24,9 +24,9 @@ CEILINGS = {"max_steps": 200, "max_cost_micro_usd": 100_000_000, "max_wall_secon
 
 @dataclass(frozen=True)
 class Budgets:
-    max_steps: int = DEFAULT_MAX_STEPS  # model calls per segment (one drive() call)
+    max_steps: int = DEFAULT_MAX_STEPS  # model calls per run (persisted, not reset by approvals or resumes)
     max_cost_micro_usd: int = DEFAULT_MAX_COST_MICRO_USD  # per run, from the ai ledger
-    max_wall_seconds: int = DEFAULT_MAX_WALL_SECONDS  # per segment
+    max_wall_seconds: int = DEFAULT_MAX_WALL_SECONDS  # active driving time per run (persisted)
     max_repairs: int = DEFAULT_MAX_REPAIRS  # per failing gate rule
 
     def as_dict(self) -> dict[str, int]:
@@ -54,7 +54,7 @@ class Budgets:
 def check_limits(b: Budgets, *, steps: int, cost_micro_usd: int, elapsed_seconds: float) -> StopReason | None:
     """First budget that is used up, or None. Order: steps, cost, wall."""
     if steps >= b.max_steps:
-        return StopReason("budget_steps", f"{steps} of {b.max_steps} steps used in this segment")
+        return StopReason("budget_steps", f"{steps} of {b.max_steps} steps used by this run")
     if cost_micro_usd >= b.max_cost_micro_usd:
         return StopReason(
             "budget_cost", f"{cost_micro_usd} of {b.max_cost_micro_usd} micro-USD used by this run"

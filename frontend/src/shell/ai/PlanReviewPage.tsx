@@ -2,7 +2,10 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../../api/client'
 import { aiApi } from './aiApi'
 import { PLAN_ERRORS, PLAN_KEYS, PLAN_LABEL, addRow, editedInfo, gateAFor, isEdited, phasesOf, planBody, planRows, toggleRow, type PlanKey, type PlanRow } from './planLogic'
+import { approvalFingerprint, approvalList, decideFailure, decisionGate, effectiveState } from './approvalLogic'
 import type { Approval } from './types'
+import { useMyRole } from './useMyRole'
+import { useNow } from './useNow'
 import { errMsg, runLink, useRunParam } from './useRunParam'
 
 /** F3-2: Gate A. What the agent wants to touch, as a table you can trim; approve, deny, or send your changes back. */
@@ -17,11 +20,14 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [done, setDone] = useState('')
+  const [changed, setChanged] = useState(false)
+  const myRole = useMyRole(projectId)
+  const now = useNow()
 
   const load = useCallback(async () => {
     try {
       // with a run in the link also the decided plan is shown (with what the reviewer changed)
-      const list = await aiApi.listApprovals(projectId, runId ? { run_id: runId } : { state: 'pending' })
+      const list = approvalList(await aiApi.listApprovals(projectId, runId ? { run_id: runId } : { state: 'pending' }))
       const a = gateAFor(list)
       setApproval(a)
       setRows(a ? planRows(a.payload) : [])
@@ -31,17 +37,32 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
 
   const original = useMemo(() => (approval ? planRows(approval.payload) : []), [approval])
   const edited = isEdited(rows, original)
-  const open = approval?.state === 'pending'
+  const st = approval ? effectiveState(approval, now) : ''
+  const gate = approval ? decisionGate(approval, myRole, now) : { canDecide: false, reason: '' }
+  const open = st === 'pending'
   const was = approval && !open ? editedInfo(approval.payload) : null
 
   const decide = async (approve: boolean, text?: string, msg = '', plan?: Record<string, string[]>) => {
     if (!approval) return
+    if (!gate.canDecide) return
     setBusy(true); setError('')
     try {
-      await aiApi.decide(projectId, approval.id, approve, text, plan)
+      // S3-005: decide only on the plan that was shown; if it changed meanwhile, show the new one and ask again
+      const fresh = approvalList([await aiApi.getApproval(projectId, approval.id)])[0]
+      if (fresh && approvalFingerprint(fresh) !== approvalFingerprint(approval)) {
+        setApproval(fresh); setRows(planRows(fresh.payload)); setChanged(true)
+        return
+      }
+      setChanged(false)
+      await aiApi.decide(projectId, approval.id, approve, text, plan, approval)
       setDone(msg)
       setApproval(null)
-    } catch (e) { setError(e instanceof ApiError && PLAN_ERRORS[e.code] ? PLAN_ERRORS[e.code] : errMsg(e)) } finally { setBusy(false) }
+    } catch (e) {
+      const code = e instanceof ApiError ? e.code : undefined
+      const f = decideFailure(code, errMsg(e))
+      setError(code && PLAN_ERRORS[code] ? PLAN_ERRORS[code] : f.text)
+      if (f.reload) { setChanged(true); void load() }
+    } finally { setBusy(false) }
   }
 
   return (
@@ -49,6 +70,7 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
       <h1>Review the plan</h1>
       <p className="muted">Before it builds, the agent tells you what it plans to touch. Nothing outside this list can be changed.</p>
       {error && <p className="bh-error" role="alert">{error}</p>}
+      {changed && <p className="card" role="status" data-testid="plan-changed">This plan changed since you opened it. Review it again before you decide.</p>}
       {loading && <p className="empty-state">Loading…</p>}
       {done && (
         <p data-testid="plan-done">{done} {runId && <a href={runLink(projectId, 'build', runId)}>Back to the build</a>}</p>
@@ -61,8 +83,9 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
         <div className="card" data-testid="plan-card">
           <h2>{approval.subject}</h2>
           {!open && (
-            <p className="card" role="status" data-testid="plan-state" data-state={approval.state}>
-              <strong>{approval.state === 'approved' ? 'Approved' : approval.state === 'denied' ? 'Denied' : approval.state === 'superseded' ? 'Replaced by a newer plan' : 'Expired'}.</strong>
+            <p className="card" role="status" data-testid="plan-state" data-state={st}>
+              <strong>{st === 'approved' ? 'Approved' : st === 'denied' ? 'Denied' : st === 'superseded' ? 'Replaced by a newer plan' : 'Expired'}.</strong>
+              {st === 'expired' && <> It was not decided in time, so it can no longer be approved. The agent has to ask again.</>}
               {approval.decision_note && <> Note: {approval.decision_note}</>}
             </p>
           )}
@@ -88,12 +111,13 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
                 <tr key={`${r.key}-${r.value}`} data-removed={r.removed || undefined}>
                   <td>{PLAN_LABEL[r.key]}</td>
                   <td className={r.removed ? 'ai-struck' : undefined}><code>{r.value}</code></td>
-                  <td>{open && <button className="small outline" onClick={() => setRows(toggleRow(rows, i))}>{r.removed ? 'Keep' : 'Remove'}</button>}</td>
+                  <td>{open && gate.canDecide && <button className="small outline" onClick={() => setRows(toggleRow(rows, i))}>{r.removed ? 'Keep' : 'Remove'}</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-          {open && (
+          {open && !gate.canDecide && <p className="muted" role="note" id="plan-gate-reason" data-testid="plan-gate-reason">{gate.reason}</p>}
+          {open && gate.canDecide && (
             <>
               <div className="hstack">
                 <select aria-label="Kind to add" value={addKey} onChange={(e) => setAddKey(e.target.value as PlanKey)}>
@@ -106,8 +130,8 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
               <input id="plan-note" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
               {edited && <p className="muted small-text" data-testid="plan-edited">You changed the scope. Approving sends your list: the build step is then limited to exactly what is left. The agent's original is kept on record.</p>}
               <div className="hstack">
-                <button disabled={busy} onClick={() => void decide(true, note, edited ? 'Your edited plan was approved.' : 'Plan approved.', edited ? planBody(rows) : undefined)} data-testid="plan-approve">{edited ? 'Approve my edited plan' : 'Approve plan'}</button>
-                <button className="outline" disabled={busy} onClick={() => void decide(false, note, 'Plan denied.')} data-testid="plan-deny">Deny</button>
+                <button disabled={busy || !gate.canDecide} aria-describedby={!gate.canDecide ? 'plan-gate-reason' : undefined} onClick={() => void decide(true, note, edited ? 'Your edited plan was approved.' : 'Plan approved.', edited ? planBody(rows) : undefined)} data-testid="plan-approve">{edited ? 'Approve my edited plan' : 'Approve plan'}</button>
+                <button className="outline" disabled={busy || !gate.canDecide} onClick={() => void decide(false, note, 'Plan denied.')} data-testid="plan-deny">Deny</button>
               </div>
             </>
           )}

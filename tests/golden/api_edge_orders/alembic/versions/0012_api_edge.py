@@ -28,6 +28,7 @@ def upgrade() -> None:
         sa.Column("method", sa.String(8), nullable=False),
         sa.Column("path", sa.String(500), nullable=False),
         sa.Column("request_hash", sa.String(64), nullable=False),
+        sa.Column("caller_roles", sa.JSON(), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
         sa.Column("response_status", sa.Integer(), nullable=True),
         sa.Column("response_headers", sa.JSON(), nullable=True),

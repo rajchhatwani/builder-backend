@@ -6,18 +6,23 @@ compare-and-set UPDATE. The loop executes only ToolCall objects returned by the 
 inside tool results is data (wrapped as untrusted) and can never select a tool.
 """
 
+import asyncio
+import contextlib
 import hashlib
 import json
+import logging
 import re
 import time
 import uuid
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from sqlalchemy import func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
 from app.exceptions import AppError
@@ -26,6 +31,7 @@ from app.models.ai_ledger import AiCostLedger
 from app.models.project import Project
 from app.models.workspace import Workspace
 from app.schemas.agent_run import RunDetail, RunRead, StepRead
+from app.services.agent import approved_effects
 from app.services.agent import budgets as bud
 from app.services.agent.contract import (
     ApprovalKind,
@@ -37,7 +43,7 @@ from app.services.agent.contract import (
     ToolContext,
     ToolResult,
 )
-from app.services.agent.draft import apply_draft, drop_draft, spec_seq
+from app.services.agent.draft import LeaseLost, apply_draft, drop_draft, spec_seq
 from app.services.ai.base import (
     CompletionRequest,
     Message,
@@ -49,8 +55,12 @@ from app.services.ai.gateway import ModelGateway, ProviderFactory
 from app.services.ops.scope import Actor
 from app.services.spec_service import SpecService
 
+log = logging.getLogger(__name__)
+
 TERMINAL = frozenset({"applied", "stopped", "failed", "cancelled"})
-LEASE_SECONDS = 60
+# The lease is short on purpose; a heartbeat renews it while a model call, a tool or the gates run
+# (S1-001), so a live driver never loses it and a dead one is taken over within this time.
+LEASE_SECONDS: float = 60
 OUTPUT_CAP = 20_000  # bytes of stored tool output
 FINISH = "finish"
 FINISH_DEF = ToolDefinition(
@@ -127,6 +137,20 @@ class Approvals(Protocol):
     async def require_valid(self, run: AiRun, kind: ApprovalKind) -> None:
         """Raise AppError (409) unless the latest decision of this kind is approved AND still bound
         to the current spec hash and commit (stale / expired / denied approvals never pass)."""
+        ...
+
+    async def validate_for_use(self, run: AiRun, approval: AiApproval, *, strict_payload: bool = False) -> None:
+        """Raise AppError unless this approved row is unexpired, bound to the spec hash and content
+        hash the run has now, and its payload is still the one that was asked (S1-004)."""
+        ...
+
+    async def prepare_promotion(self, run: AiRun) -> dict[str, bytes]:
+        """B-004: before apply, the custom-zone files covered by the valid final approval, verified
+        against the approved hashes (AppError on any mismatch)."""
+        ...
+
+    async def promote(self, run: AiRun, files: dict[str, bytes]) -> dict[str, Any]:
+        """B-004: after apply, commit those files to the project's live code (idempotent)."""
         ...
 
 
@@ -336,7 +360,10 @@ def replay(steps: list[AiStep], budgets: bud.Budgets) -> Replayed:
     ]
     needs_nudge = False
     if last_model is not None and not (last_model.output or {}).get("tool_calls"):
-        after = [s for s in steps if s.seq > last_model.seq and s.kind == "system"]
+        after = [
+            s for s in steps
+            if s.seq > last_model.seq and s.kind == "system" and not (s.output or {}).get("recovered")
+        ]
         needs_nudge = not after
     return Replayed(det, rep, last_failed, pending, needs_nudge, streak)
 
@@ -369,12 +396,13 @@ async def _append_step(session: AsyncSession, run: AiRun, kind: str, **kw: Any) 
     await session.commit()
 
 
-async def discard_draft(session: AsyncSession, run_id: uuid.UUID) -> str:
+async def discard_draft(session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None) -> str:
     """Drop the run's spec draft (deny, cancel, stop, failure). The live spec was never touched,
     so nothing is undone. The draft workspace's generated files go back to the live spec. Records
-    a system step when there was a draft; never raises. Returns discarded | nothing."""
+    a system step when there was a draft; never raises. Returns discarded | nothing | lost.
+    With `owner` the draft is only dropped while that driver still holds the lease (S1-001)."""
     try:
-        dropped = await drop_draft(session, run_id)
+        dropped = await drop_draft(session, run_id, owner=owner)
         run = await session.get(AiRun, run_id, populate_existing=True)
         if run is None or dropped == 0:
             return "nothing"
@@ -389,6 +417,8 @@ async def discard_draft(session: AsyncSession, run_id: uuid.UUID) -> str:
                 detail = f"workspace_resync_failed: {getattr(exc, 'code', type(exc).__name__)}"
         await _append_step(session, run, "system", output={"draft": "discarded", "ops": dropped, "detail": detail})
         return "discarded"
+    except LeaseLost:
+        return "lost"
     except Exception:
         await session.rollback()
         return "nothing"
@@ -425,6 +455,28 @@ class RunService:
             ).scalar_one_or_none()
             if ws is None:
                 raise AppError("not_found", "workspace not found", 404)
+        # S1-006: serialise creators of one project on its row, then apply the cap and the
+        # one-live-run-per-workspace rule (the partial unique index is the last line of defence).
+        await self.session.execute(select(Project.id).where(Project.id == project_id).with_for_update())
+        live = (
+            await self.session.execute(
+                select(func.count()).select_from(AiRun).where(
+                    AiRun.project_id == project_id, AiRun.state.in_(_LIVE)
+                )
+            )
+        ).scalar_one()
+        if int(live) >= self.settings.agent_max_live_runs_per_project:
+            await self.session.rollback()
+            raise AppError("too_many_runs", "this project has too many live agent runs; finish or cancel one", 409)
+        if workspace_id is not None:
+            busy = (
+                await self.session.execute(
+                    select(AiRun.id).where(AiRun.workspace_id == workspace_id, AiRun.state.in_(_LIVE)).limit(1)
+                )
+            ).scalar_one_or_none()
+            if busy is not None:
+                await self.session.rollback()
+                raise AppError("workspace_busy", "another live agent run already uses this workspace", 409)
         run = AiRun(
             project_id=project_id,
             workspace_id=workspace_id,
@@ -435,7 +487,11 @@ class RunService:
             budgets=bud.Budgets().as_dict(),
         )
         self.session.add(run)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError:
+            await self.session.rollback()
+            raise AppError("workspace_busy", "another live agent run already uses this workspace", 409) from None
         return run
 
     async def list_runs(
@@ -611,6 +667,75 @@ class RunDriver:
         )
         await self.s.commit()
 
+    @asynccontextmanager
+    async def _beat(self, run_id: uuid.UUID) -> AsyncIterator[None]:
+        """Keep the lease alive while one long await (model call, tool, gates) runs, on its own
+        connection. If the lease was taken over meanwhile, `_Lost` is raised when the await ends."""
+        interval = max(LEASE_SECONDS / 3, 0.05)
+        bind = self.s.bind
+        assert bind is not None
+        maker = async_sessionmaker(bind, expire_on_commit=False)
+        lost = False
+
+        async def pump() -> None:
+            nonlocal lost
+            while True:
+                await asyncio.sleep(interval)
+                try:
+                    async with maker() as hs:
+                        res = await hs.execute(
+                            update(AiRun)
+                            .where(
+                                AiRun.id == run_id,
+                                AiRun.lease_owner == self.owner,
+                                AiRun.state.notin_(TERMINAL),
+                            )
+                            .values(lease_until=_now() + timedelta(seconds=LEASE_SECONDS))
+                            .execution_options(synchronize_session=False)
+                        )
+                        await hs.commit()
+                    if res.rowcount == 0:  # type: ignore[attr-defined]
+                        lost = True
+                        return
+                except Exception:  # a failed beat is retried; the lease just runs down
+                    log.warning("agent lease heartbeat failed", exc_info=True)
+
+        task = asyncio.create_task(pump())
+        try:
+            yield
+        finally:
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+        if lost:
+            raise _Lost()
+
+    async def _discard(self, run_id: uuid.UUID) -> None:
+        """Drop the draft only while this driver still owns the run; otherwise abort safely."""
+        if await discard_draft(self.s, run_id, owner=self.owner) == "lost":
+            raise _Lost()
+
+    async def _checkpoint(self, run_id: uuid.UUID, label: str) -> None:
+        """B-015: automatic workspace checkpoint (best effort; the outcome is a system step)."""
+        run = await self._reload(run_id)
+        if run.workspace_id is None:
+            return
+        out: dict[str, Any]
+        ok = True
+        try:
+            from app.services.workspace_service import WorkspaceService
+
+            async with self._beat(run_id):
+                cp = await WorkspaceService(self.s).checkpoint(run.project_id, run.workspace_id, label)
+            out = {"checkpoint": label, "checkpoint_id": str(cp.id)}
+        except _Lost:
+            raise
+        except Exception as exc:  # a failed checkpoint never blocks the run
+            await self.s.rollback()
+            ok = False
+            out = {"checkpoint": label, "checkpoint_failed": str(getattr(exc, "code", type(exc).__name__))}
+        await self._add_step(await self._reload(run_id), "system", ok=ok, output=out)
+
     async def _move(self, run_id: uuid.UUID, to: str, **fields: Any) -> None:
         """Guarded compare-and-set by this driver. No row => the run was cancelled or taken over."""
         if to in TERMINAL:
@@ -645,7 +770,7 @@ class RunDriver:
         ).scalar_one()
         return int(top or 0) + 1
 
-    async def _add_step(self, run: AiRun, kind: str, **kw: Any) -> AiStep:
+    async def _add_step(self, run: AiRun, kind: str, *, commit: bool = True, **kw: Any) -> AiStep:
         step = AiStep(
             run_id=run.id,
             project_id=run.project_id,
@@ -654,7 +779,10 @@ class RunDriver:
             **kw,
         )
         self.s.add(step)
-        await self.s.commit()
+        if commit:
+            await self.s.commit()
+        else:
+            await self.s.flush()
         return step
 
     async def _cost(self, run_id: uuid.UUID) -> int:
@@ -694,13 +822,36 @@ class RunDriver:
             await self.s.rollback()
             detail = f"{type(exc).__name__}: {redact(str(exc))}"[:500]
             try:
-                await discard_draft(self.s, run_id)
+                await self._discard(run_id)  # only while this driver still owns the run (S1-001)
                 await self._move(run_id, "failed", stop_code="internal_error", stop_detail=detail)
             except _Lost:
                 pass
         finally:
             await self._release(run_id)
         return await self._reload(run_id)
+
+    async def recover(self, run_id: uuid.UUID, max_recoveries: int) -> AiRun:
+        """Crash resume (B-003): take over a run whose lease expired and drive it on. A run that was
+        already recovered `max_recoveries` times (a poison run that keeps killing its driver) is
+        failed instead. Raises run_leased / run_finished like drive() when the lease is live."""
+        await self._acquire(run_id)
+        try:
+            run = await self._reload(run_id)
+            done = sum(1 for st in await self._steps(run_id) if st.kind == "system" and (st.output or {}).get("recovered"))
+            if done >= max_recoveries:
+                await self._discard(run_id)
+                await self._move(
+                    run_id, "failed", stop_code="crash_loop",
+                    stop_detail=f"the run was recovered after a crash {done} times and keeps failing",
+                )
+                return await self._reload(run_id)
+            await self._add_step(run, "system", output={"recovered": True, "attempt": done + 1})
+        except _Lost:
+            return await self._reload(run_id)
+        except BaseException:
+            await self._release(run_id)
+            raise
+        return await self.drive(run_id)
 
     async def _enter(self, run_id: uuid.UUID) -> None:
         run = await self._reload(run_id)
@@ -709,6 +860,7 @@ class RunDriver:
             fields["started_at"] = _now()
         if run.state == "created":
             await self._move(run_id, "planning", **fields)
+            await self._checkpoint(run_id, "run-start")  # B-015
         elif run.state == "awaiting_approval":
             await self._consume_approvals(run, fields)
         elif run.state == "gating":
@@ -727,6 +879,10 @@ class RunDriver:
                 )
             ).scalars()
         )
+        now = _now()
+        for a in approvals:  # S1-010: an expired pending approval is a decision (expired), not a block
+            if a.state == "pending" and a.expires_at < now:
+                a.state = "expired"
         if any(a.state == "pending" for a in approvals):
             raise AppError("approval_pending", "a decision is still pending for this run", 409)
         consumed = {
@@ -739,14 +895,44 @@ class RunDriver:
             raise AppError("nothing_to_resume", "this run has no new decision to continue from", 409)
         phase = run.phase
         denied_final = False
+        resync = False
         for a in fresh:
             note = f"Decision on approval {a.kind} ({a.subject}): {a.state}."
             if a.decision_note:
                 note += f" Note from the reviewer: {a.decision_note}"
+            marker: dict[str, Any] = {"approval_id": str(a.id), "decision": a.state}
+            unusable: str | None = None
+            if a.state == "approved" and a.kind in ("A", "D", "E"):
+                # S1-004: an approval is re-validated WHEN IT IS USED (expiry, spec hash, content hash,
+                # payload hash), not only when it was given.
+                try:
+                    await self.approvals.validate_for_use(run, a, strict_payload=a.kind in ("D", "E"))
+                except AppError as exc:
+                    unusable = exc.code
+                    marker["unusable"] = exc.code
+                    note += (
+                        f" It could NOT be used ({exc.code}): the spec, the code or the request changed "
+                        "after it was given, or it expired. Nothing was done; ask again if still needed."
+                    )
+                else:
+                    if a.kind in ("D", "E"):  # B-002: the approved action runs now, server-side
+                        outcome = await approved_effects.execute(self.s, run, a)
+                        text = outcome.pop("text", None)
+                        marker["executed"] = outcome
+                        resync = resync or (a.kind == "D" and outcome.get("executed") is True)
+                        if outcome.get("executed") is True:
+                            note += f" It was approved and EXECUTED: {redact(json.dumps(outcome, default=str))[:500]}."
+                        else:
+                            note += f" It was approved but NOT executed: {redact(json.dumps(outcome, default=str))[:500]}."
+                        if isinstance(text, str) and text:
+                            note += "\n" + wrap_untrusted("fetch_docs", str(a.id), {"untrusted_text": text[:8000]})
+            marker["note"] = redact(note)
+            # S1-003: the "consumed" marker is only committed together with the state move below
             await self._add_step(
-                run, "system", ok=a.state == "approved",
-                output={"note": redact(note), "approval_id": str(a.id), "decision": a.state},
+                run, "system", ok=a.state == "approved" and unusable is None, commit=False, output=marker,
             )
+            if unusable is not None:
+                continue  # consumed, but it releases nothing
             if a.kind == "A" and a.state == "approved" and phase == "plan":
                 phase = "build"
                 clean = clean_plan((a.payload or {}).get("plan"))
@@ -784,16 +970,21 @@ class RunDriver:
                     phase = "apply"
                 except AppError as exc:
                     await self._add_step(
-                        run, "system", ok=False,
+                        run, "system", ok=False, commit=False,
                         output={"note": f"The approval is no longer valid ({exc.code}); change was not applied. "
                                 "Finish again to ask for a new review.", "approval_id": f"{a.id}:stale"},
                     )
         if denied_final:  # the reviewer rejected the finished change: drop the draft
-            await discard_draft(self.s, run.id)
+            # one commit for the markers and the stop; the draft goes after (terminal runs take no ops)
             await self._move(run.id, "stopped", stop_code="denied", stop_detail="the final review was denied")
+            await discard_draft(self.s, run.id)
             return
         to = "running" if phase != "plan" else "planning"
         await self._move(run.id, to, phase=phase, **fields)
+        if resync:  # an executed D op changed the draft spec: regenerate the draft's generated files
+            sync = getattr(self.toolbox, "sync_draft", None)
+            if sync is not None:
+                await sync(await self._reload(run.id))
 
     # -- the loop --
 
@@ -803,7 +994,7 @@ class RunDriver:
         rp = replay(await self._steps(run_id), b)
         self._state = rp
         t0 = self.clock()
-        segment_steps = 0
+        base_ms = int(run.wall_ms_used or 0)  # B-008: wall time and steps are run-wide, not per drive()
         if rp.needs_nudge:
             await self._add_step(run, "system", output={"note": NUDGE_NOTE})
         while True:
@@ -811,6 +1002,12 @@ class RunDriver:
             run = await self._reload(run_id)
             if run.state in TERMINAL or run.state == "awaiting_approval":
                 return
+            wall_ms = base_ms + int((self.clock() - t0) * 1000)
+            await self.s.execute(
+                update(AiRun).where(AiRun.id == run_id).values(wall_ms_used=wall_ms)
+                .execution_options(synchronize_session=False)
+            )
+            await self.s.commit()
             if rp.pending:
                 calls, rp.pending = rp.pending, []
                 if await self._exec_calls(run, calls):
@@ -818,7 +1015,7 @@ class RunDriver:
                 continue
             cost = await self._cost(run_id)
             stop = bud.check_limits(
-                b, steps=segment_steps, cost_micro_usd=cost, elapsed_seconds=self.clock() - t0
+                b, steps=run.steps_used, cost_micro_usd=cost, elapsed_seconds=wall_ms / 1000
             )
             if stop is not None:
                 await self._stop(run_id, stop)
@@ -828,7 +1025,6 @@ class RunDriver:
                 return
             if await self._model_turn(run, rp):
                 return
-            segment_steps += 1
 
     async def _model_turn(self, run: AiRun, rp: Replayed) -> bool:
         phase = Phase(run.phase)
@@ -843,9 +1039,10 @@ class RunDriver:
         )
         rid = run.id
         try:
-            comp = await self.gateway.complete(
-                self.org_id, task, req, project_id=run.project_id, run_id=run.id
-            )
+            async with self._beat(rid):
+                comp = await self.gateway.complete(
+                    self.org_id, task, req, project_id=run.project_id, run_id=run.id
+                )
         except AppError as exc:
             await self.s.rollback()
             run = await self._reload(rid)  # rollback expired every loaded object
@@ -858,6 +1055,7 @@ class RunDriver:
             await self._stop(run.id, StopReason(code, f"{exc.code}: {redact(exc.message)}"[:500]))
             return True
         await self.s.commit()  # the ledger row
+        await self._renew(rid)  # still the owner? else _Lost before anything is written (S1-001)
         used = {s.tool_call_id for s in steps if s.tool_call_id}
         calls: list[dict[str, Any]] = []
         for tc in comp.tool_calls:
@@ -944,7 +1142,8 @@ class RunDriver:
                             )]
                             self._gate_hash = ""
                         else:
-                            found, self._gate_hash = await self.gates.check_report(run)
+                            async with self._beat(run.id):
+                                found, self._gate_hash = await self.gates.check_report(run)
                             run = await self._reload(run.id)
                         if found:
                             finishing = False
@@ -971,12 +1170,16 @@ class RunDriver:
                     plan=self._plan(run),
                     workspace_id=run.workspace_id,
                     worktree=await self.gates.worktree(run) if self.gates is not None else None,
+                    reexecution=existing is not None,  # S1-008: a crash re-run of a pending step
                 )
                 try:
-                    res = await self.toolbox.execute(ctx, name, tin)
+                    async with self._beat(rid):
+                        res = await self.toolbox.execute(ctx, name, tin)
                     out = result_output(res)
                     # a failing spec tool rolls the session back, which expires the run row
                     run = await self._reload(rid)
+                except _Lost:
+                    raise
                 except Exception as exc:  # a tool bug is a failed step, never a crashed run
                     await self.s.rollback()
                     run = await self._reload(rid)  # rollback expired every loaded object
@@ -1062,6 +1265,7 @@ class RunDriver:
         else:
             try:  # the content moved after the reviewer looked: back to build, not stuck in apply
                 await self.approvals.require_valid(run, ApprovalKind.C)
+                to_promote = await self.approvals.prepare_promotion(run)  # B-004: hash mismatch refuses
             except AppError as exc:
                 await self.s.execute(
                     update(AiRun).where(AiRun.id == run.id, AiRun.lease_owner == self.owner).values(phase="build")
@@ -1075,7 +1279,8 @@ class RunDriver:
                 return
             if run.state != "applying":
                 await self._move(run.id, "applying")
-            out = await apply_draft(self.s, run.id)
+            await self._checkpoint(run.id, "before-apply")  # B-015: the restore point for the E step
+            out = await apply_draft(self.s, run.id, owner=self.owner)
             if out.status != "applied":  # never overwrite a newer live spec: stop, show why
                 key = "apply_conflict" if out.status == "conflict" else "apply_failed"
                 fresh = await self._reload(run.id)
@@ -1084,12 +1289,11 @@ class RunDriver:
                     output={key: True, "detail": redact(out.detail), "draft_ops": out.ops,
                             "note": "The reviewed change was NOT applied; the live spec is unchanged."},
                 )
-                await discard_draft(self.s, run.id)
+                await self._discard(run.id)
                 await self._move(run.id, "stopped", stop_code=key, stop_detail=str(redact(out.detail))[:1000])
                 return
-            await self._add_step(await self._reload(run.id), "system", output={"draft": "applied", "ops": out.ops})
-            await self._move(run.id, "applied")
-            return
+            await self._promote(run.id, to_promote)  # B-004
+            return  # S1-005: apply_draft already committed spec + draft removal + `applied` + step atomically
         fresh = await self._reload(run.id)
         approval_id = await self.approvals.request(fresh, req)
         await self._add_step(
@@ -1098,13 +1302,30 @@ class RunDriver:
         )
         await self._move(run.id, "awaiting_approval")
 
+    async def _promote(self, run_id: uuid.UUID, files: dict[str, bytes]) -> None:
+        """B-004: the reviewed custom code goes live right after the spec did. The run is already
+        `applied` (spec committed), so a failure here is recorded loudly, never silent."""
+        run = await self._reload(run_id)
+        try:
+            out = await self.approvals.promote(run, files)
+            await self._add_step(run, "system", output={"promotion": out})
+        except Exception as exc:
+            await self.s.rollback()
+            log.error("promotion of approved custom code failed for run %s: %s", run_id, type(exc).__name__)
+            run = await self._reload(run_id)
+            await self._add_step(
+                run, "system", ok=False,
+                output={"promotion_failed": str(getattr(exc, "code", type(exc).__name__)),
+                        "files": sorted(files)[:100]},
+            )
+
     async def _stop(self, run_id: uuid.UUID, reason: StopReason) -> None:
         run = await self._reload(run_id)
         await self._add_step(
             run, "system", ok=False,
             output={"stopped": reason.code, "detail": redact(reason.detail)},
         )
-        await discard_draft(self.s, run_id)
+        await self._discard(run_id)
         await self._move(
             run_id, "stopped", stop_code=reason.code, stop_detail=str(redact(reason.detail))[:1000]
         )

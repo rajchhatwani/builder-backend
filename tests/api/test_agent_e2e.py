@@ -25,6 +25,7 @@ from app.services.ai.base import (
     ToolCall,
     Usage,
 )
+from tests.api._approval_hash import reviewer_sends_hash  # noqa: F401  (isort: skip)
 from tests.api._auth_helpers import make_project
 from tests.api.conftest import ClientFor, add_to_project_org
 
@@ -77,7 +78,8 @@ async def _cleanup(client: AsyncClient) -> Any:
     # Discard every draft so no checkpoint database (bbcp_*) outlives the test.
     while _MADE:
         pid, ws = _MADE.pop()
-        await client.delete(f"/projects/{pid}/workspaces/{ws}")
+        r = await client.delete(f"/projects/{pid}/workspaces/{ws}")
+        assert r.status_code in (200, 204, 404), f"draft cleanup failed (bbcp_* database may leak): {r.status_code} {r.text}"
 
 
 _FACTORY: Any = None

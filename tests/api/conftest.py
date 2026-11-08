@@ -72,6 +72,15 @@ def session_factory(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 
 
 @pytest.fixture(autouse=True)
+def _bind_factory(session_factory: async_sessionmaker[AsyncSession]) -> None:
+    """tests/e2e/test_preview_stack.py re-imports these session fixtures, so a second
+    session_factory (another database) is built mid-run and overwrites _FACTORY; later api
+    tests then ran add_to_project_org() against the wrong database and silently did nothing
+    (R-001). Re-bind to this test's own factory every time."""
+    _FACTORY[:] = [session_factory]
+
+
+@pytest.fixture(autouse=True)
 async def _clean_tables(engine: AsyncEngine) -> AsyncGenerator[None, None]:
     yield
     async with engine.begin() as conn:

@@ -43,6 +43,7 @@ async def add_entity(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
 
 
 async def add_field(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    _check_security_keys("add_field", args["field"])
     payload = {"entity": args["entity"], "field": args["field"]}
     if args.get("index") is not None:
         payload["index"] = args["index"]
@@ -72,10 +73,29 @@ def weakening(current: dict[str, Any], changes: dict[str, Any]) -> list[str]:
             out.append("max_length reduced")
     if "type" in changes and changes["type"] != current.get("type"):
         out.append("type changed")
+    for key in ("min_value", "max_value", "default"):
+        # a first bound/default on a field that had none only adds a rule: that is the normal validation-rule edit
+        if key in changes and changes[key] != current.get(key) and current.get(key) is not None:
+            out.append(f"{key} changed")
+    if "enum_values" in changes and changes["enum_values"] != current.get("enum_values"):
+        old_vals, new_vals = current.get("enum_values"), changes["enum_values"]
+        if old_vals is not None and (new_vals is None or not set(old_vals) <= set(new_vals)):
+            out.append("enum values removed")  # S1-012: rows holding a removed value become invalid
+    if "indexed" in changes and current.get("indexed") and not changes["indexed"]:
+        out.append("indexed off")
+    if "name" in changes and changes["name"] != current.get("name"):
+        out.append("renamed (column drop and add)")
     return out
 
 
+def _check_security_keys(tool: str, obj: Any) -> None:
+    key = has_key(obj)
+    if key:
+        raise refuse("tool_s_bang", tool, "no auth/access/tenancy content", f"key '{key[:30]}'", S_BANG_HINT)
+
+
 async def update_field(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    _check_security_keys("update_field", args["changes"])
     current = await _current_field(ctx, args["entity"], args["name"])
     if current is not None:
         risky = weakening(current, args["changes"])
@@ -97,6 +117,7 @@ def _ask_human(tool: str, subject: str, **payload: Any) -> ToolResult:
 
 async def add_relation(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
     rel = args["relation"]
+    _check_security_keys("add_relation", rel)
     if str(rel.get("on_delete", "")).lower() == "cascade":
         return _ask_human("add_relation", "add a relation that deletes related rows on delete (cascade)",
                           relation=rel)  # fmt: skip

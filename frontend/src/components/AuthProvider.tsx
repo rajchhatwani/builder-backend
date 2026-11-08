@@ -16,6 +16,7 @@ import {
   type SessionResponse,
   type UserAccount,
 } from '../api/types'
+import { forgetTokens } from '../shell/ai/seeItLogic'
 import { isViewingTab, receiveViewingToken } from '../api/viewing'
 
 type AuthState =
@@ -93,6 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     const stop = onSessionLost((surface) => {
       if (surface !== 'app') return
+      forgetTokens()
       setViewing(null)
       setState(viewingTab ? { status: 'viewing-ended' } : { status: 'anon' })
     })
@@ -120,6 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(async () => {
     await api.logout().catch(() => undefined)
+    forgetTokens() // preview tokens must not outlive the account
     setState({ status: 'anon' })
     window.location.hash = '#/'
   }, [])

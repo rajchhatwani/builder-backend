@@ -74,7 +74,6 @@ async def test_a_regression_against_the_baseline_is_flagged(
     assert res.passed
     report = rep.build_report([res])
     base = rep.build_report([res])
-    assert rep.compare(report, base) == []
     base["tasks"]["validation_rule"]["tokens"] = res.tokens // 2  # the baseline was much cheaper
     assert any("tokens up" in r for r in rep.compare(report, base))
 

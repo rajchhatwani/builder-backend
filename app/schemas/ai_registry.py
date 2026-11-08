@@ -3,10 +3,12 @@
 import re
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 _HASH = re.compile(r"^[0-9a-f]{64}$")
+_API_KEY = re.compile(r"sk[-_][A-Za-z0-9_\-]{17,}")  # prefix + 20 chars minimum, no whitespace
 
 
 class AiLedgerRead(BaseModel):
@@ -36,17 +38,42 @@ class AiCostSummary(BaseModel):
     offset: int
 
 
+class ApprovalPolicyOverride(BaseModel):
+    """An org's override of the agent approval policy (B-001). It can only TIGHTEN the platform policy:
+    a longer lifetime, a role below the floor, auto-approval on or separation of duties off are ignored
+    when applied (and refused here where the value is plainly looser)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    ttl_hours: int | None = Field(default=None, ge=1, le=168)
+    ttl_plan_hours: int | None = Field(default=None, ge=1, le=168)
+    roles: dict[Literal["A", "B", "C", "D", "E"], Literal["owner"]] | None = None
+    auto_plan_small_edit: Literal[False] | None = None
+    separation_of_duties: Literal[True] | None = None
+
+
 class AiSettingsRead(BaseModel):
     has_api_key: bool
     api_key_hint: str | None
     monthly_budget_micro_usd: int | None
+    approval_policy: ApprovalPolicyOverride | None = None
 
 
 class AiSettingsWrite(BaseModel):
-    api_key: SecretStr | None = Field(default=None, min_length=8, max_length=300)
+    # None = unchanged. {} clears the override.
+    approval_policy: ApprovalPolicyOverride | None = None
+    api_key: SecretStr | None = Field(default=None, min_length=20, max_length=300)
     clear_api_key: bool = False
     monthly_budget_micro_usd: int | None = Field(default=None, ge=0)
     clear_budget: bool = False
+
+    @field_validator("api_key")
+    @classmethod
+    def _api_key_format(cls, v: SecretStr | None) -> SecretStr | None:
+        # Never echo the value in the error.
+        if v is not None and not _API_KEY.fullmatch(v.get_secret_value()):
+            raise ValueError("not a valid provider API key (expected an sk- prefixed key, 20+ characters)")
+        return v
 
 
 # -- registry --------------------------------------------------------------------------------

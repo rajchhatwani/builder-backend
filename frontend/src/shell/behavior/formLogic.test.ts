@@ -29,6 +29,11 @@ describe('sequences and lists mapping', () => {
     const b = { name: 'order_no', prefix: 'ORD-', padding: 4, start: 1, per_tenant: false, reset_yearly: true, view_roles: [] }
     expect(sequenceToBody(sequenceFromBody(b))).toEqual(b)
   })
+  it('keeps entity and field (bound counter) through load -> edit one thing -> save', () => {
+    const b = { name: 'order_no', prefix: 'ORD-', padding: 4, start: 1, per_tenant: true, reset_yearly: true, view_roles: ['admin'], entity: 'Order', field: 'number' }
+    expect(sequenceToBody(sequenceFromBody(b))).toEqual(b)
+    expect(sequenceToBody({ ...sequenceFromBody(b), prefix: 'X-' })).toEqual({ ...b, prefix: 'X-' })
+  })
   it('previews the next number like the generated helper', () => {
     expect(previewNumber({ ...blankSequence(), prefix: 'INV-', padding: '5', start: '42' })).toBe('INV-00042')
     expect(previewNumber({ ...blankSequence(), prefix: 'O-', padding: '3', reset_yearly: true }, 2026)).toBe('O-2026-001')

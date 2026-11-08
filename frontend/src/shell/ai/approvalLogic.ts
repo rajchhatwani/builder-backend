@@ -141,3 +141,58 @@ export const reviewHref = (projectId: string, a: Pick<Approval, 'id' | 'kind' | 
   a.kind === 'A' ? `#/p/${projectId}/plan?run=${a.run_id}` : approvalsLink(projectId, a.id)
 
 export const pendingCount = (list: Approval[], now = Date.now()) => list.filter((a) => effectiveState(a, now) === 'pending').length
+
+/** S3-006: the list endpoint is a bare array today; tolerate a paginated `{items}` envelope, junk rows, and rows with a missing payload or flags. */
+export function approvalList(raw: unknown): Approval[] {
+  const rows = Array.isArray(raw) ? raw : isObj(raw) && Array.isArray(raw.items) ? raw.items : []
+  const out: Approval[] = []
+  for (const r of rows) {
+    if (!isObj(r) || typeof r.id !== 'string' || typeof r.kind !== 'string') continue
+    out.push({
+      ...(r as unknown as Approval),
+      payload: isObj(r.payload) ? r.payload : {},
+      risk_flags: Array.isArray(r.risk_flags) ? r.risk_flags.filter((f): f is string => typeof f === 'string') : [],
+      subject: typeof r.subject === 'string' ? r.subject : '',
+      run_id: typeof r.run_id === 'string' ? r.run_id : '',
+    })
+  }
+  return out
+}
+
+const stable = (v: unknown): string =>
+  Array.isArray(v) ? `[${v.map(stable).join(',')}]` : isObj(v) ? `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stable(v[k])}`).join(',')}}` : JSON.stringify(v ?? null)
+
+/** S3-004/5: what the reviewer saw. If this differs when they click, the request changed under them and nothing is sent. */
+export const approvalFingerprint = (a: Approval): string =>
+  stable([a.id, a.kind, a.state, a.bound_spec_hash, a.bound_commit ?? null, a.payload_hash ?? null, a.payload, a.risk_flags])
+
+export interface DecideFailure { text: string; reload: boolean }
+/** Server refusals of a decision that mean "your view is out of date" (reload and review again) or "cannot be decided now". */
+export function decideFailure(code: string | undefined, fallback: string): DecideFailure {
+  switch (code) {
+    case 'approval_already_decided': return { text: 'This request changed: it was already decided by someone else. Review it again.', reload: true }
+    case 'approval_expired': return { text: 'This request changed: it has expired, so it can no longer be approved. The agent has to ask again.', reload: true }
+    case 'approval_changed': return { text: 'This request changed since you opened it. Review it again before you decide.', reload: true }
+    case 'run_finished': return { text: 'The run has already finished, so this request can no longer be decided. Nothing was changed by your click.', reload: true }
+    case 'separation_of_duties': return { text: 'This organisation requires someone other than the person who started the run to decide it. Ask another person.', reload: false }
+    case 'approval_forbidden': return { text: 'Your role may not decide this request. Ask a project owner.', reload: false }
+    default: return { text: fallback, reload: false }
+  }
+}
+
+const OP_LABEL: Record<string, string> = {
+  remove_entity: 'Remove the entity', remove_field: 'Remove the field', update_field: 'Change the field', add_relation: 'Add a relation',
+  change_tenancy_mode: 'Change the tenancy mode', weaken_access_rule: 'Weaken the access rule',
+}
+export interface GateD { headline: string; phrase: string; rows: Array<{ key: string; value: string }> }
+/** C-005: Gate D shows what exactly changes and asks for the affected name to be typed. */
+export function gateDInfo(payload: Record<string, unknown>): GateD {
+  const s = (k: string) => (typeof payload[k] === 'string' ? (payload[k] as string).slice(0, 120) : '')
+  const op = s('op_type')
+  const target = s('package')
+    ? `${s('package')}${s('version') ? `==${s('version')}` : ''}`
+    : [s('entity'), s('name')].filter(Boolean).join('.') || [s('from_entity'), s('to_entity')].filter(Boolean).join(' -> ') || s('name')
+  const rows = Object.entries(payload).filter(([k]) => !['run_id', 'op_type'].includes(k)).map(([key, v]) => ({ key, value: (typeof v === 'string' ? v : JSON.stringify(v) ?? '').slice(0, 300) }))
+  return { headline: `${OP_LABEL[op] ?? (op || 'Apply a risky change to')}${target ? ` ${target}` : ''}`, phrase: target || 'APPROVE', rows }
+}
+export const confirmMatches = (typed: string, phrase: string) => typed.trim() === phrase

@@ -171,8 +171,10 @@ async def test_wall_time_kill(box: DockerSandbox) -> None:
 
 async def test_exec_timeout_kills_sandbox_and_dead_is_normal(box: DockerSandbox) -> None:
     sid = await box.start(SandboxSpec(image=IMAGE, command=["sleep", "300"]))
-    ok = await box.exec(sid, ["echo", "hi"], timeout=20)
-    assert ok.stdout.strip() == "hi" and not ok.died
+    # Generous first-exec budget: under a long manifest run (R-002) the host is loaded and a cold
+    # runsc exec can exceed 20 s. A timeout here would kill the sandbox, so warm it up wide.
+    ok = await box.exec(sid, ["echo", "hi"], timeout=90)
+    assert ok.stdout.strip() == "hi" and not ok.died and not ok.timed_out
     hung = await box.exec(sid, ["sleep", "60"], timeout=2)
     assert hung.timed_out
     after = await box.exec(sid, ["echo", "x"], timeout=5)

@@ -38,7 +38,7 @@ function Tree({ nodes, open, selected, onPick, depth = 0 }: { nodes: TreeNode[];
   )
 }
 
-export function CodeView({ projectId, workspaceId }: { projectId: string; workspaceId: string }) {
+export function CodeView({ projectId, workspaceId, onDirtyChange }: { projectId: string; workspaceId: string; onDirtyChange?: (dirty: boolean) => void }) {
   const [files, setFiles] = useState<WsFile[] | null>(null)
   const [listError, setListError] = useState<string | null>(null)
   const [open, setOpen] = useState<Set<string>>(new Set())
@@ -50,23 +50,27 @@ export function CodeView({ projectId, workspaceId }: { projectId: string; worksp
   const draftRef = useRef(draft); draftRef.current = draft
   const fileRef = useRef(file); fileRef.current = file
   const savingRef = useRef(false)
+  const openSeq = useRef(0)
 
   const loadList = useCallback(() => {
     setListError(null)
     workspaceApi.list(projectId, workspaceId).then(setFiles, (e: unknown) => setListError(e instanceof ApiError ? e.message : 'Could not load the files'))
   }, [projectId, workspaceId])
-  useEffect(() => { setFiles(null); setFile(null); loadList() }, [loadList])
+  useEffect(() => { openSeq.current++; setFiles(null); setFile(null); setDraft(''); setMessage(null); setLoading(false); loadList() }, [loadList])
 
   const dirty = !!file && draft !== file.content
   const openFile = useCallback(async (path: string, force = false) => {
     if (!force && fileRef.current && draftRef.current !== fileRef.current.content && !window.confirm('Discard your unsaved changes?')) return
+    const mine = ++openSeq.current
     setLoading(true); setMessage(null)
     try {
       const f = await workspaceApi.read(projectId, workspaceId, path)
+      if (mine !== openSeq.current) return // a newer open (or a workspace switch) superseded this one
       setFile(f); setDraft(f.content)
     } catch (e) {
+      if (mine !== openSeq.current) return
       setMessage({ kind: 'error', text: e instanceof ApiError ? (e.status === 413 || e.status === 415 || e.status === 422 ? 'This file is binary or too large to show here.' : e.message) : 'Could not open the file' })
-    } finally { setLoading(false) }
+    } finally { if (mine === openSeq.current) setLoading(false) }
   }, [projectId, workspaceId])
 
   const save = useCallback(async () => {
@@ -89,6 +93,7 @@ export function CodeView({ projectId, workspaceId }: { projectId: string; worksp
     setOpen((s) => { const x = new Set(s); if (x.has(n.path)) x.delete(n.path); else x.add(n.path); return x })
   }
 
+  useEffect(() => { onDirtyChange?.(dirty); return () => onDirtyChange?.(false) }, [dirty, onDirtyChange])
   useEffect(() => {
     if (!dirty) return
     const h = (e: BeforeUnloadEvent) => { e.preventDefault() }
@@ -111,6 +116,11 @@ export function CodeView({ projectId, workspaceId }: { projectId: string; worksp
       <section className="stage-main" aria-label="File editor">
         {!file && !loading && <p className="muted" data-testid="code-pick">Pick a file to view it.</p>}
         {loading && <p className="muted small-text" role="status">Opening…</p>}
+        {message && (
+              <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? 'error-text' : 'muted small-text'} data-testid="code-message">
+                {message.text} {message.reload && file && <button type="button" className="btn btn-sm" data-testid="code-reload" onClick={() => file && void openFile(file.path, true)}>Reload latest</button>}
+              </p>
+            )}
         {file && (
           <>
             <div className="hstack stage-bar">
@@ -121,11 +131,6 @@ export function CodeView({ projectId, workspaceId }: { projectId: string; worksp
               {file.editable && <span className="muted small-text">Ctrl/Cmd+S</span>}
             </div>
             {!file.editable && <p className="muted small-text" data-testid="code-readonly-hint">Generated, edit the spec instead. This file is read-only.</p>}
-            {message && (
-              <p role={message.kind === 'error' ? 'alert' : 'status'} className={message.kind === 'error' ? 'error-text' : 'muted small-text'} data-testid="code-message">
-                {message.text} {message.reload && <button type="button" className="btn btn-sm" data-testid="code-reload" onClick={() => void openFile(file.path, true)}>Reload latest</button>}
-              </p>
-            )}
             <EditorBoundary fallback={<><p className="muted small-text" data-testid="code-fallback-note">The code editor could not load, showing the file read-only.</p>{pre}</>}>
               <Suspense fallback={<p className="muted small-text" role="status">Loading editor…</p>}>
                 <MonacoEditor path={file.path} language={languageFor(file.path)} value={draft} readOnly={readOnly || saving} onChange={setDraft} onSave={() => void save()} label={label} />

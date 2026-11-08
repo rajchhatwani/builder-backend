@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { ProvenanceBadge } from '../ai/Provenance'
 import { api } from '../../api/client'
 import type { HookBody, HookFieldBody } from '../../api/types'
 import {
@@ -195,7 +196,7 @@ export function HooksPage({ projectId }: { projectId: string }) {
         )
         return (
           <fieldset key={r.k} className="card bh-row bh-hook" data-testid="hook-row">
-            <legend>{r.name || 'New hook'}</legend>
+            <legend>{r.name || 'New hook'}{r.author && <> <ProvenanceBadge author={r.author === 'trusted' ? 'human' : r.author} /></>}</legend>
             {allMsgs(i).length > 0 && (
               <div role="alert" data-variant="danger" className="bh-alert" data-testid="hook-issues">
                 <ul>{allMsgs(i).map((m, n) => <li key={n}>{m}</li>)}</ul>

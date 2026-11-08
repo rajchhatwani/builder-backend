@@ -5,11 +5,13 @@
 Creates (idempotent): org "showcase", demo accounts editor/viewer (verified straight in the local
 showcase database, setup only), two example projects from the demo specs (invoice approval, HR
 leave) with the three roles on them. The agent-built project comes from scripts/demo_agent_run.py.
+Admin login: SC_ADMIN_EMAIL (default admin@example.test) and SC_ADMIN_PASSWORD (or the file admin_pw in that folder).
 Passwords are generated once and kept in ~/.local/share/builder-showcase/ (never printed here).
 """
 
 import argparse
 import json
+import os
 import secrets
 import subprocess
 import sys
@@ -34,8 +36,9 @@ def psql(sql: str) -> str:
 def password() -> str:
     f = SECRETS / "demo_pw"
     if not f.exists():
-        f.write_text(secrets.token_urlsafe(14) + "-Aa1")
-        f.chmod(0o600)
+        fd = os.open(f, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)  # never world-readable, even briefly
+        with os.fdopen(fd, "w") as fh:
+            fh.write(secrets.token_urlsafe(14) + "-Aa1")
     return f.read_text().strip()
 
 
@@ -43,8 +46,8 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--base", default="http://localhost:8780")
     a = ap.parse_args()
-    admin_email = "rajchhatwani39@gmail.com"
-    apw = (SECRETS / "admin_pw").read_text().strip()
+    admin_email = os.environ.get("SC_ADMIN_EMAIL", "admin@example.test")
+    apw = os.environ.get("SC_ADMIN_PASSWORD") or (SECRETS / "admin_pw").read_text().strip()
     anon = httpx.Client(base_url=a.base, headers=H, timeout=60)
     admin = httpx.Client(base_url=a.base, headers=H, timeout=60)
     admin.headers["Authorization"] = "Bearer " + admin.post(

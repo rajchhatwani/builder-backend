@@ -24,7 +24,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.jobs import config, cron, definitions, queue
 from app.jobs.models import Schedule, ScheduleFire
-from app.models._base import utcnow
 
 logger = structlog.get_logger()
 
@@ -92,7 +91,11 @@ async def _fire_one(factory: SessionFactory, name: str, now: _dt.datetime) -> _d
 async def fire_due(factory: SessionFactory, now: _dt.datetime | None = None) -> list[tuple[str, _dt.datetime]]:
     """Fire every schedule whose tick is due at `now`. Safe to call from many processes at once.
     Returns (schedule, tick) for the ticks THIS call enqueued."""
-    stamp = now or utcnow()
+    if now is None:
+        async with factory() as clock:
+            stamp = await queue.db_now(clock)  # the database clock, not this host's
+    else:
+        stamp = now
     fired: list[tuple[str, _dt.datetime]] = []
     for name, cfg in sorted(definitions.SCHEDULES.items()):
         if not cfg["enabled"]:

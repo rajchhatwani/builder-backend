@@ -85,21 +85,24 @@ def _role_probe(
         and t["guard"] is None
         and not has_guard_hooks(project.spec)
     ]
-    empty = next((t["name"] for t in start if not t["roles"]), None)
-    roled = next(
-        (
-            (t["name"], role)
-            for t in start
-            if t["roles"]
-            for role in sorted(t["roles"])
-            if role in safe
-        ),
-        None,
-    )
+    empty_t = next((t for t in start if not t["roles"]), None)
+    empty = empty_t["name"] if empty_t else None
+    roled_t = next((t for t in start if t["roles"] and any(r in safe for r in t["roles"])), None)
+    roled = (roled_t["name"], next(r for r in sorted(roled_t["roles"]) if r in safe)) if roled_t else None
     if not safe:
         return None
     refused = next((t["name"] for t in machine["transitions"] if not t["auto"] and not t["roles"]), None)
-    return {"reader": safe[0], "refused": refused, "empty": empty, "roled": roled}
+    return {
+        "reader": safe[0],
+        "refused": refused,
+        "empty": empty,
+        "roled": roled,
+        # sample data may trigger an automatic transition at create time (a rule on random
+        # numbers), so the tests create until the record sits where the move starts
+        "field": machine["field"],
+        "roled_from": roled_t["from"] if roled_t else [machine["initial"]],
+        "empty_from": empty_t["from"] if empty_t else [machine["initial"]],
+    }
 
 
 _GUARD_IMPORT_ANCHOR = "from app.core.errors import AppError, NotFoundError\n"

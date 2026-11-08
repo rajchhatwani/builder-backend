@@ -55,7 +55,11 @@ ORG_TABLES: tuple[str, ...] = (
     "ai_org_settings",
     "ai_cost_ledger",
     "preview_org_limits",
+    "ai_spend_reservations",  # platform-scope rows have a NULL org: see NULL_ORG_TABLES
 )
+# Tables whose organization_id may be NULL for platform-level rows; those stay visible in a
+# scoped request (like the audit log) so the platform spend cap is never under-counted.
+NULL_ORG_TABLES: frozenset[str] = frozenset({"platform_audit_log", "ai_spend_reservations"})
 AUDIT_TABLE = "platform_audit_log"
 # `organizations` itself is scoped by its primary key.
 ORGANIZATIONS_TABLE = "organizations"
@@ -94,12 +98,26 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "dependency_requests",
     "previews",
 )
+# Tables that reach their org only through a parent row (no organization_id / project_id of
+# their own): table -> (column, parent table). Visible exactly when the parent row is (S2-010).
+PARENT_CHILD_TABLES: dict[str, tuple[str, str]] = {
+    "fields": ("entity_id", "entities"),
+    "scim_group_members": ("group_id", "scim_groups"),
+}
 ALL_TABLES: tuple[str, ...] = (
     ORGANIZATIONS_TABLE,
     *ORG_TABLES,
     AUDIT_TABLE,
     *PROJECT_CHILD_TABLES,
+    *PARENT_CHILD_TABLES,
 )
+
+# Accepted design (S2-010): the policy is FAIL-OPEN on purpose. An unset `app.organization_id`
+# means "not an org-scoped request" (sign-in, webhooks, operator console, background jobs) and
+# sees everything; only `bind`/`org_context` confine a transaction. Any new background path must
+# either bind or be understood as unconfined. Generated apps (wf_*, nt_*, provider_credentials)
+# have NO database-level isolation: their tenant isolation is application-layer only (every
+# query passes tenant_id). That is documented, not enforced here.
 
 _ctx = "nullif(current_setting('app.organization_id', true), '')"
 _UNSET = f"{_ctx} IS NULL"
@@ -109,11 +127,14 @@ _ORG = f"{_ctx}::uuid"
 def _using(table: str) -> str:
     if table == ORGANIZATIONS_TABLE:
         return f"{_UNSET} OR id = {_ORG}"
-    if table == AUDIT_TABLE:
+    if table in NULL_ORG_TABLES:
         # Platform-level events (no org) stay writable and readable inside a scoped request.
         return f"{_UNSET} OR organization_id IS NULL OR organization_id = {_ORG}"
     if table in PROJECT_CHILD_TABLES:
         return f"{_UNSET} OR project_id IN (SELECT id FROM projects)"
+    if table in PARENT_CHILD_TABLES:
+        column, parent = PARENT_CHILD_TABLES[table]
+        return f"{_UNSET} OR {column} IN (SELECT id FROM {parent})"
     return f"{_UNSET} OR organization_id = {_ORG}"
 
 
