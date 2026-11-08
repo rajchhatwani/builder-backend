@@ -1,0 +1,7 @@
+=== 02_mfa against local (http://127.0.0.1:8001) ===
+[     Low] NOT_TESTABLE mfa/test_totp_replay: test_totp_replay
+[     Low] NOT_TESTABLE mfa/test_recovery_code_reuse_and_formats: test_recovery_code_reuse_and_formats
+[     Low] NOT_TESTABLE mfa/test_challenge_token_cross_surface: test_challenge_token_cross_surface
+[     Low] NOT_TESTABLE mfa/test_disable_mfa_without_proof: test_disable_mfa_without_proof
+[     Low] NOT_TESTABLE mfa/test_require_mfa_needs_own_mfa_first: test_require_mfa_needs_own_mfa_first
+[     Low] NOT_TESTABLE mfa/test_org_require_mfa_all_surfaces: test_org_require_mfa_all_surfaces

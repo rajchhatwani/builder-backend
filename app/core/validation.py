@@ -46,8 +46,30 @@ from app.core.spec_models import (
     SpecProject,
     SpecRelation,
 )
+from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
+from app.core.validation_authorization import check_authorization
+from app.core.validation_behavior import check_state_machines
+from app.core.validation_deploy import check_deployment
+from app.core.validation_documents import check_documents
+from app.core.validation_events import EV_TABLES, check_events, events_active
+from app.core.validation_history import CH_TABLES, check_history, history_active
+from app.core.validation_hooks import check_hooks
+from app.core.validation_jobs import JOB_TABLES, check_jobs, jobs_active
+from app.core.validation_notifications import (
+    NOTIFICATION_TABLES,
+    check_notifications,
+    notifications_active,
+)
+from app.core.validation_numbering import check_numbered_fields
+from app.core.validation_observability import check_observability
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
+from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
+from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
+from app.core.validation_secrets import check_block_secrets
+from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
 from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
+from app.core.validation_workflows import WORKFLOW_TABLES, check_workflows, workflows_active
 
 MAX_ENTITIES = 100
 MAX_FIELDS_PER_ENTITY = 100
@@ -116,6 +138,37 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         for table in STORAGE_TABLES:
             ctx.tables[table] = "storage"
 
+    if runtime_config_active(spec):
+        for table in RC_TABLES:
+            ctx.tables[table] = "runtime_config"
+    if history_active(spec):
+        for table in CH_TABLES:
+            ctx.tables[table] = "change_history"
+    if seed_active(spec):
+        for table in SEED_TABLES:
+            ctx.tables[table] = "seed"
+    if events_active(spec):
+        for table in EV_TABLES:
+            ctx.tables[table] = "events"
+    if api_edge_active(spec):
+        for table in API_EDGE_TABLES:
+            ctx.tables[table] = "api_edge"
+    if jobs_active(spec):
+        for table in JOB_TABLES:
+            ctx.tables[table] = "jobs"
+    if workflows_active(spec):
+        for table in WORKFLOW_TABLES:
+            ctx.tables[table] = "workflows"
+    if providers_active(spec):
+        for table in PROVIDER_TABLES:
+            ctx.tables[table] = "providers"
+    if notifications_active(spec):
+        for table in NOTIFICATION_TABLES:
+            ctx.tables[table] = "notifications"
+    if webhooks_active(spec):
+        for table in WEBHOOK_TABLES:
+            ctx.tables[table] = "webhooks"
+
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
     entities_by_name = _check_entities(spec, ctx)
@@ -124,7 +177,33 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         _check_auth(spec.auth, entities_by_name, ctx)
     check_payments(spec, entities_by_name, ctx.add, redirect_uri_problem)
     check_storage(spec, entities_by_name, ctx.add)
-    return ctx.issues
+    check_authorization(spec, entities_by_name, ctx.add)
+    check_observability(spec, ctx.add)
+    check_deployment(spec, ctx.add)
+    check_documents(spec, ctx.add)
+    check_state_machines(spec, entities_by_name, ctx.add)
+    check_runtime_config(spec, ctx.add)
+    check_numbered_fields(spec, entities_by_name, ctx.add)
+    check_history(spec, entities_by_name, ctx.add)
+    check_hooks(spec, entities_by_name, ctx.add)
+    check_seed(spec, entities_by_name, ctx.add)
+    check_events(spec, ctx.add)
+    check_api_edge(spec, ctx.add)
+    check_jobs(spec, ctx.add)
+    check_workflows(spec, ctx.add)
+    check_providers(spec, ctx.add)
+    check_notifications(spec, ctx.add)
+    check_webhooks(spec, ctx.add)
+    check_block_secrets(spec, ctx.add)
+    seen: set[tuple[str, str]] = set()
+    unique = []
+    for issue in ctx.issues:  # the same secret may be found by a block's own check too
+        if issue.code == "secret_in_spec":
+            if (issue.path, issue.code) in seen:
+                continue
+            seen.add((issue.path, issue.code))
+        unique.append(issue)
+    return unique
 
 
 # --- shared helpers ---------------------------------------------------------------------
@@ -365,7 +444,9 @@ def _check_file_definition(field: SpecField, p: str, ctx: _Ctx) -> None:
         ctx.add(p, "unsupported_option", "file fields cannot be unique")
     for option in ("default", "max_length", "min_value", "max_value", "enum_values"):
         if getattr(field, option) is not None:
-            ctx.add(f"{p}.{option}", "unsupported_option", f"{option} does not apply to file fields")
+            ctx.add(
+                f"{p}.{option}", "unsupported_option", f"{option} does not apply to file fields"
+            )
 
 
 def _check_enum_values(field: SpecField, p: str, ctx: _Ctx) -> None:
@@ -474,9 +555,7 @@ def _check_options(options: SpecEntityOptions, p: str, types: dict[str, str], ct
     if len(set(options.operations)) != len(options.operations):
         ctx.add(f"{p}.operations", "duplicate_name", "operations must be unique")
 
-    _check_field_refs(
-        options.filterable, f"{p}.filterable", types, ctx, excluded={"json", "file"}
-    )
+    _check_field_refs(options.filterable, f"{p}.filterable", types, ctx, excluded={"json", "file"})
     for k, name in enumerate(options.filterable):
         if name in naming.RESERVED_QUERY_PARAMS:
             ctx.add(
@@ -651,16 +730,24 @@ def _claim_name(ctx: _Ctx, entity_name: str, name: str, path: str) -> None:
 
 # Tables the generated auth module creates; entities may not use these names.
 AUTH_TABLES = (
+    "auth_identities",
     "auth_invitations",
     "auth_provider_lock",
     "auth_refresh_tokens",
+    "auth_sessions",
     "auth_tenants",
     "auth_users",
     "auth_verification_codes",
 )
 # With Keycloak the identity provider owns passwords, tokens and invitations; the project keeps
 # only a profile row per user (auth_users) and the provider lock.
-KEYCLOAK_AUTH_TABLES = ("auth_provider_lock", "auth_tenants", "auth_users")
+KEYCLOAK_AUTH_TABLES = (
+    "auth_identities",
+    "auth_provider_lock",
+    "auth_sessions",
+    "auth_tenants",
+    "auth_users",
+)
 
 
 def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
@@ -671,6 +758,7 @@ def auth_tables(auth: SpecAuth) -> tuple[str, ...]:
 def uses_keycloak(auth: SpecAuth | None) -> bool:
     return auth is not None and auth.enabled and auth.provider == AuthProvider.keycloak
 
+
 # Columns of auth_users that custom registration fields may not reuse.
 AUTH_USER_COLUMNS = frozenset(
     {
@@ -680,6 +768,7 @@ AUTH_USER_COLUMNS = frozenset(
         "password",
         "password_hash",
         "roles",
+        "role_source",
         "is_active",
         "email_verified_at",
         "phone_verified_at",

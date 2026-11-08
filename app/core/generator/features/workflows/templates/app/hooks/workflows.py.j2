@@ -1,0 +1,40 @@
+"""Your workflow step functions. Written once; the platform never overwrites this file.
+
+Each hook step needs a function registered under (workflow, step); each step with `compensate` needs an
+undo function too:
+
+    from app.workflows.registry import StepContext, compensation, step
+
+    @step("workflow_name", "step_name")
+    async def do_it(ctx: StepContext) -> dict | None:
+        ...   # ctx.input, ctx.results, ctx.idempotency_key, ctx.attempt; return a JSON result to keep it
+
+    @compensation("workflow_name", "step_name")
+    async def undo_it(ctx: StepContext) -> None:
+        ...   # ctx.result is what the step returned; ctx.reason is failure or cancel
+
+A function runs at least once: make the work idempotent (key on ctx.idempotency_key). Raise to fail the
+attempt (retried with backoff, then the workflow's failure policy applies). Do not log ctx.input as a
+whole. A worker refuses to start while a declared function is missing here.
+"""
+
+from app.workflows.registry import StepContext, compensation, step
+{% for wf in workflows %}
+{% for s in wf.steps %}
+{% if s.kind == "hook" %}
+
+
+@step({{ wf.name | pyrepr }}, {{ s.name | pyrepr }})
+async def {{ wf.name }}__{{ s.name }}(ctx: StepContext) -> dict[str, object] | None:
+    # {{ wf.name }} step {{ loop.index }}: {{ s.name }} ({{ s.max_attempts }} attempt(s), timeout {{ s.timeout_seconds }}s)
+    raise NotImplementedError("write the {{ s.name }} step of {{ wf.name }} in app/hooks/workflows.py")
+{% endif %}
+{% if s.compensate %}
+
+
+@compensation({{ wf.name | pyrepr }}, {{ s.name | pyrepr }})
+async def {{ wf.name }}__{{ s.name }}__undo(ctx: StepContext) -> None:
+    raise NotImplementedError("write the undo of {{ s.name }} in {{ wf.name }} in app/hooks/workflows.py")
+{% endif %}
+{% endfor %}
+{% endfor %}

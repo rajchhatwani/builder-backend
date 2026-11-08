@@ -1,6 +1,6 @@
 # Settings every payments process shares (the API and the workers).
 x-payments-env: &payments-env
-  APP_ENV: ${APP_ENV:-development}
+  APP_ENV: ${APP_ENV:-production}
   STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:?set STRIPE_SECRET_KEY in .env (see .env.example)}
   STRIPE_WEBHOOK_SECRETS: ${STRIPE_WEBHOOK_SECRETS:?set STRIPE_WEBHOOK_SECRETS in .env (see .env.example)}
   PAYMENTS_WEBHOOK_MODE: ${PAYMENTS_WEBHOOK_MODE:-queued}

@@ -1,0 +1,83 @@
+"""Runtime configuration checks (generated): setting validation and gapless sequences."""
+
+{% if sequences.values() | selectattr("per_tenant") | list %}
+import uuid
+
+{% endif %}
+{% if settings %}
+import pytest
+
+{% endif %}
+{% if settings %}
+from app.core.errors import AppError
+{% endif %}
+{% if sequences %}
+from app.db import session_factory
+from app.runtime_config import sequences as _sequences
+{% endif %}
+{% if settings %}
+from app.runtime_config import settings as _settings
+{% endif %}
+{% if settings %}
+
+
+def test_every_setting_default_passes_its_own_validation() -> None:
+    for key, definition in _settings.SETTINGS.items():
+        assert _settings.check_value(key, definition["default"]) is not None
+{% for key, d in settings.items() %}
+{% if d.type == "bool" %}
+
+
+def test_setting_{{ key }}_refuses_a_non_boolean() -> None:
+    with pytest.raises(AppError) as excinfo:
+        _settings.check_value({{ key | pyrepr }}, "yes")
+    assert excinfo.value.status_code == 422
+{% elif d.type == "int" %}
+
+
+def test_setting_{{ key }}_refuses_a_non_integer() -> None:
+    for bad in ("7", 1.5, True):
+        with pytest.raises(AppError) as excinfo:
+            _settings.check_value({{ key | pyrepr }}, bad)
+        assert excinfo.value.status_code == 422
+{% elif d.type == "decimal" %}
+
+
+def test_setting_{{ key }}_refuses_a_float_or_text() -> None:
+    for bad in (1.5, "abc", True):
+        with pytest.raises(AppError) as excinfo:
+            _settings.check_value({{ key | pyrepr }}, bad)
+        assert excinfo.value.status_code == 422
+{% else %}
+
+
+def test_setting_{{ key }}_refuses_a_non_string() -> None:
+    with pytest.raises(AppError) as excinfo:
+        _settings.check_value({{ key | pyrepr }}, 5)
+    assert excinfo.value.status_code == 422
+{% endif %}
+{% endfor %}
+{% endif %}
+{% for name, d in sequences.items() %}
+
+
+async def test_sequence_{{ name }}_hands_out_consecutive_numbers_and_ignores_rollbacks() -> None:
+{% if d.per_tenant %}
+    tenant = uuid.uuid4()
+    kwargs = {"tenant_id": tenant}
+{% else %}
+    kwargs = {}
+{% endif %}
+    async with session_factory() as session:
+        first = await _sequences.next_number(session, {{ name | pyrepr }}, **kwargs)
+        await session.commit()
+    async with session_factory() as session:
+        await _sequences.next_number(session, {{ name | pyrepr }}, **kwargs)
+        await session.rollback()  # this number was never used: it must come back
+    async with session_factory() as session:
+        second = await _sequences.next_number(session, {{ name | pyrepr }}, **kwargs)
+        await session.commit()
+    assert first.endswith(str({{ d.start }}).zfill({{ d.padding }}))
+    assert second.endswith(str({{ d.start + 1 }}).zfill({{ d.padding }}))
+    assert first.startswith({{ d.prefix | pyrepr }}) and second.startswith({{ d.prefix | pyrepr }})
+{% endfor %}

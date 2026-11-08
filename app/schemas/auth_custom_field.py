@@ -89,20 +89,12 @@ class AuthCustomFieldCreate(BaseModel):
             raise ValueError("enum_values is only valid for type 'enum'")
 
         # string constraints only on string-like
-        if t not in _STRING_LIKE and (
-            self.min_length is not None or self.max_length is not None
-        ):
-            raise ValueError(
-                f"min_length / max_length are not applicable for type '{t}'"
-            )
+        if t not in _STRING_LIKE and (self.min_length is not None or self.max_length is not None):
+            raise ValueError(f"min_length / max_length are not applicable for type '{t}'")
 
         # numeric constraints only on numeric
-        if t not in _NUMERIC and (
-            self.min_value is not None or self.max_value is not None
-        ):
-            raise ValueError(
-                f"min_value / max_value are not applicable for type '{t}'"
-            )
+        if t not in _NUMERIC and (self.min_value is not None or self.max_value is not None):
+            raise ValueError(f"min_value / max_value are not applicable for type '{t}'")
 
         # min ≤ max for strings
         if (

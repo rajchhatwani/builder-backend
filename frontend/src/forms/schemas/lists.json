@@ -1,0 +1,131 @@
+{
+  "$defs": {
+    "ListBody": {
+      "properties": {
+        "name": {
+          "maxLength": 80,
+          "title": "Name",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "items": {
+          "items": {
+            "$ref": "#/$defs/ListItemBody"
+          },
+          "maxItems": 1000,
+          "title": "Items",
+          "type": "array",
+          "x-ui": {
+            "itemLabel": "Item"
+          }
+        },
+        "max_items": {
+          "default": 100,
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Max Items",
+          "type": "integer"
+        },
+        "edit_roles": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 50,
+          "title": "Edit Roles",
+          "type": "array",
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "ListBody",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "label",
+          "max_items",
+          "edit_roles",
+          "items"
+        ]
+      }
+    },
+    "ListItemBody": {
+      "properties": {
+        "value": {
+          "maxLength": 80,
+          "title": "Value",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 200,
+          "title": "Label",
+          "type": "string"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "maxLength": 20,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "locked": {
+          "default": false,
+          "title": "Locked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "value",
+        "label"
+      ],
+      "title": "ListItemBody",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "value",
+          "label",
+          "color",
+          "locked"
+        ]
+      }
+    }
+  },
+  "description": "Body of PUT /projects/{id}/behavior/lists. Replaces every list.",
+  "properties": {
+    "lists": {
+      "items": {
+        "$ref": "#/$defs/ListBody"
+      },
+      "maxItems": 500,
+      "title": "Lists",
+      "type": "array",
+      "x-ui": {
+        "itemLabel": "List"
+      }
+    }
+  },
+  "title": "Lists",
+  "type": "object"
+}

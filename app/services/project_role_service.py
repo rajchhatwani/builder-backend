@@ -46,9 +46,7 @@ class ProjectRoleService:
             raise AppError(code="not_found", message="role not found", status_code=404)
         return role
 
-    async def _get_role_by_name(
-        self, project_id: uuid.UUID, name: str
-    ) -> ProjectRole | None:
+    async def _get_role_by_name(self, project_id: uuid.UUID, name: str) -> ProjectRole | None:
         result = await self.session.execute(
             select(ProjectRole).where(
                 ProjectRole.project_id == project_id,
@@ -60,7 +58,9 @@ class ProjectRoleService:
     async def _count_defaults(self, project_id: uuid.UUID) -> int:
         return (
             await self.session.execute(
-                select(func.count()).select_from(ProjectRole).where(
+                select(func.count())
+                .select_from(ProjectRole)
+                .where(
                     ProjectRole.project_id == project_id,
                     ProjectRole.is_default.is_(True),
                 )
@@ -144,9 +144,9 @@ class ProjectRoleService:
         await self._get_project_or_404(project_id)
         total = (
             await self.session.execute(
-                select(func.count()).select_from(ProjectRole).where(
-                    ProjectRole.project_id == project_id
-                )
+                select(func.count())
+                .select_from(ProjectRole)
+                .where(ProjectRole.project_id == project_id)
             )
         ).scalar_one()
         rows = (
@@ -205,16 +205,15 @@ class ProjectRoleService:
         if role.is_default:
             raise AppError(
                 code="conflict",
-                message=(
-                    "cannot delete the default role; "
-                    "assign another role as default first"
-                ),
+                message=("cannot delete the default role; assign another role as default first"),
                 status_code=409,
             )
         # Guard: no other role inherits from this one (would leave a dangling ref)
         inheritors = (
             await self.session.execute(
-                select(func.count()).select_from(ProjectRole).where(
+                select(func.count())
+                .select_from(ProjectRole)
+                .where(
                     ProjectRole.project_id == role.project_id,
                     ProjectRole.inherits_from == role.name,
                 )

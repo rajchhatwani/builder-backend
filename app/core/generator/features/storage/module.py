@@ -9,7 +9,7 @@ rendered: bucket credentials are environment variables of the generated project.
 from pathlib import Path
 from typing import Any
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.spec_models import SpecStorage
@@ -76,6 +76,7 @@ def clamd_limit_mb(storage: SpecStorage) -> int:
 
 class StorageModule:
     name = "storage"
+    manifest = ModuleManifest(id="storage", version="1", depends_on=('auth',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

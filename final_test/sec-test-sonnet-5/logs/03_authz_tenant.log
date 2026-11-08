@@ -1,0 +1,8 @@
+=== 03_authz_tenant against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[    Info] SOLID        authz/3.1: unauthenticated sweep across org/project/account/admin routes
+[    Info] SOLID        authz/3.2: outsider gets 404 (not 403) on every route of an org they don't belong to
+[    Info] SOLID        authz/3.3: org slug lookup is exact-match, no case/whitespace-insensitive IDOR
+[    Info] SOLID        authz/3.4a: mass assignment on /account/register (platform_role, is_admin, etc.)
+[    Info] SOLID        authz/3.4b: mass assignment on POST /orgs (plan_id, require_mfa, id, etc.)
+[    Info] SOLID        authz/3.5: the last owner of an org cannot leave or self-demote
+[  Medium] NOT_TESTABLE authz/3.6: cross-org project access

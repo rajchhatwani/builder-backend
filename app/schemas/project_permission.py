@@ -29,13 +29,9 @@ class PermissionEntry(BaseModel):
     def check_custom_filter_fields(self) -> "PermissionEntry":
         if self.row_rule == RowRule.custom_filter:
             if not self.custom_filter_field:
-                raise ValueError(
-                    "custom_filter_field is required when row_rule is 'custom_filter'"
-                )
+                raise ValueError("custom_filter_field is required when row_rule is 'custom_filter'")
             if self.custom_filter_value is None:
-                raise ValueError(
-                    "custom_filter_value is required when row_rule is 'custom_filter'"
-                )
+                raise ValueError("custom_filter_value is required when row_rule is 'custom_filter'")
         else:
             # Non-custom_filter row rules must not carry custom filter fields
             if self.custom_filter_field is not None or self.custom_filter_value is not None:

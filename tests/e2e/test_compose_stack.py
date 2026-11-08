@@ -12,11 +12,13 @@ import time
 import uuid
 import zipfile
 from collections.abc import AsyncGenerator, Iterator
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -25,9 +27,11 @@ from sqlalchemy.ext.asyncio import (
 )
 from testcontainers.community.postgres import PostgresContainer
 
+from app.core import platform_security as sec
 from app.db import get_session
 from app.main import app
 from app.models.base import Base
+from app.models.platform import PlatformUser
 from tests.api.test_spec import build_blog
 
 
@@ -46,7 +50,9 @@ pytestmark = pytest.mark.skipif(
 def compose(
     root: Path, project: str, *args: str, port: int, timeout: int = 900
 ) -> subprocess.CompletedProcess[str]:
-    env = {**os.environ, "API_PORT": str(port)}
+    # the generated compose file defaults to APP_ENV=production (live-key / https guards);
+    # this demo runs on plain http, so it runs the way .env.example does: development
+    env = {**os.environ, "API_PORT": str(port), "APP_ENV": "development"}
     return subprocess.run(
         ["docker", "compose", "-p", project, *args],
         cwd=root,
@@ -78,6 +84,18 @@ async def builder_engine(builder_postgres: PostgresContainer) -> AsyncGenerator[
     engine = create_async_engine(url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # Plans are migration-seeded in production; a Subscription row references one.
+        await conn.execute(
+            text(
+                "INSERT INTO plans (id, display_name, max_seats, max_projects, max_api_tokens,"
+                " max_mcp_tokens, allow_sso, allow_scim, allow_mcp, monthly_price_usd, is_public,"
+                " created_at) VALUES"
+                " ('free','Free',1,1,3,0,false,false,false,0,true,now()),"
+                " ('team','Team',5,10,20,5,false,true,true,2900,true,now()),"
+                " ('enterprise','Enterprise',NULL,NULL,NULL,NULL,true,true,true,0,false,now())"
+                " ON CONFLICT (id) DO NOTHING"
+            )
+        )
     yield engine
     await engine.dispose()
 
@@ -91,8 +109,31 @@ async def builder(builder_engine: AsyncEngine) -> AsyncGenerator[AsyncClient, No
             yield session
 
     app.dependency_overrides[get_session] = override
+    # The builder requires sign-in: create an account directly and use its access token.
+    os.environ.setdefault("SECRET_KEY", "e2e-test-secret-key")
+    async with factory() as session:
+        user = PlatformUser(
+            email="e2e@example.com",
+            name="E2E",
+            email_verified_at=datetime.now(UTC),
+            password_hash=sec.hash_password("unused-password-1"),
+        )
+        session.add(user)
+        await session.commit()
+    token = sec.encode_jwt(
+        sec.access_claims(
+            user_id=str(user.id),
+            audience=sec.AUDIENCE_APP,
+            token_version=0,
+            ttl_seconds=3600,
+        )
+    )
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://builder") as client:
+    async with AsyncClient(
+        transport=transport,
+        base_url="http://builder",
+        headers={"Authorization": f"Bearer {token}"},
+    ) as client:
         yield client
     app.dependency_overrides.pop(get_session, None)
 
@@ -196,7 +237,7 @@ async def test_blog_demo_from_download_to_running_stack(
 
     # 3. download the zip and unzip it
     download = await builder.get(f"/projects/{project_id}/generate/download")
-    assert download.status_code == 200
+    assert download.status_code == 200, download.text
     with zipfile.ZipFile(io.BytesIO(download.content)) as archive:
         archive.extractall(tmp_path)
     root = tmp_path / "blog"

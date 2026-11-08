@@ -1,0 +1,62 @@
+"""Typed events (generated from the entities' Read schemas).
+
+Each `<entity>.created / .updated / .deleted` payload carries `data`: the record as its Read schema
+shows it, MINUS every field whose name looks like a credential, every json field and every relation
+list (fail closed: what is not listed here is never published). `<entity>.transitioned` is announced
+for entities with a state machine."""
+@@ALIAS_IMPORTS@@
+{% for e in entities %}
+
+
+class {{ e.name }}Data(_pd.BaseModel):
+    model_config = _pd.ConfigDict(extra="forbid")
+
+    id: _uuid.UUID
+{% for decl in e.decls %}
+    {{ decl }}
+{% endfor %}
+    created_at: _dt.datetime
+    updated_at: _dt.datetime
+
+
+class {{ e.name }}Created(_pd.BaseModel):
+    model_config = _pd.ConfigDict(extra="forbid")
+
+    data: {{ e.name }}Data
+
+
+class {{ e.name }}Updated(_pd.BaseModel):
+    model_config = _pd.ConfigDict(extra="forbid")
+
+    data: {{ e.name }}Data
+    changed: list[str]
+
+
+class {{ e.name }}Deleted(_pd.BaseModel):
+    model_config = _pd.ConfigDict(extra="forbid")
+
+    data: {{ e.name }}Data
+{% if e.machine %}
+
+
+class {{ e.name }}Transitioned(_pd.BaseModel):
+    model_config = _pd.ConfigDict(extra="forbid")
+
+    transition: str
+    from_state: str
+    to_state: str
+    automatic: bool
+    actor_id: _uuid.UUID | None
+{% endif %}
+{% endfor %}
+
+EVENT_TYPES: dict[str, type[_pd.BaseModel]] = {
+{% for e in entities %}
+    "{{ e.event }}.created": {{ e.name }}Created,
+    "{{ e.event }}.updated": {{ e.name }}Updated,
+    "{{ e.event }}.deleted": {{ e.name }}Deleted,
+{% if e.machine %}
+    "{{ e.event }}.transitioned": {{ e.name }}Transitioned,
+{% endif %}
+{% endfor %}
+}

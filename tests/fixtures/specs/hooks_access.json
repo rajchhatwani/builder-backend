@@ -1,0 +1,161 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Hooks Access",
+    "slug": "hooks-access",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {},
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        }
+      ]
+    },
+    {
+      "name": "Ledger",
+      "table_name": "ledgers",
+      "plural_path": "ledgers",
+      "options": {},
+      "fields": [
+        {
+          "name": "label",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Note",
+        "operation": "create",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Note",
+        "operation": "list",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Note",
+        "operation": "get",
+        "roles": [
+          "member",
+          "admin"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Ledger",
+        "operation": "create",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ledger",
+        "operation": "list",
+        "roles": [
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "app_url": "https://hooks-access.example.com",
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@hooks-access.example.com",
+      "from_name": "Hooks Access"
+    }
+  },
+  "hooks": [
+    {
+      "name": "peek",
+      "point": "Note.after_commit",
+      "kind": "effect",
+      "input": {
+        "name": "PeekInput",
+        "fields": [
+          {
+            "name": "id",
+            "type": "uuid",
+            "required": true
+          },
+          {
+            "name": "title",
+            "type": "string",
+            "required": true
+          }
+        ]
+      },
+      "output": {
+        "name": "PeekResult",
+        "fields": [
+          {
+            "name": "seen",
+            "type": "bool",
+            "required": true
+          }
+        ]
+      },
+      "failure_policy": null,
+      "fallback": null,
+      "budget": {
+        "cpu_ms": 500,
+        "rows": 20,
+        "outbound_calls": 0
+      },
+      "reads": [
+        "Note",
+        "Ledger"
+      ]
+    }
+  ]
+}

@@ -226,6 +226,12 @@ async def test_download_headers_are_safe(alice: AsyncClient) -> None:
     created = await upload_ok(alice, name='evil"\r\nX-Injected: yes.txt')
     response = await alice.get(f"/files/{created['id']}/download")
     assert response.status_code == 200
+    # The headers the service itself sets (other middleware may add the same ones as well).
+    assert service.SAFETY_HEADERS == {
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+        "Cache-Control": "private, no-store",
+    }
     headers = response.headers
     assert headers["x-content-type-options"] == "nosniff"
     assert headers["content-security-policy"] == "default-src 'none'; sandbox"

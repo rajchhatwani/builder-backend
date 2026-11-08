@@ -1,0 +1,265 @@
+{
+ "desktop:login": [
+  "landmark-one-main",
+  "page-has-heading-one",
+  "region"
+ ],
+ "desktop:admin-overview": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:admin-insights": [
+  "landmark-unique"
+ ],
+ "desktop:admin-users": [
+  "empty-table-header",
+  "landmark-unique"
+ ],
+ "desktop:admin-organizations": [
+  "empty-table-header",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:admin-billing": [
+  "landmark-unique"
+ ],
+ "desktop:admin-plans": [
+  "empty-table-header",
+  "landmark-unique"
+ ],
+ "desktop:admin-projects": [
+  "landmark-unique"
+ ],
+ "desktop:admin-audit": [
+  "landmark-unique"
+ ],
+ "desktop:admin-settings": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:login": [
+  "landmark-one-main",
+  "page-has-heading-one",
+  "region"
+ ],
+ "phone:admin-overview": [
+  "heading-order",
+  "landmark-unique",
+  "scrollable-region-focusable"
+ ],
+ "phone:admin-insights": [
+  "landmark-unique",
+  "scrollable-region-focusable"
+ ],
+ "phone:admin-users": [
+  "empty-table-header",
+  "landmark-unique"
+ ],
+ "phone:admin-organizations": [
+  "empty-table-header",
+  "heading-order",
+  "landmark-unique",
+  "scrollable-region-focusable"
+ ],
+ "phone:admin-billing": [
+  "landmark-unique"
+ ],
+ "phone:admin-plans": [
+  "empty-table-header",
+  "landmark-unique"
+ ],
+ "phone:admin-projects": [
+  "landmark-unique"
+ ],
+ "phone:admin-audit": [
+  "landmark-unique"
+ ],
+ "phone:admin-settings": [
+  "color-contrast",
+  "landmark-unique",
+  "scrollable-region-focusable"
+ ],
+ "desktop:projects": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:account": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:org-people": [
+  "color-contrast",
+  "empty-table-header",
+  "landmark-unique"
+ ],
+ "desktop:org/invites": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:org/projects": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "desktop:org/plan": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "desktop:org/audit": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "desktop:org/sso": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:org/policies": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-overview": [
+  "landmark-unique"
+ ],
+ "desktop:project-model": [
+  "landmark-unique"
+ ],
+ "desktop:project-auth": [
+  "aria-allowed-attr",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-keycloak": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-payments": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-storage": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-access": [
+  "aria-allowed-attr",
+  "landmark-unique"
+ ],
+ "desktop:project-observability": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "desktop:project-deployment": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "desktop:project-documents": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-integrations": [
+  "color-contrast",
+  "empty-table-header",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "desktop:project-generate": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:projects": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:account": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:org-people": [
+  "color-contrast",
+  "empty-table-header",
+  "landmark-unique",
+  "scrollable-region-focusable"
+ ],
+ "phone:org/invites": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:org/projects": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:org/plan": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:org/audit": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:org/sso": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:org/policies": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-overview": [
+  "landmark-unique"
+ ],
+ "phone:project-model": [
+  "landmark-unique"
+ ],
+ "phone:project-auth": [
+  "aria-allowed-attr",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-keycloak": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-payments": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-storage": [
+  "color-contrast",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-access": [
+  "aria-allowed-attr",
+  "landmark-unique"
+ ],
+ "phone:project-observability": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:project-deployment": [
+  "color-contrast",
+  "landmark-unique"
+ ],
+ "phone:project-documents": [
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-integrations": [
+  "color-contrast",
+  "empty-table-header",
+  "heading-order",
+  "landmark-unique"
+ ],
+ "phone:project-generate": [
+  "heading-order",
+  "landmark-unique"
+ ]
+}

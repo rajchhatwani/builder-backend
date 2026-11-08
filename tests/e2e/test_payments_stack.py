@@ -133,6 +133,7 @@ def stack(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Stack]:
     (root / ".env").write_text(
         "\n".join(
             [
+                "APP_ENV=development",  # compose defaults to production (live keys, https only)
                 f"API_PORT={api_port}",
                 f"FAKE_PORT={fake_port}",
                 "AUTH_JWT_SECRET=" + secrets.token_hex(32),

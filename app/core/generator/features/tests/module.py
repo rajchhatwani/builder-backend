@@ -5,12 +5,22 @@ search / sort, patch, replace, delete) against a real database."""
 
 from pathlib import Path
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import EntityCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation import auth_tables, uses_keycloak
+from app.core.validation_api_edge import api_edge_tables
+from app.core.validation_events import EV_TABLES, events_active
+from app.core.validation_history import CH_TABLES, history_active
+from app.core.validation_jobs import JOB_TABLES, jobs_active
+from app.core.validation_notifications import NOTIFICATION_TABLES, notifications_active
 from app.core.validation_payments import PAYMENTS_TABLES, payments_active
+from app.core.validation_providers import PROVIDER_TABLES, providers_active
+from app.core.validation_runtime import RC_TABLES, runtime_config_active
+from app.core.validation_seed import SEED_TABLES, seed_active
 from app.core.validation_storage import STORAGE_TABLES, storage_active
+from app.core.validation_webhooks import WEBHOOK_TABLES, webhooks_active
+from app.core.validation_workflows import WORKFLOW_TABLES, workflows_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -29,6 +39,11 @@ def creatable(entity: EntityCtx, project: ProjectCtx, seen: frozenset[str] = fro
 
 
 def _skip_reason(entity: EntityCtx, project: ProjectCtx) -> str | None:
+    if entity.policy:
+        return (
+            f"access to {entity.name} is decided by authorization policies, so a generic smoke "
+            "test cannot know who may do what; see tests/test_authz.py and docs/AUTHORIZATION.md"
+        )
     if creatable(entity, project):
         return None
     return (
@@ -39,6 +54,7 @@ def _skip_reason(entity: EntityCtx, project: ProjectCtx) -> str | None:
 
 class TestsModule:
     name = "tests"
+    manifest = ModuleManifest(id="tests", version="1", depends_on=('crud',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)
@@ -64,6 +80,27 @@ class TestsModule:
         if storage:
             # Same reason as the payments audit table: it is append-only and cannot be truncated.
             tables |= set(STORAGE_TABLES) - {"stor_audit_log"}
+        if project.spec.state_machines:
+            tables.add("state_transitions")
+        if runtime_config_active(project.spec):
+            tables |= set(RC_TABLES)
+        if history_active(project.spec):
+            tables |= set(CH_TABLES)
+        if seed_active(project.spec):
+            tables |= set(SEED_TABLES)
+        if events_active(project.spec):
+            tables |= set(EV_TABLES)
+        tables |= set(api_edge_tables(project.spec))
+        if providers_active(project.spec) and project.auth is not None:
+            tables |= set(PROVIDER_TABLES)
+        if jobs_active(project.spec):
+            tables |= set(JOB_TABLES)
+        if webhooks_active(project.spec) and project.auth is not None:
+            tables |= set(WEBHOOK_TABLES)
+        if notifications_active(project.spec) and providers_active(project.spec) and project.auth is not None:
+            tables |= set(NOTIFICATION_TABLES)
+        if workflows_active(project.spec) and project.auth is not None:
+            tables |= set(WORKFLOW_TABLES)
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",
@@ -120,6 +157,6 @@ class TestsModule:
             "replace_args": "".join(
                 f', {fk.column}=created["{fk.column}"]' for fk in entity.required_fks
             ),
-            "has_required_input": any(f.required for f in entity.fields)
+            "has_required_input": any(f.required and not f.managed for f in entity.fields)
             or bool(entity.required_fks),
         }

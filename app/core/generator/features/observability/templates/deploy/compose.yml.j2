@@ -1,0 +1,45 @@
+# Local observability stack for {{ project_name }} (generated). Add it to the normal compose file:
+#
+#   docker compose -f docker-compose.yml -f deploy/observability/compose.yml up --build
+#
+# Traces:  http://localhost:16686  (Jaeger)      Metrics: http://localhost:9090  (Prometheus)
+# These are development tools: no authentication, data kept in memory. Do not expose them.
+services:
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+    depends_on:
+      otel-collector:
+        condition: service_started
+
+  otel-collector:
+    image: {{ collector_image }}
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/observability/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    depends_on:
+      - jaeger
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  jaeger:
+    image: {{ jaeger_image }}
+    ports:
+      - "127.0.0.1:16686:16686"
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  prometheus:
+    image: {{ prometheus_image }}
+    volumes:
+      - ./deploy/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - otel-collector
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped

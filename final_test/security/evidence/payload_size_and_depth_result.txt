@@ -1,0 +1,14 @@
+Checkpoint: adversarial payload size/depth, live, 2026-10-29
+
+1. 12 MB request body (settings.max_request_bytes=10MB) -> HTTP 413 in ~1.5ms (rejected on the
+   DECLARED Content-Length header alone, before reading any of the body -- SecurityMiddleware
+   in app/main.py). No resource consumption from the oversized payload.
+
+2. A 10,000-level-deep JSON array (small in total bytes, deep in nesting -- the classic
+   parser-recursion-DoS shape) -> HTTP 400 "There was an error parsing the body" in ~6ms.
+   No hang, no crash.
+
+3. GET /health immediately after both -> 200. The API process was unaffected by either payload.
+
+CONCLUSION: no resource-exhaustion or crash vector found for oversized or deeply-nested
+request bodies.

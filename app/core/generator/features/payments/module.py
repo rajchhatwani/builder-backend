@@ -10,7 +10,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from app.core import currencies
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import AccessCtx, ProjectCtx
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.payments_sizing import PaymentsSizing, size
@@ -151,6 +151,7 @@ def _access_args(access: AccessCtx | None) -> str:
 
 class PaymentsModule:
     name = "payments"
+    manifest = ModuleManifest(id="payments", version="1", depends_on=('auth',))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)

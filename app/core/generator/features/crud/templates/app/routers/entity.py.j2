@@ -9,6 +9,9 @@ from app import db as _db
 {% if e.access %}
 from app.auth import access as _access
 {% endif %}
+{% if e.policy %}
+from app.auth import authorize as _authz
+{% endif %}
 {% if "head" in e.ops %}
 from app.core import errors as _errors
 {% endif %}
@@ -25,10 +28,14 @@ from app.schemas.{{ e.table }} import {{ e.schema_imports | join(", ") }}
 router = _fa.APIRouter(prefix="/{{ e.path }}", tags=["{{ e.path }}"])
 {% if e.access %}
 
-# Who may call each operation, and which rows they get (see app/auth/access.py).
+# Who may call each operation, and which rows they get (see app/auth/access.py{% if e.policy %} and app/auth/authorize.py{% endif %}).
 _ACCESS = {
 {% for a in e.access %}
+{% if a.policy %}
+    "{{ a.op }}": _authz.{{ a.policy_call(e.name) }},
+{% else %}
     "{{ a.op }}": _access.{{ a.call }},
+{% endif %}
 {% endfor %}
 }
 {% endif %}

@@ -1,0 +1,14 @@
+{
+  "member_view_of_bb_sso_people_tab": {
+    "own_row": {"last_login_at": "shown (10/29/2026)", "mfa_enabled": "shown (off)"},
+    "other_rows_owner_and_bb_sso1": {"last_login_at": "hidden (—)", "mfa_enabled": "hidden (—)"},
+    "matches": "F-010 fix: a member sees these private fields only for their own row"
+  },
+  "sso_scim_tab_as_member": {
+    "tab_visible_in_nav": true,
+    "content_shown": "Only owners and admins can see and change single sign-on and SCIM provisioning. Ask BB Owner Test Acc.",
+    "note": "the tab link itself is visible, but its content is correctly gated behind the real 403 the API would give; nothing privileged is ever rendered"
+  },
+  "invite_and_role_controls": "not shown to a plain member; the page instead says who to ask (the owner), matching the API's org_forbidden detail",
+  "layout_375px": {"scrollWidth": 375, "clientWidth": 375, "hasHorizontalOverflow": false}
+}

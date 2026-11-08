@@ -1,0 +1,2 @@
+# Test files that are deliberately NOT in tests/regression_manifest.txt. One per line: path  # reason (reason required).
+# tests/golden/** is excluded by rule (generated-project snapshots), not listed here.

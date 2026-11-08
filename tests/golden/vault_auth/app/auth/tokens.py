@@ -93,13 +93,15 @@ class TokenStore:
             raise _unavailable(exc) from exc
         return Rotation("ok", uuid.UUID(result[1]), uuid.UUID(result[2]))
 
-    async def revoke_family_of(self, token_hash: str) -> None:
+    async def revoke_family_of(self, token_hash: str) -> uuid.UUID | None:
         try:
             family_id = await self.client.hget(_PREFIX + token_hash, "family_id")
             if family_id is not None:
                 await self.client.eval(_REVOKE_SET, 1, _FAMILY + family_id, _PREFIX)
+                return uuid.UUID(family_id)
         except RedisError as exc:
             raise _unavailable(exc) from exc
+        return None
 
     async def revoke_all(self, user_id: uuid.UUID) -> None:
         try:

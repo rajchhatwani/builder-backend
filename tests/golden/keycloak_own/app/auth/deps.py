@@ -13,11 +13,11 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated
 
 import structlog
-from fastapi import Depends
+from fastapi import Depends, Request
 from fastapi.security import OAuth2AuthorizationCodeBearer
 
-from app.auth import config, oidc, service
-from app.auth.models import AuthUser
+from app.auth import config, identity, oidc, service
+from app.auth.models import AuthTenant, AuthUser
 from app.auth.service import effective_roles
 from app.core.errors import AppError
 from app.db import SessionDep
@@ -45,6 +45,7 @@ def _unauthorized(message: str = "authentication required") -> AppError:
 
 
 async def get_current_user(
+    request: Request,
     session: SessionDep,
     raw_token: Annotated[str | None, Depends(_bearer)],
 ) -> AuthUser:
@@ -78,10 +79,42 @@ async def get_current_user(
     user = await service.sync_user(session, token)
     if user is None:
         raise _unauthorized("invalid or expired access token")
+    if token.sid is not None and not await identity.open_session(
+        session, user.id, token.issuer, token.sid
+    ):
+        # Keycloak told us (back-channel logout) that this sign-in is over.
+        await session.rollback()
+        raise _unauthorized("invalid or expired access token")
+    request.state.auth_context = {
+        "issuer": token.issuer,
+        "subject": token.sub,
+        "session_id": token.sid,
+        "auth_time": token.auth_time,
+    }
     return user
 
 
 CurrentUser = Annotated[AuthUser, Depends(get_current_user)]
+
+
+async def get_principal(request: Request, user: CurrentUser, session: SessionDep) -> identity.Principal:
+    """The caller as a `Principal`: use this in your own code instead of reading token claims."""
+    context = request.state.auth_context
+    tenant_id = getattr(user, "tenant_id", None)
+    tenant = await session.get(AuthTenant, tenant_id) if tenant_id is not None else None
+    return identity.Principal(
+        user_id=user.id,
+        issuer=context["issuer"],
+        subject=context["subject"],
+        tenant_id=tenant_id,
+        tenant_external_ref=tenant.external_ref if tenant is not None else None,
+        roles=tuple(sorted(effective_roles(user.roles))),
+        session_id=context["session_id"],
+        auth_time=context["auth_time"],
+    )
+
+
+CurrentPrincipal = Annotated[identity.Principal, Depends(get_principal)]
 
 
 def require_roles(*names: str) -> Callable[[AuthUser], Awaitable[AuthUser]]:

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { Project } from '../api/types'
+import { formatDeletionDate } from '../api/dates'
+import type { Organization, Project } from '../api/types'
 import { NewProjectDialog } from '../components/NewProjectDialog'
 import { link } from '../components/Sidebar'
 import { useUi } from '../components/Ui'
@@ -11,10 +12,20 @@ interface Summary {
   problems: number
 }
 
-function ProjectCard({ project, onDelete }: { project: Project; onDelete: () => void }) {
+interface ProjectCardProps {
+  project: Project
+  onDelete: () => void
+  /** The project's org is waiting for deletion: every call about it would answer 423. */
+  lockedOrg?: Organization
+  /** The project's org requires two-factor and this session has none: every call would answer 403. */
+  mfaOrg?: Organization
+}
+
+function ProjectCard({ project, onDelete, lockedOrg, mfaOrg }: ProjectCardProps) {
   const [summary, setSummary] = useState<Summary | null>(null)
 
   useEffect(() => {
+    if (lockedOrg || mfaOrg) return
     let cancelled = false
     Promise.all([
       api.listEntities(project.id, 1, 0),
@@ -31,7 +42,43 @@ function ProjectCard({ project, onDelete }: { project: Project; onDelete: () => 
     return () => {
       cancelled = true
     }
-  }, [project.id])
+  }, [project.id, lockedOrg, mfaOrg])
+
+  if (mfaOrg && !lockedOrg) {
+    return (
+      <div className="card project-card" onClick={() => (window.location.hash = '#/account')}>
+        <div className="project-card-head">
+          <h3>{project.name}</h3>
+          <span className="badge badge-muted">Needs 2FA</span>
+        </div>
+        <p className="muted">
+          {mfaOrg.name} requires two-factor authentication. Turn it on, then sign in again with your code.{' '}
+          <a href="#/account" onClick={(e) => e.stopPropagation()}>
+            Open your account
+          </a>
+        </p>
+      </div>
+    )
+  }
+
+  if (lockedOrg) {
+    const orgPage = link(`/org/${encodeURIComponent(lockedOrg.slug)}`)
+    return (
+      <div className="card project-card" onClick={() => (window.location.hash = orgPage)}>
+        <div className="project-card-head">
+          <h3>{project.name}</h3>
+          <span className="badge badge-muted">Locked</span>
+        </div>
+        <p className="muted">
+          {lockedOrg.name} is scheduled for deletion on {formatDeletionDate(lockedOrg.deletion_scheduled_for)}, with
+          this project.{' '}
+          <a href={orgPage} onClick={(e) => e.stopPropagation()}>
+            Open the organization
+          </a>
+        </p>
+      </div>
+    )
+  }
 
   const open = link(`/p/${project.id}/overview`)
 
@@ -81,6 +128,8 @@ function describe(s: Summary): string {
 export function ProjectsPage() {
   const { confirm, toast } = useUi()
   const [projects, setProjects] = useState<Project[]>([])
+  const [lockedOrgs, setLockedOrgs] = useState<Map<string, Organization>>(new Map())
+  const [mfaOrgs, setMfaOrgs] = useState<Map<string, Organization>>(new Map())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -91,6 +140,13 @@ export function ProjectsPage() {
     try {
       const page = await api.listProjects(200, 0)
       setProjects(page.items)
+      // Orgs waiting for deletion (locked cards) and orgs whose two-factor policy this session
+      // doesn't meet: opening their projects would only answer 423 / 403.
+      const orgs = (await api.listOrgs().catch(() => null))?.items ?? []
+      setLockedOrgs(new Map(orgs.filter((o) => o.deletion_scheduled_for).map((o) => [o.id, o])))
+      const strict = orgs.filter((o) => o.require_mfa)
+      const sessionMfa = strict.length ? ((await api.mfaStatus().catch(() => null))?.session_mfa ?? true) : true
+      setMfaOrgs(new Map(sessionMfa ? [] : strict.map((o) => [o.id, o])))
     } catch {
       setError("Can't reach the server. Make sure the backend is running, then try again.")
     } finally {
@@ -146,7 +202,13 @@ export function ProjectsPage() {
       {!loading && !error && projects.length > 0 && (
         <div className="project-grid">
           {projects.map((p) => (
-            <ProjectCard key={p.id} project={p} onDelete={() => handleDelete(p)} />
+            <ProjectCard
+              key={p.id}
+              project={p}
+              onDelete={() => handleDelete(p)}
+              lockedOrg={p.organization_id ? lockedOrgs.get(p.organization_id) : undefined}
+              mfaOrg={p.organization_id ? mfaOrgs.get(p.organization_id) : undefined}
+            />
           ))}
         </div>
       )}

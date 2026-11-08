@@ -20,8 +20,12 @@ interface OverviewPanelProps {
 
 /** Which section can fix an issue, judged by its path. */
 export function sectionForIssue(issue: ValidationIssue): Section {
+  if (issue.path === 'documents' || issue.path.startsWith('documents.')) return 'documents'
+  if (issue.path === 'deployment' || issue.path.startsWith('deployment.')) return 'deployment'
+  if (issue.path === 'observability' || issue.path.startsWith('observability.')) return 'observability'
   if (issue.path === 'payments' || issue.path.startsWith('payments.')) return 'payments'
   if (issue.path === 'storage' || issue.path.startsWith('storage.') || issue.code === 'storage_required') return 'storage'
+  if (issue.path === 'authorization' || issue.path.startsWith('authorization.') || issue.code.startsWith('authz.')) return 'access'
   if (issue.path.startsWith('auth.roles') || issue.path.startsWith('auth.permissions')) return 'access'
   if (issue.path === 'auth.keycloak' || issue.path.startsWith('auth.keycloak.')) return 'keycloak'
   if (issue.path === 'auth' || issue.path.startsWith('auth.')) return 'auth'

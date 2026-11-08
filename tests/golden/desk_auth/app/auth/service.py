@@ -11,7 +11,7 @@ import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import config, security
+from app.auth import config, identity, security
 from app.auth.delivery import DeliveryError, Mailer, SmsSender
 from app.auth.models import AuthInvitation, AuthTenant, AuthUser, AuthVerificationCode
 from app.auth.tokens import TokenStore
@@ -86,6 +86,15 @@ class AuthService:
             invitation.accepted_at = _now()
         try:
             await self.session.flush()
+            await identity.add_identity(
+                self.session,
+                user.id,
+                issuer=config.ISSUER,
+                subject=str(user.id),
+                provider=config.PROVIDER,
+                email=email,
+                email_verified=user.email_verified_at is not None,
+            )
         except IntegrityError as exc:
             await self.session.rollback()
             raise ConflictError("an account with that email or phone number already exists") from exc
@@ -253,17 +262,24 @@ class AuthService:
         self, user: AuthUser, family_id: uuid.UUID | None = None
     ) -> tuple[str, str, int]:
         ttl = config.ACCESS_TOKEN_TTL_MINUTES * 60
+        family_id = family_id or uuid.uuid4()
+        if not await identity.open_session(
+            self.session, user.id, config.ISSUER, str(family_id)
+        ):
+            raise AppError("invalid_token", "the refresh token is invalid", 401)
         access = security.create_access_token(
             user.id,
             sorted(user.roles),
             key=self.settings.jwt_key,
             ttl_seconds=ttl,
             tenant_id=getattr(user, "tenant_id", None),
+            issuer=config.ISSUER,
+            session_id=str(family_id),
         )
         refresh = security.new_token()
         await self.tokens.add(
             user.id,
-            family_id or uuid.uuid4(),
+            family_id,
             security.hash_secret(refresh),
             _now() + dt.timedelta(days=config.REFRESH_TOKEN_TTL_DAYS),
         )
@@ -284,11 +300,14 @@ class AuthService:
         return await self.issue_tokens(user, family_id=rotation.family_id)
 
     async def logout(self, raw_token: str) -> None:
-        await self.tokens.revoke_family_of(security.hash_secret(raw_token))
+        family_id = await self.tokens.revoke_family_of(security.hash_secret(raw_token))
         await self.session.commit()
+        if family_id is not None:
+            await identity.end_session(self.session, config.ISSUER, str(family_id), "logout")
 
     async def _revoke_all_refresh_tokens(self, user_id: uuid.UUID) -> None:
         await self.tokens.revoke_all(user_id)
+        await identity.end_sessions_of_user(self.session, user_id, "credentials_changed")
 
     # --- verification codes -------------------------------------------------------
 

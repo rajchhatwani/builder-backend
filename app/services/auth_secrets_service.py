@@ -48,20 +48,14 @@ class AuthSecretsService:
 
     async def _get_auth_config(self, project_id: uuid.UUID) -> ProjectAuthConfig | None:
         result = await self.session.execute(
-            select(ProjectAuthConfig).where(
-                ProjectAuthConfig.project_id == project_id
-            )
+            select(ProjectAuthConfig).where(ProjectAuthConfig.project_id == project_id)
         )
         return result.scalar_one_or_none()
 
-    async def _get_or_create_secrets_row(
-        self, project_id: uuid.UUID
-    ) -> ProjectAuthSecrets:
+    async def _get_or_create_secrets_row(self, project_id: uuid.UUID) -> ProjectAuthSecrets:
         """Fetch existing secrets row, or create an empty one."""
         result = await self.session.execute(
-            select(ProjectAuthSecrets).where(
-                ProjectAuthSecrets.project_id == project_id
-            )
+            select(ProjectAuthSecrets).where(ProjectAuthSecrets.project_id == project_id)
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -72,28 +66,20 @@ class AuthSecretsService:
 
     # ── Public API ────────────────────────────────────────────────────────────
 
-    async def upsert(
-        self, project_id: uuid.UUID, data: AuthSecretsWrite
-    ) -> AuthSecretsStatus:
+    async def upsert(self, project_id: uuid.UUID, data: AuthSecretsWrite) -> AuthSecretsStatus:
         """Write (encrypted) secrets and return status booleans — never plaintext."""
         await self._get_project_or_404(project_id)
         auth_config = await self._get_auth_config(project_id)
 
         # If an sms_provider is specified in the request, cross-check against
         # the DB auth config sms_provider for consistency.
-        active_sms_provider: SmsProvider | None = (
-            auth_config.sms_provider if auth_config else None
-        )
+        active_sms_provider: SmsProvider | None = auth_config.sms_provider if auth_config else None
         if data.sms_provider is not None:
             active_sms_provider = data.sms_provider
 
         # If sms is enabled in config but neither the request nor the DB has a
         # matching provider block, surface a clear error.
-        if (
-            auth_config is not None
-            and auth_config.sms_otp_enabled
-            and active_sms_provider is None
-        ):
+        if auth_config is not None and auth_config.sms_otp_enabled and active_sms_provider is None:
             raise AppError(
                 code="validation_error",
                 message=(
@@ -143,18 +129,12 @@ class AuthSecretsService:
         await self._get_project_or_404(project_id)
         auth_config = await self._get_auth_config(project_id)
         result = await self.session.execute(
-            select(ProjectAuthSecrets).where(
-                ProjectAuthSecrets.project_id == project_id
-            )
+            select(ProjectAuthSecrets).where(ProjectAuthSecrets.project_id == project_id)
         )
         row = result.scalar_one_or_none()
         if row is None:
             # No secrets stored yet — return all-false status
-            fallback_ts = (
-                auth_config.updated_at
-                if auth_config
-                else datetime.now(tz=UTC)
-            )
+            fallback_ts = auth_config.updated_at if auth_config else datetime.now(tz=UTC)
             return AuthSecretsStatus(
                 project_id=project_id,
                 smtp=SmtpSecretsStatus(configured=False, username_set=False),
@@ -169,9 +149,7 @@ class AuthSecretsService:
 
     # ── Generator-internal: decrypt for code generation only ─────────────────
 
-    async def get_for_generator(
-        self, project_id: uuid.UUID
-    ) -> dict[str, str | None]:
+    async def get_for_generator(self, project_id: uuid.UUID) -> dict[str, str | None]:
         """Decrypt and return all secrets for the generator pipeline.
 
         This method is NOT reachable via any HTTP route.  It is called only
@@ -179,9 +157,7 @@ class AuthSecretsService:
         Returns a flat dict of plaintext values; None means not configured.
         """
         result = await self.session.execute(
-            select(ProjectAuthSecrets).where(
-                ProjectAuthSecrets.project_id == project_id
-            )
+            select(ProjectAuthSecrets).where(ProjectAuthSecrets.project_id == project_id)
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -214,14 +190,10 @@ class AuthSecretsService:
         sms_configured = False
         if active_sms_provider == SmsProvider.twilio:
             sms_configured = (
-                row.twilio_account_sid is not None
-                and row.twilio_auth_token is not None
+                row.twilio_account_sid is not None and row.twilio_auth_token is not None
             )
         elif active_sms_provider == SmsProvider.vonage:
-            sms_configured = (
-                row.vonage_api_key is not None
-                and row.vonage_api_secret is not None
-            )
+            sms_configured = row.vonage_api_key is not None and row.vonage_api_secret is not None
         elif active_sms_provider == SmsProvider.aws_sns:
             sms_configured = (
                 row.aws_access_key_id is not None

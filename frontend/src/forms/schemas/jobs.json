@@ -1,0 +1,180 @@
+{
+  "$defs": {
+    "SpecJob": {
+      "additionalProperties": false,
+      "description": "A kind of background job. `handler` is the name of a function you write in the custom file\napp/hooks/jobs.py (the platform generates only the registry and the stub).",
+      "properties": {
+        "handler": {
+          "title": "Handler",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "queue": {
+          "default": "default",
+          "title": "Queue",
+          "type": "string"
+        },
+        "retry": {
+          "$ref": "#/$defs/SpecJobRetry"
+        },
+        "timeout_seconds": {
+          "default": 300,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "handler"
+      ],
+      "title": "SpecJob",
+      "type": "object"
+    },
+    "SpecJobQueue": {
+      "additionalProperties": false,
+      "description": "Where jobs wait. Only `postgres` (the app's own database, FOR UPDATE SKIP LOCKED) is\nimplemented; `redis` and `rabbitmq` are accepted by the schema and refused by validation.",
+      "properties": {
+        "backend": {
+          "default": "postgres",
+          "title": "Backend",
+          "type": "string"
+        }
+      },
+      "title": "SpecJobQueue",
+      "type": "object"
+    },
+    "SpecJobRetry": {
+      "additionalProperties": false,
+      "description": "How a failing job is tried again: up to `max_attempts` runs in all, waiting `backoff_seconds`\n(`fixed`) or `backoff_seconds` doubling each time (`exponential`, capped at an hour) between runs.\nAfter the last failed run the job is parked as `dead` (visible, and it can be requeued).",
+      "properties": {
+        "backoff": {
+          "default": "exponential",
+          "title": "Backoff",
+          "type": "string"
+        },
+        "backoff_seconds": {
+          "default": 30,
+          "title": "Backoff Seconds",
+          "type": "integer"
+        },
+        "max_attempts": {
+          "default": 3,
+          "title": "Max Attempts",
+          "type": "integer"
+        }
+      },
+      "title": "SpecJobRetry",
+      "type": "object"
+    },
+    "SpecJobSchedule": {
+      "additionalProperties": false,
+      "description": "Enqueue `job` on a 5-field `cron` in `timezone`. Exactly one job per tick, however many worker\nprocesses run. If ticks were missed (everything was down), `missed` decides: `catch_up_one` runs\nthe most recent missed tick once, `skip` drops them.",
+      "properties": {
+        "cron": {
+          "title": "Cron",
+          "type": "string"
+        },
+        "enabled": {
+          "default": true,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "job": {
+          "title": "Job",
+          "type": "string"
+        },
+        "missed": {
+          "default": "catch_up_one",
+          "title": "Missed",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "job",
+        "cron"
+      ],
+      "title": "SpecJobSchedule",
+      "type": "object"
+    },
+    "SpecWorkerGroup": {
+      "additionalProperties": false,
+      "description": "A set of worker processes that run jobs from the listed `queues`, `concurrency` jobs at a time\nper process. `same_server` adds a compose service to the project; `separate_server` writes a\nbundle under deploy/workers/<name>/ to run on another machine with its own DATABASE_URL.",
+      "properties": {
+        "concurrency": {
+          "default": 4,
+          "title": "Concurrency",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "placement": {
+          "default": "same_server",
+          "title": "Placement",
+          "type": "string"
+        },
+        "queues": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Queues",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecWorkerGroup",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Background jobs, schedules and worker groups (C11). Off unless `enabled`.",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "jobs": {
+      "items": {
+        "$ref": "#/$defs/SpecJob"
+      },
+      "title": "Jobs",
+      "type": "array"
+    },
+    "queue": {
+      "$ref": "#/$defs/SpecJobQueue"
+    },
+    "schedules": {
+      "items": {
+        "$ref": "#/$defs/SpecJobSchedule"
+      },
+      "title": "Schedules",
+      "type": "array"
+    },
+    "worker_groups": {
+      "items": {
+        "$ref": "#/$defs/SpecWorkerGroup"
+      },
+      "title": "Worker Groups",
+      "type": "array"
+    }
+  },
+  "title": "SpecJobs",
+  "type": "object"
+}

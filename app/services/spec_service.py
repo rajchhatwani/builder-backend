@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError
@@ -24,11 +25,15 @@ from app.core.spec_models import (
     Spec,
     SpecAuth,
     SpecAuthCustomField,
+    SpecAuthorization,
+    SpecDeployment,
+    SpecDocuments,
     SpecEntity,
     SpecEntityOptions,
     SpecField,
     SpecIdentityProvider,
     SpecKeycloak,
+    SpecObservability,
     SpecPasswordReset,
     SpecPayments,
     SpecPermission,
@@ -38,21 +43,46 @@ from app.core.spec_models import (
     SpecRole,
     SpecSmsConfig,
     SpecSmtpConfig,
+    SpecStateMachine,
     SpecStorage,
 )
 from app.core.validation import ValidationIssue, validate
 from app.exceptions import AppError
 from app.models.auth_config import ProjectAuthConfig
 from app.models.auth_custom_field import AuthCustomField
+from app.models.authorization_config import ProjectAuthorization
+from app.models.behavior_config import ProjectBehavior
+from app.models.deployment_config import ProjectDeployment
+from app.models.documents_config import ProjectDocuments
 from app.models.entity import Entity
 from app.models.field import Field
 from app.models.keycloak_config import ProjectKeycloakConfig
+from app.models.observability_config import ProjectObservability
 from app.models.payments_config import ProjectPaymentsConfig
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
 from app.models.relation import Relation
 from app.models.storage_config import ProjectStorageConfig
+from app.services.authorization_service import apply_spec as apply_authorization_spec
+from app.services.authorization_service import config_to_spec as authorization_config_to_spec
+from app.services.behavior_service import (
+    BLOCKS,
+    HISTORY,
+    HOOKS,
+    LISTS,
+    SEED,
+    SEQUENCES,
+    SETTINGS,
+    BehaviorService,
+    apply_section,
+)
+from app.services.deployment_service import apply_spec as apply_deployment_spec
+from app.services.deployment_service import config_to_spec as deployment_config_to_spec
+from app.services.documents_service import apply_spec as apply_documents_spec
+from app.services.documents_service import config_to_spec as documents_config_to_spec
+from app.services.observability_service import apply_spec as apply_observability_spec
+from app.services.observability_service import config_to_spec as observability_config_to_spec
 from app.services.payments_service import apply_spec, config_to_spec
 from app.services.storage_service import apply_spec as apply_storage_spec
 from app.services.storage_service import config_to_spec as storage_config_to_spec
@@ -261,6 +291,18 @@ class SpecService:
             auth=spec_auth,
             payments=await self._payments_spec(project_id),
             storage=await self._storage_spec(project_id),
+            authorization=await self._authorization_spec(project_id),
+            observability=await self._observability_spec(project_id),
+            state_machines=await BehaviorService(self.session).machines(project_id),
+            settings=await BehaviorService(self.session).settings(project_id),
+            sequences=await BehaviorService(self.session).sequences(project_id),
+            lists=await BehaviorService(self.session).lists(project_id),
+            history=await BehaviorService(self.session).history(project_id),
+            hooks=await BehaviorService(self.session).hooks(project_id),
+            seed=await BehaviorService(self.session).seed(project_id),
+            **{key: await BehaviorService(self.session).block(project_id, key) for key in BLOCKS},
+            deployment=await self._deployment_spec(project_id),
+            documents=await self._documents_spec(project_id),
         )
 
     async def _payments_spec(self, project_id: uuid.UUID) -> SpecPayments | None:
@@ -279,10 +321,49 @@ class SpecService:
         ).scalar_one_or_none()
         return storage_config_to_spec(row) if row is not None else None
 
+    async def _authorization_spec(self, project_id: uuid.UUID) -> SpecAuthorization | None:
+        row = (
+            await self.session.execute(
+                select(ProjectAuthorization).where(ProjectAuthorization.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return authorization_config_to_spec(row) if row is not None else None
+
+    async def _observability_spec(self, project_id: uuid.UUID) -> SpecObservability | None:
+        row = (
+            await self.session.execute(
+                select(ProjectObservability).where(ProjectObservability.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return observability_config_to_spec(row) if row is not None else None
+
+    async def _deployment_spec(self, project_id: uuid.UUID) -> SpecDeployment | None:
+        row = (
+            await self.session.execute(
+                select(ProjectDeployment).where(ProjectDeployment.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return deployment_config_to_spec(row) if row is not None else None
+
+    async def _documents_spec(self, project_id: uuid.UUID) -> SpecDocuments | None:
+        row = (
+            await self.session.execute(
+                select(ProjectDocuments).where(ProjectDocuments.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        return documents_config_to_spec(row) if row is not None else None
+
     async def validate(self, project_id: uuid.UUID) -> list[ValidationIssue]:
         return validate(await self.assemble(project_id))
 
-    async def replace(self, project_id: uuid.UUID, spec: Spec) -> Spec:
+    async def replace(
+        self,
+        project_id: uuid.UUID,
+        spec: Spec,
+        *,
+        validate_spec: bool = True,
+        expected_version: int | None = None,
+    ) -> Spec:
         """Replace the project's entities, fields and relations with the spec's.
 
         The project's own identity (name, slug, description) is left alone: a spec
@@ -290,10 +371,31 @@ class SpecService:
         The `auth` block is replaced as a whole when the spec has one. A spec without it
         leaves the project's auth settings as they are (permissions are re-attached to the
         re-created entities by name). Credentials are never part of a spec.
-        All-or-nothing: an invalid spec changes nothing.
+        All-or-nothing: an invalid spec changes nothing. The op-log passes `validate_spec=False`
+        only to return to a state the project already had (undo, redo, restore).
         """
         project = await self._get_project_or_404(project_id)
-        issues = validate(spec)
+        if expected_version is not None:
+            # Lock the row so two writers holding the same version cannot both pass the check.
+            locked = (
+                await self.session.execute(
+                    select(Project)
+                    .where(Project.id == project_id)
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )
+            ).scalar_one()
+            current_version = locked.version
+            if current_version != expected_version:
+                await self.session.rollback()
+                raise AppError(
+                    code="version_conflict",
+                    message="the spec was changed by someone else; refetch and retry",
+                    status_code=409,
+                    details=[{"current_version": current_version}],
+                )
+            project = locked
+        issues = validate(spec) if validate_spec else []
         if issues:
             raise AppError(
                 code="spec_invalid",
@@ -369,6 +471,29 @@ class SpecService:
             await self._replace_payments(project_id, spec.payments)
         if spec.storage is not None:
             await self._replace_storage(project_id, spec.storage)
+        if spec.authorization is not None:
+            await self._replace_authorization(project_id, spec.authorization)
+        if spec.observability is not None:
+            await self._replace_observability(project_id, spec.observability)
+        if spec.state_machines:
+            await self._replace_state_machines(project_id, spec.state_machines)
+        for key, items in (
+            (SETTINGS, spec.settings),
+            (SEQUENCES, spec.sequences),
+            (LISTS, spec.lists),
+            (HISTORY, spec.history),
+            (HOOKS, spec.hooks),
+            (SEED, spec.seed),
+        ):
+            if items:
+                await self._replace_behavior_section(project_id, key, items)
+        for block in BLOCKS:
+            if getattr(spec, block) is not None:
+                await self._replace_behavior_section(project_id, block, getattr(spec, block))
+        if spec.deployment is not None:
+            await self._replace_deployment(project_id, spec.deployment)
+        if spec.documents is not None:
+            await self._replace_documents(project_id, spec.documents)
         project.db_engine = DbEngine(spec.project.db_engine)
         project.version += 1
         try:
@@ -517,6 +642,87 @@ class SpecService:
             row = ProjectStorageConfig(project_id=project_id)
             self.session.add(row)
         apply_storage_spec(row, storage)
+
+    async def _replace_authorization(
+        self, project_id: uuid.UUID, authorization: SpecAuthorization
+    ) -> None:
+        # No authorization block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectAuthorization).where(ProjectAuthorization.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectAuthorization(project_id=project_id, version=1)
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_authorization_spec(row, authorization)
+
+    async def _replace_state_machines(
+        self, project_id: uuid.UUID, machines: list[SpecStateMachine]
+    ) -> None:
+        await self._replace_behavior_section(project_id, "state_machines", machines)
+
+    async def _replace_behavior_section(
+        self, project_id: uuid.UUID, key: str, items: list[Any]
+    ) -> None:
+        # An import without items for a section leaves it alone; one with them replaces it.
+        row = (
+            await self.session.execute(
+                select(ProjectBehavior).where(ProjectBehavior.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectBehavior(project_id=project_id, version=1, sections={})
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_section(row, key, items)
+
+    async def _replace_observability(
+        self, project_id: uuid.UUID, observability: SpecObservability
+    ) -> None:
+        # No observability block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectObservability).where(ProjectObservability.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectObservability(project_id=project_id, version=1)
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_observability_spec(row, observability)
+
+    async def _replace_deployment(self, project_id: uuid.UUID, deployment: SpecDeployment) -> None:
+        # No deployment block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectDeployment).where(ProjectDeployment.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectDeployment(project_id=project_id, version=1)
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_deployment_spec(row, deployment)
+
+    async def _replace_documents(self, project_id: uuid.UUID, documents: SpecDocuments) -> None:
+        # No documents block leaves the settings alone; one with it replaces them.
+        row = (
+            await self.session.execute(
+                select(ProjectDocuments).where(ProjectDocuments.project_id == project_id)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            row = ProjectDocuments(project_id=project_id, version=1)
+            self.session.add(row)
+        else:
+            row.version += 1
+        apply_documents_spec(row, documents)
 
     async def _replace_keycloak(self, project_id: uuid.UUID, kc: SpecKeycloak | None) -> None:
         row = (

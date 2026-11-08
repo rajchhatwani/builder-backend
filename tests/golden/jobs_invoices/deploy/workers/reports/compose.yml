@@ -1,0 +1,41 @@
+# Job worker group "reports" on a machine of its own (generated).
+#
+# It needs only the database: it does not talk to the API. Build the image once, push it to a registry
+# your servers can pull from, then on the server:
+#
+#   export APP_IMAGE=registry.example.com/invoice-jobs:1.0.0
+#   docker compose up -d
+#
+# Put the settings in a .env file next to this one (see .env.example). Never put real secrets in this
+# file, and never commit the .env file. Your handlers (app/hooks/jobs.py) may need more settings
+# (provider keys, ...): add them under `environment` and to the .env file.
+#
+# Sizing: 2 job(s) at a time per process; each running job and each claim uses a database
+# connection, so DB_POOL_SIZE is 4. replicas x pool size must fit in the
+# database's max_connections (or put PgBouncer in front).
+services:
+  worker-reports:
+    image: ${APP_IMAGE:?set APP_IMAGE to the image you built and pushed}
+    command: ["python", "-m", "app.jobs.worker", "--group", "reports"]
+    restart: unless-stopped
+    environment:
+      # This machine's own database login. Use TLS to reach a database on another machine:
+      # add ?ssl=require (asyncpg) to the URL, and prefer verify-full.
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      APP_ENV: ${APP_ENV:-production}
+      JOBS_CONCURRENCY: ${JOBS_CONCURRENCY:-2}
+      JOBS_POLL_INTERVAL_SECONDS: ${JOBS_POLL_INTERVAL_SECONDS:-1}
+      # Every worker may fire the cron schedules (exactly one wins each tick); set false to leave it to others.
+      JOBS_SCHEDULER_ENABLED: ${JOBS_SCHEDULER_ENABLED:-true}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-4}
+      DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-0}
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    stop_grace_period: 40s

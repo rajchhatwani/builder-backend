@@ -1,0 +1,73 @@
+"""Numbered fields (generated): the platform draws each number from its sequence; callers cannot set it."""
+@@ALIAS_IMPORTS@@
+
+{% set live = entities | rejectattr("skip") | list %}
+{% set skipped = entities | selectattr("skip") | list %}
+{% if live %}
+import asyncio
+import re
+
+{% endif %}
+{% if skipped %}
+import pytest
+{% endif %}
+{% if live %}
+from httpx import AsyncClient
+
+from tests import _factories
+
+
+def _count(value: object) -> int:
+    match = re.search(r"(\d+)$", str(value))
+    assert match is not None, value
+    return int(match.group(1))
+{% endif %}
+{% for r in entities %}
+{% set e = r.e %}
+{% if r.skip %}
+
+
+def test_{{ e.table }}_numbers_come_from_the_sequence() -> None:
+    pytest.skip({{ r.skip | pyrepr }})
+{% else %}
+
+
+async def test_{{ e.table }}_numbers_come_from_the_sequence({{ "authed_client" if e.access else "client" }}: AsyncClient) -> None:
+    client = {{ "authed_client" if e.access else "client" }}
+    made = await asyncio.gather(*(_factories.make_{{ e.table }}(client) for _ in range(6)))
+    last: dict[str, int] = {}
+{% for f, seq, per_tenant, as_int in e.numbered %}
+    # 6 parallel creates: 6 distinct numbers, one after another (gapless)
+    numbers = sorted(_count(row[{{ f | pyrepr }}]) for row in made)
+    assert numbers == list(range(numbers[0], numbers[0] + 6)), numbers
+    last[{{ f | pyrepr }}] = numbers[-1]
+{% endfor %}
+    # a number chosen by the caller is ignored
+    forged = await _factories.make_{{ e.table }}(
+        client,
+        **{
+{% for f, seq, per_tenant, as_int in e.numbered %}
+            {{ f | pyrepr }}: {{ 999999 if as_int else "FORGED-1" | pyrepr }},
+{% endfor %}
+        },
+    )
+    for name, number in last.items():
+        assert str(forged[name]) not in ("FORGED-1", "999999")
+        assert _count(forged[name]) == number + 1
+{% if "get" in e.ops and "update" in e.ops %}
+    # and it cannot be changed afterwards
+    before = (await client.get(f"/{{ e.path }}/{forged['id']}")).json()
+    await client.patch(
+        f"/{{ e.path }}/{forged['id']}",
+        json={
+{% for f, seq, per_tenant, as_int in e.numbered %}
+            {{ f | pyrepr }}: {{ 777777 if as_int else "HACKED-1" | pyrepr }},
+{% endfor %}
+        },
+    )
+    after = (await client.get(f"/{{ e.path }}/{forged['id']}")).json()
+    for name in last:
+        assert after[name] == before[name]
+{% endif %}
+{% endif %}
+{% endfor %}

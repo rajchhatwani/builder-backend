@@ -1,0 +1,168 @@
+"""Seed data: the plan gives the same rows every time, the rows pass the invariants, seeding twice changes
+nothing, reset removes only seeded rows, and the production guard refuses (generated)."""
+
+import re
+
+import pytest
+from sqlalchemy import func, select
+
+from app.db import session_factory
+from app.models import Base
+from app.runtime_config import sequences
+from app.seed import engine, guard, runner
+from app.seed.definitions import DEFINITIONS
+from app.seed.models import SeedRow
+from app.seed.numbering import NUMBERED
+from app.seed.plan import PROFILES
+
+LOCAL_DB = "postgresql+asyncpg://app:app@localhost:5432/app"
+DEV_ENV = {"APP_ENV": "test", "DATABASE_URL": LOCAL_DB}
+
+
+@pytest.mark.parametrize("profile", sorted(PROFILES))
+def test_a_profile_gives_the_same_rows_every_time(profile: str) -> None:
+    first = engine.generate(DEFINITIONS, PROFILES[profile])
+    second = engine.generate(DEFINITIONS, PROFILES[profile])
+    assert first.digest() == second.digest()
+    assert engine.canonical_dump(first) == engine.canonical_dump(second)
+
+
+@pytest.mark.parametrize("profile", sorted(PROFILES))
+async def test_seeding_twice_changes_nothing_and_the_invariants_hold(profile: str) -> None:
+    first = await runner.seed(profile, env=DEV_ENV)
+    assert first.status == "seeded"
+    assert await runner.check() == []
+    again = await runner.seed(profile, env=DEV_ENV)
+    assert again.status == "already_seeded"
+    assert again.digest == first.digest
+    async with session_factory() as session:
+        for name, count in first.counts.items():
+            table = Base.metadata.tables[DEFINITIONS["entities"][name]["table"]]
+            assert (await session.execute(select(func.count()).select_from(table))).scalar_one() == count
+
+
+async def test_reset_removes_the_seeded_rows_and_nothing_else() -> None:
+    profile = sorted(PROFILES)[0]
+    await runner.seed(profile, env=DEV_ENV)
+    report = await runner.reset(env=DEV_ENV)
+    assert report.status == "reset"
+    assert await runner.tracked() == 0
+    async with session_factory() as session:
+        for d in DEFINITIONS["entities"].values():
+            table = Base.metadata.tables[d["table"]]
+            assert (await session.execute(select(func.count()).select_from(table))).scalar_one() == 0
+
+
+def test_the_guard_refuses_anything_but_a_development_environment() -> None:
+    local = {"DATABASE_URL": LOCAL_DB}
+    for bad in (
+        local,
+        {**local, "APP_ENV": "production"},
+        {**local, "APP_ENV": "staging"},
+        {**local, "APP_ENV": "development", "ENVIRONMENT": "prod"},
+    ):
+        with pytest.raises(guard.SeedRefused):
+            guard.require_safe_environment(bad)
+    # one half of the override is not enough
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment({**local, "APP_ENV": "production"}, allow_production=True)
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment({**local, "APP_ENV": "production", "SEED_ALLOW_PRODUCTION": "yes"})
+    guard.require_safe_environment({**local, "APP_ENV": "development"})
+
+
+def test_the_guard_refuses_a_remote_or_unreadable_database_host() -> None:
+    remote = "postgresql+asyncpg://app:secret@db.example.com:5432/app"
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment({"APP_ENV": "development", "DATABASE_URL": remote})
+    for url in ("", "not a url", "postgresql+asyncpg:///app", "postgresql://[bad/app"):
+        with pytest.raises(guard.SeedRefused):
+            guard.require_safe_environment({"APP_ENV": "development", "DATABASE_URL": url})
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment({"APP_ENV": "development"})
+    # a safe environment with a local or compose-internal host is allowed
+    for host in ("localhost", "127.0.0.1", "[::1]", "db", "pgbouncer"):
+        url = f"postgresql+asyncpg://app:app@{host}:5432/app"
+        guard.require_safe_environment({"APP_ENV": "development", "DATABASE_URL": url})
+    # only the double override lets a remote host through
+    env = {"APP_ENV": "development", "DATABASE_URL": remote}
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment(env, allow_production=True)
+    guard.require_safe_environment({**env, "SEED_ALLOW_PRODUCTION": "yes"}, allow_production=True)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+asyncpg://u:p@localhost/db?host=prod.example.com",
+        "postgresql+asyncpg://u:p@localhost/db?HOST=prod.example.com",
+        "postgresql+asyncpg://u:p@localhost/db?%68ost=prod.example.com",
+        "postgresql+asyncpg://u:p@localhost/db?hostaddr=10.1.2.3",
+        "postgresql+asyncpg://u:p@localhost/db?port=6432",
+        "postgresql+asyncpg://u:p@localhost/db?service=prod",
+        "postgresql+asyncpg://u:p@localhost/db?ssl=disable&host=prod.example.com",
+        "postgresql+asyncpg://u:p@localhost/db?dbname=postgresql://prod.example.com/db",
+        "postgresql+asyncpg://u:p@localhost/db#@prod.example.com",
+        "postgresql+asyncpg://u:p@localhost/db#",
+        "postgresql+asyncpg://u:p@localhost,prod.example.com/db",
+        "postgresql+asyncpg://u:p@localhost%2Cprod.example.com/db",
+        "postgresql+asyncpg://u:p@localhost./db",
+        "postgresql+asyncpg://u:p@local%20host/db",
+        "postgresql+asyncpg://u:p@localhost%0A/db",
+        "postgresql+asyncpg://u:p@l\u043ecalhost/db",
+        "postgresql+asyncpg://u:p@prod.example.com/db",
+        "postgresql+asyncpg://u:p@%70rod.example.com/db",
+        "postgresql+asyncpg:///db?host=/var/run/postgresql",
+        "postgresql+asyncpg://u:p@/db?host=localhost",
+    ],
+)
+def test_the_guard_refuses_a_url_that_can_hide_another_host(url: str) -> None:
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment({"APP_ENV": "development", "DATABASE_URL": url})
+    # the double override is still the only way through
+    env = {"APP_ENV": "development", "DATABASE_URL": url}
+    with pytest.raises(guard.SeedRefused):
+        guard.require_safe_environment(env, allow_production=True)
+    guard.require_safe_environment({**env, "SEED_ALLOW_PRODUCTION": "yes"}, allow_production=True)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "postgresql+asyncpg://app:app@localhost:5432/app",
+        "postgresql+asyncpg://app:app@127.0.0.1:5432/app",
+        "postgresql+asyncpg://app:app@[::1]:5432/app",
+        "postgresql+asyncpg://app:app@db/app?ssl=disable",
+        "postgresql+asyncpg://app:app@LOCALHOST/app?ssl=disable",
+    ],
+)
+def test_the_guard_accepts_a_plain_local_url(url: str) -> None:
+    guard.require_safe_environment({"APP_ENV": "development", "DATABASE_URL": url})
+
+
+async def test_seeding_in_production_writes_nothing() -> None:
+    with pytest.raises(guard.SeedRefused):
+        await runner.seed(sorted(PROFILES)[0], env={**DEV_ENV, "APP_ENV": "production"})
+    assert await runner.tracked() == 0
+    assert not (await runner.check())
+    assert SeedRow.__tablename__ == "seed_rows"
+
+
+async def test_numbered_fields_draw_from_the_live_counter_so_the_next_real_number_is_free() -> None:
+    for profile in sorted(PROFILES):
+        await runner.seed(profile, env=DEV_ENV)
+        assert await runner.check() == []
+        async with session_factory() as session:
+            for entity, fields in NUMBERED.items():
+                table = Base.metadata.tables[DEFINITIONS["entities"][entity]["table"]]
+                for field, sequence, per_tenant, _as_int in fields:
+                    rows = (await session.execute(select(table.c[field], table.c.get("tenant_id")))).all()
+                    values = [str(r[0]) for r in rows]
+                    assert all(values) and len(set(values)) == len(values)  # present and unique
+                    for tenant in {r[1] for r in rows} if per_tenant else {None}:
+                        mine = [str(r[0]) for r in rows if not per_tenant or r[1] == tenant]
+                        highest = max(int(re.search(r"(\d+)$", v).group(1)) for v in mine)  # type: ignore[union-attr]
+                        number = await sequences.next_number(session, sequence, tenant_id=tenant)
+                        assert int(re.search(r"(\d+)$", number).group(1)) > highest  # type: ignore[union-attr]
+                        await session.rollback()  # a real create would use it; the check must not
+        await runner.reset(env=DEV_ENV)

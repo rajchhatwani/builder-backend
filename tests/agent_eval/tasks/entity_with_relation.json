@@ -1,0 +1,91 @@
+{
+  "id": "entity_with_relation",
+  "title": "Add an entity with a relation",
+  "goal": "Customers place Orders; add Order and link it to Customer.",
+  "starting_spec": {
+    "entities": [
+      {
+        "name": "Customer",
+        "table_name": "customers",
+        "plural_path": "customers",
+        "options": {},
+        "fields": [
+          {
+            "name": "name",
+            "type": "string",
+            "required": true
+          }
+        ]
+      }
+    ]
+  },
+  "transcript": [
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "plan",
+        "plan": {
+          "entities": [
+            "Customer",
+            "Order"
+          ],
+          "hooks": [],
+          "zones": [],
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "tool": "add_entity",
+      "input": {
+        "entity": {
+          "name": "Order",
+          "fields": [
+            {
+              "name": "reference",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "tool": "add_relation",
+      "input": {
+        "relation": {
+          "kind": "one_to_many",
+          "from_entity": "Customer",
+          "to_entity": "Order",
+          "from_name": "orders",
+          "to_name": "customer"
+        }
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "built"
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "apply"
+      }
+    }
+  ],
+  "expect": {
+    "state": "applied",
+    "max_repairs": 0,
+    "spec": [
+      {
+        "path": "entities[name=Order].name",
+        "equals": "Order"
+      },
+      {
+        "path": "relations[from_entity=Customer].to_entity",
+        "equals": "Order"
+      }
+    ]
+  }
+}

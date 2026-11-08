@@ -20,7 +20,7 @@ services:
       # Where people reach Keycloak, and where this service fetches its signing keys from.
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:-http://localhost:8081}
       KEYCLOAK_INTERNAL_URL: http://keycloak:8080
-      APP_ENV: ${APP_ENV:-development}
+      APP_ENV: ${APP_ENV:-production}
       AUTH_ALLOW_PROVIDER_SWITCH: ${AUTH_ALLOW_PROVIDER_SWITCH:-false}
     depends_on:
       db:

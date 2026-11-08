@@ -1,0 +1,27 @@
+terraform {
+  required_version = ">= 1.10"
+
+  required_providers {
+    azurerm = {
+      source  = "hashicorp/azurerm"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.6"
+    }
+  }
+
+  # State in an Azure Storage container created by bootstrap/ (blob leases provide the locking). Pass at
+  # init time (the pipeline signs in with OIDC, so use_oidc and no key):
+  #   terraform init -backend-config="resource_group_name=..." -backend-config="storage_account_name=..." \
+  #     -backend-config="container_name=tfstate" -backend-config="key={{ slug }}/<env>.tfstate" \
+  #     -backend-config="use_oidc=true" -backend-config="use_azuread_auth=true"
+  backend "azurerm" {}
+}
+
+provider "azurerm" {
+  features {}
+  subscription_id = var.subscription_id
+  use_oidc        = true
+}

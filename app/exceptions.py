@@ -11,8 +11,10 @@ class AppError(Exception):
         message: str,
         status_code: int = 400,
         details: list[dict[str, object]] | None = None,
+        headers: dict[str, str] | None = None,
     ) -> None:
         self.code = code
         self.message = message
         self.status_code = status_code
         self.details = details or []
+        self.headers = headers or {}

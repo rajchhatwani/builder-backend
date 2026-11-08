@@ -1,0 +1,78 @@
+"""jobs queue
+
+Revision ID: 0013
+Revises: 0009
+Create Date: rendered from the spec by Backend Builder
+
+The job queue, the schedules' first-seen marks and their fired ticks.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0013"
+down_revision: str | None = "0009"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "jb_jobs",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(40), nullable=False),
+        sa.Column("queue", sa.String(40), nullable=False),
+        sa.Column("payload", sa.JSON(), nullable=False),
+        sa.Column("status", sa.String(16), nullable=False),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("max_attempts", sa.Integer(), nullable=False),
+        sa.Column("run_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("lease_token", sa.Uuid(), nullable=True),
+        sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("locked_by", sa.String(80), nullable=True),
+        sa.Column("dedupe_key", sa.String(200), nullable=True),
+        sa.Column("tenant_id", sa.Uuid(), nullable=True),
+        sa.Column("last_error", sa.String(300), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id", name="pk_jb_jobs"),
+    )
+    op.create_index(
+        "uq_jb_jobs_dedupe_key", "jb_jobs", ["dedupe_key"], unique=True, postgresql_where=sa.text("tenant_id IS NULL")
+    )
+    op.create_index(
+        "uq_jb_jobs_tenant_dedupe_key",
+        "jb_jobs",
+        ["tenant_id", "dedupe_key"],
+        unique=True,
+        postgresql_where=sa.text("tenant_id IS NOT NULL"),
+    )
+    op.create_index("ix_jb_jobs_claim", "jb_jobs", ["queue", "status", "run_at"])
+    op.create_index("ix_jb_jobs_finished_at", "jb_jobs", ["finished_at"])
+    op.create_table(
+        "jb_schedules",
+        sa.Column("name", sa.String(40), nullable=False),
+        sa.Column("baseline_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("name", name="pk_jb_schedules"),
+    )
+    op.create_table(
+        "jb_schedule_fires",
+        sa.Column("schedule", sa.String(40), nullable=False),
+        sa.Column("fire_time", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("outcome", sa.String(16), nullable=False),
+        sa.Column("job_id", sa.Uuid(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("schedule", "fire_time", name="pk_jb_schedule_fires"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("jb_schedule_fires")
+    op.drop_table("jb_schedules")
+    op.drop_index("uq_jb_jobs_tenant_dedupe_key", table_name="jb_jobs")
+    op.drop_index("uq_jb_jobs_dedupe_key", table_name="jb_jobs")
+    op.drop_index("ix_jb_jobs_finished_at", table_name="jb_jobs")
+    op.drop_index("ix_jb_jobs_claim", table_name="jb_jobs")
+    op.drop_table("jb_jobs")

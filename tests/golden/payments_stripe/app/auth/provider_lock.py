@@ -36,7 +36,10 @@ async def ensure_provider_lock() -> None:
             if row is None:
                 session.add(
                     AuthProviderLock(
-                        id=_LOCK_ID, provider=config.PROVIDER, realm=config.PROVIDER_REALM
+                        id=_LOCK_ID,
+                        provider=config.PROVIDER,
+                        realm=config.PROVIDER_REALM,
+                        issuer=config.current_issuer(),
                     )
                 )
                 try:
@@ -46,6 +49,15 @@ async def ensure_provider_lock() -> None:
                     continue
                 return
             if (row.provider, row.realm) == (config.PROVIDER, config.PROVIDER_REALM):
+                issuer = config.current_issuer()
+                if row.issuer != issuer:
+                    # Not a refusal: the same realm can be reached at another address. Users keep
+                    # their ids; to move their identities to the new issuer run
+                    # `python -m app.auth.export relink --from <old> --to <new>`.
+                    if row.issuer is not None:
+                        logger.warning("auth_issuer_changed", before=row.issuer, after=issuer)
+                    row.issuer = issuer
+                    await session.commit()
                 return
             before = _describe(row.provider, row.realm)
             after = _describe(config.PROVIDER, config.PROVIDER_REALM)
@@ -58,6 +70,7 @@ async def ensure_provider_lock() -> None:
             logger.warning("auth_provider_switched", before=before, after=after)
             row.provider = config.PROVIDER
             row.realm = config.PROVIDER_REALM
+            row.issuer = config.current_issuer()
             await session.commit()
             return
         raise RuntimeError("could not record the auth provider")

@@ -1,0 +1,6 @@
+=== 06_sso_scim against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[     Low] NOT_TESTABLE sso/test_saml_baseline_and_negatives: test_saml_baseline_and_negatives
+[     Low] NOT_TESTABLE sso/test_saml_signature_wrapping: test_saml_signature_wrapping
+[Critical] CONFIRMED    sso/6.3: SAML XXE/DOCTYPE in the Response is rejected outright
+[    Info] SOLID        sso/6.4: OIDC discovery_url SSRF guard refuses loopback/link-local/private/localhost targets
+[     Low] NOT_TESTABLE sso/test_scim_self_contained: test_scim_self_contained

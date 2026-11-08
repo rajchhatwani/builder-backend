@@ -1,0 +1,8 @@
+{
+  "localStorage": {"theme": "light"},
+  "sessionStorage": {},
+  "network_leaks_in_urls": 0,
+  "suspicious_console_messages": 0,
+  "bb_refresh_cookie": {"httpOnly": true, "secure": true, "sameSite": "Strict", "path": "/account"},
+  "note": "URL stayed at '#/login' in location.href even though the page content showed the signed-in app (sectest-frontend@dumbpotato.com, Projects, Organizations) -- matches review finding F-016's 'URL stays #/login after sign-in' UI note, cosmetic only."
+}

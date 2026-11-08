@@ -1,0 +1,16 @@
+Checkpoint 5a — account lockout, live, 2026-10-29
+  Fresh account sectest-lockout2@dumbpotato.com, login_max_failures=5, lockout_minutes=15.
+  5 wrong-password attempts -> each 401 invalid_credentials.
+  6th attempt with the CORRECT password -> still 401 invalid_credentials (same generic message,
+  no information leak distinguishing "locked" from "wrong password").
+  DB check: failed_logins=0, locked_until=~15 min in the future (confirms lockout armed; counter
+  reset to 0 on the transition to locked, matching app/services/platform_auth_service.py:218-221).
+
+Checkpoint 5b — X-Forwarded-For rate-limit bypass attempt, live, against the public tunnel
+  35 POST /account/login requests, each with a DIFFERENT, attacker-chosen X-Forwarded-For value
+  (203.0.113.0 .. 203.0.113.34), targeting different nonexistent accounts to avoid any one
+  account's lockout. Result: 401 x 30, then 429 (rate_limited) starting at request #31 and for
+  every request after -- the spoofed XFF header had NO effect. The app/Caddy correctly trust
+  only the real connecting peer for rate-limiting, not a client-supplied header value.
+  (Re-run after restarting the API to get a clean rate-limit window; the in-memory limiter does
+  not survive a process restart, see SECURITY_REPORT.md note on multi-worker deployments.)

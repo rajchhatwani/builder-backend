@@ -1,0 +1,100 @@
+# Manual-test stack (project bbmanual). Driven by scripts/manual_stack.sh, which exports every value at
+# run time from ~/final_test.env. This file contains NO secrets: only variable NAMES.
+# LOCAL TESTING ONLY: the api service mounts the host docker socket (backlog P1 is about removing this).
+name: bbmanual
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bbmanual-postgres
+    environment: { POSTGRES_USER: builder, POSTGRES_PASSWORD: builder, POSTGRES_DB: builder }
+    ports: ["127.0.0.1:5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./scripts/db/10-app-role.sql:/docker-entrypoint-initdb.d/10-app-role.sql:ro
+    healthcheck: { test: ["CMD-SHELL", "pg_isready -U builder -d builder"], interval: 3s, timeout: 3s, retries: 30 }
+  redis:
+    image: redis:7-alpine
+    container_name: bbmanual-redis
+    ports: ["127.0.0.1:6379:6379"]
+    healthcheck: { test: ["CMD", "redis-cli", "ping"], interval: 3s, timeout: 3s, retries: 20 }
+  minio:   # S3 store. MinIO no longer publishes images; this is the same SeaweedFS the generator uses for dev S3
+    image: chrislusf/seaweedfs:4.48
+    container_name: bbmanual-minio
+    command: ["server", "-s3", "-s3.port=9000", "-dir=/data", "-ip.bind=0.0.0.0"]
+    environment:
+      AWS_ACCESS_KEY_ID: ${STORAGE_ACCESS_KEY_ID:?}
+      AWS_SECRET_ACCESS_KEY: ${STORAGE_SECRET_ACCESS_KEY:?}
+    ports: ["127.0.0.1:9000:9000"]
+    volumes: [miniodata:/data]
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: bbmanual-mailpit
+    ports: ["127.0.0.1:1025:1025", "127.0.0.1:8025:8025"]
+  api:
+    build: { context: "${BB_CTX:?}/api", dockerfile: Dockerfile }   # staged by manual_stack.sh (classic builder has no per-Dockerfile ignore)
+    image: bbmanual-api:1
+    container_name: bbmanual-api
+    network_mode: host   # reaches sandbox container IPs and the published service ports on 127.0.0.1
+    depends_on: { postgres: { condition: service_healthy }, redis: { condition: service_healthy } }
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock   # UNSAFE, local testing only
+      - ${BB_DATA:?}:${BB_DATA:?}                   # same absolute path on host and in container
+    environment:
+      - SECRET_KEY
+      - BUILDER_ENVIRONMENT
+      - BUILDER_DATABASE_URL
+      - BUILDER_MIGRATIONS_DATABASE_URL
+      - BUILDER_PUBLIC_APP_URL
+      - BUILDER_PUBLIC_API_URL
+      - BUILDER_CORS_ORIGINS
+      - BUILDER_SIGNUP_MODE
+      - BUILDER_BOOTSTRAP_ADMIN_EMAIL
+      - BUILDER_BOOTSTRAP_ADMIN_PASSWORD
+      - BUILDER_TRUST_PROXY_HEADERS
+      - BUILDER_ADMIN_MFA_REQUIRED
+      - BUILDER_RLS_ENABLED
+      - BUILDER_STRIPE_SECRET_KEY
+      - BUILDER_STRIPE_PRICE_IDS
+      - BUILDER_STRIPE_WEBHOOK_SECRET
+      - BUILDER_STRIPE_WEBHOOK_TOLERANCE_SECONDS
+      - BUILDER_SMTP_HOST
+      - BUILDER_SMTP_PORT
+      - BUILDER_SMTP_USERNAME
+      - BUILDER_SMTP_PASSWORD
+      - BUILDER_SMTP_FROM
+      - BUILDER_SMTP_STARTTLS
+      - BUILDER_SSO_ALLOW_HTTP_IDP
+      - BUILDER_SSO_ALLOW_PRIVATE_IDP
+      - BUILDER_SSO_LOGIN_TTL_SECONDS
+      - BUILDER_SECURITY_DIGEST_WEBHOOK_URL
+      - BUILDER_SECURITY_DIGEST_EMAIL
+      - BUILDER_AI_API_KEY
+      - BUILDER_AI_PLATFORM_KEY_ORGS
+      - BUILDER_PREVIEW_ROOT
+      - BUILDER_PREVIEW_SCHEDULER_ENABLED
+      - BUILDER_WORKSPACE_ROOT
+      - BUILDER_WORKSPACE_DB_ADMIN_URL
+      - BUILDER_SANDBOX_RUNTIME
+      - STORAGE_ENDPOINT_URL
+      - STORAGE_REGION
+      - STORAGE_BUCKET
+      - STORAGE_ACCESS_KEY_ID
+      - STORAGE_SECRET_ACCESS_KEY
+      - REDIS_URL
+      - OTEL_EXPORTER_OTLP_ENDPOINT
+    healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"], interval: 5s, timeout: 5s, retries: 40 }
+  web:
+    build:
+      context: ${BB_CTX:?}/web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${BB_ORIGIN:?}
+        VITE_PREVIEW_API_ORIGIN: ${BB_PREVIEW_ORIGIN:?}
+    image: bbmanual-web:${BB_MODE:-local}
+    container_name: bbmanual-web
+    network_mode: host
+    environment: [BB_ORIGIN]
+    depends_on: { api: { condition: service_started } }
+volumes:
+  pgdata:
+  miniodata:

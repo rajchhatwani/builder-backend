@@ -1,0 +1,19 @@
+# Manual-test API image: the repo's Dockerfile steps + git (draft workspaces) + docker CLI (sandbox/previews)
+# + scripts/ (create_admin.py). LOCAL TESTING ONLY: the container gets the host docker socket.
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv PATH=/app/.venv/bin:$PATH
+RUN apt-get update && apt-get install -y --no-install-recommends git ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && curl -fsSL https://download.docker.com/linux/static/stable/x86_64/docker-27.3.1.tgz | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
+ && apt-get purge -y curl && apt-get autoremove -y
+RUN pip install --no-cache-dir uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+# httpx is imported by app code but declared only in the dev group: the repo Dockerfile (--no-dev) image cannot start (finding for ATLAS)
+RUN uv sync --frozen
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY scripts ./scripts
+EXPOSE 8000
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 127.0.0.1 --port 8000"]

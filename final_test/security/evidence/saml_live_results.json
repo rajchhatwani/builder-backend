@@ -1,0 +1,85 @@
+[
+  {
+    "case": "A_valid_signed_assertion",
+    "status": 302,
+    "outcome": "ACCEPTED",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/sso/complete",
+    "expect": "ACCEPTED"
+  },
+  {
+    "case": "B_unsigned",
+    "status": 302,
+    "outcome": "REFUSED:unsigned",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=unsigned",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "C_foreign_signed_attacker_key",
+    "status": 302,
+    "outcome": "REFUSED:bad_signature",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=bad_signature",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "D_wrong_audience",
+    "status": 302,
+    "outcome": "REFUSED:wrong_audience",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=wrong_audience",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "E_wrong_recipient",
+    "status": 302,
+    "outcome": "REFUSED:wrong_recipient",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=wrong_recipient",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "F_wrong_issuer",
+    "status": 302,
+    "outcome": "REFUSED:wrong_issuer",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=wrong_issuer",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "G_expired_assertion",
+    "status": 302,
+    "outcome": "REFUSED:expired",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=expired",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "H_not_yet_valid",
+    "status": 302,
+    "outcome": "REFUSED:not_yet_valid",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=not_yet_valid",
+    "expect": "REFUSED"
+  },
+  {
+    "case": "I_unmatched_in_response_to",
+    "status": 302,
+    "outcome": "REFUSED:invalid_request_state",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=invalid_request_state",
+    "expect": "REFUSED",
+    "note": "fabricated InResponseTo that was never issued by a real login; correctly refused as an unmatched/unsolicited response"
+  },
+  {
+    "case": "J_replay_same_valid_response_twice",
+    "first": { "status": 302, "outcome": "ACCEPTED" },
+    "second": {
+      "status": 302,
+      "outcome": "REFUSED:invalid_request_state",
+      "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=invalid_request_state"
+    },
+    "expect": "second=REFUSED",
+    "note": "first POST of the valid response signs in; replaying the identical SAMLResponse is refused because the login-request row was already consumed (single-use, race-safe UPDATE ... WHERE consumed_at IS NULL)"
+  },
+  {
+    "case": "K_signature_wrapping_extra_assertion",
+    "status": 302,
+    "outcome": "REFUSED:multiple_assertions",
+    "location": "https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login?sso_error=multiple_assertions",
+    "expect": "REFUSED",
+    "note": "a forged, unsigned Assertion claiming bb-owner@dumbpotato.com was spliced in as a sibling ahead of the legitimately signed Assertion for bb-sso1; the app counts Assertion elements before trusting any of them and refuses outright rather than risking which one a parser might read"
+  }
+]

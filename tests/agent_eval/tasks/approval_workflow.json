@@ -1,0 +1,117 @@
+{
+  "id": "approval_workflow",
+  "title": "Add an approval workflow (state machine)",
+  "goal": "Invoices move draft -> submitted -> approved or rejected.",
+  "starting_spec": {
+    "entities": [
+      {
+        "name": "Invoice",
+        "table_name": "invoices",
+        "plural_path": "invoices",
+        "options": {},
+        "fields": [
+          {
+            "name": "invoice_no",
+            "type": "string",
+            "required": true,
+            "max_length": 40
+          },
+          {
+            "name": "amount",
+            "type": "decimal",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "enum",
+            "required": true,
+            "enum_values": [
+              "draft",
+              "submitted",
+              "approved",
+              "rejected"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "transcript": [
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "plan",
+        "plan": {
+          "entities": [
+            "Invoice"
+          ],
+          "hooks": [],
+          "zones": [],
+          "dependencies": []
+        }
+      }
+    },
+    {
+      "tool": "set_section",
+      "input": {
+        "section": "state_machines",
+        "items": [
+          {
+            "entity": "Invoice",
+            "field": "status",
+            "initial": "draft",
+            "transitions": [
+              {
+                "name": "submit",
+                "from_states": [
+                  "draft"
+                ],
+                "to_state": "submitted"
+              },
+              {
+                "name": "approve",
+                "from_states": [
+                  "submitted"
+                ],
+                "to_state": "approved"
+              },
+              {
+                "name": "reject",
+                "from_states": [
+                  "submitted"
+                ],
+                "to_state": "rejected"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "built"
+      }
+    },
+    {
+      "tool": "finish",
+      "input": {
+        "summary": "apply"
+      }
+    }
+  ],
+  "expect": {
+    "state": "applied",
+    "max_repairs": 0,
+    "spec": [
+      {
+        "path": "state_machines[entity=Invoice].initial",
+        "equals": "draft"
+      },
+      {
+        "path": "state_machines[entity=Invoice].transitions[name=approve].to_state",
+        "equals": "approved"
+      }
+    ]
+  }
+}

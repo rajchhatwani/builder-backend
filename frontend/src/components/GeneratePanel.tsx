@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from '../api/client'
+import { EmailNotVerifiedBanner, isEmailNotVerified } from './EmailNotVerifiedBanner'
 import type {
   AuthConfig,
   GenerationSummary,
@@ -63,6 +64,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   const [history, setHistory] = useState<GenerationSummary[]>([])
   const [busy, setBusy] = useState<'validate' | 'preview' | 'download' | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [unverified, setUnverified] = useState(false)
   // Set after a download, so the user sees what to do with the zip.
   const [downloaded, setDownloaded] = useState<{
     auth: AuthConfig | null
@@ -88,6 +90,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   async function run(kind: 'validate' | 'preview' | 'download') {
     setBusy(kind)
     setError(null)
+    setUnverified(false)
     try {
       if (kind === 'validate') {
         const report = await api.validateProject(project.id)
@@ -126,6 +129,8 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         setValid(false)
         setIssues(found)
         setPreview(null)
+      } else if (isEmailNotVerified(err)) {
+        setUnverified(true)
       } else {
         setError(err instanceof Error ? err.message : 'Something went wrong.')
       }
@@ -152,6 +157,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
       </div>
 
       <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
+        {unverified && <EmailNotVerifiedBanner />}
         {error && (
           <div role="alert" data-variant="danger">
             {error}

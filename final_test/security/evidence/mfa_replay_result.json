@@ -1,0 +1,9 @@
+{
+  "first_use": {
+    "status": 200
+  },
+  "replay": {
+    "status": 401,
+    "body": "{'code': 'invalid_mfa_code', 'message': 'that code is not valid', 'details': []}"
+  }
+}

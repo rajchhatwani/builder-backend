@@ -1,0 +1,71 @@
+"""Authorization tests (generated). They pin what must never change by accident:
+the audited engine file, the shape of the policy data, deny-wins, and sign-in on every route."""
+
+import hashlib
+import uuid
+from pathlib import Path
+
+import pytest
+import sqlalchemy as sa
+from httpx import ASGITransport, AsyncClient
+
+from app.auth import policy
+from app.auth.policy_data import POLICY_DATA
+from app.main import app
+
+# The engine is shipped as one audited file. If you edit app/auth/policy.py on purpose, update
+# this hash in the same change so a reviewer sees that the security core was touched.
+ENGINE_SHA256 = "deeef50e8c711dc1a090f3a616bdc1bbbb5e05bbe200ef61d28eb1103878edc6"
+LIST_ROUTES: tuple[str, ...] = ('/labels', '/tasks')
+ALWAYS_DENIED: tuple[tuple[str, str], ...] = ()
+
+
+def test_policy_data_is_well_formed() -> None:
+    pset = policy.load_policy_set(POLICY_DATA)
+    assert pset.model == "pbac"
+
+
+def test_engine_is_the_audited_file() -> None:
+    text = Path(policy.__file__).read_text(encoding="utf-8").replace("\r\n", "\n")
+    assert hashlib.sha256(text.encode("utf-8")).hexdigest() == ENGINE_SHA256
+
+
+@pytest.mark.parametrize(("entity", "op"), ALWAYS_DENIED)
+def test_an_unconditional_deny_wins_over_everything(entity: str, op: str) -> None:
+    pset = policy.load_policy_set(POLICY_DATA)
+    roles = tuple(name for name in POLICY_DATA["attachments"] if name != "*")
+    context = policy.Context(subject={"id": uuid.uuid4(), "roles": roles})
+    assert not policy.plan(pset, context, entity, op, sa.column).allowed
+
+
+def test_the_shipped_engine_keeps_its_core_promises() -> None:
+    allow = {"effect": "allow", "actions": ["Doc.*"], "when": None}
+    block = {
+        "effect": "deny",
+        "actions": ["Doc.delete"],
+        "when": {"left": {"resource": "locked"}, "op": "eq", "right": {"literal": True}},
+    }
+    pset = policy.load_policy_set(
+        {
+            "model": "pbac",
+            "policies": {"a": allow, "b": block},
+            "attachments": {"*": ["a", "b"]},
+            "field_types": {"Doc": {"locked": "boolean"}},
+        }
+    )
+    who = policy.Context(subject={"id": uuid.uuid4(), "roles": ()})
+    assert policy.decide(pset, who, "Doc", "delete", {"locked": False}).allowed
+    assert not policy.decide(pset, who, "Doc", "delete", {"locked": True}).allowed  # deny wins
+    # a condition on a missing value never matches, so this deny does not fire either
+    assert policy.decide(pset, who, "Doc", "delete", {}).allowed
+    assert not policy.decide(pset, who, "Other", "list", {}).allowed  # default deny
+    broken = {"x": {"effect": "allow", "actions": ["*"], "when": {"all": []}}}
+    with pytest.raises(policy.PolicyError):
+        policy.load_policy_set({"model": "pbac", "policies": broken})
+
+
+@pytest.mark.parametrize("route", LIST_ROUTES)
+async def test_a_signed_out_request_is_refused(route: str) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+        response = await http.get(route)
+    assert response.status_code == 401, response.text

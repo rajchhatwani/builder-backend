@@ -1,0 +1,93 @@
+"""HTTP routes for authentication with Keycloak (generated).
+
+Signing in, registering, password reset and token refresh all happen in Keycloak, so this
+project only offers the caller's own profile."""
+import datetime as _dt
+import typing as _t
+import uuid as _uuid
+
+import fastapi as _fa
+import pydantic as _pd
+
+from app.auth import config, identity, oidc, service
+from app.auth.deps import CurrentUser
+from app.auth.models import AuthTenant
+from app.core.errors import AppError
+from app.db import SessionDep
+
+router = _fa.APIRouter(prefix="/auth", tags=["auth"])
+
+
+class UserRead(_pd.BaseModel):
+    model_config = _pd.ConfigDict(from_attributes=True)
+
+    id: _uuid.UUID
+    email: str | None
+    name: str | None
+    roles: list[str]
+    tenant_id: _uuid.UUID | None
+    age: int | None = None
+    born: _dt.date | None = None
+    company: str | None = None
+    mobile: str | None = None
+    newsletter: bool | None = None
+    notes: str | None = None
+    plan: _t.Literal['free', 'pro'] | None = None
+    score: float | None = None
+    site: str | None = None
+    created_at: _dt.datetime
+
+
+class TenantRead(_pd.BaseModel):
+    model_config = _pd.ConfigDict(from_attributes=True)
+
+    id: _uuid.UUID
+    name: str
+
+
+@router.get("/me", response_model=UserRead)
+async def me(user: CurrentUser) -> UserRead:
+    return UserRead.model_validate(user)
+
+
+@router.get("/tenant", response_model=TenantRead)
+async def my_tenant(user: CurrentUser, session: SessionDep) -> TenantRead:
+    """The tenant (Keycloak organization) the signed-in user is working in."""
+    tenant = await session.get(AuthTenant, user.tenant_id)  # type: ignore[attr-defined]
+    if tenant is None:  # unreachable: the user was placed in a tenant when they were seen
+        raise AppError("not_found", "tenant not found", 404)
+    return TenantRead.model_validate(tenant)
+
+
+@router.delete("/me", status_code=204)
+async def delete_me(user: CurrentUser, session: SessionDep) -> None:
+    """Erases the caller's profile here. Their Keycloak account is deleted in Keycloak."""
+    await service.delete_account(session, user)
+
+
+@router.post("/backchannel-logout", status_code=204, include_in_schema=False)
+async def backchannel_logout(request: _fa.Request, session: SessionDep) -> None:
+    """Keycloak calls this when someone signs out elsewhere, so their session ends here too.
+    Disabled (404) until AUTH_BACKCHANNEL_LOGOUT_ENABLED=true."""
+    if not config.get_auth_settings().auth_backchannel_logout_enabled:
+        raise AppError("not_found", "not found", 404)
+    # A plain form post (application/x-www-form-urlencoded); parsed by hand so the project needs
+    # no multipart library.
+    try:
+        logout_token = oidc.logout_token_from_form(await request.body())
+    except oidc.InvalidTokenError as exc:
+        raise AppError("invalid_token", "invalid logout token", 400) from exc
+    try:
+        verified = await oidc.verify_logout_token(logout_token)
+    except oidc.KeysUnavailableError as exc:
+        raise AppError("auth_unavailable", "sign-in is temporarily unavailable", 503) from exc
+    except oidc.InvalidTokenError as exc:
+        raise AppError("invalid_token", "invalid logout token", 400) from exc
+    if verified.sid is not None:
+        await identity.end_session(session, verified.issuer, verified.sid, "backchannel_logout")
+    elif verified.sub is not None:
+        user_id = await identity.find_user_id(session, verified.issuer, verified.sub)
+        if user_id is not None:
+            await identity.end_sessions_of_user(
+                session, user_id, "backchannel_logout", issuer=verified.issuer
+            )

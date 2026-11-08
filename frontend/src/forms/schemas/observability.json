@@ -1,0 +1,140 @@
+{
+  "description": "Body of PUT /projects/{id}/observability. `expected_version` guards against lost updates.",
+  "properties": {
+    "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "service_name": {
+      "anyOf": [
+        {
+          "maxLength": 80,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Service Name",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    },
+    "sample_ratio": {
+      "default": 0.1,
+      "maximum": 1000,
+      "minimum": -1000,
+      "title": "Sample Ratio",
+      "type": "number",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    },
+    "metrics": {
+      "default": true,
+      "title": "Metrics",
+      "type": "boolean",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    },
+    "db_spans": {
+      "default": true,
+      "title": "Db Spans",
+      "type": "boolean",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    },
+    "exclude_paths": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Exclude Paths",
+      "type": "array",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        },
+        "widget": "csv"
+      }
+    },
+    "extra_redact_keys": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 200,
+      "title": "Extra Redact Keys",
+      "type": "array",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        },
+        "widget": "csv"
+      }
+    },
+    "local_stack": {
+      "default": true,
+      "title": "Local Stack",
+      "type": "boolean",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    },
+    "expected_rps": {
+      "anyOf": [
+        {
+          "maximum": 100000000,
+          "minimum": -1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Rps",
+      "x-ui": {
+        "showWhen": {
+          "field": "enabled",
+          "equals": true
+        }
+      }
+    }
+  },
+  "title": "Observability",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "enabled",
+      "service_name",
+      "sample_ratio",
+      "metrics",
+      "db_spans",
+      "local_stack",
+      "expected_rps",
+      "exclude_paths",
+      "extra_redact_keys"
+    ]
+  }
+}

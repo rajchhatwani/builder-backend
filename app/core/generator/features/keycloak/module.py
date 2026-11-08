@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
-from app.core.generator.base import FileTree
+from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import read_verbatim
 from app.core.spec_models import SpecAuth, SpecAuthCustomField, SpecIdentityProvider, SpecKeycloak
@@ -655,6 +655,7 @@ def _dump(document: dict[str, Any]) -> str:
 
 class KeycloakModule:
     name = "keycloak"
+    manifest = ModuleManifest(id="keycloak", version="1", depends_on=('auth',))
 
     def render(self, project: ProjectCtx) -> FileTree:
         auth = project.auth

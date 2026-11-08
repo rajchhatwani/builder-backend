@@ -1,0 +1,7 @@
+=== 07_billing against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[    Info] SOLID        billing/7.1: bad-signature and malformed-but-signed events are handled without a 500
+[    Info] SOLID        billing/7.2: a forged (but correctly signed) checkout.session.completed can set ANY known plan via metadata.plan_id, with no cross-check against what was actually paid for
+[    Info] SOLID        billing/7.3: duplicate event id and an older out-of-order event are both no-ops
+[    Info] SOLID        billing/7.4: an event citing a DIFFERENT customer than the one already bound to the org is refused (customer_mismatch), even if it names the right org/subscription id
+[    Info] SOLID        billing/7.5: a livemode=true event is refused on a test-mode platform
+[    Info] SOLID        billing/7.6: checkout/portal are session-only (an API token, even write-scope, is refused)

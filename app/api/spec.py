@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.spec_models import Spec
@@ -18,9 +18,17 @@ async def get_spec(project_id: uuid.UUID, session: AsyncSession = Depends(get_se
 
 @router.put("/spec", response_model=Spec)
 async def put_spec(
-    project_id: uuid.UUID, body: Spec, session: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID,
+    body: Spec,
+    expected_version: int | None = Query(
+        default=None,
+        ge=1,
+        description="The project version the caller last read. If it is no longer current the "
+        "write is refused with 409 (details[0].current_version). Omitted: last write wins.",
+    ),
+    session: AsyncSession = Depends(get_session),
 ) -> Spec:
-    return await SpecService(session).replace(project_id, body)
+    return await SpecService(session).replace(project_id, body, expected_version=expected_version)
 
 
 @router.post("/validate", response_model=ValidationReport)

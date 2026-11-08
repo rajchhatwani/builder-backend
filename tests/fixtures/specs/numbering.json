@@ -1,0 +1,302 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Numbered Orders",
+    "slug": "numbered-orders",
+    "description": "Orders numbered by sequences, with a guard that reads a setting",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "options": {
+        "filterable": [
+          "stage"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "customer",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "stage",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "open",
+            "auto_approved",
+            "needs_review"
+          ]
+        },
+        {
+          "name": "invoice_no",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 40
+        },
+        {
+          "name": "order_no",
+          "type": "string",
+          "required": true,
+          "unique": true,
+          "max_length": 40
+        },
+        {
+          "name": "ticket_no",
+          "type": "bigint",
+          "required": true,
+          "unique": true
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://orders.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "manager",
+        "label": "Manager",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@orders.example.com",
+      "from_name": "Order Desk"
+    }
+  },
+  "settings": [
+    {
+      "key": "vat_rate",
+      "type": "decimal",
+      "default": "0.20",
+      "label": "VAT rate",
+      "minimum": "0",
+      "maximum": "1",
+      "edit_roles": [
+        "admin"
+      ]
+    },
+    {
+      "key": "approval_threshold",
+      "type": "int",
+      "default": 1000,
+      "label": "Orders above this amount need approval",
+      "minimum": 0,
+      "maximum": 1000000,
+      "read_roles": [
+        "manager",
+        "admin"
+      ],
+      "edit_roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "key": "allow_backorders",
+      "type": "bool",
+      "default": false,
+      "label": "Accept orders for items out of stock",
+      "edit_roles": [
+        "admin"
+      ]
+    },
+    {
+      "key": "invoice_footer",
+      "type": "string",
+      "default": "Thank you for your business",
+      "max_length": 120,
+      "edit_roles": [
+        "admin"
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "name": "invoice_no",
+      "prefix": "INV-",
+      "padding": 5,
+      "view_roles": [
+        "admin"
+      ],
+      "entity": "Order",
+      "field": "invoice_no"
+    },
+    {
+      "name": "order_no",
+      "prefix": "ORD-",
+      "padding": 4,
+      "reset_yearly": true,
+      "start": 1,
+      "entity": "Order",
+      "field": "order_no"
+    },
+    {
+      "name": "ticket_no",
+      "start": 100,
+      "entity": "Order",
+      "field": "ticket_no"
+    }
+  ],
+  "lists": [],
+  "state_machines": [
+    {
+      "entity": "Order",
+      "field": "stage",
+      "initial": "open",
+      "transitions": [
+        {
+          "name": "auto_ok",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "auto_approved",
+          "auto": true,
+          "when": "total <= settings.approval_threshold"
+        },
+        {
+          "name": "review",
+          "from_states": [
+            "open"
+          ],
+          "to_state": "needs_review",
+          "auto": true,
+          "when": "total > settings.approval_threshold"
+        }
+      ]
+    }
+  ],
+  "seed": [
+    {
+      "name": "demo",
+      "seed": 7,
+      "as_of": "2026-10-01",
+      "tenants": 2,
+      "entities": [
+        {
+          "entity": "Order",
+          "count": 3,
+          "fields": [
+            {
+              "field": "customer",
+              "generator": {
+                "type": "words",
+                "min_words": 2,
+                "max_words": 2
+              }
+            },
+            {
+              "field": "total",
+              "generator": {
+                "type": "decimal_range",
+                "min": "10.00",
+                "max": "5000.00",
+                "places": 2
+              }
+            },
+            {
+              "field": "stage",
+              "generator": {
+                "type": "state",
+                "weights": {
+                  "open": 1,
+                  "auto_approved": 1,
+                  "needs_review": 1
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

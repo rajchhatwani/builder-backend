@@ -1,0 +1,90 @@
+"""notifications
+
+Revision ID: 0021
+Revises: 0016
+Create Date: rendered from the spec by Backend Builder
+
+Templates, preferences and the delivery log. No message body is stored.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0021"
+down_revision: str | None = "0016"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "nt_templates",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("type", sa.String(40), nullable=False),
+        sa.Column("channel", sa.String(10), nullable=False),
+        sa.Column("subject", sa.String(200), nullable=False),
+        sa.Column("body", sa.Text(), nullable=False),
+        sa.Column("html", sa.Boolean(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("updated_by", sa.Uuid(), nullable=True),
+        sa.PrimaryKeyConstraint("id", name="pk_nt_templates"),
+        sa.UniqueConstraint("tenant_id", "type", "channel", name="uq_nt_templates_key"),
+    )
+    op.create_table(
+        "nt_preferences",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("user_key", sa.String(200), nullable=False),
+        sa.Column("type", sa.String(40), nullable=False),
+        sa.Column("channel", sa.String(10), nullable=False),
+        sa.Column("enabled", sa.Boolean(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_nt_preferences"),
+        sa.UniqueConstraint("tenant_id", "user_key", "type", "channel", name="uq_nt_preferences_key"),
+    )
+    op.create_table(
+        "nt_deliveries",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("type", sa.String(40), nullable=False),
+        sa.Column("channel", sa.String(10), nullable=False),
+        sa.Column("recipient_key", sa.String(200), nullable=False),
+        sa.Column("recipient_hint", sa.String(80), nullable=False),
+        sa.Column("status", sa.String(12), nullable=False),
+        sa.Column("reason", sa.String(40), nullable=True),
+        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("provider", sa.String(64), nullable=True),
+        sa.Column("provider_message_id", sa.String(200), nullable=True),
+        sa.Column("error_code", sa.String(40), nullable=True),
+        sa.Column("source_event_id", sa.Uuid(), nullable=True),
+        sa.Column("dedupe_key", sa.String(200), nullable=True),
+        sa.Column("address", sa.String(600), nullable=True),
+        sa.Column("variables", sa.JSON(), nullable=True),
+        sa.Column("next_attempt_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("lease_token", sa.Uuid(), nullable=True),
+        sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.PrimaryKeyConstraint("id", name="pk_nt_deliveries"),
+    )
+    op.create_index("ix_nt_deliveries_due", "nt_deliveries", ["status", "next_attempt_at"])
+    op.create_index("ix_nt_deliveries_tenant", "nt_deliveries", ["tenant_id", "created_at"])
+    op.create_index(
+        "uq_nt_deliveries_dedupe",
+        "nt_deliveries",
+        ["tenant_id", "dedupe_key"],
+        unique=True,
+        postgresql_where=sa.text("dedupe_key IS NOT NULL"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("uq_nt_deliveries_dedupe", table_name="nt_deliveries")
+    op.drop_index("ix_nt_deliveries_tenant", table_name="nt_deliveries")
+    op.drop_index("ix_nt_deliveries_due", table_name="nt_deliveries")
+    op.drop_table("nt_deliveries")
+    op.drop_table("nt_preferences")
+    op.drop_table("nt_templates")

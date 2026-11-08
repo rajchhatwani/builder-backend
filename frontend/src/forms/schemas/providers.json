@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "SpecProviderAdapter": {
+      "additionalProperties": false,
+      "description": "One adapter a project may use: its `kind` (email | sms | push | payments | storage | llm |\ngeneric), its `name` and NON-SECRET settings. Credentials are never part of the spec: each tenant\nwrites its own through the generated, admin-only vault API.",
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "settings": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "title": "Settings",
+          "type": "object"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "SpecProviderAdapter",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Provider adapter framework and per-tenant credential vault (C15). Off unless `enabled`.\nEvery kind always has the in-process `emulator`; the adapters listed here are the ones a tenant\nmay select by storing credentials for them. Nothing secret lives in the spec (`secret_in_spec`).",
+  "properties": {
+    "adapters": {
+      "items": {
+        "$ref": "#/$defs/SpecProviderAdapter"
+      },
+      "title": "Adapters",
+      "type": "array"
+    },
+    "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+    },
+    "breaker_failures": {
+      "default": 5,
+      "title": "Breaker Failures",
+      "type": "integer"
+    },
+    "breaker_reset_seconds": {
+      "default": 30.0,
+      "title": "Breaker Reset Seconds",
+      "type": "number"
+    },
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "max_attempts": {
+      "default": 3,
+      "title": "Max Attempts",
+      "type": "integer"
+    },
+    "timeout_seconds": {
+      "default": 10.0,
+      "title": "Timeout Seconds",
+      "type": "number"
+    }
+  },
+  "title": "SpecProviders",
+  "type": "object"
+}

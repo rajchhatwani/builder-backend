@@ -1,0 +1,281 @@
+"""The builder's own permission rules, as data, with no web framework in sight.
+
+Three questions, three tables:
+  1. Which project role does this request need?        -> required_member_role()
+  2. Which API-token scope does this request need?     -> required_scope()
+  3. What may each platform role do in the admin console? -> ADMIN_PERMISSIONS
+
+A person's project role is looked up per request from `project_members`; nothing here trusts a
+claim inside a token. Every deny is the default: a role or scope not named below gets nothing.
+"""
+
+from app.models.enums import MemberRole, OrgRole, PlatformRole
+
+SCOPE_READ = "read"
+SCOPE_WRITE = "write"
+SCOPE_GENERATE = "generate"
+# MCP endpoint scopes (WP6).
+SCOPE_MCP_READ = "mcp:read"
+SCOPE_MCP_WRITE = "mcp:write"
+SCOPE_MCP_GENERATE = "mcp:generate"
+VALID_SCOPES = frozenset(
+    {SCOPE_READ, SCOPE_WRITE, SCOPE_GENERATE, SCOPE_MCP_READ, SCOPE_MCP_WRITE, SCOPE_MCP_GENERATE}
+)
+
+_READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+
+# (method or "*", route template or template prefix ending in "/") -> role needed.
+_OWNER_ONLY: tuple[tuple[str, str], ...] = (
+    ("DELETE", "/projects/{project_id}"),
+    ("POST", "/projects/{project_id}/members"),
+    # Registry (B3-8): recording block versions, hooks, locked deps and approvals is owner-only.
+    ("POST", "/projects/{project_id}/registry/"),
+    # Dependency policy (B3-9): only an owner approves or denies an unknown package.
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/approve"),
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/deny"),
+    ("POST", "/projects/{project_id}/dependencies/requests/{request_id}/revoke"),
+    ("PATCH", "/projects/{project_id}/members/"),
+    ("DELETE", "/projects/{project_id}/members/"),
+    # MCP access grant: only an owner may enable/disable MCP for a member.
+    ("PATCH", "/projects/{project_id}/members/{user_id}/mcp"),
+    # Project-scoped token management: owner sees and revokes pinned tokens.
+    ("GET", "/projects/{project_id}/tokens"),
+    ("DELETE", "/projects/{project_id}/tokens/"),
+    # Credentials for e-mail / SMS providers: the most sensitive thing the builder stores.
+    ("PUT", "/projects/{project_id}/auth/secrets"),
+    # Effectful hooks (CO-3): only an owner may switch them on or change their allow-lists.
+    ("PUT", "/projects/{project_id}/behavior/hook-effects"),
+)
+
+# Routes that are about no project at all: any signed-in, active person may call them.
+UNSCOPED_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {("POST", "/projects"), ("GET", "/projects")}
+)
+
+# POST routes that only compute an answer and change nothing: a viewer may call them.
+_READ_ONLY_POSTS: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", "/projects/{project_id}/authorization/simulate"),
+        ("POST", "/projects/{project_id}/authorization/recommend"),
+        ("POST", "/projects/{project_id}/deployment/plan"),
+        ("POST", "/projects/{project_id}/documents/preview"),
+        ("POST", "/projects/{project_id}/behavior/expressions/check"),
+    }
+)
+
+
+def _matches(method: str, template: str, rule: tuple[str, str]) -> bool:
+    rule_method, rule_path = rule
+    if rule_method not in ("*", method):
+        return False
+    return template == rule_path or (rule_path.endswith("/") and template.startswith(rule_path))
+
+
+def required_member_role(method: str, template: str) -> MemberRole:
+    """Viewer for reads, editor for changes, owner for the few things only an owner may do."""
+    method = method.upper()
+    if any(_matches(method, template, rule) for rule in _OWNER_ONLY):
+        return MemberRole.owner
+    if (method, template) in _READ_ONLY_POSTS:
+        return MemberRole.viewer
+    return MemberRole.viewer if method in _READ_METHODS else MemberRole.editor
+
+
+def required_scope(method: str, template: str) -> str:
+    if "/generate/" in template or template.startswith("/generations/"):
+        return SCOPE_GENERATE
+    if (method.upper(), template) in _READ_ONLY_POSTS:
+        return SCOPE_READ
+    return SCOPE_READ if method.upper() in _READ_METHODS else SCOPE_WRITE
+
+
+def scopes_allow(granted: frozenset[str], needed: str) -> bool:
+    """`write` includes `read`; `generate` is separate because a zip leaves the platform."""
+    if needed in granted:
+        return True
+    return needed == SCOPE_READ and SCOPE_WRITE in granted
+
+
+# -- organization routes (PLATFORM_SAAS_PLAN §5) -------------------------------------------
+#
+# (method, route template) -> the minimum org role. Default-deny: a /orgs/{slug} route that is
+# not listed here is refused (a test walks the app's routes to keep this table complete).
+# Handlers add the finer rules a flat table can't express: only an owner may create or remove
+# owners, and anyone may remove themselves.
+
+ORG_ROLE_LEVEL: dict[OrgRole, int] = {OrgRole.member: 1, OrgRole.admin: 2, OrgRole.owner: 3}
+
+ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
+    ("GET", "/orgs/{slug}"): OrgRole.member,
+    ("PATCH", "/orgs/{slug}"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}"): OrgRole.owner,  # requests deletion (grace period)
+    ("POST", "/orgs/{slug}/deletion/cancel"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/members"): OrgRole.member,
+    ("PATCH", "/orgs/{slug}/members/{user_id}"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/members/{user_id}"): OrgRole.member,  # self; else admin (handler)
+    ("POST", "/orgs/{slug}/transfer"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/invitations"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/invitations"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/invitations/{invitation_id}"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/invitations/{invitation_id}/resend"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/projects"): OrgRole.member,
+    ("POST", "/orgs/{slug}/projects/{project_id}/join"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/projects/{project_id}/transfer"): OrgRole.owner,
+    ("GET", "/orgs/{slug}/plan"): OrgRole.member,
+    ("POST", "/orgs/{slug}/billing/checkout"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/billing/portal"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/audit"): OrgRole.admin,
+    # §9 per-org data export: owners, from a session (see ORG_ROUTES_SESSION_ONLY).
+    ("GET", "/orgs/{slug}/export"): OrgRole.owner,
+    # Enterprise SSO (§8 "SSO & SCIM", admins). Handlers also refuse API tokens.
+    # AI cost ledger, BYO key and budget (B3-7); org registry view (B3-8).
+    ("GET", "/orgs/{slug}/ai/cost"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/ai/platform-budget"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/ai/settings"): OrgRole.admin,
+    ("PUT", "/orgs/{slug}/ai/settings"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/registry/projects"): OrgRole.admin,
+    ("GET", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("PUT", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/sso"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/activate"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/deactivate"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/domains"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/domains/{domain}/verify"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/sso/domains/{domain}"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/test"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/sso/check"): OrgRole.admin,
+    # SCIM 2.0 setup (§8 "SSO & SCIM", admins). Handlers also refuse API tokens; mapping a
+    # group to the owner role needs an owner (handler).
+    ("GET", "/orgs/{slug}/scim"): OrgRole.admin,
+    ("POST", "/orgs/{slug}/scim/token"): OrgRole.admin,
+    ("PATCH", "/orgs/{slug}/scim"): OrgRole.admin,
+    ("DELETE", "/orgs/{slug}/scim"): OrgRole.admin,
+    # §8 Security policies (admins). The PATCH handler also refuses API tokens.
+    ("GET", "/orgs/{slug}/policies"): OrgRole.admin,
+    ("PATCH", "/orgs/{slug}/policies"): OrgRole.admin,
+}
+
+
+# Destructive and owner-level org actions need a signed-in session: a personal access token
+# (script, CI, MCP client) can read and write ordinary data but never delete the org, change who
+# belongs to it or who owns it, or open the billing flow.
+ORG_ROUTES_SESSION_ONLY: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("DELETE", "/orgs/{slug}"),
+        ("PUT", "/orgs/{slug}/ai/settings"),
+        ("POST", "/orgs/{slug}/deletion/cancel"),
+        ("PATCH", "/orgs/{slug}/members/{user_id}"),
+        ("DELETE", "/orgs/{slug}/members/{user_id}"),
+        ("POST", "/orgs/{slug}/transfer"),
+        ("POST", "/orgs/{slug}/projects/{project_id}/transfer"),
+        ("POST", "/orgs/{slug}/billing/checkout"),
+        ("POST", "/orgs/{slug}/billing/portal"),
+        ("GET", "/orgs/{slug}/export"),
+    }
+)
+
+
+# While an org waits for deletion, every route is blocked (423) except these, so members can
+# see what's happening and an owner can revoke the request.
+ORG_ROUTES_OPEN_DURING_DELETION: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/orgs/{slug}"),
+        ("POST", "/orgs/{slug}/deletion/cancel"),
+        # An org about to be deleted can still take its data with it.
+        ("GET", "/orgs/{slug}/export"),
+    }
+)
+
+
+# When an org requires MFA (§4.4), a member whose session has no second factor is refused
+# everywhere in it (403 `org_mfa_required`) except these: the org page, so the UI can say why,
+# and leaving the org.
+ORG_ROUTES_OPEN_WITHOUT_MFA: frozenset[tuple[str, str]] = frozenset(
+    {("GET", "/orgs/{slug}"), ("DELETE", "/orgs/{slug}/members/{user_id}")}
+)
+
+
+def required_org_role(method: str, template: str) -> OrgRole | None:
+    """None means the route is not listed: refuse it."""
+    return ORG_ROUTE_ROLES.get((method.upper(), template))
+
+
+def org_role_allows(role: OrgRole, needed: OrgRole) -> bool:
+    return ORG_ROLE_LEVEL[role] >= ORG_ROLE_LEVEL[needed]
+
+
+# -- impersonation (§4.5) ----------------------------------------------------------------
+#
+# A "view as" token is the member's identity inside ONE org and nothing else. Routes that act on
+# the account itself (`session_principal`) refuse it by their `via`; the rest decide here.
+
+IMPERSONATION_OPEN_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/account/me"),
+        ("GET", "/orgs"),  # the handler cuts the list down to the one org
+        ("GET", "/account/impersonation"),
+        ("POST", "/account/impersonation/writes"),
+        ("POST", "/account/impersonation/end"),
+    }
+)
+
+# Never reachable while viewing, writes switched on or not: anything that mints, shows or sends
+# out a credential or the whole project, or changes who can reach it.
+_IMPERSONATION_NEVER: tuple[str, ...] = ("/tokens", "/auth/secrets", "/export", "/billing/")
+_IMPERSONATION_NEVER_WRITES: tuple[tuple[str, str], ...] = (
+    ("POST", "/projects"),
+    ("DELETE", "/projects/{project_id}"),
+    ("POST", "/projects/{project_id}/members"),
+    ("PATCH", "/projects/{project_id}/members/"),
+    ("DELETE", "/projects/{project_id}/members/"),
+)
+
+
+def impersonation_denial(method: str, template: str, *, writes_allowed: bool) -> str | None:
+    """None = a viewing session may make this request; else the error code to refuse it with
+    (`impersonation_blocked`: never; `impersonation_read_only`: needs the writes switch)."""
+    method = method.upper()
+    if (method, template) in IMPERSONATION_OPEN_ROUTES:
+        return None
+    if any(part in template for part in _IMPERSONATION_NEVER):
+        return "impersonation_blocked"
+    if required_scope(method, template) == SCOPE_GENERATE:
+        return "impersonation_blocked"
+    is_read = required_scope(method, template) == SCOPE_READ
+    if is_read:
+        return None
+    if template.startswith("/orgs/"):
+        return "impersonation_blocked"  # the org console is look-only, whatever the switch says
+    if any(_matches(method, template, rule) for rule in _IMPERSONATION_NEVER_WRITES):
+        return "impersonation_blocked"
+    return None if writes_allowed else "impersonation_read_only"
+
+
+# -- admin console ----------------------------------------------------------------------
+
+ADMIN_PERMISSIONS: dict[PlatformRole, frozenset[str]] = {
+    PlatformRole.customer: frozenset(),
+    PlatformRole.platform_support: frozenset(
+        {"users:read", "projects:read", "audit:read", "stats:read", "settings:read"}
+    ),
+    PlatformRole.platform_admin: frozenset(
+        {
+            "users:read",
+            "users:write",
+            "projects:read",
+            "audit:read",
+            "stats:read",
+            "settings:read",
+            # B3-10: preview limits, per-org overrides and the preview kill switch.
+            "settings:write",
+            # §4.5: "view as" a customer member. Platform admins only, never support.
+            "impersonate:write",
+            # SEC L-1: the SSO "test" button makes an outbound fetch; read-only support may not.
+            "sso:check",
+        }
+    ),
+}
+
+
+def admin_can(role: PlatformRole, permission: str) -> bool:
+    return permission in ADMIN_PERMISSIONS.get(role, frozenset())

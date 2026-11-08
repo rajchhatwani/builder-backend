@@ -22,7 +22,8 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 # Always resolve the DB URL from app settings/env, never the static alembic.ini value.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+_s = get_settings()
+config.set_main_option("sqlalchemy.url", _s.migrations_database_url or _s.database_url)
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

@@ -51,12 +51,8 @@ class ProjectAuthConfig(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=TokenStore.db,
     )
-    access_token_ttl_minutes: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=15
-    )
-    refresh_token_ttl_days: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=7
-    )
+    access_token_ttl_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15)
+    refresh_token_ttl_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
     jwt_algorithm: Mapped[JwtAlgorithm] = mapped_column(
         SAEnum(JwtAlgorithm, name="jwt_algorithm", native_enum=False, length=10),
         nullable=False,
@@ -64,18 +60,12 @@ class ProjectAuthConfig(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     # ── Password reset ────────────────────────────────────────────────────────
-    email_magic_link_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
-    sms_otp_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=False
-    )
+    email_magic_link_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    sms_otp_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     otp_ttl_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=10)
 
     # ── Registration ──────────────────────────────────────────────────────────
-    email_verification_required: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    email_verification_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # ── User lifecycle ────────────────────────────────────────────────────────
     deletion_mode: Mapped[DeletionMode] = mapped_column(
@@ -103,20 +93,12 @@ class ProjectAuthConfig(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     # ── Rate limiting (stored as plain text notes; implementation via generated code) ─
     # Configurable limits are stored so the generator can embed them in templates.
-    login_rate_limit: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="5/15minutes"
-    )
-    register_rate_limit: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="10/hour"
-    )
-    reset_rate_limit: Mapped[str] = mapped_column(
-        String(50), nullable=False, default="3/hour"
-    )
+    login_rate_limit: Mapped[str] = mapped_column(String(50), nullable=False, default="5/15minutes")
+    register_rate_limit: Mapped[str] = mapped_column(String(50), nullable=False, default="10/hour")
+    reset_rate_limit: Mapped[str] = mapped_column(String(50), nullable=False, default="3/hour")
 
     # ── Security headers ──────────────────────────────────────────────────────
-    security_headers_enabled: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True
-    )
+    security_headers_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     # ── Branding ──────────────────────────────────────────────────────────────
     app_name: Mapped[str | None] = mapped_column(String(100), nullable=True)

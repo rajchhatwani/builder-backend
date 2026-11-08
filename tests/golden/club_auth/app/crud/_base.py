@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.pagination import PageParams
+from app.crud.lifecycle import Hook, HookContext, run_stage
 from app.models._base import Base
 
 
@@ -30,6 +31,8 @@ class Repository[ModelT: Base]:
     # payload keys that hold the id of an uploaded file, and the check each id must pass
     file_fields: ClassVar[tuple[str, ...]] = ()
     file_check: ClassVar[Callable[..., Awaitable[None]] | None] = None
+    # lifecycle hooks: stage (before_save | after_save | after_commit) -> async callables(ctx)
+    hooks: ClassVar[dict[str, tuple[Hook, ...]]] = {}
 
     def __init__(
         self,
@@ -40,6 +43,7 @@ class Repository[ModelT: Base]:
         tenant_id: uuid.UUID | None = None,
         caller_tenant_id: uuid.UUID | None = None,
         caller: Any = None,
+        policy: Any = None,
     ) -> None:
         self.session = session
         # column -> value every read and write is restricted to (row-level access rules)
@@ -52,16 +56,20 @@ class Repository[ModelT: Base]:
         self.caller_tenant_id = caller_tenant_id or tenant_id
         # the signed-in user making the request (file fields are checked against them)
         self.caller = caller
+        # abac / pbac: decides which rows are visible and checks what is written
+        self.policy = policy
 
     # --- query building -----------------------------------------------------------
 
     def _col(self, name: str) -> Any:
         return self.model.__table__.c[name]
 
-    def _alive(self) -> list[Any]:
+    def _alive(self, *, policy: bool = True) -> list[Any]:
         """Conditions every query starts from: not soft-deleted, and inside the access scope."""
         conditions = [self._col("deleted_at").is_(None)] if self.soft_delete else []
         conditions.extend(self._col(name) == value for name, value in self.scope.items())
+        if policy and self.policy is not None:
+            conditions.extend(self.policy.row_conditions(self._col))
         return conditions
 
     def _loaders(self) -> list[Any]:
@@ -125,10 +133,12 @@ class Repository[ModelT: Base]:
         rows = (await self.session.execute(stmt)).scalars().all()
         return list(rows), total
 
-    async def get(self, item_id: uuid.UUID) -> ModelT:
+    async def get(self, item_id: uuid.UUID, *, policy: bool = True) -> ModelT:
+        # policy=False: re-read a row this request just wrote. The write was already checked, and the
+        # operation's own row filter may no longer match it (an update that closes a ticket).
         stmt = (
             sa.select(self.model)
-            .where(self._col("id") == item_id, *self._alive())
+            .where(self._col("id") == item_id, *self._alive(policy=policy))
             .options(*self._loaders())
             .execution_options(populate_existing=True)
         )
@@ -144,17 +154,26 @@ class Repository[ModelT: Base]:
     # --- writes --------------------------------------------------------------------
 
     async def create(self, data: dict[str, Any]) -> ModelT:
-        values = dict(data)
+        ctx = self._ctx("create", dict(data))
+        await run_stage("before_save", self.hooks, ctx)
+        values = ctx.values
         if self.owner_id is not None:
             values["created_by_id"] = self.owner_id
         if self.tenant_id is not None:
             values["tenant_id"] = self.tenant_id
+        ctx.trace.append("guards")
+        if self.policy is not None:
+            self.policy.check_new_row(values)
+        ctx.trace.append("validate")
         related = await self._pop_related(values)
         await self._check_references(values)
+        ctx.trace.append("write")
         item = self.model(**values, **related)
         self.session.add(item)
-        await self._commit()
-        return await self.get(item.id)  # type: ignore[attr-defined]
+        await self._flush()
+        ctx.item = item
+        await self._finish(ctx)
+        return await self.get(item.id, policy=False)  # type: ignore[attr-defined]
 
     async def replace(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
         return await self._apply(item_id, data)
@@ -169,21 +188,59 @@ class Repository[ModelT: Base]:
         item = (await self.session.execute(stmt)).scalars().first()
         if item is None:
             raise NotFoundError(f"{self.model.__name__} {item_id} not found")
+        ctx = self._ctx("delete", {})
+        ctx.item = item
+        await run_stage("before_save", self.hooks, ctx)
+        ctx.trace.extend(("guards", "validate", "write"))
         if self.soft_delete:
             item.deleted_at = datetime.now(UTC)  # type: ignore[attr-defined]
         else:
             await self.session.delete(item)
-        await self._commit()
+        await self._flush()
+        await self._finish(ctx)
 
     async def _apply(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
         item = await self.get(item_id)
-        values = dict(data)
+        ctx = self._ctx("update", dict(data))
+        ctx.item = item
+        await run_stage("before_save", self.hooks, ctx)
+        values = ctx.values
+        ctx.trace.append("guards")
+        if self.policy is not None:
+            before = {c.name: getattr(item, c.name) for c in self.model.__table__.columns}
+            self.policy.check_changed_row({**before, **values})
+        ctx.trace.append("validate")
         related = await self._pop_related(values)
         await self._check_references(values)
+        ctx.trace.append("write")
         for key, value in {**values, **related}.items():
             setattr(item, key, value)
+        await self._flush()
+        await self._finish(ctx)
+        return await self.get(item_id, policy=False)
+
+    def _ctx(self, op: str, values: dict[str, Any]) -> HookContext:
+        return HookContext(entity=self.model.__name__, op=op, values=values, caller=self.caller)
+
+    async def _finish(self, ctx: HookContext) -> None:
+        """after_save (inside the transaction), commit, after_commit (never fails the request)."""
+        try:
+            await run_stage("after_save", self.hooks, ctx)
+        except Exception:
+            await self.session.rollback()
+            raise
+        ctx.trace.append("commit")
         await self._commit()
-        return await self.get(item_id)
+        await run_stage("after_commit", self.hooks, ctx, fail_closed=False)
+
+    async def _flush(self) -> None:
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise ConflictError(
+                "the request conflicts with existing data (duplicate value or referenced record)"
+            ) from exc
 
     async def _commit(self) -> None:
         try:

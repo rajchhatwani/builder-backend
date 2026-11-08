@@ -1,0 +1,32 @@
+[
+  {
+    "target": "http://127.0.0.1:8000/.well-known/openid-configuration",
+    "note": "loopback, http scheme",
+    "put_status": 422,
+    "put_body": "{'code': 'insecure_url', 'message': 'oidc_discovery_url must use https', 'details': []}",
+    "outcome": "REFUSED at config-save time (scheme check: require_https default true)"
+  },
+  {
+    "target": "https://127.0.0.1:8000/.well-known/openid-configuration",
+    "note": "loopback, https scheme (passes the scheme check)",
+    "put_status": 200,
+    "check_status": 200,
+    "check_body_discovery_check": {"name": "discovery", "status": "error", "detail": "private_address"},
+    "outcome": "Config save allowed (scheme is valid), but the live discovery fetch (POST /orgs/{slug}/sso/check) is refused with 'private_address' -- the SSRF guard resolves the hostname and rejects any non-global IP before connecting."
+  },
+  {
+    "target": "http://169.254.169.254/latest/meta-data/",
+    "note": "classic cloud-metadata SSRF target, http scheme",
+    "put_status": 422,
+    "put_body": "{'code': 'insecure_url', 'message': 'oidc_discovery_url must use https', 'details': []}",
+    "outcome": "REFUSED at config-save time (scheme check)"
+  },
+  {
+    "target": "https://metadata.google.internal/computeMetadata/v1/",
+    "note": "GCP metadata hostname, https scheme",
+    "put_status": 200,
+    "check_status": 200,
+    "check_body_ok": false,
+    "outcome": "Config save allowed; live discovery fetch failed (DNS does not resolve to the GCP metadata address outside a GCP VM in this environment, so this host could not fully prove the private-IP block the way the 127.0.0.1 case did -- but the request was refused either way, not followed)"
+  }
+]

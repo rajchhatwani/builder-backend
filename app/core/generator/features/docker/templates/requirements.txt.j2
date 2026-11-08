@@ -7,7 +7,25 @@ boto3>=1.38.0
 cryptography>=44.0.0
 {% endif %}
 fastapi>=0.156.8
+{% if otel %}
+opentelemetry-api>=1.45.1,<2
+opentelemetry-exporter-otlp-proto-http>=1.45.1,<2
+opentelemetry-instrumentation-fastapi>=0.66b1,<0.67
+{% if redis_store %}
+opentelemetry-instrumentation-redis>=0.66b1,<0.67
+{% endif %}
+{% if otel_db %}
+opentelemetry-instrumentation-asyncpg>=0.66b1,<0.67
+{% endif %}
+opentelemetry-sdk>=1.45.1,<2
+{% endif %}
+{% if documents %}
+pillow>=13.0.0
+{% endif %}
 pydantic-settings>=2.16.1
+{% if documents %}
+reportlab>=5.1.0
+{% endif %}
 {% if storage %}
 # Reads multipart uploads. Older versions have denial-of-service and path-traversal bugs
 # (CVE-2024-24762, CVE-2024-53981, CVE-2026-24486): keep this floor.

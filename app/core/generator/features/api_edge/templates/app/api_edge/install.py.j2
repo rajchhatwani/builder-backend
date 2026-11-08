@@ -1,0 +1,69 @@
+"""Wires the API edge into the app (generated): the middleware{% if guarded %}, the application-wide guard{% endif %}{% if idempotency %}, the shared
+transaction of idempotent requests{% endif %}{% if versioning %} and the /api-versions changelog{% endif %}."""
+
+{% if idempotency %}
+from collections.abc import AsyncIterator
+
+{% endif %}
+from fastapi import {% if versioning %}APIRouter, {% endif %}{% if guarded %}Depends, {% endif %}FastAPI{% if idempotency %}, Request{% endif %}{{ "" }}
+{% if idempotency %}
+from sqlalchemy.ext.asyncio import AsyncSession
+{% endif %}
+
+from app.api_edge import config{% if idempotency %}, deferral{% endif %}{% if versioning %}, versioning{% endif %}{{ "" }}
+{% if guarded %}
+from app.api_edge.guard import guard
+{% endif %}
+from app.api_edge.middleware import ApiEdgeMiddleware
+{% if idempotency %}
+from app.db import get_session, session_factory
+{% endif %}
+
+{% if versioning %}
+router = APIRouter(tags=["api-versions"])
+
+
+@router.get("/api-versions")
+async def api_versions() -> dict[str, object]:
+    """The versions this API has had, newest first, and the one a client gets without a header."""
+    return versioning.changelog()
+
+
+{% endif %}
+{% if idempotency %}
+{% if not versioning %}
+
+{% endif %}
+async def edge_session(request: Request) -> AsyncIterator[AsyncSession]:
+    """The request's session. An idempotent request uses the one its middleware opened (it also
+    commits it); every other request gets a session of its own, as without the edge."""
+    edge = getattr(request.state, "edge", None)
+    if edge is not None and edge.session is not None:
+        yield edge.session
+        return
+    async with session_factory() as session:
+        yield session
+
+
+{% endif %}
+{% if not versioning and not idempotency %}
+
+{% endif %}
+def install(app: FastAPI) -> None:
+    config.trusted_proxies()  # a bad API_EDGE_TRUSTED_PROXIES stops the app here
+{% if versioning %}
+    versioning.check_registry()  # a transformer for an undeclared version stops the app here
+{% endif %}
+{% if idempotency %}
+    deferral.install()  # an app without the expected lifecycle stops here
+{% endif %}
+    app.add_middleware(ApiEdgeMiddleware)
+{% if guarded %}
+    app.router.dependencies.append(Depends(guard))  # before any router is included: it covers them all
+{% endif %}
+{% if idempotency %}
+    app.dependency_overrides[get_session] = edge_session
+{% endif %}
+{% if versioning %}
+    app.include_router(router)
+{% endif %}

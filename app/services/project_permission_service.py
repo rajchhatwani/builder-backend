@@ -42,22 +42,16 @@ class ProjectPermissionService:
             raise AppError(code="not_found", message="project not found", status_code=404)
         return project
 
-    async def _get_permission_or_404(
-        self, permission_id: uuid.UUID
-    ) -> ProjectPermission:
+    async def _get_permission_or_404(self, permission_id: uuid.UUID) -> ProjectPermission:
         perm = await self.session.get(ProjectPermission, permission_id)
         if perm is None:
-            raise AppError(
-                code="not_found", message="permission not found", status_code=404
-            )
+            raise AppError(code="not_found", message="permission not found", status_code=404)
         return perm
 
     async def _load_entity_ids(self, project_id: uuid.UUID) -> set[uuid.UUID]:
         """Return all entity IDs that belong to this project."""
         rows = (
-            await self.session.execute(
-                select(Entity.id).where(Entity.project_id == project_id)
-            )
+            await self.session.execute(select(Entity.id).where(Entity.project_id == project_id))
         ).scalars()
         return set(rows)
 
@@ -65,9 +59,7 @@ class ProjectPermissionService:
         """Return all role names defined for this project."""
         rows = (
             await self.session.execute(
-                select(ProjectRole.name).where(
-                    ProjectRole.project_id == project_id
-                )
+                select(ProjectRole.name).where(ProjectRole.project_id == project_id)
             )
         ).scalars()
         return set(rows)
@@ -177,9 +169,9 @@ class ProjectPermissionService:
         await self._get_project_or_404(project_id)
         total = (
             await self.session.execute(
-                select(func.count()).select_from(ProjectPermission).where(
-                    ProjectPermission.project_id == project_id
-                )
+                select(func.count())
+                .select_from(ProjectPermission)
+                .where(ProjectPermission.project_id == project_id)
             )
         ).scalar_one()
         rows = (

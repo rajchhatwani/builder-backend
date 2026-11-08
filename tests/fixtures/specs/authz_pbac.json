@@ -1,0 +1,191 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Docs",
+    "slug": "docs-pbac",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Document",
+      "table_name": "documents",
+      "plural_path": "documents",
+      "options": {
+        "filterable": [
+          "status"
+        ]
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "published",
+            "archived"
+          ]
+        },
+        {
+          "name": "pages",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "Comment",
+      "table_name": "comments",
+      "plural_path": "comments",
+      "options": {},
+      "fields": [
+        {
+          "name": "body",
+          "type": "text",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "registration": {
+      "email_verification_required": false
+    },
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false
+    },
+    "login_rate_limit": "50/minute",
+    "roles": [
+      {
+        "name": "editor",
+        "label": "Editor",
+        "inherits_from": "reader"
+      },
+      {
+        "name": "manager",
+        "label": "Manager",
+        "inherits_from": "editor"
+      },
+      {
+        "name": "reader",
+        "label": "Reader",
+        "is_default": true
+      }
+    ]
+  },
+  "authorization": {
+    "model": "pbac",
+    "policies": [
+      {
+        "id": "read_published",
+        "description": "Everybody signed in reads published documents and comments.",
+        "effect": "allow",
+        "actions": [
+          "Document.list",
+          "Document.get",
+          "Document.head"
+        ],
+        "when": {
+          "left": {
+            "resource": "status"
+          },
+          "op": "eq",
+          "right": {
+            "literal": "published"
+          }
+        }
+      },
+      {
+        "id": "comment",
+        "description": "Everybody signed in may read and write comments of their own.",
+        "effect": "allow",
+        "actions": [
+          "Comment.*"
+        ],
+        "when": {
+          "left": {
+            "resource": "created_by_id"
+          },
+          "op": "eq",
+          "right": {
+            "subject": "id"
+          }
+        }
+      },
+      {
+        "id": "author",
+        "description": "Editors work on their own documents.",
+        "effect": "allow",
+        "actions": [
+          "Document.list",
+          "Document.get",
+          "Document.head",
+          "Document.create",
+          "Document.update"
+        ],
+        "when": {
+          "left": {
+            "resource": "created_by_id"
+          },
+          "op": "eq",
+          "right": {
+            "subject": "id"
+          }
+        }
+      },
+      {
+        "id": "manage",
+        "description": "Managers see and change every document and delete drafts.",
+        "effect": "allow",
+        "actions": [
+          "Document.*"
+        ],
+        "when": null
+      },
+      {
+        "id": "archived_is_frozen",
+        "description": "Nobody changes archived documents.",
+        "effect": "deny",
+        "actions": [
+          "Document.update",
+          "Document.replace",
+          "Document.delete"
+        ],
+        "when": {
+          "left": {
+            "resource": "status"
+          },
+          "op": "eq",
+          "right": {
+            "literal": "archived"
+          }
+        }
+      }
+    ],
+    "attachments": {
+      "*": [
+        "read_published",
+        "comment",
+        "archived_is_frozen"
+      ],
+      "editor": [
+        "author"
+      ],
+      "manager": [
+        "manage"
+      ]
+    }
+  }
+}

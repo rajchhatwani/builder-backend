@@ -1,0 +1,120 @@
+"""State machine checks (generated): initial state, state cannot be written directly, state log."""
+
+{% set live = routes | rejectattr("skip") | list %}
+{% if live %}
+import uuid
+
+{% endif %}
+import pytest
+{% if live %}
+from httpx import AsyncClient
+
+from tests import _factories
+{% if live | selectattr("probe") | list %}
+from tests._auth_support import client_for, sign_in
+{% endif %}
+{% endif %}
+{% for r in routes %}
+{% set e = r.e %}
+{% set m = machines[e.name] %}
+{% if r.skip %}
+
+
+def test_{{ e.table }}_state_machine() -> None:
+    pytest.skip({{ r.skip | pyrepr }})
+{% else %}
+{% if e.access %}
+
+
+@pytest.fixture
+def client(authed_client: AsyncClient) -> AsyncClient:
+    """The state machine's entity has access rules: sign in as a user who holds every role."""
+    return authed_client
+{% endif %}
+
+
+async def test_{{ e.table }}_starts_in_its_initial_state(client: AsyncClient) -> None:
+    other = {{ (m.states | reject("equalto", m.initial) | list or [m.initial])[0] | pyrepr }}
+    # A caller cannot choose the state: whatever is sent, the record starts in the initial state
+    # (the log's first entry says so, even if an automatic transition has moved it on since).
+    created = await _factories.make_{{ e.table }}(client, **{"{{ m.field }}": other})
+{% if not (m.transitions | selectattr("auto") | list) %}
+    assert created["{{ m.field }}"] == {{ m.initial | pyrepr }}
+{% endif %}
+    history = (await client.get(f"/{{ e.path }}/{created['id']}/state-history")).json()
+    assert [(h["transition"], h["from_state"], h["to_state"]) for h in history][:1] == [
+        ("created", None, {{ m.initial | pyrepr }})
+    ]
+
+
+async def test_{{ e.table }}_state_cannot_be_written_directly(client: AsyncClient) -> None:
+    created = await _factories.make_{{ e.table }}(client)
+    before = created["{{ m.field }}"]
+{% if "update" in e.ops %}
+    for state in ({{ m.states | map("pyrepr") | join(", ") }},):
+        response = await client.patch(f"/{{ e.path }}/{created['id']}", json={"{{ m.field }}": state})
+        assert response.status_code in (200, 422), response.text
+{% endif %}
+    current = (await client.get(f"/{{ e.path }}/{created['id']}/transitions")).status_code
+    assert current == 200
+{% if "get" in e.ops %}
+    assert (await client.get(f"/{{ e.path }}/{created['id']}")).json()["{{ m.field }}"] == before
+{% endif %}
+
+
+async def test_{{ e.table }}_unknown_transition_and_record(client: AsyncClient) -> None:
+    created = await _factories.make_{{ e.table }}(client)
+    unknown = await client.post(f"/{{ e.path }}/{created['id']}/transitions/__no_such_transition__")
+    assert unknown.status_code == 404
+    assert unknown.json()["code"] == "not_found"
+    missing = await client.post(f"/{{ e.path }}/{uuid.uuid4()}/transitions/{{ (m.transitions | rejectattr("auto") | map(attribute="name") | list or ["x"])[0] }}")
+    assert missing.status_code == 404
+{% endif %}
+{% if r.probe and not r.skip %}
+{% set p = r.probe %}
+
+
+async def _make_in(client: AsyncClient, states: list[str]) -> dict[str, object]:
+    """Sample data can trip an automatic transition on create; create until the record is in `states` (any state when empty)."""
+    for _ in range(50):
+        created = await _factories.make_{{ e.table }}(client)
+        if not states or created[{{ p.field | pyrepr }}] in states:
+            return created
+    raise AssertionError(f"no sample record was created in one of {states}")
+
+
+async def test_{{ e.table }}_transitions_without_roles_need_update_access(client: AsyncClient) -> None:
+    """A transition that lists no roles is open to whoever may update {{ e.name }}, not to every reader
+    (role `{{ p.reader }}` can read but not update); one that lists roles keeps its own role check."""
+    created = await _make_in(client, [{% for st in (p.roled_from if p.roled else []) %}{{ st | pyrepr }}{{ ", " if not loop.last }}{% endfor %}])
+    base = f"/{{ e.path }}/{created['id']}"
+    async with client_for(await sign_in(client, "sm-reader@example.com", roles=[{{ p.reader | pyrepr }}])) as reader:
+{% if "get" in e.ops %}
+        assert (await reader.get(base)).status_code == 200  # the reader sees the record...
+{% else %}
+        assert (await reader.get(f"{base}/transitions")).status_code == 200
+{% endif %}
+{% if p.refused %}
+        refused = await reader.post(f"{base}/transitions/{{ p.refused }}")
+        assert refused.status_code == 403, refused.text
+        assert refused.json()["code"] == "forbidden"
+{% endif %}
+{% if p.roled %}
+{% if p.roled[1] != p.reader %}
+    async with client_for(await sign_in(client, "sm-roled@example.com", roles=[{{ p.roled[1] | pyrepr }}])) as roled:
+        moved = await roled.post(f"{base}/transitions/{{ p.roled[0] }}")
+{% else %}
+        moved = await reader.post(f"{base}/transitions/{{ p.roled[0] }}")
+{% endif %}
+        assert moved.status_code == 200, moved.text  # listed role: unchanged, no update right needed
+        created = await _make_in(client, [{% for st in (p.empty_from if p.empty else []) %}{{ st | pyrepr }}{{ ", " if not loop.last }}{% endfor %}])
+        base = f"/{{ e.path }}/{created['id']}"
+{% endif %}
+    async with client_for({}) as anonymous:
+        assert (await anonymous.post(f"{base}/transitions/{{ (p.refused or p.empty or (p.roled and p.roled[0]) or "x") }}")).status_code in (401, 403)
+{% if p.empty %}
+    allowed = await client.post(f"{base}/transitions/{{ p.empty }}")  # holds every role, so may update
+    assert allowed.status_code == 200, allowed.text
+{% endif %}
+{% endif %}
+{% endfor %}

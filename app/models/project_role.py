@@ -20,9 +20,7 @@ class ProjectRole(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "project_roles"
-    __table_args__ = (
-        UniqueConstraint("project_id", "name", name="uq_project_roles_project_name"),
-    )
+    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_project_roles_project_name"),)
 
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

@@ -1,0 +1,10 @@
+=== 01_authn_session against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+[    Info] SOLID        authn/1.1: brute force lockout
+[    Info] SOLID        authn/1.2: lockout bucketing by case/unicode email variant
+[    High] CONFIRMED    authn/1.3: client IP trust through the Caddy+ngrok proxy chain (and the per-IP rate limiter it feeds)
+[    Info] SOLID        authn/1.4: JWT tampering (alg=none, tampered payload, bad signature, wrong audience, garbage)
+[    Info] SOLID        authn/1.5: refresh cookie flags (HttpOnly, Secure, SameSite=Strict, Path=/account)
+[    Info] SOLID        authn/1.6: CSRF defenses on /account/refresh (SameSite=Strict + X-Requested-With + Origin allow-list)
+[    Info] SOLID        authn/1.7.https://evil.attacker.example: CORS preflight for Origin=https://evil.attacker.example
+[    Info] SOLID        authn/1.7.null: CORS preflight for Origin=null
+[     Low] SOLID        authn/1.8: must_change_password enforced on admin routes

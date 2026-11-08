@@ -8,7 +8,7 @@ from app.auth import config
 from app.auth.delivery import Mailer, SmsSender, get_mailer, get_sms_sender
 from app.auth.deps import CurrentUser, require_roles
 from app.auth.models import AuthUser
-from app.auth.ratelimit import RateLimiter
+from app.auth.ratelimit import FailureRateLimiter, RateLimiter
 from app.auth.schemas import (
     Accepted,
     ChangePasswordRequest,
@@ -33,7 +33,7 @@ router = _fa.APIRouter(prefix="/auth", tags=["auth"])
 MailerDep = _t.Annotated[Mailer, _fa.Depends(get_mailer)]
 SmsDep = _t.Annotated[SmsSender, _fa.Depends(get_sms_sender)]
 
-_login_limit = RateLimiter("login", config.LOGIN_RATE_LIMIT)
+_login_limit = FailureRateLimiter("login", config.LOGIN_RATE_LIMIT)
 _register_limit = RateLimiter("register", config.REGISTER_RATE_LIMIT)
 _reset_limit = RateLimiter("reset", config.RESET_RATE_LIMIT)
 

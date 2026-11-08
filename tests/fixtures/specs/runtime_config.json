@@ -1,0 +1,236 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Order Desk",
+    "slug": "order-desk",
+    "description": "Orders with numbered invoices, tenant-editable statuses and tunable settings",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Order",
+      "table_name": "orders",
+      "plural_path": "orders",
+      "options": {
+        "filterable": [
+          "status"
+        ],
+        "sortable": [
+          "created_at"
+        ]
+      },
+      "fields": [
+        {
+          "name": "customer",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "total",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "required": true,
+          "max_length": 40
+        },
+        {
+          "name": "invoice_no",
+          "type": "string",
+          "required": false,
+          "max_length": 40
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://orders.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "manager",
+        "label": "Manager",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Order",
+        "operation": "create",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "list",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "get",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "update",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Order",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "manager",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@orders.example.com",
+      "from_name": "Order Desk"
+    }
+  },
+  "settings": [
+    {
+      "key": "vat_rate",
+      "type": "decimal",
+      "default": "0.20",
+      "label": "VAT rate",
+      "minimum": "0",
+      "maximum": "1",
+      "edit_roles": [
+        "admin"
+      ]
+    },
+    {
+      "key": "approval_threshold",
+      "type": "int",
+      "default": 1000,
+      "label": "Orders above this amount need approval",
+      "minimum": 0,
+      "maximum": 1000000,
+      "read_roles": [
+        "manager",
+        "admin"
+      ],
+      "edit_roles": [
+        "admin",
+        "manager"
+      ]
+    },
+    {
+      "key": "allow_backorders",
+      "type": "bool",
+      "default": false,
+      "label": "Accept orders for items out of stock",
+      "edit_roles": [
+        "admin"
+      ]
+    },
+    {
+      "key": "invoice_footer",
+      "type": "string",
+      "default": "Thank you for your business",
+      "max_length": 120,
+      "edit_roles": [
+        "admin"
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "name": "invoice_no",
+      "prefix": "INV-",
+      "padding": 5,
+      "per_tenant": true,
+      "view_roles": [
+        "admin"
+      ]
+    },
+    {
+      "name": "order_no",
+      "prefix": "ORD-",
+      "padding": 4,
+      "reset_yearly": true,
+      "start": 1
+    }
+  ],
+  "lists": [
+    {
+      "name": "order_status",
+      "label": "Order statuses",
+      "max_items": 12,
+      "edit_roles": [
+        "admin"
+      ],
+      "items": [
+        {
+          "value": "new",
+          "label": "New",
+          "color": "#2563eb",
+          "locked": true
+        },
+        {
+          "value": "packed",
+          "label": "Packed",
+          "color": "#d97706"
+        },
+        {
+          "value": "shipped",
+          "label": "Shipped",
+          "color": "#16a34a"
+        },
+        {
+          "value": "cancelled",
+          "label": "Cancelled",
+          "color": "#6b7280"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Notes",
+    "slug": "deploy-gcp",
+    "description": null,
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {},
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "deletion_mode": "hard",
+    "security_headers_enabled": false,
+    "login_rate_limit": "3/minute",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": true,
+      "otp_ttl_minutes": 5
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "sms_provider": "aws_sns",
+    "sms": {
+      "from_number": "Notes"
+    }
+  },
+  "deployment": {
+    "enabled": true,
+    "cloud": "gcp",
+    "region": "europe-west1",
+    "github_repo": "acme/notes",
+    "environments": [
+      {
+        "name": "dev",
+        "profile": "small"
+      },
+      {
+        "name": "staging",
+        "profile": "small"
+      },
+      {
+        "name": "prod",
+        "profile": "medium",
+        "min_instances": 2,
+        "max_instances": 8
+      }
+    ]
+  }
+}

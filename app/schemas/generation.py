@@ -4,6 +4,8 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from app.schemas.migration_plan import MigrationPlanResponse
+
 
 class FileInfo(BaseModel):
     path: str
@@ -15,6 +17,7 @@ class PreviewResponse(BaseModel):
     total_files: int
     total_size: int
     files: list[FileInfo]
+    migration: MigrationPlanResponse | None = None
 
 
 class GenerationSummary(BaseModel):

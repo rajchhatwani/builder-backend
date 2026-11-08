@@ -5,7 +5,9 @@ a different implementation with `app.dependency_overrides`. Network calls use th
 library and run in a worker thread so they never block the event loop.
 """
 
+{% if a.smtp or sms_provider %}
 import asyncio
+{% endif %}
 {% if sms_provider == "twilio" %}
 import base64
 {% endif %}
@@ -25,7 +27,9 @@ from email.message import EmailMessage
 {% endif %}
 from typing import Protocol
 
+{% if a.smtp or sms_provider %}
 from app.auth import config
+{% endif %}
 from app.core.errors import AppError
 
 _TIMEOUT_SECONDS = 10

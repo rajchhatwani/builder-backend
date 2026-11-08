@@ -1,0 +1,40 @@
+Checkpoint: MCP endpoint reachability through the real public hostname, 2026-10-29
+
+A raw POST of a valid MCP `initialize` JSON-RPC request to /mcp/ :
+  Host: 127.0.0.1:8000                                  -> 200, normal MCP handshake response
+  Host: cinderous-overfamiliar-sanford.ngrok-free.dev    -> 421 "Invalid Host header"
+  Host: api.example.com                                  -> 421 "Invalid Host header"
+
+Root cause, traced into the `mcp` SDK (.venv/lib/python3.12/site-packages/mcp/server/mcpserver/server.py):
+  streamable_http_app(self, *, ..., transport_security: TransportSecuritySettings | None = None,
+                       host: str = "127.0.0.1") -> Starlette:
+      ...
+      if transport_security is None and host in ("127.0.0.1", "localhost", "::1"):
+          transport_security = TransportSecuritySettings(
+              enable_dns_rebinding_protection=True,
+              allowed_hosts=["127.0.0.1:*", "localhost:*", "[::1]:*"],
+          )
+
+app/api/mcp.py's build_mcp_app() calls:
+      return mcp.streamable_http_app(streamable_http_path="/")
+  -- passing neither `host=` nor `transport_security=`. This takes the SDK's default
+  host="127.0.0.1", which auto-enables the SDK's own DNS-rebinding protection and allowlists
+  ONLY localhost-style Host headers. This is NOT affected by what address uvicorn actually
+  binds to at runtime (BUILDER_PUBLIC_API_URL, --host flags, the reverse proxy, etc.) -- it is
+  a static default baked into this one call, so it applies identically in every deployment of
+  this code, not just this test environment.
+
+IMPACT: any real MCP client (Claude Desktop, another agent) connecting to the deployed,
+public API hostname will always receive 421 "Invalid Host header" and can never use the MCP
+feature at all. Since MCP is a paid, plan-gated feature (`plans.allow_mcp`), this means the
+feature is completely non-functional for every real customer today, regardless of their plan,
+tokens, or scopes -- none of that matters because the request never gets past the Host check.
+
+This is NOT an authorization bypass (if anything it fails closed/safe), but it is a confirmed,
+reproducible, deployment-breaking defect found during this security pass, and the single most
+actionable "fix this" item from the whole MCP checkpoint.
+
+SUGGESTED FIX: pass an explicit `transport_security=TransportSecuritySettings(allowed_hosts=[...])`
+(or `host=`) in app/api/mcp.py's build_mcp_app(), including the real public API hostname
+(BUILDER_PUBLIC_API_URL's host) alongside the localhost variants, e.g. derived from settings
+at app startup.

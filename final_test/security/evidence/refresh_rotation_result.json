@@ -1,0 +1,11 @@
+{
+  "refresh_v1_rotated_to_v2": 200,
+  "replay_old_v1_after_grace_window": {
+    "status": 401,
+    "body": "b'{\"code\":\"invalid_session\",\"message\":\"the session is no longer valid\",\"details\":[]}'"
+  },
+  "use_current_v2_after_v1_replay_detected": {
+    "status": 401,
+    "body": "b'{\"code\":\"invalid_session\",\"message\":\"the session is no longer valid\",\"details\":[]}'"
+  }
+}
