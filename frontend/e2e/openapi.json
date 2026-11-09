@@ -5328,6 +5328,41 @@
     "title": "FileInfo",
     "type": "object"
    },
+   "GateRunResult": {
+    "description": "A human-triggered gate run over the run's draft (read-only static checks).",
+    "properties": {
+     "failure_count": {
+      "title": "Failure Count",
+      "type": "integer"
+     },
+     "failures": {
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Failures",
+      "type": "array"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "report_hash": {
+      "title": "Report Hash",
+      "type": "string"
+     }
+    },
+    "required": [
+     "ok",
+     "failure_count",
+     "failures",
+     "report_hash"
+    ],
+    "title": "GateRunResult",
+    "type": "object"
+   },
    "GenerationDetail": {
     "properties": {
      "created_at": {
@@ -12807,6 +12842,18 @@
       "title": "Offset",
       "type": "integer"
      },
+     "paused_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Paused At"
+     },
      "phase": {
       "title": "Phase",
       "type": "string"
@@ -12952,6 +12999,18 @@
       "format": "uuid",
       "title": "Id",
       "type": "string"
+     },
+     "paused_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Paused At"
      },
      "phase": {
       "title": "Phase",
@@ -27498,6 +27557,112 @@
      }
     },
     "summary": "Cancel Run",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs/{run_id}/gates": {
+   "post": {
+    "operationId": "run_gates_projects__project_id__agent_runs__run_id__gates_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "run_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Run Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GateRunResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Run Gates",
+    "tags": [
+     "agent"
+    ]
+   }
+  },
+  "/projects/{project_id}/agent/runs/{run_id}/pause": {
+   "post": {
+    "operationId": "pause_run_projects__project_id__agent_runs__run_id__pause_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "run_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Run Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Pause Run",
     "tags": [
      "agent"
     ]

@@ -4,7 +4,9 @@ POST /projects/{project_id}/agent/runs                     create (editor, verif
 GET  /projects/{project_id}/agent/runs                     list (viewer)
 GET  /projects/{project_id}/agent/runs/{run_id}            read with steps, paged (viewer)
 POST /projects/{project_id}/agent/runs/{run_id}/cancel     cancel (editor)
-POST /projects/{project_id}/agent/runs/{run_id}/resume     drive / re-drive (editor, verified e-mail)
+POST /projects/{project_id}/agent/runs/{run_id}/pause      pause a live run at its next step (editor)
+POST /projects/{project_id}/agent/runs/{run_id}/resume     drive / re-drive; lifts a pause (editor, verified e-mail)
+POST /projects/{project_id}/agent/runs/{run_id}/gates      run the platform gates over the draft (editor)
 """
 
 import uuid
@@ -14,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination, require_verified_email
 from app.db import get_session
-from app.schemas.agent_run import RunCreate, RunDetail, RunRead
+from app.schemas.agent_run import GateRunResult, RunCreate, RunDetail, RunRead
 from app.schemas.common import Page
 from app.services.access_service import Principal
 from app.services.agent.run_service import AgentDeps, RunService, get_agent_deps
@@ -69,6 +71,23 @@ async def cancel_run(
     project_id: uuid.UUID, run_id: uuid.UUID, db: AsyncSession = Depends(get_session)
 ) -> RunRead:
     return RunRead.model_validate(await RunService(db).cancel(project_id, run_id))
+
+
+@router.post("/{run_id}/pause", response_model=RunRead)
+async def pause_run(
+    project_id: uuid.UUID, run_id: uuid.UUID, db: AsyncSession = Depends(get_session)
+) -> RunRead:
+    return RunRead.model_validate(await RunService(db).pause(project_id, run_id))
+
+
+@router.post("/{run_id}/gates", response_model=GateRunResult)
+async def run_gates(
+    project_id: uuid.UUID,
+    run_id: uuid.UUID,
+    deps: AgentDeps = Depends(agent_deps),
+    db: AsyncSession = Depends(get_session),
+) -> GateRunResult:
+    return GateRunResult(**await RunService(db).run_gates(project_id, run_id, deps))
 
 
 @router.post(

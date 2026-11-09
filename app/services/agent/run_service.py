@@ -45,6 +45,7 @@ from app.services.agent.contract import (
 )
 from app.services.agent.draft import LeaseLost, apply_draft, drop_draft, spec_seq
 from app.services.ai.base import (
+    Completion,
     CompletionRequest,
     Message,
     TaskClass,
@@ -110,11 +111,17 @@ SYSTEM_PROMPT = (
     "- Never write secrets into any tool input.\n"
 )
 _PHASE_LINE = {
-    Phase.plan: "Phase: PLAN. You may only read. Finish with a plan summary for approval.",
+    Phase.plan: (
+        "Phase: PLAN. You may only read. Call get_authoring_guide first (entity, state-machine and hook "
+        "shapes). Your plan must list EVERY entity, hook and dependency you will touch, including a "
+        "hook for each validation or transition guard: anything missing costs the human an extra "
+        "approval. Finish with a plan summary for approval."
+    ),
     Phase.build: "Phase: BUILD. Make the approved changes in the draft; the gates run on every write.",
     Phase.apply: "Phase: APPLY. Only humans approve external effects.",
 }
 
+NO_CHANGES = "no_changes"  # stop_code of a run that finished without changing anything
 REFLECT_NOTE = (
     "Reflect: you repeated a call with the same result. Do not repeat it. Re-read the failure "
     "or output, change your approach, or call finish(summary) and explain what blocks you."
@@ -396,6 +403,17 @@ async def _append_step(session: AsyncSession, run: AiRun, kind: str, **kw: Any) 
     await session.commit()
 
 
+async def mark_promotion(
+    session: AsyncSession, run_id: uuid.UUID, state: str, files: list[str], *, attempts: int | None = None
+) -> None:
+    """Close the stored promotion of a run: the file bytes are dropped, the names stay (FX-3)."""
+    doc: dict[str, Any] = {"state": state, "files": files[:100]}
+    if attempts is not None:
+        doc["attempts"] = attempts
+    await session.execute(update(AiRun).where(AiRun.id == run_id).values(promotion=doc))
+    await session.commit()
+
+
 async def discard_draft(session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None) -> str:
     """Drop the run's spec draft (deny, cancel, stop, failure). The live spec was never touched,
     so nothing is undone. The draft workspace's generated files go back to the live spec. Records
@@ -425,6 +443,9 @@ async def discard_draft(session: AsyncSession, run_id: uuid.UUID, *, owner: str 
 
 
 # -- the service used by the API ------------------------------------------------------------------
+
+
+_GATES_INFLIGHT: set[uuid.UUID] = set()
 
 
 class RunService:
@@ -556,6 +577,37 @@ class RunService:
         await discard_draft(self.session, run_id)
         return await self._fresh(run_id)
 
+    async def pause(self, project_id: uuid.UUID, run_id: uuid.UUID) -> AiRun:
+        """G3: ask a live run to stop at its next step. The draft and the workspace slot are kept; the
+        sweeper leaves it alone. A run that is applying cannot be paused (the apply is atomic)."""
+        await self._run(project_id, run_id)
+        res = await self.session.execute(
+            update(AiRun)
+            .where(AiRun.id == run_id, AiRun.state.in_(_LIVE - {"applying"}), AiRun.paused_at.is_(None))
+            .values(paused_at=_now())
+            .execution_options(synchronize_session=False)
+        )
+        if res.rowcount == 0:  # type: ignore[attr-defined]
+            await self.session.rollback()
+            raise AppError("illegal_transition", "only a live run that is not applying can be paused", 409)
+        await self.session.commit()
+        return await self._fresh(run_id)
+
+    async def run_gates(self, project_id: uuid.UUID, run_id: uuid.UUID, deps: "AgentDeps") -> dict[str, Any]:
+        """FX-7: a person runs the platform gates over the draft (the same pass the finish check uses)."""
+        run = await self._run(project_id, run_id)
+        if run.state in TERMINAL or deps.gates is None:
+            raise AppError("illegal_transition", "gates can only be run on a live run with a draft", 409)
+        if run_id in _GATES_INFLIGHT:  # one scan per run at a time: generate/replay/scanners are heavy
+            raise AppError("gates_busy", "a gate run for this run is already in progress", 429)
+        _GATES_INFLIGHT.add(run_id)
+        try:
+            failures, digest = await deps.gates.check_report(run)
+        finally:
+            _GATES_INFLIGHT.discard(run_id)
+        return {"ok": not failures, "failure_count": len(failures), "report_hash": digest,
+                "failures": [f.as_dict() for f in failures[:50]]}  # fmt: skip
+
     async def _fresh(self, run_id: uuid.UUID) -> AiRun:
         run = await self.session.get(AiRun, run_id, populate_existing=True)
         assert run is not None
@@ -563,6 +615,11 @@ class RunService:
 
     async def resume(self, project_id: uuid.UUID, run_id: uuid.UUID, deps: AgentDeps) -> AiRun:
         await self._run(project_id, run_id)
+        await self.session.execute(  # G3: resuming lifts a pause
+            update(AiRun).where(AiRun.id == run_id, AiRun.paused_at.is_not(None)).values(paused_at=None)
+            .execution_options(synchronize_session=False)
+        )
+        await self.session.commit()
         project = await self.session.get(Project, project_id)
         assert project is not None
         settings = deps.settings or self.settings
@@ -769,6 +826,19 @@ class RunDriver:
             await self.s.execute(select(func.max(AiStep.seq)).where(AiStep.run_id == run_id))
         ).scalar_one()
         return int(top or 0) + 1
+
+    @staticmethod
+    def _normalise_calls(comp: Completion, used: set[str]) -> list[dict[str, Any]]:
+        calls: list[dict[str, Any]] = []
+        for tc in comp.tool_calls:
+            cid = tc.id or "call"
+            n = 1
+            while cid in used:
+                n += 1
+                cid = f"{tc.id}~{n}"
+            used.add(cid)
+            calls.append({"id": cid, "name": tc.name, "input": redact(tc.input)})
+        return calls
 
     async def _add_step(self, run: AiRun, kind: str, *, commit: bool = True, **kw: Any) -> AiStep:
         step = AiStep(
@@ -1002,6 +1072,9 @@ class RunDriver:
             run = await self._reload(run_id)
             if run.state in TERMINAL or run.state == "awaiting_approval":
                 return
+            if run.paused_at is not None:  # G3: a human paused the run; stop at this step boundary
+                await self._add_step(run, "system", output={"paused": True, "note": "paused by a person"})
+                return
             wall_ms = base_ms + int((self.clock() - t0) * 1000)
             await self.s.execute(
                 update(AiRun).where(AiRun.id == run_id).values(wall_ms_used=wall_ms)
@@ -1038,10 +1111,48 @@ class RunDriver:
             TaskClass.repair if rp.last_failed else TaskClass.code
         )
         rid = run.id
+        # B-009: the ledger row is keyed by the seq this turn's model step will take, so a retried turn
+        # (crash between the spend and the step) never writes a second spend row.
+        seq = await self._next_seq(rid)
+        step_key = f"{rid}:{seq}"
+        used = {s.tool_call_id for s in steps if s.tool_call_id}
+        proj = run.project_id
+        phash = prefix_digest(system, tools)
+        tset = self.toolbox.tool_set_hash(phase)
+
+        async def write_model_step(sess: AsyncSession, comp: Completion) -> None:
+            # Runs inside the ledger transaction (B-009): spend and model step commit together. A retried
+            # turn finds its step already there and writes nothing a second time.
+            outs = (
+                await sess.execute(select(AiStep.output).where(AiStep.run_id == rid, AiStep.kind == "model"))
+            ).scalars().all()
+            if any(isinstance(o, dict) and o.get("step_key") == step_key for o in outs):
+                return
+            # The seq is taken NOW (max+1), not at the turn start: a cancel or discard may have written a
+            # step during the provider call, and a unique-index clash here would undo the spend row.
+            top = (await sess.execute(select(func.max(AiStep.seq)).where(AiStep.run_id == rid))).scalar_one()
+            calls = self._normalise_calls(comp, set(used))
+            sess.add(
+                AiStep(
+                    run_id=rid, project_id=proj, seq=int(top or 0) + 1, kind="model", model=comp.model,
+                    prompt_hash=phash, tool_set_hash=tset,
+                    output={
+                        "text": redact(comp.text)[:4000],
+                        "tool_calls": calls,
+                        "stop_reason": comp.stop_reason,
+                        "step_key": step_key,
+                    },
+                )
+            )
+            await sess.execute(
+                update(AiRun).where(AiRun.id == rid).values(steps_used=AiRun.steps_used + 1)
+            )
+
         try:
             async with self._beat(rid):
-                comp = await self.gateway.complete(
-                    self.org_id, task, req, project_id=run.project_id, run_id=run.id
+                await self.gateway.complete(
+                    self.org_id, task, req, project_id=run.project_id, run_id=run.id,
+                    step_key=step_key, after_settle=write_model_step,
                 )
         except AppError as exc:
             await self.s.rollback()
@@ -1054,34 +1165,15 @@ class RunDriver:
                 raise
             await self._stop(run.id, StopReason(code, f"{exc.code}: {redact(exc.message)}"[:500]))
             return True
-        await self.s.commit()  # the ledger row
-        await self._renew(rid)  # still the owner? else _Lost before anything is written (S1-001)
-        used = {s.tool_call_id for s in steps if s.tool_call_id}
-        calls: list[dict[str, Any]] = []
-        for tc in comp.tool_calls:
-            cid = tc.id or "call"
-            n = 1
-            while cid in used:
-                n += 1
-                cid = f"{tc.id}~{n}"
-            used.add(cid)
-            calls.append({"id": cid, "name": tc.name, "input": redact(tc.input)})
-        await self._add_step(
-            run,
-            "model",
-            model=comp.model,
-            prompt_hash=prefix_digest(system, tools),
-            tool_set_hash=self.toolbox.tool_set_hash(phase),
-            output={
-                "text": redact(comp.text)[:4000],
-                "tool_calls": calls,
-                "stop_reason": comp.stop_reason,
-            },
-        )
-        await self.s.execute(
-            update(AiRun).where(AiRun.id == run.id).values(steps_used=AiRun.steps_used + 1)
-        )
-        await self.s.commit()
+        await self.s.commit()  # nothing pending: the ledger row and the model step are already committed
+        await self._renew(rid)  # still the owner? else _Lost (S1-001)
+        calls: Any = (
+            await self.s.execute(
+                select(AiStep.output).where(AiStep.run_id == rid, AiStep.kind == "model")
+                .order_by(AiStep.seq.desc())
+            )
+        ).scalars().all()
+        calls = next(o["tool_calls"] for o in calls if o.get("step_key") == step_key)
         if not calls:
             rp.no_tool_streak += 1
             await self._add_step(run, "system", output={"note": NUDGE_NOTE})
@@ -1126,6 +1218,7 @@ class RunDriver:
             )
             step_id, rid = step.id, run.id
             finishing = False
+            no_changes = False
             if name == FINISH:
                 summary = tin.get("summary") if isinstance(tin, dict) else None
                 if isinstance(summary, str) and summary.strip():
@@ -1149,6 +1242,14 @@ class RunDriver:
                             finishing = False
                             res = ToolResult(ok=False, failures=tuple(found[:20]))
                             out = result_output(res)
+                        elif run.phase == "build" and await self._empty_change(run):
+                            # FX-9: an empty change is not a success (first real run: "applied but EMPTY")
+                            finishing, no_changes = False, True
+                            res = ToolResult(ok=False)
+                            out = failure_output(
+                                "agent.no_changes", FINISH, "at least one spec or custom-code change",
+                                "the draft is identical to the live project",
+                            )
                 else:
                     out = failure_output("agent.finish_invalid", FINISH, "finish needs a non-empty summary")
                     res = ToolResult(ok=False)
@@ -1200,6 +1301,11 @@ class RunDriver:
                     f"extend plan: {kind} {what}"[:300],
                     {"extend": {"kind": kind, "name": what}},
                 )
+            if no_changes:
+                await self._skip_rest(run, calls[idx + 1 :])
+                await self._stop(run.id, StopReason(
+                    NO_CHANGES, "the run finished without changing anything; nothing was applied"))
+                return True
             if finishing:
                 await self._skip_rest(run, calls[idx + 1 :])
                 await self._finish(run, out["data"]["summary"], tin.get("plan"))
@@ -1232,6 +1338,10 @@ class RunDriver:
             if bud.Verdict.reflect in (loop_v, rep_v):
                 await self._add_step(run, "system", output={"note": REFLECT_NOTE, "reflect": True})
         return False
+
+    async def _empty_change(self, run: AiRun) -> bool:
+        check = getattr(self.approvals, "empty_change", None)
+        return bool(await check(run)) if check is not None else False
 
     async def _skip_rest(self, run: AiRun, calls: list[dict[str, Any]]) -> None:
         for call in calls:
@@ -1280,7 +1390,9 @@ class RunDriver:
             if run.state != "applying":
                 await self._move(run.id, "applying")
             await self._checkpoint(run.id, "before-apply")  # B-015: the restore point for the E step
-            out = await apply_draft(self.s, run.id, owner=self.owner)
+            from app.services.agent import promote as promote_lib  # late: promote imports the tools package
+
+            out = await apply_draft(self.s, run.id, owner=self.owner, promotion=promote_lib.encode(to_promote))
             if out.status != "applied":  # never overwrite a newer live spec: stop, show why
                 key = "apply_conflict" if out.status == "conflict" else "apply_failed"
                 fresh = await self._reload(run.id)
@@ -1303,12 +1415,14 @@ class RunDriver:
         await self._move(run.id, "awaiting_approval")
 
     async def _promote(self, run_id: uuid.UUID, files: dict[str, bytes]) -> None:
-        """B-004: the reviewed custom code goes live right after the spec did. The run is already
-        `applied` (spec committed), so a failure here is recorded loudly, never silent."""
+        """B-004: the reviewed custom code goes live right after the spec did. The files are already
+        stored on the run (FX-3), so a failure here is recorded loudly AND retried by the sweeper."""
         run = await self._reload(run_id)
         try:
             out = await self.approvals.promote(run, files)
             await self._add_step(run, "system", output={"promotion": out})
+            if files:  # nothing was stored for a run without custom files
+                await mark_promotion(self.s, run_id, "done", sorted(files))
         except Exception as exc:
             await self.s.rollback()
             log.error("promotion of approved custom code failed for run %s: %s", run_id, type(exc).__name__)
@@ -1316,7 +1430,7 @@ class RunDriver:
             await self._add_step(
                 run, "system", ok=False,
                 output={"promotion_failed": str(getattr(exc, "code", type(exc).__name__)),
-                        "files": sorted(files)[:100]},
+                        "files": sorted(files)[:100], "retry": "the sweeper retries a stored promotion"},
             )
 
     async def _stop(self, run_id: uuid.UUID, reason: StopReason) -> None:

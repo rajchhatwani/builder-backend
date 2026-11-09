@@ -315,7 +315,7 @@ async def test_fetch_guard_refuses_non_public_addresses(host: str) -> None:
     assert exc.value.code == "fetch_refused"
 
 
-async def test_e_without_an_executor_is_consumed_and_reported_not_executed(client: AsyncClient, ws_settings: Settings) -> None:
+async def test_e_create_pr_runs_through_the_local_adapter_without_outbound(client: AsyncClient, ws_settings: Settings) -> None:
     pid, rid = await e2e._to_final_review(client)
     install(Script([call("create_pr", title="x"), call("finish", summary="done")]))
     await _decide(client, pid)
@@ -324,7 +324,9 @@ async def test_e_without_an_executor_is_consumed_and_reported_not_executed(clien
     await _decide(client, pid)
     await _resume(client, pid, rid, allow_stop=True)
     out = await _marker(client, pid, rid, e["id"])
-    assert out["executed"]["executed"] is False and "NOT executed" in out["note"]
+    ex = out["executed"]  # FX-4: create_pr has an executor now (local adapter, nothing pushed)
+    assert ex["executed"] is True and ex["outbound"] is False and ex["pushed"] is False
+    assert ex["pull_request"]["title"] == "x" and "EXECUTED" in out["note"]
 
 
 # -- S1-008: the hook-review approval survives a re-run of the tool ----------------------------------

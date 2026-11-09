@@ -48,6 +48,10 @@ class AiRun(UUIDPrimaryKeyMixin, Base):
     state: Mapped[str] = mapped_column(String(24), nullable=False, default="created")
     phase: Mapped[str] = mapped_column(String(10), nullable=False, default="plan")
     plan: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # FX-3: custom files to commit to main, stored in the apply transaction so the sweeper can retry a
+    # crashed promotion. {"state": pending|done|failed, "attempts": n, "files": {rel: base64} | [rel]}
+    promotion: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    paused_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)  # G3
     plan_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     budgets: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
     steps_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

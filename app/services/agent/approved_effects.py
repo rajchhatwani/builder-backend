@@ -8,8 +8,8 @@ approval's payload runs server-side:
      weaken_access_rule: one typed operation appended to the run's spec DRAFT (the live spec still only
      changes through the final review). The operation is validated like every other draft op.
   E  fetch_docs: a guarded HTTPS GET (public hosts only, no redirects, size/time capped); the text comes
-     back as untrusted data. apply_migration, create_pr, request_secret have no executor in this
-     platform yet: they are consumed and reported `executed: false` (never pretended).
+     back as untrusted data. apply_migration, create_pr, request_secret run through the adapters of
+     external_adapters.py (local defaults, no outbound call; FX-4).
 
 The caller has already verified the approval is approved, unexpired, bound to the current spec hash
 and content hash, and that its payload still hashes to what was asked (`check_usable`, strict).
@@ -34,7 +34,7 @@ FETCH_MAX_BYTES = 200_000
 FETCH_TIMEOUT = 10.0
 FETCH_TOTAL_TIMEOUT = 20.0  # one deadline for the whole fetch
 _TEXT_TYPES = ("text/", "application/json", "application/xml", "application/xhtml", "application/yaml")
-NO_EXECUTOR = frozenset({"apply_migration", "create_pr", "request_secret"})
+NO_EXECUTOR: frozenset[str] = frozenset()  # FX-4: every E action has an executor now (external_adapters)
 
 
 # -- D: spec draft operations -------------------------------------------------------------------
@@ -192,6 +192,16 @@ async def execute(session: AsyncSession, run: AiRun, approval: AiApproval) -> di
             if action == "fetch_docs":
                 got = await fetch_url(str(payload.get("url", "")))
                 return {"executed": True, "action": action, **got}
+            from app.services.agent.external_adapters import get_adapters
+
+            ad = get_adapters()
+            if action == "apply_migration":
+                return {"executed": True, "action": action, **await ad.dev.apply_migration(session, run)}
+            if action == "create_pr":
+                return {"executed": True, "action": action,
+                        **await ad.pull_requests.create(session, run, str(payload.get("title", "")))}  # fmt: skip
+            if action == "request_secret":
+                return {"executed": True, "action": action, **await ad.secrets.request(session, run, str(payload.get("name", "")))}
             if action in NO_EXECUTOR:
                 return {"executed": False, "action": action, "reason": "this platform has no executor for it yet"}
             return {"executed": False, "action": action[:40], "reason": "unknown action"}

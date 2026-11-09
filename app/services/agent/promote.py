@@ -12,6 +12,8 @@ by the final review (kind C), never by the worktree's current content:
      promotion. Files that are not in the approved list are never promoted.
 """
 
+import base64
+import binascii
 import hashlib
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -22,6 +24,32 @@ from app.services.agent.tools._common import _clean_rel, _denied
 
 MAX_PROMOTED_FILES = 100
 MAX_PROMOTED_BYTES = 256 * 1024
+MAX_PROMOTED_TOTAL = 1024 * 1024  # all files of one promotion (they are stored with the apply, FX-3)
+MAX_PROMOTION_ATTEMPTS = 5
+
+
+def encode(files: dict[str, bytes]) -> dict[str, Any] | None:
+    """FX-3 / B-004: what the apply transaction stores so a crash between the spec apply and the git
+    commit can be retried: {"state": "pending", "attempts": 0, "files": {rel: base64}}."""
+    if not files:
+        return None
+    return {"state": "pending", "attempts": 0,
+            "files": {rel: base64.b64encode(data).decode("ascii") for rel, data in sorted(files.items())}}
+
+
+def decode(doc: Any) -> dict[str, bytes] | None:
+    """The stored pending files, or None when the document is not a well-formed pending promotion."""
+    if not isinstance(doc, dict) or doc.get("state") != "pending" or not isinstance(doc.get("files"), dict):
+        return None
+    out: dict[str, bytes] = {}
+    for rel, b64 in doc["files"].items():
+        if not isinstance(rel, str) or not isinstance(b64, str) or not promotable(rel):
+            return None
+        try:
+            out[rel] = base64.b64decode(b64.encode("ascii"), validate=True)
+        except (binascii.Error, ValueError):
+            return None
+    return out
 
 
 def _sha(data: bytes) -> str:
@@ -73,6 +101,7 @@ def collect(root: Path, declared: Any) -> dict[str, bytes]:
     if len(declared) > MAX_PROMOTED_FILES:
         raise AppError("promotion_refused", "the approval lists too many files", 409)
     out: dict[str, bytes] = {}
+    total = 0
     for rel, sha in sorted(declared.items()):
         if not isinstance(rel, str) or not isinstance(sha, str) or not promotable(rel):
             raise AppError("promotion_refused", f"{str(rel)[:80]} is not a promotable custom-zone file", 409)
@@ -83,5 +112,8 @@ def collect(root: Path, declared: Any) -> dict[str, bytes]:
                 f"{rel[:80]} differs from the file that was approved; nothing was promoted",
                 409,
             )
+        total += len(data)
+        if total > MAX_PROMOTED_TOTAL:
+            raise AppError("promotion_refused", "the approved files are too large to promote together", 409)
         out[rel] = data
     return out

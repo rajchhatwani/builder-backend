@@ -57,12 +57,20 @@ def _detail_text(exc: AppError) -> str:
 
 
 def app_error_failure(tool: str, exc: AppError) -> RuleFailure:
-    detail = _detail_text(exc)
+    if exc.status_code >= 500:  # L6: server-side text never reaches the model
+        actual = "the operation failed on the server"
+    else:
+        from app.services.agent.run_service import redact  # lazy: run_service imports the tools
+
+        detail = _detail_text(exc)
+        text = f"{exc.message}: {detail}" if detail else exc.message
+        # project-owned text is data, not instruction: envelope + secret redaction, then the cap
+        actual = json.dumps(untrusted(redact(text)[:230]))
     return failure(
         exc.code or "tool_error",
         tool,
         "the operation is valid for the current spec",
-        f"{exc.message}: {detail}" if detail else exc.message,
+        actual,
         "fix the input and call the tool again" if exc.status_code < 500 else "",
     )
 

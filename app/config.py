@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     ai_request_timeout_seconds: float = 120.0
     # A spend reservation not settled within this long is treated as orphaned (process died) and freed.
     # Keep it well above ai_request_timeout_seconds so a slow live call is never freed under it.
-    ai_reservation_ttl_seconds: float = 900.0
+    ai_reservation_ttl_seconds: float = 1800.0
     # The owner's own key (BUILDER_AI_API_KEY in the git-ignored .env.local). Used ONLY for orgs
     # whose ID (uuid string, never the slug: slugs are user-chosen) is listed in ai_platform_key_orgs and that have no key of their own; the
     # platform cap bounds the total spend either way.
@@ -163,6 +163,12 @@ class Settings(BaseSettings):
     # (no user-space kernel) is accepted only when environment is local/test.
     sandbox_runtime: str = "runsc"
     sandbox_docker_bin: str = "docker"
+    # Dedicated address range for sandbox networks. The runner gives each new network an explicit
+    # --subnet (one block of this size) from the pool; the host firewall matches the whole range, so
+    # networks created later are covered with no `reapply`. Keep Docker's own default pools away
+    # from it (daemon.json default-address-pools) and the range unused on the host LAN.
+    sandbox_subnet_pool: str = "172.30.0.0/16"
+    sandbox_subnet_prefix: int = 28
     # P1 narrow runner. API side: when `sandbox_runner_url` is set (http://127.0.0.1:PORT or
     # unix:///path.sock, https:// for a remote one) every sandbox call goes to the runner and the
     # API process never runs the docker binary. The token is mandatory with it.
@@ -202,6 +208,11 @@ class Settings(BaseSettings):
     agent_sweep_interval_seconds: int = 30
     agent_sweep_max_runs: int = 3
     agent_max_recoveries: int = 3
+    # Extra agent gates (FX-6). Licence check on hand-written requirements; static analysis runs only when
+    # bandit or semgrep is installed locally (else recorded as skipped); strict typing is opt-in.
+    agent_gate_licence: bool = True
+    agent_gate_static_analysis: bool = True
+    agent_gate_strict_typing: bool = False
     # Approval policy (B-001). Platform values; an org may only TIGHTEN them (ai_org_settings.approval_policy).
     # Lifetimes in hours (clamped 1 min .. 7 days); roles kind->"owner" can only RAISE the built-in floor;
     # auto-approval of a small plan edit is off; separation of duties (the run's creator may not approve

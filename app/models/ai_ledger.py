@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import BigInteger, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -49,11 +49,21 @@ class AiCostLedger(UUIDPrimaryKeyMixin, Base):
     cache_read_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cache_write_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     cost_micro_usd: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    # B-009: "run_id:seq" of the agent step this call belongs to; a retry never bills twice.
+    step_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )
 
-    __table_args__ = (Index("ix_ai_cost_ledger_org_created", "organization_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_ai_cost_ledger_org_created", "organization_id", "created_at"),
+        Index(
+            "uq_ai_cost_ledger_step_key",
+            "step_key",
+            unique=True,
+            postgresql_where=text("step_key IS NOT NULL"),
+        ),
+    )
 
 
 class AiPlatformBudget(Base):

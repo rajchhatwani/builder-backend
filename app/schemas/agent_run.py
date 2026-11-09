@@ -27,6 +27,7 @@ class RunRead(BaseModel):
     cost_micro_usd: int
     stop_code: str | None
     stop_detail: str | None
+    paused_at: datetime | None = None
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
@@ -56,3 +57,12 @@ class RunDetail(RunRead):
     steps_total: int
     limit: int
     offset: int
+
+
+class GateRunResult(BaseModel):
+    """A human-triggered gate run over the run's draft (read-only static checks)."""
+
+    ok: bool
+    failure_count: int
+    failures: list[dict[str, str]]
+    report_hash: str

@@ -148,14 +148,15 @@ class ApplyOutcome:
 
 
 async def apply_draft(
-    session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None
+    session: AsyncSession, run_id: uuid.UUID, *, owner: str | None = None, promotion: dict[str, Any] | None = None
 ) -> ApplyOutcome:
     """Replay the draft onto the live project, only if the live spec is exactly the plan's base.
     A person's (or another run's) change in between is a conflict: nothing is written.
 
     The live spec, the draft deletion and the run's `applied` state commit in ONE transaction
     (S1-005): a crash or a cancel can no longer leave a changed spec behind a run that is not
-    `applied`, and a repeated call on an applied run is a no-op."""
+    `applied`, and a repeated call on an applied run is a no-op. `promotion` (FX-3) is stored on the run
+    in that same transaction, so the custom code that goes with the spec is never lost to a crash."""
     from app.services.ops.service import OpsService
 
     run = await session.get(AiRun, run_id, populate_existing=True)
@@ -182,7 +183,8 @@ async def apply_draft(
         claimed = await session.execute(
             update(AiRun)
             .where(*cond)
-            .values(state="applied", finished_at=datetime.now(UTC), lease_owner=None, lease_until=None)
+            .values(state="applied", finished_at=datetime.now(UTC), lease_owner=None, lease_until=None,
+                    **({"promotion": promotion} if promotion is not None else {}))
             .execution_options(synchronize_session=False)
         )
         if claimed.rowcount == 0:  # type: ignore[attr-defined]

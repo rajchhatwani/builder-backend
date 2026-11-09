@@ -165,6 +165,16 @@ class Approvals:
         digest, commit = await self._bound(run)
         ApprovalService.check_usable(approval, spec_hash=digest, commit=commit, strict_payload=strict_payload)
 
+    async def empty_change(self, run: AiRun) -> bool:
+        """FX-9: the draft changes neither the spec nor a file (same test as the final review's flag)."""
+        session = _session(run)
+        now = await run_spec(session, run.id, run.project_id)
+        raw = (run.plan or {}).get("base_spec") if isinstance(run.plan, dict) else None
+        base = Spec.model_validate(raw) if isinstance(raw, dict) else None
+        if spec_changes(base, now):
+            return False
+        return not await _changed_files(session, await _workspace(run))
+
     async def prepare_promotion(self, run: AiRun) -> dict[str, bytes]:
         """B-004, before apply: the custom-zone files the VALID final approval covers, re-read from the
         worktree and checked against the approved hashes. AppError when any differs. Files outside the
@@ -280,8 +290,12 @@ class Gates:
             for r in await DependencyPolicyService(session).approved_pins(run.project_id)
         ]
         root = Path(path)
-        first = await asyncio.to_thread(gate_lib.run_gates, root, spec, approved_pins=pins)
-        second = await asyncio.to_thread(gate_lib.replay, root, spec, pins)
+        cfg = get_settings()
+        lic, sta, typ = cfg.agent_gate_licence, cfg.agent_gate_static_analysis, cfg.agent_gate_strict_typing
+        first = await asyncio.to_thread(
+            lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta, strict_typing=typ))
+        second = await asyncio.to_thread(
+            lambda: gate_lib.replay(root, spec, pins, licence=lic, static_analysis=sta, strict_typing=typ))
         failures = [*first.failures, *second.failures]
         report = gate_lib.GateReport(ok=not failures, failures=failures, gates=first.gates)
         return failures, gate_lib.report_hash(report)

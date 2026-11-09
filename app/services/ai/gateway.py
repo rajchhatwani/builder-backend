@@ -73,6 +73,8 @@ class ModelGateway:
         *,
         project_id: uuid.UUID | None,
         run_id: uuid.UUID | None,
+        step_key: str | None = None,
+        after_settle: Callable[[AsyncSession], Awaitable[None]] | None = None,
     ) -> None:
         # Outcome unknown (timeout, dropped stream, cancellation): the call may have been billed, so
         # the worst case stays counted on both the platform counter and the org ledger.
@@ -90,6 +92,8 @@ class ModelGateway:
             task_class=task_class.value,
             usage=usage,
             charge_worst_case=unknown,
+            step_key=step_key,
+            after_settle=after_settle,
         )
 
     async def _provider(self, org_id: uuid.UUID) -> ModelProvider:
@@ -124,15 +128,28 @@ class ModelGateway:
         *,
         project_id: uuid.UUID | None = None,
         run_id: uuid.UUID | None = None,
+        step_key: str | None = None,
+        after_settle: Callable[[AsyncSession, Completion], Awaitable[None]] | None = None,
     ) -> Completion:
+        """after_settle(session, completion) runs inside the transaction that writes the ledger row (B-009), so
+        the caller can persist its model step atomically with the spend. step_key dedupes the row."""
         provider = await self._provider(org_id)
         model = route_model(task_class, self.settings)
         self._require_price(model)
         org_res, res = await self._begin(org_id, provider, model, request)
 
-        def settle(usage: Usage | None, error: ProviderError | None = None) -> Awaitable[None]:
+        holder: list[Completion] = []
+
+        async def hook(session: AsyncSession) -> None:
+            if after_settle is not None:
+                await after_settle(session, holder[0])
+
+        def settle(
+            usage: Usage | None, error: ProviderError | None = None, *, final: bool = False
+        ) -> Awaitable[None]:
             return self._settle(
-                org_res, res, model, task_class, usage, error, project_id=project_id, run_id=run_id
+                org_res, res, model, task_class, usage, error, project_id=project_id, run_id=run_id,
+                step_key=step_key, after_settle=hook if final and after_settle else None,
             )
 
         try:
@@ -143,7 +160,8 @@ class ModelGateway:
         except BaseException:
             await settle(None)
             raise
-        await settle(result.usage)
+        holder.append(result)
+        await settle(result.usage, final=True)
         return result
 
     async def stream(

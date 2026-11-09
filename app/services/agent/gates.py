@@ -39,10 +39,11 @@ from typing import Any
 from app.core import hook_gates
 from app.core.generator import InvalidSpecError, generate
 from app.core.spec_models import Spec
+from app.services.agent import gates_extra as gx
 from app.services.agent.contract import RuleFailure
 from app.services.dependency_policy_service import Pin, check_requirements, is_dependency_manifest
 
-GATE_ORDER = ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9")
+GATE_ORDER = ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12")
 MAX_FILES = 5_000
 MAX_FILE_BYTES = 1_048_576
 MAX_TOTAL_BYTES = 64 * 1_048_576
@@ -69,7 +70,8 @@ _ROUTE_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "op
 class GateReport:
     ok: bool
     failures: list[RuleFailure] = field(default_factory=list)
-    gates: dict[str, str] = field(default_factory=dict)  # "G0".."G9" -> pass | fail | skipped
+    gates: dict[str, str] = field(default_factory=dict)  # "G0".."G12" -> pass | fail | skipped
+    skipped: dict[str, str] = field(default_factory=dict)  # gate -> why it did not (fully) run; not in the hash
 
 
 def signature(failure: RuleFailure) -> str:
@@ -443,23 +445,52 @@ def run_gates(
     upto: str = "G8",
     public_routes: Iterable[tuple[str, str]] = DEFAULT_PUBLIC_ROUTES,
     max_seconds: float = MAX_SECONDS,
+    licence: bool = True,
+    static_analysis: bool = True,
+    strict_typing: bool = False,
 ) -> GateReport:
-    """G0-G7 (hook gates) and, when `upto` is G8, the security gate. Never executes project code."""
+    """G0-G7 (hook gates) and, when `upto` is G8, the security gate plus the extra gates G10-G12
+    (gates_extra). Never executes project code."""
     if upto not in ("G7", "G8"):
         raise ValueError("upto must be 'G7' or 'G8' (G9 is replay())")
     root = Path(root)
     tree = _scan_tree(root, time.monotonic() + max_seconds)
     failures, gates = _hook_gates(root, spec, tree)
-    for g in ("G8", "G9"):
+    for g in ("G8", "G9", *gx.EXTRA_GATES):
         gates[g] = "skipped"
+    skipped: dict[str, str] = {}
     if upto == "G8":
         g8 = _g8(root, spec, tree, tuple(approved_pins), frozenset(public_routes))
         failures += g8
         gates["G8"] = "fail" if g8 else "pass"
+        if not tree.hazard:
+            for ex in _extras(root, tree, licence, static_analysis, strict_typing):
+                failures += ex.failures
+                gates.update(ex.gates)
+                skipped.update(ex.skipped)
     elif tree.failures:
         failures += tree.failures
     ordered = _order(failures)
-    return GateReport(ok=not ordered, failures=ordered, gates=gates)
+    return GateReport(ok=not ordered, failures=ordered, gates=gates, skipped=skipped)
+
+
+def _extras(root: Path, tree: _Tree, licence: bool, static_analysis: bool, strict_typing: bool) -> list[gx.ExtraResult]:
+    zones_doc = _json(root, tree, hook_gates.ZONES_PATH) or {}
+    zones = {k: v for k, v in (zones_doc.get("zones") or {}).items() if isinstance(v, str)}
+    out: list[gx.ExtraResult] = []
+    if licence:
+        reqs: dict[str, str] = {}
+        for rel in sorted(tree.files):
+            name = rel.rsplit("/", 1)[-1]
+            if zones.get(rel) != "generated" and name.startswith("requirements") and name.endswith(".txt"):
+                raw = _read(root, rel, tree.files[rel])
+                if raw is not None:
+                    reqs[rel] = raw.decode("utf-8", "replace")
+        out.append(gx.licence_gate(reqs))
+    if static_analysis:
+        out.append(gx.static_gate(root, tree.files))
+    out.append(gx.typing_gate(root, tree.files, strict_typing))
+    return out
 
 
 def _write_clean(base: Path, files: dict[str, str]) -> None:
@@ -479,6 +510,9 @@ def replay(
     *,
     public_routes: Iterable[tuple[str, str]] = DEFAULT_PUBLIC_ROUTES,
     max_seconds: float = MAX_SECONDS,
+    licence: bool = True,
+    static_analysis: bool = True,
+    strict_typing: bool = False,
 ) -> GateReport:
     """G9: regenerate from the spec, compare every generated-zone file byte for byte with the worktree,
     then run G0-G8 on the clean copy (custom and seeded files copied from the worktree)."""
@@ -521,6 +555,7 @@ def replay(
                               "unexpected file", "remove it or move it into a custom zone"))
 
     gates = {g: "skipped" for g in GATE_ORDER}
+    skipped: dict[str, str] = {}
     with tempfile.TemporaryDirectory(prefix="bb-replay-") as tmp:
         clean = Path(tmp) / "clean"
         _write_clean(clean, files)
@@ -537,11 +572,13 @@ def replay(
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_bytes(raw)
             inner = run_gates(clean, spec, approved_pins=pins, upto="G8", public_routes=public_routes,
-                              max_seconds=max_seconds)
+                              max_seconds=max_seconds, licence=licence, static_analysis=static_analysis,
+                              strict_typing=strict_typing)
             failures += inner.failures
             gates.update(inner.gates)
+            skipped.update(inner.skipped)
         shutil.rmtree(clean, ignore_errors=True)
     ordered = _order(failures)
     mismatch = any(f.rule_id == "replay_mismatch" for f in ordered)
     gates["G9"] = "fail" if mismatch else "pass"
-    return GateReport(ok=not ordered, failures=ordered, gates=gates)
+    return GateReport(ok=not ordered, failures=ordered, gates=gates, skipped=skipped)

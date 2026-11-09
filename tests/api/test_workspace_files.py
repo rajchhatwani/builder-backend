@@ -231,3 +231,15 @@ async def test_cache_dir_file_is_not_editable_but_still_in_the_content_hash(clie
     assert (wt / rel).read_text() == "a = 1\n"
     (wt / rel).write_text("a = 3\n")  # a change made outside the API
     assert await content_hash(str(wt)) != h1
+
+
+async def test_nul_content_is_rejected_and_file_stays_writable(
+    client: AsyncClient, ws_settings: Settings
+) -> None:
+    pid, base, wt = await _mk(client, ws_settings)
+    body = {"path": CUSTOM, "content": "a\x00b", "expected_sha256": _sha("print('v1')\n")}
+    r = await client.put(f"{base}/files/content", json=body)
+    assert r.status_code in (415, 422)  # the request schema or the service refuses it
+    assert (wt / CUSTOM).read_text() == "print('v1')\n"
+    ok = await client.put(f"{base}/files/content", json={**body, "content": "print('v2')\n"})
+    assert ok.status_code == 200

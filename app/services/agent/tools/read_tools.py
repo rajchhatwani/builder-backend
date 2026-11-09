@@ -1,13 +1,17 @@
 """Class R: read-only tools. Project content is returned wrapped as untrusted data."""
 
 import asyncio
+import hashlib
+import os
+import uuid
 from pathlib import Path
 from typing import Any
 
 from sqlalchemy import select
 
+from app.core import naming
 from app.core.generator.engine import module_registry
-from app.core.spec_models import Spec
+from app.core.spec_models import Spec, spec_hash as spec_digest
 from app.services.agent.contract import PermissionClass, Tool, ToolContext, ToolResult
 from app.services.agent.draft import run_spec
 from app.services.ops.registry import SECTIONS, section_adapter
@@ -79,7 +83,81 @@ async def read_file(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
     return ToolResult(ok=True, data={"path": rel, "truncated": truncated, "note": NOTE, "untrusted_data": text})
 
 
+def authoring_guide() -> dict[str, Any]:
+    """FX-9: the shapes the first real run had to guess (hook item, state-machine transition,
+    plural_path), built from the live validation constants so it cannot drift from the validator."""
+    from app.core.validation_hooks import POINT_RE
+
+    return {
+        "plan_ahead": (
+            "List EVERYTHING you will touch in the plan: every entity, every hook name, and a hook for "
+            "each transition guard or validation. Anything outside the plan costs a human approval round "
+            "trip."
+        ),
+        "entity": {
+            "name": f"PascalCase, pattern {naming.ENTITY_NAME_RE.pattern}",
+            "plural_path": f"snake_case URL segment, pattern {naming.SNAKE_NAME_RE.pattern}; unique per "
+                           f"project; not one of {sorted(naming.RESERVED_PATHS)}",
+            "table_name": f"snake_case, pattern {naming.SNAKE_NAME_RE.pattern}",
+            "example": {"name": "LeaveRequest", "table_name": "leave_requests", "plural_path": "leave_requests",
+                        "fields": [{"name": "status", "type": "enum", "required": True,
+                                    "enum_values": ["pending", "approved", "rejected"]}]},
+        },  # fmt: skip
+        "state_machine": {
+            "note": "set_section('state_machines', items). `field` must be a required enum field of the "
+                    "entity; `initial` and every state must be one of its enum_values.",
+            "example": {
+                "entity": "LeaveRequest", "field": "status", "initial": "pending",
+                "transitions": [
+                    {"name": "approve", "from_states": ["pending"], "to_state": "approved",
+                     "roles": ["manager"], "when": None, "auto": False},
+                ],
+            },
+        },  # fmt: skip
+        "hook": {
+            "note": "set_section('hooks', items). Then write the body with replace_function_body.",
+            "point_pattern": POINT_RE.pattern,
+            "point_examples": ["LeaveRequest.validate", "LeaveRequest.before_save",
+                               "LeaveRequest.transition_guard(approve)"],  # fmt: skip
+            "kind": ["pure", "effect"],
+            "field_types": ["string", "int", "float", "decimal", "bool", "date", "datetime", "uuid"],
+            "example": {
+                "name": "check_dates", "point": "LeaveRequest.validate", "kind": "pure",
+                "input": {"name": "CheckDatesInput", "fields": [
+                    {"name": "start_date", "type": "date", "required": True},
+                    {"name": "end_date", "type": "date", "required": True}]},
+                "output": {"name": "CheckDatesOutput", "fields": [
+                    {"name": "ok", "type": "bool", "required": True},
+                    {"name": "message", "type": "string", "required": False}]},
+            },
+        },  # fmt: skip
+        "more": "get_block_schema(<section>) returns the full item schema of any section.",
+    }
+
+
+async def get_authoring_guide(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
+    return ToolResult(ok=True, data=authoring_guide())
+
+
 GATE_FAILURE_CAP = 50
+_REPORT_CACHE: dict[uuid.UUID, tuple[str, dict[str, Any]]] = {}  # run id -> (input key, report); last one only
+_REPORT_CACHE_MAX = 64
+
+
+def _tree_key(root: Path, spec_digest: str, pins: list[Any]) -> str:
+    """Hash of every file of the worktree (path, size, mtime_ns) + the draft spec + the approved pins."""
+    h = hashlib.sha256(spec_digest.encode())
+    h.update(repr(sorted((p, v, tuple(hs or ())) for p, v, hs in pins)).encode())
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = sorted(d for d in dirnames if d != ".git")
+        for name in sorted(filenames):
+            full = os.path.join(dirpath, name)
+            try:
+                st = os.lstat(full)
+            except OSError:
+                continue
+            h.update(f"{os.path.relpath(full, root)}\0{st.st_size}\0{st.st_mtime_ns}\n".encode("utf-8", "replace"))
+    return h.hexdigest()
 LOG_LINES = 100
 LOG_CHARS = 6_000
 
@@ -99,17 +177,32 @@ async def last_gate_report(ctx: ToolContext) -> dict[str, Any]:
         (r.package, r.version, r.hashes)
         for r in await DependencyPolicyService(ctx.session).approved_pins(ctx.project_id)
     ]
-    first = await asyncio.to_thread(gate_lib.run_gates, root, spec, approved_pins=pins)
-    second = await asyncio.to_thread(gate_lib.replay, root, spec, pins)
+    # Same tree + same draft spec + same pins = same report: reuse it instead of recomputing (the
+    # gates are deterministic and pure). The cache holds the last result of each run only.
+    key = await asyncio.to_thread(_tree_key, root, spec_digest(spec), pins)
+    cached = _REPORT_CACHE.get(ctx.run_id)
+    if cached is not None and cached[0] == key:
+        return {**cached[1], "cached": True}
+    cfg = ctx.settings
+    lic, sta, typ = cfg.agent_gate_licence, cfg.agent_gate_static_analysis, cfg.agent_gate_strict_typing
+    first = await asyncio.to_thread(
+        lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta, strict_typing=typ))
+    second = await asyncio.to_thread(
+        lambda: gate_lib.replay(root, spec, pins, licence=lic, static_analysis=sta, strict_typing=typ))
     failures = [*first.failures, *second.failures]
     report = gate_lib.GateReport(ok=not failures, failures=failures, gates=first.gates)
-    return {
+    out = {
         "ok": report.ok,
         "gates": dict(sorted(report.gates.items())),
+        "skipped": dict(sorted({**first.skipped, **second.skipped}.items())),  # gate -> why it did not run
         "failure_count": len(failures),
         "failures": [f.as_dict() for f in failures[:GATE_FAILURE_CAP]],
         "report_hash": gate_lib.report_hash(report),
     }
+    if len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:
+        _REPORT_CACHE.pop(next(iter(_REPORT_CACHE)))
+    _REPORT_CACHE[ctx.run_id] = (key, out)
+    return out
 
 
 async def read_gate_report(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
@@ -172,7 +265,13 @@ TOOLS: list[Tool] = [
         R,
         read_file,
     ),
-    Tool("read_gate_report", "The last gate report of this run.", _s({}, []), R, read_gate_report),
+    Tool(
+        "get_authoring_guide",
+        "Shapes you need before planning or writing: entity naming and plural_path pattern, state-machine "
+        "transition shape, hook item and point pattern, with valid examples. Call it first.",
+        _s({}, []), R, get_authoring_guide,
+    ),
+    Tool("read_gate_report", "The gate report of the draft as it is now (reused while nothing changed).", _s({}, []), R, read_gate_report),
     Tool("read_app_logs", "Tail of the preview application log.", _s({}, []), R, read_app_logs),
 ]
 SCOPES: dict[str, Any] = {}

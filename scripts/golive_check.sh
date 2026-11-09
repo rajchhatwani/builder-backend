@@ -47,6 +47,6 @@ s=get_settings()
 w = bool(s.public_api_url) and not s.public_api_url.startswith(('http://localhost','http://127.')) and not s.trust_proxy_headers
 print('WARN' if w else 'ok')"); if echo "$out" | tail -1 | grep -q WARN; then
   echo "WARN  P4 proxy headers  public_api_url is set but trust_proxy_headers=false: behind a reverse proxy all preview visitors share one rate bucket (set BUILDER_TRUST_PROXY_HEADERS=true if the proxy sets X-Forwarded-For)"; fi
-echo "NOTE  P2 firewall covers bridges that exist when applied; after new preview networks run: sudo scripts/sandbox_firewall.sh reapply --yes (atomic, no gap)"
+echo "NOTE  P2 firewall matches the sandbox subnet pool (SANDBOX_SUBNET_POOL, default 172.30.0.0/16) by range: later preview networks need no reapply; re-run sandbox_hostile_check.sh after apply"
 echo "--- $fails FAIL"
 [ "$fails" = 0 ]

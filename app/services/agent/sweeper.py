@@ -9,14 +9,14 @@ and then every `agent_sweep_interval_seconds` (started from the app lifespan).
 import asyncio
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings
 from app.exceptions import AppError
-from app.models.agent import AiApproval, AiRun
+from app.models.agent import AiApproval, AiRun, AiStep
 from app.models.project import Project
 from app.services.behavior_service import system_actor
 from app.services.agent.run_service import AgentDeps, RunDriver, get_agent_deps
@@ -40,6 +40,7 @@ async def sweep_once(
                     select(AiRun.id)
                     .where(
                         AiRun.state.in_(SWEEP_STATES),
+                        AiRun.paused_at.is_(None),  # G3: a paused run waits for a human
                         or_(AiRun.lease_until.is_(None), AiRun.lease_until < now),
                     )
                     .order_by(AiRun.updated_at)
@@ -48,6 +49,7 @@ async def sweep_once(
             ).scalars()
         )
     await _expire_abandoned(factory, now)
+    await retry_promotions(factory, deps, settings)
     taken: list[uuid.UUID] = []
     for rid in ids:
         async with factory() as s:
@@ -76,6 +78,62 @@ async def sweep_once(
             except Exception:  # noqa: BLE001 - one bad run never stops the sweep
                 log.exception("agent run recovery crashed", extra={"run_id": str(rid)})
     return taken
+
+
+async def retry_promotions(
+    factory: async_sessionmaker[AsyncSession], deps: AgentDeps, settings: Settings, *, min_age_seconds: int = 60
+) -> list[uuid.UUID]:
+    """FX-3 / B-004: an `applied` run whose custom code is still `pending` (the process died, or git
+    failed, between the spec apply and the commit to main) gets its stored files committed now.
+    `promote_files` is idempotent, so a retry of a half-done promotion is safe. After
+    MAX_PROMOTION_ATTEMPTS the promotion is marked failed (loudly) and left to a human."""
+    from app.services.agent import promote as promote_lib
+    from app.services.agent.run_service import mark_promotion
+
+    done: list[uuid.UUID] = []
+    async with factory() as s:
+        ids = list(
+            (
+                await s.execute(
+                    select(AiRun.id)
+                    .where(AiRun.state == "applied", AiRun.promotion["state"].astext == "pending",
+                           AiRun.finished_at < datetime.now(UTC) - timedelta(seconds=min_age_seconds))
+                    .order_by(AiRun.updated_at)
+                    .limit(settings.agent_sweep_max_runs)
+                )
+            ).scalars()
+        )
+    for rid in ids:
+        async with factory() as s:
+            run = await s.get(AiRun, rid)
+            doc = run.promotion if run is not None else None
+            files = promote_lib.decode(doc)
+            if run is None or not isinstance(doc, dict):
+                continue
+            attempts = int(doc.get("attempts") or 0) + 1
+            if files is None:
+                await mark_promotion(s, rid, "failed", [], attempts=attempts)
+                continue
+            top = (await s.execute(select(func.max(AiStep.seq)).where(AiStep.run_id == rid))).scalar_one()
+            try:
+                out = await deps.approvals.promote(run, files)
+                s.add(AiStep(run_id=rid, project_id=run.project_id, seq=int(top or 0) + 1, kind="system",
+                             output={"promotion": out, "retried": attempts}))
+                await s.commit()
+                await mark_promotion(s, rid, "done", sorted(files), attempts=attempts)
+                done.append(rid)
+            except Exception as exc:  # noqa: BLE001 - one bad run never stops the sweep
+                await s.rollback()
+                log.error("promotion retry failed for run %s: %s", rid, type(exc).__name__)
+                final = attempts >= promote_lib.MAX_PROMOTION_ATTEMPTS
+                run = await s.get(AiRun, rid)
+                if run is not None:
+                    s.add(AiStep(run_id=rid, project_id=run.project_id, seq=int(top or 0) + 1, kind="system",
+                                 ok=False, output={"promotion_failed": str(getattr(exc, "code", type(exc).__name__)),
+                                                   "retried": attempts, "gave_up": final}))
+                    run.promotion = {**doc, "attempts": attempts, **({"state": "failed"} if final else {})}
+                    await s.commit()
+    return done
 
 
 async def _expire_abandoned(factory: async_sessionmaker[AsyncSession], now: datetime) -> list[uuid.UUID]:

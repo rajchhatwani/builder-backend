@@ -34,9 +34,9 @@ from app.services.agent.tools.registry import REGISTRY
 from tests.e2e.hooks_support import MATCH_BODY, example_spec
 
 GOLDEN = {
-    "plan": "58ec16b3aa6c65b644abd4ebe9c32870759d4003fc2671d6ea237e7e0e64908b",
-    "build": "3280589c3c04121aee27937df12807c280e0b359347874e9085fe951c152416c",
-    "apply": "9f45d282068f728439c1bc6522186c064c06cc40c10137738f30f57a30ab50ef",
+    "plan": "e34bbc1c8be5ff67a844667633030db8c78066e690c41a4002151f759e34e13d",
+    "build": "e6579d3a619e272e88eaa75b4f2ad6aabc3b33884b8d5119f5a8e3f1dd9c9315",
+    "apply": "643c142b0d3eeace3fba49c9d2283b0b911abac52c1c05f6c361cc7596c8f892",
 }  # pinned: changing any tool name, description or schema changes these on purpose
 
 PLAN = Plan(
@@ -571,10 +571,12 @@ async def test_run_gates_default_and_injected(wt: Path, monkeypatch: pytest.Monk
     assert r.failures[0].rule_id == "G9.x"
 
 
-async def test_unwired_x_tools_say_not_available() -> None:
+async def test_x_tools_are_wired_and_refuse_without_a_draft() -> None:
+    """FX-5: run_tests / start_preview / call_endpoint are real now (see test_agent_wpb.py); with no
+    worktree or preview they refuse with a typed reason, never `not_available`."""
     for tool, args in [("run_tests", {}), ("start_preview", {}), ("call_endpoint", {"method": "GET", "path": "/x"})]:
         r = await agent_tools.execute(make_ctx(), tool, args)
-        assert r.failures[0].rule_id == "not_available"
+        assert r.failures[0].rule_id in ("no_worktree", "no_preview")
 
 
 # -- SENTINEL batch: M1 M2 M3 L1 L2 ---------------------------------------------------------
@@ -706,4 +708,6 @@ def test_app_error_failure_shows_the_validation_issue_to_the_agent() -> None:
         details=[{"path": "entities[0].fields", "code": "x", "message": "needs a primary key"}],
     )
     assert "needs a primary key" in app_error_failure("add_entity", exc).actual
-    assert app_error_failure("t", AppError("c", "plain", 409)).actual == "plain"
+    assert json.loads(app_error_failure("t", AppError("c", "plain", 409)).actual) == {
+        "untrusted_text": "plain"
+    }

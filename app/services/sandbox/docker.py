@@ -17,6 +17,7 @@ import uuid
 from collections.abc import Collection
 
 from app.config import Settings, get_settings
+from app.services.sandbox import subnets
 from app.services.sandbox.base import (
     ENV_RE,
     ID_RE,
@@ -204,6 +205,8 @@ class DockerSandbox(Sandbox):
         self._allow_runc = s.environment_explicit and s.environment in ("local", "test")
         self._runtime_ok = False
         self.images = frozenset(s.sandbox_images)
+        self.subnet_prefix = s.sandbox_subnet_prefix
+        self.subnet_pool = subnets.parse_pool(s.sandbox_subnet_pool, s.sandbox_subnet_prefix)
 
     # -- docker CLI ------------------------------------------------------------------------
     def _assert_direct_allowed(self) -> None:
@@ -282,20 +285,39 @@ class DockerSandbox(Sandbox):
         if rc != 0 or internal != "true" or owner != sandbox_id:
             raise SandboxError("sandbox network must be an internal network owned by this sandbox")
 
+    async def _used_subnets(self) -> list[subnets.IPv4Net]:
+        """Every subnet any docker network on this host already uses (not only ours)."""
+        rc, out, _ = await self._docker("network", "ls", "-q")
+        ids = out.split() if rc == 0 else []
+        if not ids:
+            return []
+        rc, out, _ = await self._docker(
+            "network", "inspect", *ids, "--format", "{{range .IPAM.Config}}{{.Subnet}} {{end}}"
+        )
+        return subnets.parse_used(out.split()) if rc == 0 else []
+
     async def create_network(self, sandbox_id: str, limits: Limits | None = None) -> str:
-        """Create the --internal, labelled network for one sandbox id; returns its name."""
+        """Create the --internal, labelled network for one sandbox id on a block of the sandbox
+        subnet pool (firewall coverage by range); returns its name."""
         name = name_for(sandbox_id)
         expires = expiry_epoch(limits or Limits())
-        rc, _, err = await self._docker(
-            "network", "create", "--internal",
-            "--label", f"{LABEL}=1",
-            "--label", f"{LABEL_ID}={sandbox_id}",
-            "--label", f"{LABEL_EXPIRES}={expires}",
-            name,
-        )  # fmt: skip
-        if rc != 0:
-            raise SandboxError(f"could not create sandbox network: {err.strip()[:200]}")
-        return name
+        err = ""
+        for _attempt in range(6):  # a concurrent creator may take the same block: docker refuses
+            subnet = subnets.pick_subnet(
+                self.subnet_pool, self.subnet_prefix, await self._used_subnets()
+            )
+            rc, _, err = await self._docker(
+                "network", "create", "--internal", "--subnet", subnet,
+                "--label", f"{LABEL}=1",
+                "--label", f"{LABEL_ID}={sandbox_id}",
+                "--label", f"{LABEL_EXPIRES}={expires}",
+                name,
+            )  # fmt: skip
+            if rc == 0:
+                return name
+            if "overlap" not in err.lower() and "pool" not in err.lower():
+                break
+        raise SandboxError(f"could not create sandbox network: {err.strip()[:200]}")
 
     # -- lifecycle -------------------------------------------------------------------------
     async def start(self, spec: SandboxSpec) -> str:

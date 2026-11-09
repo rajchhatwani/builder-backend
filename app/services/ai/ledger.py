@@ -3,6 +3,7 @@
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from sqlalchemy import func, select, text
@@ -195,11 +196,18 @@ class AiLedgerService:
         task_class: str,
         usage: Usage | None,
         charge_worst_case: bool = False,
+        step_key: str | None = None,
+        after_settle: Callable[[AsyncSession], Awaitable[None]] | None = None,
     ) -> None:
         """Release the hold and write the ledger row in ONE transaction.
 
         usage given: the real cost. usage None + charge_worst_case: outcome unknown, so the worst
         case is recorded (zero tokens). usage None otherwise: the call never reached the model.
+
+        step_key (B-009): a retried step carries the same key; a ledger row with that key is written
+        once (the retry's row is skipped, under the org row lock). after_settle runs inside this same
+        transaction with its session, so the caller's own write (the model step) commits or rolls
+        back together with the ledger row.
         """
         async with self._maker()() as s, s.begin():
             await self._lock_org(s, res.org_id)
@@ -214,20 +222,30 @@ class AiLedgerService:
                 u, cost = Usage(0, 0), res.micro_usd
             else:
                 return
-            s.add(
-                AiCostLedger(
-                    organization_id=res.org_id,
-                    project_id=project_id,
-                    run_id=run_id,
-                    model=model,
-                    task_class=task_class,
-                    input_tokens=u.input_tokens,
-                    output_tokens=u.output_tokens,
-                    cache_read_tokens=u.cache_read_tokens,
-                    cache_write_tokens=u.cache_write_tokens,
-                    cost_micro_usd=cost,
+            dup = step_key is not None and (
+                await s.execute(
+                    select(AiCostLedger.id).where(AiCostLedger.step_key == step_key).limit(1)
                 )
-            )
+            ).first() is not None
+            if not dup:
+                s.add(
+                    AiCostLedger(
+                        step_key=step_key,
+                        organization_id=res.org_id,
+                        project_id=project_id,
+                        run_id=run_id,
+                        model=model,
+                        task_class=task_class,
+                        input_tokens=u.input_tokens,
+                        output_tokens=u.output_tokens,
+                        cache_read_tokens=u.cache_read_tokens,
+                        cache_write_tokens=u.cache_write_tokens,
+                        cost_micro_usd=cost,
+                    )
+                )
+            if after_settle is not None:
+                await s.flush()
+                await after_settle(s)
 
     async def record(
         self,

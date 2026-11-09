@@ -9,6 +9,9 @@
 #   host ports, e.g. the API/DB), the docker bridge gateway, and the other sandbox's IP.
 # Prints PASS (unreachable: no route / timeout) or FAIL (reachable, including connection refused,
 # which proves the packet reached the host) per target; exit code 1 if ANY target is reachable.
+# Networks are created on a free /28 of the dedicated pool (env SANDBOX_SUBNET_POOL, default
+# 172.30.0.0/16, the same value the firewall and Settings.sandbox_subnet_pool use), exactly like the
+# platform does, AFTER the firewall was applied: so a PASS proves range coverage with no `reapply`.
 # Run it before and after scripts/sandbox_firewall.sh apply to see which layer blocks what.
 set -uo pipefail
 
@@ -27,8 +30,26 @@ cleanup() {
 trap cleanup EXIT
 SEC=(--runtime "$RUNTIME" --pull never --read-only --cap-drop ALL --security-opt no-new-privileges --user 10001:10001 "${LAB[@]}")
 
-"$DOCKER" network create --internal "${LAB[@]}" --label "bb.sandbox.id=$A" "$NETA" >/dev/null || exit 3
-"$DOCKER" network create --internal "${LAB[@]}" --label "bb.sandbox.id=$B" "$NETB" >/dev/null || exit 3
+POOL=${SANDBOX_SUBNET_POOL:-172.30.0.0/16}
+pick_subnet() {  # a random free /28 of the pool (python3 on the host; same logic as app.services.sandbox.subnets)
+  "$DOCKER" network ls -q | xargs -r "$DOCKER" network inspect --format '{{range .IPAM.Config}}{{.Subnet}} {{end}}' 2>/dev/null |
+    python3 -I -c '
+import ipaddress, random, sys
+pool = ipaddress.ip_network(sys.argv[1]); blocks = list(pool.subnets(new_prefix=28))
+used = []
+for w in sys.stdin.read().split():
+    try: used.append(ipaddress.ip_network(w, strict=False))
+    except ValueError: pass
+random.shuffle(blocks)
+for b in blocks:
+    if not any(b.overlaps(u) for u in used): print(b); break
+else: sys.exit(1)' "$POOL"
+}
+SUBA=$(pick_subnet) || { echo "no free subnet in $POOL" >&2; exit 3; }
+"$DOCKER" network create --internal --subnet "$SUBA" "${LAB[@]}" --label "bb.sandbox.id=$A" "$NETA" >/dev/null || exit 3
+SUBB=$(pick_subnet) || { echo "no free subnet in $POOL" >&2; exit 3; }
+"$DOCKER" network create --internal --subnet "$SUBB" "${LAB[@]}" --label "bb.sandbox.id=$B" "$NETB" >/dev/null || exit 3
+echo "networks: $NETA=$SUBA $NETB=$SUBB (pool $POOL)"
 "$DOCKER" run -d --name "bbsbx-$B" --network "$NETB" "${SEC[@]}" --label "bb.sandbox.id=$B" "$IMAGE" python -c "import time; time.sleep(300)" >/dev/null || exit 3
 VICTIM=$("$DOCKER" inspect -f "{{(index .NetworkSettings.Networks \"$NETB\").IPAddress}}" "bbsbx-$B")
 GW=$("$DOCKER" network inspect -f '{{(index .IPAM.Config 0).Gateway}}' "$NETA")

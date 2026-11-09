@@ -19,6 +19,7 @@ from app.core.generator.zones import zone_for
 from app.exceptions import AppError
 from app.models.agent import AiRun
 from app.models.enums import AuditResult
+from app.models.project import Project
 from app.models.workspace import Workspace
 from app.schemas.workspace_files import (
     MAX_FILE_BYTES,
@@ -152,7 +153,10 @@ def _write_sync(wt: Path, rel: str, content: str, expected: str) -> str:
             raise AppError("file_changed", "the file changed since it was opened", 409)
         if "\x00" in content:
             raise AppError("file_not_text", "the content contains a NUL byte", 415)
-        data = content.encode("utf-8")
+        try:
+            data = content.encode("utf-8")
+        except UnicodeEncodeError:
+            raise AppError("file_not_text", "the content is not valid utf-8 text", 415) from None
         if len(data) > MAX_FILE_BYTES:
             raise AppError("file_too_large", "the content is larger than 256 KB", 413)
         tmp = f".wsedit-{uuid.uuid4().hex}"
@@ -214,6 +218,11 @@ class WorkspaceFileService:
         client_ip: str | None,
         request_id: str | None,
     ) -> WorkspaceFileRead:
+        if "\x00" in content:  # L5: rejected before anything is locked or read
+            raise AppError("file_not_text", "the content contains a NUL byte", 415)
+        # L6/L5: the same project row lock run creation takes, so a run cannot start between the
+        # busy check below and the write (both then commit/rollback serialised on this row).
+        await self.session.execute(select(Project.id).where(Project.id == project_id).with_for_update())
         wt = await self._worktree(project_id, ws_id, lock=True)  # row lock held until commit
         zone = zone_for(path)
         if zone != "custom" or any(part in hook_gates.SKIP_DIRS for part in path.split("/")):
