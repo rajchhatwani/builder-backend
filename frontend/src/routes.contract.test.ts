@@ -47,6 +47,8 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/seed`, { page: 'project', projectId: PID, section: 'seed' }],
   // Added by F1-3 (addition, no existing row changed): the v2-only Rules (expression checker) page.
   [`#/p/${PID}/rules`, { page: 'project', projectId: PID, section: 'rules' }],
+  // Added by F4-4 (addition): the v2-only Access matrix page (the id 'access' already means the classic Authorization panel).
+  [`#/p/${PID}/permissions`, { page: 'project', projectId: PID, section: 'permissions' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
   // Added by F2-4 (addition): the v2-only History timeline page.
   [`#/p/${PID}/timeline`, { page: 'project', projectId: PID, section: 'timeline' }],

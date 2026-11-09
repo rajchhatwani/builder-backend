@@ -13,6 +13,7 @@ from typing import Any
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_layers import weakens as access_weakens
 from app.core.validation import ValidationIssue, validate
 from app.exceptions import AppError
 from app.models.platform import PlatformUser
@@ -36,6 +37,16 @@ def _issue_key(i: ValidationIssue) -> tuple[str, str, str]:
 
 def _err(code: str, message: str, status: int = 409) -> AppError:
     return AppError(code=code, message=message, status_code=status)
+
+
+def _access_weakened(gained: list[dict[str, Any]]) -> AppError:
+    return AppError(
+        code="access_weakened",
+        message=f"this edit gives {len({c['role'] for c in gained})} role(s) more access; "
+        "review the access diff and repeat with confirm_weakening",
+        status_code=409,
+        details=gained[:100],
+    )
 
 
 class OpsService:
@@ -80,12 +91,24 @@ class OpsService:
         actor: Actor,
         *,
         validate_result: bool = True,
+        confirm_weakening: bool = False,
     ) -> Applied:
         """Apply one typed operation. With `validate_result` the operation is rejected (422,
-        nothing recorded) when it leaves the spec with a validation issue it did not have."""
+        nothing recorded) when it leaves the spec with a validation issue it did not have.
+        An edit that gives some role more access (access layers, C7) is refused with 409
+        `access_weakened` (diff in details) unless `confirm_weakening` is set."""
 
         async def body(scope: OpScope) -> Applied:
-            return await self._run(scope, op_type, payload, actor, "do", None, validate_result)
+            return await self._run(
+                scope,
+                op_type,
+                payload,
+                actor,
+                "do",
+                None,
+                validate_result,
+                check_access=not confirm_weakening,
+            )
 
         applied: Applied = await self._transaction(project_id, actor, body)
         return applied
@@ -137,6 +160,7 @@ class OpsService:
         validate_result: bool,
         expect_before: str | None = None,
         expect_after: str | None = None,
+        check_access: bool = False,
     ) -> Applied:
         before = await scope.assemble()
         h_before = canonical_hash(before)
@@ -146,6 +170,10 @@ class OpsService:
                 "the spec changed outside the op-log since that operation; refusing to guess",
             )
         planned: Planned = plan(before, op_type, payload)
+        if check_access:
+            gained = access_weakens(before, planned.after)
+            if gained:
+                raise _access_weakened(gained)
         result = await dbapply.run(self.session, scope.project_id, op_type, planned.payload)
         await self.session.flush()
         after = await scope.assemble()
@@ -205,7 +233,9 @@ class OpsService:
                 redo.clear()
         return undo, redo
 
-    async def undo(self, project_id: uuid.UUID, actor: Actor) -> Applied:
+    async def undo(
+        self, project_id: uuid.UUID, actor: Actor, *, confirm_weakening: bool = False
+    ) -> Applied:
         async def body(scope: OpScope) -> Applied:
             rows = await self._rows(project_id)
             undo, _ = self.stacks(rows)
@@ -216,12 +246,15 @@ class OpsService:
             return await self._run(
                 scope, inv["op_type"], inv["payload"], actor, "undo", target.seq, False,
                 expect_before=target.spec_hash_after, expect_after=target.spec_hash_before,
+                check_access=not confirm_weakening,
             )  # fmt: skip
 
         applied: Applied = await self._transaction(project_id, actor, body)
         return applied
 
-    async def redo(self, project_id: uuid.UUID, actor: Actor) -> Applied:
+    async def redo(
+        self, project_id: uuid.UUID, actor: Actor, *, confirm_weakening: bool = False
+    ) -> Applied:
         async def body(scope: OpScope) -> Applied:
             rows = await self._rows(project_id)
             _, redo = self.stacks(rows)
@@ -231,12 +264,15 @@ class OpsService:
             return await self._run(
                 scope, target.op_type, target.payload, actor, "redo", target.seq, False,
                 expect_before=target.spec_hash_before, expect_after=target.spec_hash_after,
+                check_access=not confirm_weakening,
             )  # fmt: skip
 
         applied: Applied = await self._transaction(project_id, actor, body)
         return applied
 
-    async def restore(self, project_id: uuid.UUID, to_seq: int, actor: Actor) -> Applied:
+    async def restore(
+        self, project_id: uuid.UUID, to_seq: int, actor: Actor, *, confirm_weakening: bool = False
+    ) -> Applied:
         """Return the spec to the state right after op `to_seq` (0 = before the first op) by
         applying the recorded inverses newest-first, then check the exact recorded hash. The
         draft-only rule: this codebase has no locked or published spec state (a generation is an
@@ -265,6 +301,9 @@ class OpsService:
                 await dbapply.run(self.session, project_id, r.inverse["op_type"], model)
                 await self.session.flush()
             after = await scope.assemble()
+            gained = [] if confirm_weakening else access_weakens(before, after)
+            if gained:  # raising rolls the whole transaction back, the inverses included
+                raise _access_weakened(gained)
             if canonical_hash(after) != target_hash:
                 raise _err(
                     "restore_mismatch", "the restored spec does not match the recorded state"

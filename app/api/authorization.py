@@ -7,6 +7,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
 from app.schemas.authorization import (
+    AccessDiffRequest,
+    AccessDiffResponse,
+    AccessMatrixResponse,
     AuthorizationIssues,
     AuthorizationRead,
     AuthorizationWrite,
@@ -98,3 +101,27 @@ async def recommend_for_project(
 )
 async def recommend_model(project_id: uuid.UUID, body: RecommendRequest) -> RecommendResponse:
     return recommend(body)
+
+
+@router.get(
+    "/projects/{project_id}/access/matrix",
+    response_model=AccessMatrixResponse,
+    summary="Roles x object / field / row access, computed from the saved spec",
+)
+async def access_matrix(
+    project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
+) -> AccessMatrixResponse:
+    return await AuthorizationService(session).access_matrix(project_id)
+
+
+@router.post(
+    "/projects/{project_id}/access/diff",
+    response_model=AccessDiffResponse,
+    summary="Which roles gain or lose access if these rules replaced the saved ones (no writes)",
+)
+async def access_diff(
+    project_id: uuid.UUID,
+    body: AccessDiffRequest,
+    session: AsyncSession = Depends(get_session),
+) -> AccessDiffResponse:
+    return await AuthorizationService(session).access_diff(project_id, body)

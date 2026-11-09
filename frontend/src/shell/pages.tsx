@@ -31,6 +31,17 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'permissions',
+    label: 'Access matrix',
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="1.5" />
+        <path d="M4 10h16M4 15h16M10 4v16" />
+        <path d="M13 12.5l1.2 1.2 2.3-2.4" />
+      </>
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: (

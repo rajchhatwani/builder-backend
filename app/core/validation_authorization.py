@@ -132,6 +132,7 @@ def check_authorization(spec: Spec, entities: dict[str, SpecEntity], add: Add) -
     block = spec.authorization
     if block is None:
         return
+    check_field_access(spec, entities, add)
     valid_models = {m.value for m in AuthorizationModel}
     if block.model not in valid_models:
         add("authorization.model", "invalid_value", f"must be one of {sorted(valid_models)}")
@@ -176,6 +177,40 @@ def check_authorization(spec: Spec, entities: dict[str, SpecEntity], add: Add) -
         _check_policy(block.model, policy, i, entities, subject, seen, add)
 
     _check_attachments(block.model, block.attachments, block.policies, roles, add)
+
+
+def check_field_access(spec: Spec, entities: dict[str, SpecEntity], add: Add) -> None:
+    """Field layer rules: known entity + field, known roles, one rule per field, a rule that says
+    something, and sign-in switched on (a role rule means nothing without roles)."""
+    block = spec.authorization
+    if block is None or not block.field_access:
+        return
+    auth = spec.auth
+    if auth is None or not auth.enabled:
+        add(
+            "authorization.field_access",
+            "authz.needs_auth",
+            "field access rules are about roles, so sign-in must be switched on",
+        )
+        return
+    role_names = {r.name for r in auth.roles}
+    seen: set[tuple[str, str]] = set()
+    for i, rule in enumerate(block.field_access):
+        path = f"authorization.field_access[{i}]"
+        entity = entities.get(rule.entity)
+        if entity is None:
+            add(f"{path}.entity", "unknown_entity", f"no entity named {rule.entity[:40]!r}")
+        elif all(f.name != rule.field for f in entity.fields):
+            add(f"{path}.field", "unknown_field", f"{rule.entity} has no field {rule.field[:40]!r}")
+        if (rule.entity, rule.field) in seen:
+            add(path, "duplicate_name", "each field may have only one access rule")
+        seen.add((rule.entity, rule.field))
+        if rule.read_roles is None and rule.write_roles is None:
+            add(path, "required", "set read_roles, write_roles or both (a rule must restrict something)")
+        for key, roles in (("read_roles", rule.read_roles), ("write_roles", rule.write_roles)):
+            for role in roles or []:
+                if role not in role_names:
+                    add(f"{path}.{key}", "unknown_reference", f"role {role[:40]!r} does not exist")
 
 
 def _keycloak_roles(auth: SpecAuth) -> set[str]:

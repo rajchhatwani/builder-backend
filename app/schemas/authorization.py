@@ -23,14 +23,24 @@ class PolicyBody(BaseModel):
     when: dict[str, Any] | None = None
 
 
+class FieldAccessBody(BaseModel):
+    entity: str = Field(max_length=100)
+    field: str = Field(max_length=100)
+    read_roles: list[str] | None = Field(default=None, max_length=100)
+    write_roles: list[str] | None = Field(default=None, max_length=100)
+
+
 class AuthorizationWrite(BaseModel):
     """Body of PUT /projects/{id}/authorization (replaces the whole block)."""
 
     model: AuthorizationModel = AuthorizationModel.rbac
     policies: list[PolicyBody] = Field(default_factory=list, max_length=MAX_POLICIES + 50)
     attachments: dict[str, list[str]] = Field(default_factory=dict, max_length=200)
+    field_access: list[FieldAccessBody] = Field(default_factory=list, max_length=1000)
     # Optimistic concurrency: when set, the save fails with 409 if someone saved in between.
     expected_version: int | None = Field(default=None, ge=0)
+    # Required when the new block gives some role more access than the saved one (else 409).
+    confirm_weakening: bool = False
 
 
 class AuthorizationRead(BaseModel):
@@ -40,6 +50,7 @@ class AuthorizationRead(BaseModel):
     model: AuthorizationModel
     policies: list[PolicyBody]
     attachments: dict[str, list[str]]
+    field_access: list[FieldAccessBody] = Field(default_factory=list)
     version: int  # 0 = nothing saved yet (the project uses rbac)
     updated_at: datetime | None = None
 
@@ -89,3 +100,54 @@ class RecommendResponse(BaseModel):
     reasons: list[str]
     cautions: list[str]
     alternatives: list[str]
+
+
+class AccessPermissionBody(BaseModel):
+    """One (entity, operation) slot of the object/row layers, by entity NAME (like the spec)."""
+
+    entity: str = Field(max_length=100)
+    operation: str = Field(max_length=20)
+    roles: list[str] = Field(default_factory=list, max_length=100)
+    row_rule: str | None = Field(default=None, max_length=20)
+    custom_filter_field: str | None = Field(default=None, max_length=100)
+    custom_filter_value: str | None = Field(default=None, max_length=500)
+
+
+class AccessDiffRequest(BaseModel):
+    """A proposed change to the access rules. A key left out (null) keeps the saved value; a list
+    (even an empty one) REPLACES the saved list of that layer."""
+
+    permissions: list[AccessPermissionBody] | None = Field(default=None, max_length=1000)
+    field_access: list[FieldAccessBody] | None = Field(default=None, max_length=1000)
+
+
+class AccessCell(BaseModel):
+    layer: str
+    entity: str
+    target: str
+    role: str
+    value: str
+
+
+class AccessMatrixResponse(BaseModel):
+    roles: list[str]
+    entities: list[str]
+    cells: list[AccessCell]
+
+
+class AccessChange(BaseModel):
+    layer: str
+    entity: str
+    target: str
+    role: str
+    before: str | None
+    after: str | None
+    effect: str  # gain | lose | change | added | removed
+
+
+class AccessDiffResponse(BaseModel):
+    changes: list[AccessChange]
+    roles_gaining: dict[str, list[str]]
+    roles_losing: dict[str, list[str]]
+    weakens: bool  # true = some role gains access: applying needs an explicit confirmation
+    counts: dict[str, int]

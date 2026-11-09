@@ -11,6 +11,8 @@ class SpecOpApply(BaseModel):
 
     op_type: str = Field(min_length=1, max_length=40)
     payload: dict[str, Any] = Field(default_factory=dict)
+    # Set after reviewing the access diff when the edit gives a role more access (else 409).
+    confirm_weakening: bool = False
 
 
 class SpecRestore(BaseModel):

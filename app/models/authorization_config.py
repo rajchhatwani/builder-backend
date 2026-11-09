@@ -28,4 +28,8 @@ class ProjectAuthorization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     model: Mapped[str] = mapped_column(String(8), nullable=False, default="rbac")
     policies: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
     attachments: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+    # SpecFieldAccess dicts: field-level read/write rules (access layers, C7).
+    field_access: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list, server_default="[]"
+    )
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)

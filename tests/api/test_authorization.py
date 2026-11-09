@@ -171,7 +171,7 @@ async def test_switching_a_project_that_has_role_permissions_is_reported(
     assert permissions.status_code == 200, permissions.text
     policy = {"id": "all", "effect": "allow", "actions": ["*"], "when": None}
     saved = await client.put(
-        f"/projects/{project_id}/authorization", json={"model": "abac", "policies": [policy]}
+        f"/projects/{project_id}/authorization", json={"model": "abac", "policies": [policy], "confirm_weakening": True}
     )
     assert saved.status_code == 200
     issues = (await client.get(f"/projects/{project_id}/authorization/issues")).json()["issues"]

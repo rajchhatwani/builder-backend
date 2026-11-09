@@ -1,6 +1,281 @@
 {
  "components": {
   "schemas": {
+   "AccessCell": {
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "layer": {
+      "title": "Layer",
+      "type": "string"
+     },
+     "role": {
+      "title": "Role",
+      "type": "string"
+     },
+     "target": {
+      "title": "Target",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "layer",
+     "entity",
+     "target",
+     "role",
+     "value"
+    ],
+    "title": "AccessCell",
+    "type": "object"
+   },
+   "AccessChange": {
+    "properties": {
+     "after": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "After"
+     },
+     "before": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Before"
+     },
+     "effect": {
+      "title": "Effect",
+      "type": "string"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "layer": {
+      "title": "Layer",
+      "type": "string"
+     },
+     "role": {
+      "title": "Role",
+      "type": "string"
+     },
+     "target": {
+      "title": "Target",
+      "type": "string"
+     }
+    },
+    "required": [
+     "layer",
+     "entity",
+     "target",
+     "role",
+     "before",
+     "after",
+     "effect"
+    ],
+    "title": "AccessChange",
+    "type": "object"
+   },
+   "AccessDiffRequest": {
+    "description": "A proposed change to the access rules. A key left out (null) keeps the saved value; a list\n(even an empty one) REPLACES the saved list of that layer.",
+    "properties": {
+     "field_access": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/FieldAccessBody"
+        },
+        "maxItems": 1000,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Field Access"
+     },
+     "permissions": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/AccessPermissionBody"
+        },
+        "maxItems": 1000,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Permissions"
+     }
+    },
+    "title": "AccessDiffRequest",
+    "type": "object"
+   },
+   "AccessDiffResponse": {
+    "properties": {
+     "changes": {
+      "items": {
+       "$ref": "#/components/schemas/AccessChange"
+      },
+      "title": "Changes",
+      "type": "array"
+     },
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "roles_gaining": {
+      "additionalProperties": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "title": "Roles Gaining",
+      "type": "object"
+     },
+     "roles_losing": {
+      "additionalProperties": {
+       "items": {
+        "type": "string"
+       },
+       "type": "array"
+      },
+      "title": "Roles Losing",
+      "type": "object"
+     },
+     "weakens": {
+      "title": "Weakens",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "changes",
+     "roles_gaining",
+     "roles_losing",
+     "weakens",
+     "counts"
+    ],
+    "title": "AccessDiffResponse",
+    "type": "object"
+   },
+   "AccessMatrixResponse": {
+    "properties": {
+     "cells": {
+      "items": {
+       "$ref": "#/components/schemas/AccessCell"
+      },
+      "title": "Cells",
+      "type": "array"
+     },
+     "entities": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Entities",
+      "type": "array"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "required": [
+     "roles",
+     "entities",
+     "cells"
+    ],
+    "title": "AccessMatrixResponse",
+    "type": "object"
+   },
+   "AccessPermissionBody": {
+    "description": "One (entity, operation) slot of the object/row layers, by entity NAME (like the spec).",
+    "properties": {
+     "custom_filter_field": {
+      "anyOf": [
+       {
+        "maxLength": 100,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Custom Filter Field"
+     },
+     "custom_filter_value": {
+      "anyOf": [
+       {
+        "maxLength": 500,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Custom Filter Value"
+     },
+     "entity": {
+      "maxLength": 100,
+      "title": "Entity",
+      "type": "string"
+     },
+     "operation": {
+      "maxLength": 20,
+      "title": "Operation",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Roles",
+      "type": "array"
+     },
+     "row_rule": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Row Rule"
+     }
+    },
+    "required": [
+     "entity",
+     "operation"
+    ],
+    "title": "AccessPermissionBody",
+    "type": "object"
+   },
    "AccountStatus": {
     "enum": [
      "active",
@@ -3274,6 +3549,13 @@
       "title": "Attachments",
       "type": "object"
      },
+     "field_access": {
+      "items": {
+       "$ref": "#/components/schemas/FieldAccessBody"
+      },
+      "title": "Field Access",
+      "type": "array"
+     },
      "model": {
       "$ref": "#/components/schemas/AuthorizationModel"
      },
@@ -3330,6 +3612,11 @@
       "title": "Attachments",
       "type": "object"
      },
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "expected_version": {
       "anyOf": [
        {
@@ -3341,6 +3628,14 @@
        }
       ],
       "title": "Expected Version"
+     },
+     "field_access": {
+      "items": {
+       "$ref": "#/components/schemas/FieldAccessBody"
+      },
+      "maxItems": 1000,
+      "title": "Field Access",
+      "type": "array"
      },
      "model": {
       "$ref": "#/components/schemas/AuthorizationModel",
@@ -4931,6 +5226,56 @@
      "nullable"
     ],
     "title": "ExpressionField",
+    "type": "object"
+   },
+   "FieldAccessBody": {
+    "properties": {
+     "entity": {
+      "maxLength": 100,
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "maxLength": 100,
+      "title": "Field",
+      "type": "string"
+     },
+     "read_roles": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 100,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Read Roles"
+     },
+     "write_roles": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 100,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Write Roles"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "FieldAccessBody",
     "type": "object"
    },
    "FieldCreate": {
@@ -15545,6 +15890,13 @@
       "title": "Attachments",
       "type": "object"
      },
+     "field_access": {
+      "items": {
+       "$ref": "#/components/schemas/SpecFieldAccess"
+      },
+      "title": "Field Access",
+      "type": "array"
+     },
      "model": {
       "default": "rbac",
       "title": "Model",
@@ -15972,6 +16324,54 @@
      "type"
     ],
     "title": "SpecField",
+    "type": "object"
+   },
+   "SpecFieldAccess": {
+    "additionalProperties": false,
+    "description": "Field layer of the access model (C7): who may read or write ONE field of an entity.\n\n`None` = no field rule, the object permission decides. A list restricts the field to those\nroles (and the roles that inherit them); an empty list means nobody. A field rule can only\nnarrow what the object layer already allows, never widen it.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "read_roles": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Read Roles"
+     },
+     "write_roles": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Write Roles"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "SpecFieldAccess",
     "type": "object"
    },
    "SpecHistory": {
@@ -16905,6 +17305,11 @@
    "SpecOpApply": {
     "description": "`op_type` must be one of the registry's operations; `payload` is checked against that\noperation's own model.",
     "properties": {
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "op_type": {
       "maxLength": 40,
       "minLength": 1,
@@ -26874,6 +27279,102 @@
     ]
    }
   },
+  "/projects/{project_id}/access/diff": {
+   "post": {
+    "operationId": "access_diff_projects__project_id__access_diff_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/AccessDiffRequest"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessDiffResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Which roles gain or lose access if these rules replaced the saved ones (no writes)",
+    "tags": [
+     "authorization"
+    ]
+   }
+  },
+  "/projects/{project_id}/access/matrix": {
+   "get": {
+    "operationId": "access_matrix_projects__project_id__access_matrix_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/AccessMatrixResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Roles x object / field / row access, computed from the saved spec",
+    "tags": [
+     "authorization"
+    ]
+   }
+  },
   "/projects/{project_id}/advisor": {
    "get": {
     "operationId": "get_advice_projects__project_id__advisor_get",
@@ -33555,6 +34056,16 @@
        "title": "Project Id",
        "type": "string"
       }
+     },
+     {
+      "in": "query",
+      "name": "confirm_weakening",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Confirm Weakening",
+       "type": "boolean"
+      }
      }
     ],
     "responses": {
@@ -33597,6 +34108,16 @@
        "format": "uuid",
        "title": "Project Id",
        "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "confirm_weakening",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Confirm Weakening",
+       "type": "boolean"
       }
      }
     ],
@@ -33650,6 +34171,16 @@
        "format": "uuid",
        "title": "Project Id",
        "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "confirm_weakening",
+      "required": false,
+      "schema": {
+       "default": false,
+       "title": "Confirm Weakening",
+       "type": "boolean"
       }
      }
     ],

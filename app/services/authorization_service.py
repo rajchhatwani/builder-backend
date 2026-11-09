@@ -14,13 +14,24 @@ from app.core import authz_engine as eng
 from app.core import authz_recommender as recommender
 from app.core import authz_tools
 from app.core.enums import AuthorizationModel
-from app.core.spec_models import Spec, SpecAuthorization, SpecPolicy
+from app.core.access_layers import access_diff, access_matrix, weakens
+from app.core.spec_models import (
+    Spec,
+    SpecAuthorization,
+    SpecFieldAccess,
+    SpecPermission,
+    SpecPolicy,
+)
 from app.exceptions import AppError
 from app.models.authorization_config import ProjectAuthorization
 from app.models.project import Project
 from app.schemas.authorization import (
+    AccessDiffRequest,
+    AccessDiffResponse,
+    AccessMatrixResponse,
     AuthorizationRead,
     AuthorizationWrite,
+    FieldAccessBody,
     CoverageResponse,
     PolicyBody,
     RecommendRequest,
@@ -38,6 +49,7 @@ def config_to_spec(row: ProjectAuthorization) -> SpecAuthorization:
         model=row.model,
         policies=[SpecPolicy.model_validate(p) for p in row.policies],
         attachments={k: list(v) for k, v in row.attachments.items()},
+        field_access=[SpecFieldAccess.model_validate(f) for f in row.field_access or []],
     )
 
 
@@ -45,6 +57,7 @@ def apply_spec(row: ProjectAuthorization, spec: SpecAuthorization) -> None:
     row.model = spec.model
     row.policies = [p.model_dump(mode="json") for p in spec.policies]
     row.attachments = {k: list(v) for k, v in spec.attachments.items()}
+    row.field_access = [f.model_dump(mode="json") for f in spec.field_access]
 
 
 def recommend(answers: RecommendRequest) -> RecommendResponse:
@@ -89,6 +102,7 @@ class AuthorizationService:
                 model=AuthorizationModel.rbac,
                 policies=[],
                 attachments={},
+                field_access=[],
                 version=0,
             )
         return AuthorizationRead(
@@ -96,6 +110,7 @@ class AuthorizationService:
             model=AuthorizationModel(row.model),
             policies=[PolicyBody.model_validate(p) for p in row.policies],
             attachments=row.attachments,
+            field_access=[FieldAccessBody.model_validate(f) for f in row.field_access or []],
             version=row.version,
             updated_at=row.updated_at,
         )
@@ -118,7 +133,21 @@ class AuthorizationService:
             model=data.model.value,
             policies=[SpecPolicy.model_validate(p.model_dump()) for p in data.policies],
             attachments=data.attachments,
+            field_access=[SpecFieldAccess.model_validate(f.model_dump()) for f in data.field_access],
         )
+        if not data.confirm_weakening:
+            before = await _spec_service(self.session).assemble(project_id)
+            after = before.model_copy(deep=True)
+            after.authorization = spec
+            gained = weakens(before, after)
+            if gained:
+                raise AppError(
+                    code="access_weakened",
+                    message=f"this change gives {len({c['role'] for c in gained})} role(s) more "
+                    "access; review POST /access/diff and repeat with confirm_weakening",
+                    status_code=409,
+                    details=gained[:100],
+                )
         if row is None:
             row = ProjectAuthorization(project_id=project_id, version=1)
             self.session.add(row)
@@ -188,3 +217,27 @@ class AuthorizationService:
         spec = await _spec_service(self.session).assemble(project_id)
         result = recommender.recommend(recommender.answers_from_spec(spec))
         return RecommendResponse.model_validate(result)
+
+    async def access_matrix(self, project_id: uuid.UUID) -> AccessMatrixResponse:
+        await self._project(project_id)
+        spec = await _spec_service(self.session).assemble(project_id)
+        return AccessMatrixResponse.model_validate(access_matrix(spec))
+
+    async def access_diff(
+        self, project_id: uuid.UUID, body: AccessDiffRequest
+    ) -> AccessDiffResponse:
+        """Saved rules vs the proposal; nothing is written."""
+        await self._project(project_id)
+        before = await _spec_service(self.session).assemble(project_id)
+        after = before.model_copy(deep=True)
+        if body.permissions is not None:
+            if after.auth is None:
+                raise _invalid("the project has no auth section: permissions cannot be proposed")
+            after.auth.permissions = [SpecPermission.model_validate(p.model_dump()) for p in body.permissions]
+        if body.field_access is not None:
+            if after.authorization is None:
+                after.authorization = SpecAuthorization()
+            after.authorization.field_access = [
+                SpecFieldAccess.model_validate(f.model_dump()) for f in body.field_access
+            ]
+        return AccessDiffResponse.model_validate(access_diff(before, after))

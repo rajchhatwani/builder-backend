@@ -879,14 +879,24 @@ export interface AuthorizationSettings {
   model: AuthorizationModel
   policies: Policy[]
   attachments: Record<string, string[]>
+  /** Per-field read/write role lists (null = unrestricted). Must be sent back unchanged when policies are saved. */
+  field_access: FieldAccessRule[]
   version: number
   updated_at: string | null
+}
+
+export interface FieldAccessRule {
+  entity: string
+  field: string
+  read_roles: string[] | null
+  write_roles: string[] | null
 }
 
 export interface AuthorizationWrite {
   model: AuthorizationModel
   policies: Policy[]
   attachments: Record<string, string[]>
+  field_access?: FieldAccessRule[]
   expected_version?: number
 }
 
@@ -1669,4 +1679,58 @@ export interface PreviewUsage {
   by_state: Record<string, number>
   orgs_with_overrides: number
   kill_switch: boolean
+}
+
+// ── Access matrix and diff (F4-4) ───────────────────────────────────────
+export type AccessLayer = 'object' | 'field' | 'row'
+
+export interface AccessCell {
+  layer: AccessLayer
+  entity: string
+  target: string
+  role: string
+  value: string
+}
+
+export interface AccessMatrix {
+  /** The last role is "(public)". */
+  roles: string[]
+  entities: string[]
+  cells: AccessCell[]
+}
+
+/** One saved permission rule (spec.auth.permissions). Entity is the entity NAME. */
+export interface PermissionRule {
+  entity: string
+  operation: string
+  roles: string[]
+  row_rule?: string | null
+  custom_filter_field?: string | null
+  custom_filter_value?: string | null
+}
+
+/** A list replaces the saved list of that layer; null keeps it. */
+export interface AccessDiffRequest {
+  permissions?: PermissionRule[] | null
+  field_access?: FieldAccessRule[] | null
+}
+
+export type AccessEffect = 'gain' | 'lose' | 'change' | 'added' | 'removed'
+
+export interface AccessChange {
+  layer: AccessLayer
+  entity: string
+  target: string
+  role: string
+  before: string | null
+  after: string | null
+  effect: AccessEffect
+}
+
+export interface AccessDiff {
+  changes: AccessChange[]
+  roles_gaining: Record<string, string[]>
+  roles_losing: Record<string, string[]>
+  weakens: boolean
+  counts: Record<AccessEffect, number>
 }

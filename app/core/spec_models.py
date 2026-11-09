@@ -229,8 +229,23 @@ class SpecPolicy(_SpecModel):
     when: dict[str, Any] | None = None
 
 
+class SpecFieldAccess(_SpecModel):
+    """Field layer of the access model (C7): who may read or write ONE field of an entity.
+
+    `None` = no field rule, the object permission decides. A list restricts the field to those
+    roles (and the roles that inherit them); an empty list means nobody. A field rule can only
+    narrow what the object layer already allows, never widen it.
+    """
+
+    entity: str
+    field: str
+    read_roles: list[str] | None = None
+    write_roles: list[str] | None = None
+
+
 class SpecAuthorization(_SpecModel):
     model: str = "rbac"  # AuthorizationModel value
+    field_access: list[SpecFieldAccess] = Field(default_factory=list)
     policies: list[SpecPolicy] = Field(default_factory=list)
     # pbac only: "*" (everyone signed in) or a role name -> ids of the policies it carries
     attachments: dict[str, list[str]] = Field(default_factory=dict)

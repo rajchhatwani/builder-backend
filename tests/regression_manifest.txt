@@ -225,3 +225,10 @@ tests/api/test_key_rotation_db.py
 tests/api/test_shared_limiter.py
 tests/api/test_workspace_db_role.py
 tests/unit/test_production_checks.py
+tests/unit/test_access_layers.py
+tests/api/test_access_layers.py
+tests/api/test_agent_wpb.py
+tests/api/test_cp4b_wpa_ledger.py
+tests/unit/test_agent_wpb.py
+tests/unit/test_cp4b_wpa.py
+tests/unit/test_sandbox_subnets.py

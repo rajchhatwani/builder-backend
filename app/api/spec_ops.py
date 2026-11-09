@@ -42,23 +42,39 @@ async def apply_op(
     session: AsyncSession = Depends(get_session),
 ) -> SpecOpRead:
     applied = await OpsService(session).apply_op(
-        project_id, body.op_type, body.payload, request_actor(request)
+        project_id,
+        body.op_type,
+        body.payload,
+        request_actor(request),
+        confirm_weakening=body.confirm_weakening,
     )
     return to_read(applied.op)
 
 
 @router.post("/undo", response_model=SpecOpRead)
 async def undo(
-    project_id: uuid.UUID, request: Request, session: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID,
+    request: Request,
+    confirm_weakening: bool = False,
+    session: AsyncSession = Depends(get_session),
 ) -> SpecOpRead:
-    return to_read((await OpsService(session).undo(project_id, request_actor(request))).op)
+    applied = await OpsService(session).undo(
+        project_id, request_actor(request), confirm_weakening=confirm_weakening
+    )
+    return to_read(applied.op)
 
 
 @router.post("/redo", response_model=SpecOpRead)
 async def redo(
-    project_id: uuid.UUID, request: Request, session: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID,
+    request: Request,
+    confirm_weakening: bool = False,
+    session: AsyncSession = Depends(get_session),
 ) -> SpecOpRead:
-    return to_read((await OpsService(session).redo(project_id, request_actor(request))).op)
+    applied = await OpsService(session).redo(
+        project_id, request_actor(request), confirm_weakening=confirm_weakening
+    )
+    return to_read(applied.op)
 
 
 @router.post("/restore", response_model=SpecOpRead)
@@ -66,7 +82,10 @@ async def restore(
     project_id: uuid.UUID,
     body: SpecRestore,
     request: Request,
+    confirm_weakening: bool = False,
     session: AsyncSession = Depends(get_session),
 ) -> SpecOpRead:
-    applied = await OpsService(session).restore(project_id, body.to_seq, request_actor(request))
+    applied = await OpsService(session).restore(
+        project_id, body.to_seq, request_actor(request), confirm_weakening=confirm_weakening
+    )
     return to_read(applied.op)

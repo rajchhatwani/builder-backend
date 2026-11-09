@@ -1,3 +1,4 @@
+import { authorizationWriteBody } from '../shell/access/authorizationBody'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import type {
@@ -248,12 +249,7 @@ export function AuthorizationPanel({
     async (patch: Partial<{ model: AuthorizationModel; policies: Policy[]; attachments: Record<string, string[]> }>) => {
       if (!settings) return 'Not loaded yet.'
       try {
-        const next = await api.putAuthorization(projectId, {
-          model: patch.model ?? settings.model,
-          policies: patch.policies ?? settings.policies,
-          attachments: patch.attachments ?? settings.attachments,
-          expected_version: settings.version,
-        })
+        const next = await api.putAuthorization(projectId, authorizationWriteBody(settings, patch))
         setSettings(next)
         const [iss, sp] = await Promise.all([api.authorizationIssues(projectId), api.getSpecForPolicies(projectId)])
         setIssues(iss.issues)

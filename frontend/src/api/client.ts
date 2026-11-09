@@ -76,6 +76,9 @@ import type {
   ObservabilitySettings,
   ObservabilityWrite,
   AuthorizationWrite,
+  AccessDiff,
+  AccessDiffRequest,
+  AccessMatrix,
   CoverageResult,
   RecommendAnswers,
   Recommendation,
@@ -352,6 +355,15 @@ export const api = {
     }),
   listSpecOps: (projectId: string, limit = 200, offset = 0) =>
     request<Page<SpecOp>>(`/projects/${projectId}/spec/ops?limit=${limit}&offset=${offset}`),
+  getAccessMatrix: (projectId: string) => request<AccessMatrix>(`/projects/${projectId}/access/matrix`),
+  diffAccess: (projectId: string, body: AccessDiffRequest) =>
+    request<AccessDiff>(`/projects/${projectId}/access/diff`, { method: 'POST', body: JSON.stringify(body) }),
+  /** Applies one typed op. An op that gives a role more access answers 409 access_weakened unless confirmWeakening is true. */
+  applySpecOp: (projectId: string, opType: string, payload: Record<string, unknown>, confirmWeakening = false) =>
+    request<SpecOp>(`/projects/${projectId}/spec/ops`, {
+      method: 'POST',
+      body: JSON.stringify(confirmWeakening ? { op_type: opType, payload, confirm_weakening: true } : { op_type: opType, payload }),
+    }),
   undoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/undo`, { method: 'POST' }),
   redoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/redo`, { method: 'POST' }),
   restoreSpec: (projectId: string, toSeq: number) =>
