@@ -11,3 +11,9 @@ ALTER DEFAULT PRIVILEGES FOR ROLE builder IN SCHEMA public GRANT SELECT, INSERT,
 ALTER DEFAULT PRIVILEGES FOR ROLE builder IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO builder_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO builder_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO builder_app;
+-- P3: PUBLIC may not connect to the platform database, so a per-workspace role (which has CONNECT
+-- only on its own database) cannot reach it. The owner keeps CONNECT as database owner.
+DO $$ BEGIN
+  EXECUTE format('REVOKE CONNECT ON DATABASE %I FROM PUBLIC', current_database());
+  EXECUTE format('GRANT CONNECT ON DATABASE %I TO builder_app', current_database());
+END $$;

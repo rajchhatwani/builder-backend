@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import re
+import secrets
 import shutil
 import uuid
 from collections.abc import AsyncIterator
@@ -156,6 +157,49 @@ class WorkspaceService:
                     await conn.execute(text(sql), params)
         finally:
             await engine.dispose()
+
+    @staticmethod
+    def role_for(db: str) -> str | None:
+        """The per-workspace LOGIN role that belongs to workspace database `db` (P3)."""
+        if db.startswith("bbws_") and _DB_IDENT.fullmatch(db):
+            return "bbwr_" + db[len("bbws_"):]
+        return None
+
+    async def _grant_db_role(self, db: str, password: str | None = None) -> None:
+        """Dedicated role for one workspace DB: LOGIN only, CONNECT on this DB only (PUBLIC's
+        CONNECT is revoked), owner of the DB, no CREATEDB/CREATEROLE/superuser/BYPASSRLS.
+
+        `password` is set only on creation (random, hex, never logged; the SQL text is also kept
+        out of every error because a driver error would echo it)."""
+        role = self.role_for(db)
+        if role is None:
+            return
+        stmts: list[str] = []
+        if password is not None:
+            flags = "LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOBYPASSRLS"
+            stmts.append(
+                f"DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = '{role}') "
+                f"THEN ALTER ROLE \"{role}\" {flags} PASSWORD '{password}'; "
+                f"ELSE CREATE ROLE \"{role}\" {flags} PASSWORD '{password}'; END IF; END $$"
+            )
+        stmts += [
+            f'REVOKE ALL ON DATABASE "{db}" FROM PUBLIC',
+            f'ALTER DATABASE "{db}" OWNER TO "{role}"',
+            f'GRANT CONNECT ON DATABASE "{db}" TO "{role}"',
+        ]
+        try:
+            await self._admin(*stmts)
+        except AppError:
+            raise
+        except Exception:
+            # no `from exc`: the driver message would carry the statement (and the password)
+            log.error("could not provision the database role for a workspace")
+            raise AppError("workspace_db_role_failed", "workspace database role failed", 500) from None
+
+    async def _drop_db_role(self, db: str) -> None:
+        role = self.role_for(db)
+        if role is not None:
+            await self._admin(f'DROP ROLE IF EXISTS "{role}"')
 
     @staticmethod
     def _kick(db: str) -> _Stmt:
@@ -341,6 +385,7 @@ class WorkspaceService:
                 await self._admin(*self._clone(db, template, kick=False))
             else:
                 await self._admin(f'CREATE DATABASE "{db}"')
+            await self._grant_db_role(db, secrets.token_hex(24))
             ws = await self._get(project_id, ws_id)
             await self._take_checkpoint(ws, "created", spec_digest=digest)
             ws.state = "active"
@@ -596,7 +641,9 @@ class WorkspaceService:
             except BaseException:
                 log.error("rollback data swap failed; restoring preview db from snapshot")
                 await self._admin(*self._clone(db, snap, kick=False))
+                await self._grant_db_role(db)
                 raise
+            await self._grant_db_role(db)  # the swapped-in clone belongs to the workspace role again
             await self._release(project_id, ws_id, "rolled_back", spec_seq=seq)
         except BaseException:
             await self.session.rollback()
@@ -613,6 +660,12 @@ class WorkspaceService:
                 await self._admin(self._kick(name), f'DROP DATABASE IF EXISTS "{name}"')
             except Exception:
                 log.exception("could not drop database %s", name)
+                failed.append(name)
+                continue
+            try:
+                await self._drop_db_role(name)
+            except Exception:
+                log.exception("could not drop the role of database %s", name)
                 failed.append(name)
         return failed
 

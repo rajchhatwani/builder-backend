@@ -16,7 +16,7 @@ from pathlib import Path
 import httpx
 
 from app.config import Settings
-from app.services.sandbox import DockerSandbox, Limits, SandboxError, SandboxSpec
+from app.services.sandbox import Limits, Sandbox, SandboxError, SandboxSpec
 
 APP_PORT = 8000
 DB_UID = 70  # postgres:alpine's postgres user
@@ -176,7 +176,7 @@ def app_limits(spec: StackSpec) -> Limits:
     )
 
 
-async def teardown(box: DockerSandbox, db_sandbox: str, app_sandbox: str) -> None:
+async def teardown(box: Sandbox, db_sandbox: str, app_sandbox: str) -> None:
     """App first, then the database (it owns the network, which goes with it). Never raises:
     a sandbox that is already gone is the normal case."""
     for sid in (app_sandbox, db_sandbox):
@@ -186,7 +186,7 @@ async def teardown(box: DockerSandbox, db_sandbox: str, app_sandbox: str) -> Non
             continue
 
 
-async def _wait_db(box: DockerSandbox, sandbox: str, timeout: float) -> None:
+async def _wait_db(box: Sandbox, sandbox: str, timeout: float) -> None:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         # TCP on loopback: the init-time temp server only listens on the unix socket.
@@ -202,7 +202,7 @@ async def _wait_db(box: DockerSandbox, sandbox: str, timeout: float) -> None:
 
 
 async def _wait_app(
-    box: DockerSandbox,
+    box: Sandbox,
     sandbox: str,
     ip: str,
     timeout: float,
@@ -231,7 +231,7 @@ async def _wait_app(
     raise SandboxError("preview app did not become ready in time")
 
 
-async def launch(box: DockerSandbox, spec: StackSpec, settings: Settings) -> str:
+async def launch(box: Sandbox, spec: StackSpec, settings: Settings) -> str:
     """Start the stack; returns the app container's address. Cleans up after itself on failure."""
     async with _LAUNCH_SLOTS:
         password = secrets.token_urlsafe(18)
@@ -286,7 +286,7 @@ async def launch(box: DockerSandbox, spec: StackSpec, settings: Settings) -> str
 
 
 async def _start_db(
-    box: DockerSandbox, spec: StackSpec, settings: Settings, net: str, password: str
+    box: Sandbox, spec: StackSpec, settings: Settings, net: str, password: str
 ) -> None:
     await box.start(
         SandboxSpec(

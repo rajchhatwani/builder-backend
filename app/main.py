@@ -192,6 +192,11 @@ def check_startup(settings: Settings) -> None:
         log.warning(
             "secret_key_generated", detail="SECRET_KEY unset; using a temporary key (local only)"
         )
+    if settings.key_provider != "env":  # fail early on a bad key file/command, never at first use
+        from app.core import crypto
+
+        crypto.reset()
+        crypto.active_key_id()
     problem = check_secret_strength(os.environ.get("SECRET_KEY", ""), settings.environment)
     if problem:
         raise RuntimeError(problem)
@@ -210,8 +215,15 @@ def check_startup(settings: Settings) -> None:
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     check_startup(settings)
+    from app.core.production_checks import check_production_ready
+
+    check_production_ready(settings)
+    from app.core import rls as _rls
+
+    reason = _rls.startup_problem(settings)
+    if reason:
+        raise RuntimeError(reason)
     if settings.rls_enabled:
-        from app.core import rls as _rls
         from app.db import get_engine
 
         await _rls.assert_role_enforces_rls(get_engine())
@@ -229,6 +241,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             freed = await PlatformCap(session, settings).reap_expired()
         if freed:
             log.info("ai_reservations_reaped", micro_usd=freed)
+        async with get_session_factory()() as session:
+            warning = await PlatformCap(session, settings).unbounded_key_warning()
+        if warning:
+            log.warning("ai_console_key_unbounded", detail=warning)
     except Exception as exc:  # noqa: BLE001
         log.warning("ai_reservation_reap_failed", error=type(exc).__name__)
     scheduler: asyncio.Task[None] | None = None

@@ -40,6 +40,9 @@ class FakeBox:
     async def is_running(self, _sid: str) -> bool:
         return self.alive
 
+    async def ip_of(self, _sid: str, _net: str) -> str | None:
+        return "127.0.0.1"  # what fake_launch stores as app_ip (S2-012 re-check)
+
     async def logs(self, _sid: str, tail: int = 2000, since: str | None = None) -> str:
         return self.log_text if since is None else ""
 
@@ -107,9 +110,11 @@ async def stack(
 
     monkeypatch.setattr(api, "get_settings", lambda: settings)
     api._windows.clear()
+    api._verified.clear()
     ps._last_touch.clear()
     ps._last_lazy = 0.0
     api._open_streams.clear()
+    api._ip_limiter = None
     yield state
     server.close()
     await server.wait_closed()
@@ -600,6 +605,7 @@ async def test_log_stream_honours_kill_switch_rate_cap_and_redacts_more(
         await s.commit()
     api_windows = __import__("app.api.previews", fromlist=["_windows"])._windows
     api_windows.clear()
+    await _clear_shared(session_factory)
     assert (await anon.get(url, headers=h)).status_code == 200
     assert (await anon.get(url, headers=h)).status_code == 429
     # kill switch
@@ -607,6 +613,14 @@ async def test_log_stream_honours_kill_switch_rate_cap_and_redacts_more(
     await admin.put("/admin/preview-limits", json={"kill_switch": True})
     api_windows.clear()
     assert (await anon.get(url, headers=h)).status_code == 503
+
+
+async def _clear_shared(session_factory: async_sessionmaker) -> None:  # type: ignore[type-arg]
+    from sqlalchemy import text
+
+    async with session_factory() as s:  # the shared (all-workers) counters, like _windows
+        await s.execute(text("DELETE FROM rate_windows"))
+        await s.commit()
 
 
 async def test_org_override_cannot_exceed_default_without_the_flag_and_admin_lists(

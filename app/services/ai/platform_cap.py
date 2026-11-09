@@ -73,7 +73,31 @@ class PlatformCap:
         ).scalar_one_or_none()
         if override is not None:
             cap = override if cap is None else min(cap, override)
+        share = self.settings.ai_console_key_cap_micro_usd
+        if share is not None:
+            cap = share if cap is None else min(cap, share)
         return cap
+
+    async def unbounded_key_warning(self) -> str | None:
+        """S2-008: a real key is configured but nothing ties this database's spend to the key's
+        single console limit (no per-database share and no admin cap_override)."""
+        if self.settings.ai_api_key is None or self.settings.ai_console_key_cap_micro_usd is not None:
+            return None
+        async with self._maker() as s:
+            await self._ensure_row(s)
+            override = (
+                await s.execute(
+                    text("SELECT cap_override_micro_usd FROM ai_platform_budget WHERE id=1")
+                )
+            ).scalar_one_or_none()
+            await s.commit()
+        if override is None:
+            return (
+                "BUILDER_AI_API_KEY is set but neither ai_console_key_cap_micro_usd nor "
+                "cap_override_micro_usd limits this database: several databases on one console "
+                "key can together exceed its limit (use scripts/model_budget.sh)"
+            )
+        return None
 
     async def _reap(self, s: AsyncSession, at: datetime) -> int:
         """Delete expired reservations (any scope) and give the platform ones back to the counter.

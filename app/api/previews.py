@@ -14,6 +14,8 @@ Preview routes (authenticated by the per-preview token, header X-Preview-Token, 
 """
 
 import asyncio
+import ipaddress
+import logging
 import time
 import uuid
 from collections import deque
@@ -27,8 +29,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import require_verified_email
-from app.api.security import current_principal
+from app.api.security import client_ip, current_principal
 from app.config import Settings, get_settings
+from app.core.ratelimit import SlidingWindowLimiter
+from app.core.shared_limiter import SharedLimiter
 from app.db import get_session
 from app.exceptions import AppError
 from app.models.preview import Preview
@@ -37,7 +41,8 @@ from app.services import preview_runtime as rt
 from app.services import preview_service as ps
 from app.services.access_service import Principal
 from app.services.preview_runtime import redact
-from app.services.sandbox import DockerSandbox
+from app.services.sandbox import Sandbox, SandboxError
+from app.services.sandbox.docker import name_for
 from app.services.self_host_kit import build_kit
 
 project_router = APIRouter(tags=["previews"])
@@ -167,6 +172,35 @@ def _upstream_url(request: Request, preview_id: uuid.UUID, path: str, ip: str) -
     return httpx.URL(f"http://{ip}:{rt.APP_PORT}{rest or '/'}" + (f"?{query}" if query else ""))
 
 
+# S2-012: Docker can recycle a removed network's subnet to another tenant's preview. Before bytes
+# are proxied to the stored app_ip we ask the sandbox layer which address the preview's OWN app
+# container (bbsbx-<app id>, only ever created by us with the bb.sandbox label) has on the
+# preview's own network. A mismatch or an unreachable runner fails closed. Positive answers are
+# cached for a few seconds per preview (a recycled address can be reachable for at most that long).
+VERIFY_TTL_SECONDS = 5.0
+_verified: dict[uuid.UUID, tuple[str, float]] = {}
+
+
+async def verify_upstream(box: Sandbox, p: Preview, now: float | None = None) -> None:
+    ip = p.app_ip or ""
+    t = time.monotonic() if now is None else now
+    hit = _verified.get(p.id)
+    if hit is not None and hit[0] == ip and t - hit[1] < VERIFY_TTL_SECONDS:
+        return
+    try:
+        actual = await box.ip_of(p.app_sandbox, name_for(p.db_sandbox))
+    except (SandboxError, OSError, TimeoutError):
+        actual = None
+    if not ip or actual != ip:
+        _verified.pop(p.id, None)
+        await ps.sleep_preview(p.id, "address no longer matches its container; restarted")
+        raise AppError(
+            "preview_unverified", "the preview could not be verified; retry", 502,
+            headers={"Retry-After": "3"},
+        )  # fmt: skip
+    _verified[p.id] = (ip, t)
+
+
 def rate_check(preview_id: uuid.UUID, per_minute: int, now: float | None = None) -> int | None:
     """None = allowed; else seconds until a slot frees up. Sliding 60 s window."""
     t = time.monotonic() if now is None else now
@@ -191,14 +225,62 @@ async def _read_body(request: Request, cap: int) -> bytes:
     return bytes(buf)
 
 
+_ip_limiter: SlidingWindowLimiter | None = None
+_shared = SharedLimiter(lambda: ps.session_factory())  # lazily: tests swap the factory
+
+
+log = logging.getLogger(__name__)
+_proxy_warned = False
+
+
+def _warn_shared_proxy_bucket(ip: str, settings: Settings) -> None:
+    """S-4: untrusted forwarded headers + a loopback/private peer means a reverse proxy: every visitor
+    then shares this one bucket. The key stays the peer address (an untrusted header must never pick
+    the bucket); per-visitor keys only happen with trust_proxy_headers=true. Warn once."""
+    global _proxy_warned  # noqa: PLW0603
+    if _proxy_warned or settings.trust_proxy_headers:
+        return
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        return
+    if addr.is_loopback or addr.is_private:
+        _proxy_warned = True
+        log.warning(
+            "preview_ip_bucket_shared: peer %s is a loopback/private address and trust_proxy_headers is "
+            "false; all visitors share one pre-auth rate bucket. Set BUILDER_TRUST_PROXY_HEADERS=true "
+            "if a reverse proxy sets X-Forwarded-For.", ip,
+        )  # fmt: skip
+
+
+def _pre_auth_ip_check(request: Request, settings: Settings) -> None:
+    """S2-005: cheap per-address limit BEFORE the lazy sweep, the token lookup or any query, so
+    unauthenticated floods cost a dict lookup, not database work. In process on purpose."""
+    global _ip_limiter  # noqa: PLW0603
+    limit = settings.preview_ip_rate_per_minute
+    if _ip_limiter is None or _ip_limiter.attempts != limit:
+        _ip_limiter = SlidingWindowLimiter(attempts=limit, window_seconds=60)
+    ip = client_ip(request, settings) or "unknown"
+    _warn_shared_proxy_bucket(ip, settings)
+    if not _ip_limiter.allow(ip):
+        raise AppError(
+            "rate_limited", "too many requests", 429,
+            headers={"Retry-After": str(_ip_limiter.retry_after(ip))},
+        )  # fmt: skip
+
+
 async def _gate(preview_id: uuid.UUID, request: Request) -> Preview:
     """Token, state, kill switch and rate cap: everything before any bytes reach the sandbox."""
+    _pre_auth_ip_check(request, get_settings())
     ps.maybe_sweep()  # expiry / kill switch act even when the scheduler is off
     p = await ps.authenticate(preview_id, request.headers.get(TOKEN_HEADER))
     if p.state in ("expired", "killed", "failed"):
         raise AppError("preview_gone", f"this preview is {p.state}", 410)
     await ps.ensure_enabled(p.project_id)
-    wait = rate_check(p.id, int(p.limits.get("rate_per_minute", 300)))  # type: ignore[call-overload]
+    per_minute = int(p.limits.get("rate_per_minute", 300))  # type: ignore[call-overload]
+    wait = rate_check(p.id, per_minute)  # in-process first check
+    if wait is None:  # S2-005: the count every worker shares
+        wait = await _shared.hit(f"preview:{p.id}", per_minute, 60)
     if wait is not None:
         raise AppError(
             "rate_limited", "too many requests to this preview", 429, headers={"Retry-After": str(wait)}
@@ -229,7 +311,7 @@ async def preview_logs(preview_id: uuid.UUID, request: Request) -> StreamingResp
 
 
 async def _stream_logs(
-    request: Request, box: DockerSandbox, preview_id: uuid.UUID, settings: Settings
+    request: Request, box: Sandbox, preview_id: uuid.UUID, settings: Settings
 ) -> AsyncIterator[str]:
     yield "event: info\ndata: preview logs (credentials are redacted)\n\n"
     deadline = time.monotonic() + settings.preview_log_stream_max_seconds
@@ -277,6 +359,7 @@ async def proxy(preview_id: uuid.UUID, request: Request, path: str = "") -> Resp
     p = await _gate(preview_id, request)
     body = await _read_body(request, settings.preview_max_body_bytes)
     p = await ps.ensure_running(p.id, settings.preview_wake_timeout_seconds)
+    await verify_upstream(ps.get_sandbox(settings), p)
     await ps.touch(p.id)
     headers = {k: v for k, v in request.headers.items() if k.lower() not in _DROP_REQUEST}
     headers["accept-encoding"] = "identity"

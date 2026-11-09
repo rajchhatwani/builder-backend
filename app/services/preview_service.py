@@ -46,7 +46,7 @@ from app.models.workspace import Workspace
 from app.schemas.preview import PreviewCreated, PreviewRead
 from app.services import audit_service, preview_runtime
 from app.services.preview_limits import Effective, effective, resolve
-from app.services.sandbox import DockerSandbox, reap_expired
+from app.services.sandbox import Sandbox, make_sandbox, reap_expired
 from app.services.spec_service import SpecService
 
 log = logging.getLogger(__name__)
@@ -74,8 +74,9 @@ SessionFactory = Callable[[], async_sessionmaker[AsyncSession]]
 session_factory: SessionFactory = get_session_factory
 
 
-def get_sandbox(settings: Settings | None = None) -> DockerSandbox:
-    return DockerSandbox(settings or get_settings())
+def get_sandbox(settings: Settings | None = None) -> Sandbox:
+    """RemoteSandbox when `sandbox_runner_url` is set (P1), else direct docker (local/test only)."""
+    return make_sandbox(settings or get_settings())
 
 
 # -- pure helpers -------------------------------------------------------------------------

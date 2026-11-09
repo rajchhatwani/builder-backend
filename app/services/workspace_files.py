@@ -4,9 +4,10 @@ Every path is checked lexically and component by component (no symlink, no `.git
 worktree). The file content never goes to the audit row or the log."""
 
 import asyncio
+import errno
 import hashlib
 import os
-import tempfile
+import stat
 import uuid
 from pathlib import Path
 
@@ -29,7 +30,8 @@ from app.services import audit_service
 from app.services.dependency_policy_service import is_dependency_manifest
 from app.services.workspace_service import WorkspaceService
 
-_BUSY_STATES = ("running", "applying")
+# every state in which an agent run may still read or change the worktree (S2-013)
+_BUSY_STATES = ("planning", "running", "awaiting_approval", "gating", "applying")
 
 
 def _bad_path() -> AppError:
@@ -74,11 +76,52 @@ def _list_sync(wt: Path) -> list[WorkspaceFileEntry]:
     return sorted(out, key=lambda e: e.path)
 
 
-def _read_sync(wt: Path, rel: str) -> tuple[str, str]:
-    target = _safe_target(wt, rel)
-    if not target.is_file():
+def _parts(rel: str) -> list[str]:
+    if not rel or len(rel) > 500 or "\x00" in rel or "\\" in rel or rel.startswith("/"):
+        raise _bad_path()
+    parts = rel.split("/")
+    if any(p in ("", ".", "..") or p.lower() == ".git" for p in parts):
+        raise _bad_path()
+    return parts
+
+
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC
+
+
+def _open_parent(wt: Path, rel: str) -> tuple[int, str]:
+    """S2-013: walk to the file's directory with one directory fd per component, each opened
+    O_NOFOLLOW relative to the previous one. A link swapped in at any point is refused by the
+    kernel at open time, so there is no check-then-open gap. Caller closes the returned fd."""
+    parts = _parts(rel)
+    fd = os.open(str(wt.resolve()), _DIR_FLAGS)
+    try:
+        for part in parts[:-1]:
+            nxt = os.open(part, _DIR_FLAGS, dir_fd=fd)
+            os.close(fd)
+            fd = nxt
+    except OSError as exc:
+        os.close(fd)
+        if exc.errno == errno.ENOENT:
+            raise AppError("file_not_found", "file not found", 404) from None
+        raise _bad_path() from None  # ELOOP / ENOTDIR: a link or a non-directory on the way
+    return fd, parts[-1]
+
+
+def _open_file(dirfd: int, name: str) -> int:
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC, dir_fd=dirfd)
+    except OSError as exc:
+        if exc.errno == errno.ENOENT:
+            raise AppError("file_not_found", "file not found", 404) from None
+        raise _bad_path() from None
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
         raise AppError("file_not_found", "file not found", 404)
-    with target.open("rb") as fh:
+    return fd
+
+
+def _read_fd(fd: int) -> tuple[str, str]:
+    with os.fdopen(fd, "rb") as fh:
         data = fh.read(MAX_FILE_BYTES + 1)
     if len(data) > MAX_FILE_BYTES:
         raise AppError("file_too_large", "the file is larger than 256 KB", 413)
@@ -91,29 +134,48 @@ def _read_sync(wt: Path, rel: str) -> tuple[str, str]:
     return text, hashlib.sha256(data).hexdigest()
 
 
-def _write_sync(wt: Path, rel: str, content: str, expected: str) -> str:
-    target = _safe_target(wt, rel)
-    _, current = _read_sync(wt, rel)
-    if current != expected:
-        raise AppError("file_changed", "the file changed since it was opened", 409)
-    if "\x00" in content:
-        raise AppError("file_not_text", "the content contains a NUL byte", 415)
-    data = content.encode("utf-8")
-    if len(data) > MAX_FILE_BYTES:
-        raise AppError("file_too_large", "the content is larger than 256 KB", 413)
-    mode = target.stat().st_mode & 0o777
-    fd, tmp = tempfile.mkstemp(dir=target.parent, prefix=".wsedit-")
+def _read_sync(wt: Path, rel: str) -> tuple[str, str]:
+    dirfd, name = _open_parent(wt, rel)
     try:
-        with os.fdopen(fd, "wb") as fh:
-            fh.write(data)
-            fh.flush()
-            os.fsync(fh.fileno())
-        os.chmod(tmp, mode)
-        os.replace(tmp, target)
-    except BaseException:
-        Path(tmp).unlink(missing_ok=True)
-        raise
-    return hashlib.sha256(data).hexdigest()
+        return _read_fd(_open_file(dirfd, name))
+    finally:
+        os.close(dirfd)
+
+
+def _write_sync(wt: Path, rel: str, content: str, expected: str) -> str:
+    dirfd, name = _open_parent(wt, rel)
+    try:
+        fd = _open_file(dirfd, name)
+        mode = os.fstat(fd).st_mode & 0o777
+        _, current = _read_fd(fd)
+        if current != expected:
+            raise AppError("file_changed", "the file changed since it was opened", 409)
+        if "\x00" in content:
+            raise AppError("file_not_text", "the content contains a NUL byte", 415)
+        data = content.encode("utf-8")
+        if len(data) > MAX_FILE_BYTES:
+            raise AppError("file_too_large", "the content is larger than 256 KB", 413)
+        tmp = f".wsedit-{uuid.uuid4().hex}"
+        tfd = os.open(
+            tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600,
+            dir_fd=dirfd,
+        )  # fmt: skip
+        try:
+            with os.fdopen(tfd, "wb") as fh:
+                fh.write(data)
+                fh.flush()
+                os.fchmod(fh.fileno(), mode)
+                os.fsync(fh.fileno())
+            os.rename(tmp, name, src_dir_fd=dirfd, dst_dir_fd=dirfd)  # inside the pinned directory
+        except BaseException:
+            try:
+                os.unlink(tmp, dir_fd=dirfd)
+            except OSError:
+                pass
+            raise
+        return hashlib.sha256(data).hexdigest()
+    finally:
+        os.close(dirfd)
 
 
 class WorkspaceFileService:

@@ -83,6 +83,27 @@ services:
       - REDIS_URL
       - OTEL_EXPORTER_OTLP_ENDPOINT
     healthcheck: { test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:8000/health')"], interval: 5s, timeout: 5s, retries: 40 }
+  # OPTIONAL (backlog P1): the narrow sandbox runner, the only service that holds docker.sock.
+  # Off by default (the local flow above is unchanged). To use it:
+  #   1. export BB_RUNNER_TOKEN=$(openssl rand -hex 32)   (>= 32 chars; never committed)
+  #   2. start with `--profile runner`
+  #   3. give the api service BUILDER_SANDBOX_RUNNER_URL=http://127.0.0.1:8790 and
+  #      BUILDER_SANDBOX_RUNNER_TOKEN=$BB_RUNNER_TOKEN, and REMOVE its docker.sock volume
+  # The runner allows only bb.sandbox-labelled containers, listed images and mounts under BB_DATA.
+  runner:
+    profiles: ["runner"]
+    image: bbmanual-api:1
+    container_name: bbmanual-runner
+    network_mode: host   # loopback only: it refuses any other bind address
+    command: ["python", "-m", "app.services.sandbox.runner", "--host", "127.0.0.1", "--port", "8790"]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${BB_DATA:?}:${BB_DATA:?}
+    environment:
+      BB_RUNNER_TOKEN: ${BB_RUNNER_TOKEN:?set BB_RUNNER_TOKEN for the runner profile}
+      BUILDER_RUNNER_MOUNT_ROOT: ${BB_DATA:?}
+      BUILDER_ENVIRONMENT: ${BUILDER_ENVIRONMENT:-local}
+      BUILDER_SANDBOX_RUNTIME: ${BUILDER_SANDBOX_RUNTIME:-runsc}
   web:
     build:
       context: ${BB_CTX:?}/web

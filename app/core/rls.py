@@ -119,6 +119,30 @@ ALL_TABLES: tuple[str, ...] = (
 # have NO database-level isolation: their tenant isolation is application-layer only (every
 # query passes tenant_id). That is documented, not enforced here.
 
+# P5 pinned (tests/api/test_rls_background_paths.py reads this): every module that opens its own
+# database session outside a request either binds the org (`bind`) or is listed here with the
+# reason it is deliberately unconfined (fail-open GUC, see above). A new module that opens its
+# own session must be added here or bind, or that test fails.
+UNCONFINED_SESSION_MODULES: dict[str, str] = {
+    "app/db.py": "the request session factory itself; binding happens in guard/org_context",
+    "app/main.py": "startup tasks (bootstrap admin, reservation reaper): platform scope",
+    "app/api/mcp.py": "MCP tools check the project/org membership in the service layer, no GUC",
+    "app/jobs/impersonation_digest.py": "operator job across all orgs",
+    "app/services/billing_reconcile.py": "operator job across all orgs",
+    "app/services/org_deletion_service.py": "operator job; deletes one org's rows by explicit id",
+    "app/api/previews.py": "public preview proxy: only hands the shared limiter its session factory",
+    "app/services/preview_service.py": "preview proxy sessions, sweeper and scheduler: lookups "
+    "by preview id/secret; no org context exists before the preview is resolved",
+    "app/services/agent/run_service.py": "agent run worker: rows are addressed by run/project id",
+    "app/services/agent/sweeper.py": "agent sweeper re-drives expired leases across all orgs",
+    "app/services/agent_eval/runner.py": "offline eval harness, test database only",
+    "app/core/shared_limiter.py": "rate counters are platform infrastructure keyed by string",
+    "app/services/requirements/service.py": "request session; only the shared limiter opens its own",
+    "app/services/ai/ledger.py": "spend ledger writes in an independent session (platform cap)",
+    "app/services/ai/platform_cap.py": "platform-wide spend cap spans all orgs by design",
+    "app/services/ops/scope.py": "operator console scope helper, cross-org by design",
+}
+
 _ctx = "nullif(current_setting('app.organization_id', true), '')"
 _UNSET = f"{_ctx} IS NULL"
 _ORG = f"{_ctx}::uuid"
@@ -211,6 +235,9 @@ def app_role_statements(role: str, password: str, owner: str, database: str) -> 
         f"THEN CREATE ROLE {role} {flags} PASSWORD {password}; "
         f"ELSE ALTER ROLE {role} {flags} PASSWORD {password}; END IF; END $$",
         f"GRANT CONNECT ON DATABASE {database} TO {role}",
+        # P3: per-workspace roles have CONNECT only on their own database; PUBLIC must not
+        # hand them this one (the owner keeps CONNECT as database owner)
+        f"REVOKE CONNECT ON DATABASE {database} FROM PUBLIC",
         f"GRANT USAGE ON SCHEMA public TO {role}",
         f"GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {role}",
         f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {role}",
@@ -254,6 +281,20 @@ async def assert_role_enforces_rls(engine: AsyncEngine) -> None:
             "non-privileged role (python -m app.core.rls create-app-role) and keep the owner "
             "role in BUILDER_MIGRATIONS_DATABASE_URL."
         )
+
+
+def startup_problem(settings: object, engine_role_problems: list[str] | None = None) -> str | None:
+    """P5: an explicit non-local, non-test environment must run with RLS on and as a role it
+    binds. Returns the reason to refuse starting, or None."""
+    env = getattr(settings, "environment", "local")
+    explicit = bool(getattr(settings, "environment_explicit", False))
+    if not explicit or env in ("local", "test"):
+        return None
+    if not getattr(settings, "rls_enabled", False):
+        return f"environment {env!r} requires BUILDER_RLS_ENABLED=true (row-level security)"
+    if engine_role_problems:
+        return "; ".join(engine_role_problems)
+    return None
 
 
 # -- per-request scope ---------------------------------------------------------------------

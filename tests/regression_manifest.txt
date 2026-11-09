@@ -215,3 +215,13 @@ tests/unit/test_fb3c_db_clock.py
 tests/unit/test_fb3c_dependency_paths.py
 tests/api/test_fb6_fixround.py
 tests/unit/test_fb6_input_guard.py
+tests/unit/test_sandbox_runner.py
+tests/unit/test_preview_verify_upstream.py
+tests/e2e/test_sandbox_runner_docker.py
+tests/unit/test_rls_background_paths.py
+tests/unit/test_key_provider.py
+tests/unit/test_workspace_files_nofollow.py
+tests/api/test_key_rotation_db.py
+tests/api/test_shared_limiter.py
+tests/api/test_workspace_db_role.py
+tests/unit/test_production_checks.py

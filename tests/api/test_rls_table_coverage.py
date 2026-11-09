@@ -21,6 +21,7 @@ PLATFORM_OR_USER_LEVEL: dict[str, str] = {
     "platform_api_tokens": "per user token; org check happens on use",
     "platform_email_verification_tokens": "per user sign-up",
     "mfa_recovery_codes": "per user",
+    "rate_windows": "shared rate-limit counters keyed by string, platform infrastructure",
     "plans": "global catalogue",
     "ai_platform_budget": "platform-wide spend cap",
     "preview_platform_settings": "platform-wide preview limits",

@@ -8,6 +8,7 @@
 #   stripe [start|stop] Stripe CLI forwarder              stripe-trigger <event>  (checkout.session.completed needs a business name set in the Stripe dashboard)    tunnel [start|stop]  ngrok
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/scripts/model_budget.sh"  # S2-008: one console limit shared by every stack (.bb-model-budget)
 STATE="$HOME/.local/share/bbmanual"; DATA="$STATE/data"; LOGS="$STATE/logs"
 HELP="python3 $ROOT/scripts/manual_helper.py"
 COMPOSE=(docker compose -f "$ROOT/docker-compose.manual.yml")
@@ -58,7 +59,8 @@ cmd_up() {
   dc up -d --build >"$LOGS/up.log" 2>&1 || { tail -30 "$LOGS/up.log"; echo "compose up failed (full log: $LOGS/up.log)"; exit 1; }
   wait_api
   # platform AI budget: only on a fresh counter (never overwrites a cap the owner raised)
-  psql_ -c "insert into ai_platform_budget(id,spent_micro_usd,cap_override_micro_usd) values(1,1677831,2680000) on conflict (id) do update set spent_micro_usd=1677831, cap_override_micro_usd=2680000 where ai_platform_budget.spent_micro_usd=0 and ai_platform_budget.cap_override_micro_usd is null" >/dev/null
+  CAP0="$(budget_alloc manual 2680000)"
+  psql_ -c "insert into ai_platform_budget(id,spent_micro_usd,cap_override_micro_usd) values(1,1677831,$CAP0) on conflict (id) do update set spent_micro_usd=1677831, cap_override_micro_usd=$CAP0 where ai_platform_budget.spent_micro_usd=0 and ai_platform_budget.cap_override_micro_usd is null" >/dev/null
   # MinIO bucket from STORAGE_* (created from inside the API container, which has the env)
   docker exec -i bbmanual-api python - <<'PY' || echo "WARNING: MinIO bucket creation failed (see troubleshooting: MinIO bucket)"
 import os, time, boto3
@@ -147,6 +149,7 @@ PY
 
 cmd_set_ai_cap() {
   local n="${1:?usage: set-ai-cap <micro_usd>  (e.g. 4500000 = 4.50 USD)}"; [[ "$n" =~ ^[0-9]+$ ]] || { echo "number required"; exit 1; }
+  n="$(budget_alloc manual "$n")"  # never more than what the other stacks left of the console limit
   psql_ -c "insert into ai_platform_budget(id,cap_override_micro_usd) values(1,$n) on conflict (id) do update set cap_override_micro_usd=$n"
   echo "cap override = $n micro-USD. Note: the effective cap is min(this, config cap 4,500,000)."
 }

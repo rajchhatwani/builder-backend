@@ -11,3 +11,5 @@ build/
 .coverage
 htmlcov/
 final_test.env
+.bb-model-budget
+

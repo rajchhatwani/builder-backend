@@ -204,6 +204,13 @@ async def test_busy_workspace_and_stale_approval_hash(
         run.state = "applying"
         await s.commit()
     assert (await client.put(f"{base}/files/content", json=body)).status_code == 409
+    for busy in ("planning", "awaiting_approval", "gating"):  # S2-013: every live agent state
+        async with session_factory() as s:
+            run = (await s.execute(select(AiRun).where(AiRun.workspace_id == ws_id))).scalar_one()
+            run.state = busy
+            await s.commit()
+        r = await client.put(f"{base}/files/content", json=body)
+        assert r.status_code == 409 and r.json()["code"] == "workspace_busy", busy
     async with session_factory() as s:
         run = (await s.execute(select(AiRun).where(AiRun.workspace_id == ws_id))).scalar_one()
         run.state = "stopped"

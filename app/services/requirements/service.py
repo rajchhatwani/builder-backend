@@ -4,10 +4,12 @@ import uuid
 from dataclasses import dataclass
 
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
 from app.core.ratelimit import SlidingWindowLimiter
+from app.core.shared_limiter import SharedLimiter
+from app.db import get_session_factory
 from app.exceptions import AppError
 from app.models.agent import AiRun
 from app.models.project import Project
@@ -29,6 +31,7 @@ from app.services.requirements import reader as rd
 _limiter = SlidingWindowLimiter(attempts=12, window_seconds=3600)  # intakes per project per hour
 _user_limiter = SlidingWindowLimiter(attempts=20, window_seconds=3600)  # intakes per user per hour
 _IN_FLIGHT: set[uuid.UUID] = set()
+_shared = SharedLimiter(lambda: get_session_factory())  # S2-011b: the count every worker shares
 
 
 @dataclass
@@ -118,6 +121,15 @@ class RequirementsService:
 
     # -- intake ------------------------------------------------------------------------------
 
+    async def _limited(self, shared_key: str, local_key: str, local: SlidingWindowLimiter) -> int | None:
+        """None = allowed, else Retry-After seconds. The in-process window is the cheap first
+        check; the shared window (all workers) is the one that bounds the total."""
+        if not local.allow(local_key):
+            return local.retry_after(local_key)
+        bind = self.s.bind
+        factory = async_sessionmaker(bind, expire_on_commit=False) if bind is not None else None
+        return await _shared.hit(shared_key, local.attempts, int(local.window), factory)
+
     async def intake(
         self,
         project_id: uuid.UUID,
@@ -134,12 +146,13 @@ class RequirementsService:
         if sum(len(d) for _, d in files) > rd.MAX_TOTAL_BYTES:
             raise AppError("files_too_large", "the files together are too large", 413)
         ukey = str(user_id)  # before any parsing: refused intakes must not cost CPU
-        if not _user_limiter.allow(ukey):
+        user_wait = await self._limited(f"intake:user:{ukey}", ukey, _user_limiter)
+        if user_wait is not None:
             raise AppError(
                 "intake_user_rate_limited",
                 "too many intakes from you; try again later",
                 429,
-                headers={"Retry-After": str(_user_limiter.retry_after(ukey))},
+                headers={"Retry-After": str(user_wait)},
             )
         docs: list[rd.ReadDoc] = []
         if prompt and prompt.strip():
@@ -149,12 +162,13 @@ class RequirementsService:
 
         if project_id in _IN_FLIGHT:
             raise AppError("intake_in_progress", "an intake is already running for this project", 409)
-        if not _limiter.allow(str(project_id)):
+        project_wait = await self._limited(f"intake:project:{project_id}", str(project_id), _limiter)
+        if project_wait is not None:
             raise AppError(
                 "intake_rate_limited",
                 "too many intakes for this project; try again later",
                 429,
-                headers={"Retry-After": str(_limiter.retry_after(str(project_id)))},
+                headers={"Retry-After": str(project_wait)},
             )
         _IN_FLIGHT.add(project_id)
         try:

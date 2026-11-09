@@ -44,14 +44,11 @@ _BAD_NETS = frozenset({"host", "none", "bridge", "default", "ingress", "docker_g
 _BAD_TMPFS = ("/proc", "/dev", "/sys", "/workspace", "/tmp", "/etc", "/run")  # noqa: S108
 MAX_EXTRA_TMPFS_BYTES = 1024**3
 _USER_RE = re.compile(r"^\d{1,10}(:\d{1,10})?$")
-_CLI_ENV_KEYS = (
-    "PATH",
-    "HOME",
-    "DOCKER_HOST",
-    "DOCKER_CONFIG",
-    "XDG_RUNTIME_DIR",
-    "DOCKER_CONTEXT",
-)
+# What the docker CLI may inherit. DOCKER_* only for a process that talks to docker itself (the
+# runner, or local/test); a process going through the runner never builds a CLI env at all.
+_CLI_ENV_KEYS = ("PATH", "HOME", "XDG_RUNTIME_DIR")
+_DOCKER_ENV_KEYS = ("DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT")
+_ENV_NAMES_NEVER_FROM_CALLERS = frozenset(_CLI_ENV_KEYS + _DOCKER_ENV_KEYS)
 CODE_MOUNT = "/workspace"
 
 
@@ -83,7 +80,7 @@ def _validate(spec: SandboxSpec, allowed_images: Collection[str] | None = None) 
         if (
             not ENV_RE.match(k)
             or k in RESERVED_ENV
-            or k in _CLI_ENV_KEYS
+            or k in _ENV_NAMES_NEVER_FROM_CALLERS
             or k.startswith(("DOCKER_", "BB_SANDBOX"))
         ):
             raise SandboxError(f"environment variable name not allowed: {k!r}")
@@ -187,8 +184,19 @@ def build_run_args(
 
 
 class DockerSandbox(Sandbox):
-    def __init__(self, settings: Settings | None = None, docker_bin: str | None = None) -> None:
+    def __init__(
+        self,
+        settings: Settings | None = None,
+        docker_bin: str | None = None,
+        *,
+        runner_process: bool = False,
+    ) -> None:
         s = settings or get_settings()
+        # True only inside `python -m app.services.sandbox.runner`: the one process allowed to
+        # hold docker access in a deployed environment.
+        self._runner_process = runner_process
+        self._sandbox_runner_url = s.sandbox_runner_url
+        self._deployed = s.environment_explicit and s.environment not in ("local", "test")
         self.runtime = s.sandbox_runtime
         self.docker = docker_bin or s.sandbox_docker_bin
         # runc has no user-space kernel: allowed only when the environment is EXPLICITLY local
@@ -198,8 +206,21 @@ class DockerSandbox(Sandbox):
         self.images = frozenset(s.sandbox_images)
 
     # -- docker CLI ------------------------------------------------------------------------
+    def _assert_direct_allowed(self) -> None:
+        """Fail closed: the API process never talks to docker when a runner is configured, and a
+        deployed (explicit non-local/test) environment must go through the runner (P1)."""
+        if self._runner_process:
+            return
+        if self._sandbox_runner_url:
+            raise SandboxError("a sandbox runner is configured: direct docker access is disabled")
+        if self._deployed:
+            raise SandboxError(
+                "direct docker access is not allowed in this environment: set sandbox_runner_url"
+            )
+
     def _cli_env(self, extra: dict[str, str] | None = None) -> dict[str, str]:
         env = {k: os.environ[k] for k in _CLI_ENV_KEYS if k in os.environ}
+        env.update({k: os.environ[k] for k in _DOCKER_ENV_KEYS if k in os.environ})
         env.update(extra or {})
         return env
 
@@ -210,6 +231,7 @@ class DockerSandbox(Sandbox):
         env: dict[str, str] | None = None,
         cap: int = MAX_OUTPUT_BYTES,
     ) -> tuple[int, str, str]:
+        self._assert_direct_allowed()
         proc = await asyncio.create_subprocess_exec(
             self.docker,
             *args,
@@ -448,10 +470,3 @@ def new_sandbox_id() -> str:
 
 __all__ = ["CODE_MOUNT", "DockerSandbox", "build_run_args", "name_for", "new_sandbox_id"]
 
-
-async def reap_expired(settings: Settings | None = None) -> ReapResult:
-    """Scheduling hook for the preview runtime: call every `sandbox_reap_interval_seconds`.
-    Raises SandboxError when the daemon cannot be listed, so the caller can alert."""
-    box = DockerSandbox(settings)
-    await box.check_runtime()
-    return await box.reap()

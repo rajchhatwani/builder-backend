@@ -7,6 +7,7 @@
 # BUILDER_AI_PLATFORM_KEY_ORGS may use it, and the platform hard cap bounds the spend.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+. "$ROOT/scripts/model_budget.sh"  # S2-008: one console limit shared by every stack (.bb-model-budget)
 PG_PORT="${SC_PG_PORT:-55434}"; API_PORT="${SC_API_PORT:-8780}"; WEB_PORT="${SC_WEB_PORT:-5180}"
 SECRETS="$HOME/.local/share/builder-showcase"; mkdir -p "$SECRETS"; chmod 700 "$SECRETS"
 PG_NAME="bb-showcase-pg"; DATA="$ROOT/.showcase-data"; mkdir -p "$DATA/ws" "$DATA/previews" "$DATA/logs"
@@ -50,6 +51,9 @@ case "${1:-}" in
     uv run alembic upgrade head >"$DATA/logs/alembic.log" 2>&1
     nohup uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$DATA/logs/api.log" 2>&1 & echo $! >"$DATA/api.pid"
     for _ in $(seq 1 90); do curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && break; sleep 1; done
+    # S2-008: this database's spend cap is carved out of the shared console limit (SC_AI_CAP, default 1 USD)
+    CAP0="$(budget_alloc showcase "${SC_AI_CAP:-1000000}")"
+    docker exec "$PG_NAME" psql -U builder -d builder -Atq -c "insert into ai_platform_budget(id,cap_override_micro_usd) values(1,$CAP0) on conflict (id) do update set cap_override_micro_usd=$CAP0" >/dev/null
     curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" || { echo "api did not start: $DATA/logs/api.log"; exit 1; }
     ( cd frontend && VITE_API_BASE_URL="$PUBLIC_API" VITE_PREVIEW_API_ORIGIN="$PREVIEW_ORIGIN" npx vite build --outDir "$DATA/dist" --emptyOutDir >"$DATA/logs/build.log" 2>&1 )
     ( cd frontend && nohup npx vite preview --outDir "$DATA/dist" --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$DATA/logs/web.log" 2>&1 & echo $! >"$DATA/web.pid" )

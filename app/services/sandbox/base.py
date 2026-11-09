@@ -137,3 +137,18 @@ class Sandbox(ABC):
     @abstractmethod
     async def reap(self, now: float | None = None) -> ReapResult:
         """Remove expired sandboxes and dead ones (exited/dead), plus orphaned networks."""
+
+    @abstractmethod
+    async def check_runtime(self) -> None:
+        """Fail closed unless the configured OCI runtime is usable."""
+
+    @abstractmethod
+    async def create_network(self, sandbox_id: str, limits: Limits | None = None) -> str:
+        """Create the --internal, labelled network for one sandbox id; returns its name."""
+
+    @abstractmethod
+    async def is_running(self, sandbox_id: str) -> bool: ...
+
+    @abstractmethod
+    async def ip_of(self, sandbox_id: str, network: str) -> str | None:
+        """The sandbox's address on `network` (embedded DNS does not work under runsc)."""

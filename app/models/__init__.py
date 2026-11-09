@@ -29,6 +29,7 @@ from app.models.preview import Preview, PreviewOrgLimits, PreviewPlatformSetting
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
+from app.models.rate_window import RateWindow  # noqa: F401
 from app.models.registry import RegistryBlockVersion, RegistryDepLock, RegistryHookEntry
 from app.models.relation import Relation
 from app.models.requirements import RequirementItem, RequirementQuestion, RequirementsMap  # noqa: F401

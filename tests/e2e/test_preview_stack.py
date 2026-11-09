@@ -110,7 +110,18 @@ async def runtime(
         preview_wake_timeout_seconds=120, preview_lazy_sweep=False,
     )  # fmt: skip
     from app.api import previews as api
+    from app.services.sandbox import RemoteSandbox
+    from app.services.sandbox.runner import RunnerCore, create_app
 
+    # P1: the stack is driven through the narrow runner (in-process ASGI), the production path.
+    runner_settings = settings.model_copy(update={"runner_mount_root": settings.preview_root})
+    runner = create_app(runner_settings, token="e2e-" + "r" * 40, core=RunnerCore(runner_settings))
+    api_settings = Settings(
+        environment="test", sandbox_runner_url="http://127.0.0.1:8790",
+        sandbox_runner_token="e2e-" + "r" * 40,  # type: ignore[arg-type]
+    )  # fmt: skip
+    via_runner = RemoteSandbox(api_settings, transport=ASGITransport(app=runner))
+    monkeypatch.setattr(ps, "get_sandbox", lambda s=None: via_runner)
     monkeypatch.setattr(ps, "get_settings", lambda: settings)
     monkeypatch.setattr(api, "get_settings", lambda: settings)
     monkeypatch.setattr(ps, "session_factory", lambda: session_factory)

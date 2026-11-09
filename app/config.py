@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import SecretStr
+from pydantic import SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -103,6 +103,16 @@ class Settings(BaseSettings):
     # `SET LOCAL app.organization_id` on its transaction. The policies themselves are enabled
     # separately (`python -m app.rls enable`), so flipping this alone never changes visibility.
     rls_enabled: bool = False
+    # P6: where data-at-rest keys come from. `env` derives key id env0 from SECRET_KEY (as before);
+    # `file` / `command` read '<keyid> <base64 32-byte key>' lines (first = active) and then
+    # SECRET_KEY is no longer a trust root for stored secrets. No cloud SDK: use a KMS CLI wrapper.
+    key_provider: Literal["env", "file", "command"] = "env"
+    key_provider_file: str | None = None
+    key_provider_command: str | None = None
+    # Extra env var NAMES (comma/space separated) passed to the key command besides PATH and HOME.
+    key_provider_command_env: str = ""
+    # P4: an explicit non-local/test environment refuses key_provider=env unless this is set.
+    allow_env_key_provider: bool = False
     # Daily support-access digest (§4.5). Either or both; neither = "no destination".
     # The webhook is Slack-compatible (`{"text": …}`); its URL is a secret and is never logged.
     security_digest_webhook_url: SecretStr | None = None
@@ -132,6 +142,11 @@ class Settings(BaseSettings):
     # Default 4.50 USD under a 5 USD console limit. Only a config change raises it; an admin can
     # only lower it (ai_platform_budget.cap_override_micro_usd). None = no platform cap.
     ai_platform_cap_micro_usd: int | None = 4_500_000
+    # S2-008: this DATABASE's share of the console key's limit. Every stack/database has its own
+    # counter, so N databases sharing one key would each allow the full cap; set this to the share
+    # granted to this one (scripts/model_budget.sh keeps the shares under one console limit). The
+    # effective cap is the minimum of this, ai_platform_cap_micro_usd and the admin override.
+    ai_console_key_cap_micro_usd: int | None = None
 
     @property
     def sso_require_https(self) -> bool:
@@ -148,6 +163,13 @@ class Settings(BaseSettings):
     # (no user-space kernel) is accepted only when environment is local/test.
     sandbox_runtime: str = "runsc"
     sandbox_docker_bin: str = "docker"
+    # P1 narrow runner. API side: when `sandbox_runner_url` is set (http://127.0.0.1:PORT or
+    # unix:///path.sock, https:// for a remote one) every sandbox call goes to the runner and the
+    # API process never runs the docker binary. The token is mandatory with it.
+    sandbox_runner_url: str | None = None
+    sandbox_runner_token: SecretStr | None = None
+    # Runner side: the only directory a code mount may come from (== preview_root/workspace_root).
+    runner_mount_root: str | None = None
     # Root of per-project git repos + worktrees. Unset -> workspaces answer 503.
     workspace_root: str | None = None
     # Postgres server (admin URL, needs CREATEDB) hosting preview DBs. Unset -> workspaces 503.
@@ -195,10 +217,34 @@ class Settings(BaseSettings):
     # With the scheduler off, preview API calls start a sweep (at most once per interval).
     preview_lazy_sweep: bool = True
     preview_wake_timeout_seconds: int = 90
+    preview_ip_rate_per_minute: int = 600  # S2-005: pre-auth, per client address, per process
     preview_max_body_bytes: int = 1024**2
     preview_max_response_bytes: int = 8 * 1024**2
     preview_request_timeout_seconds: int = 30
     preview_log_stream_max_seconds: int = 60
+
+    @model_validator(mode="after")
+    def _runner_settings_fail_closed(self) -> "Settings":
+        url = self.sandbox_runner_url
+        if url is None:
+            return self
+        token = self.sandbox_runner_token
+        if token is None or len(token.get_secret_value()) < 32:
+            raise ValueError("sandbox_runner_url requires sandbox_runner_token (>= 32 chars)")
+        from urllib.parse import urlsplit
+
+        parts = urlsplit(url)
+        loopback = parts.hostname in ("127.0.0.1", "::1", "localhost")
+        ok = (
+            (parts.scheme == "unix" and parts.path.startswith("/"))
+            or (parts.scheme == "http" and loopback)
+            or (parts.scheme == "https" and bool(parts.hostname))
+        )
+        if not ok:
+            raise ValueError(
+                "sandbox_runner_url must be unix:///path, http://127.0.0.1:port or https://host"
+            )
+        return self
 
     @property
     def environment_explicit(self) -> bool:
