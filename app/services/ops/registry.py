@@ -18,6 +18,7 @@ from app.core.naming import pluralize, to_snake_case
 from app.core.spec_models import (
     Spec,
     SpecEntity,
+    SpecCustomFields,
     SpecEntityOptions,
     SpecField,
     SpecRelation,
@@ -67,6 +68,7 @@ class EntityDraft(_P):
     plural_path: str | None = None
     options: SpecEntityOptions | None = None
     fields: list[SpecField] = []
+    custom_fields: SpecCustomFields | None = None
 
     @field_validator("name")
     @classmethod
@@ -82,6 +84,7 @@ class EntityDraft(_P):
             plural_path=self.plural_path or plural,
             options=self.options or SpecEntityOptions(),
             fields=list(self.fields),
+            custom_fields=self.custom_fields,
         )
 
 

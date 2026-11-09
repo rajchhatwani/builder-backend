@@ -54,12 +54,30 @@ class SpecField(_SpecModel):
     enum_values: list[str] | None = None
 
 
+class SpecCustomFieldDef(_SpecModel):
+    """One per-row custom field, stored in the entity's `custom_fields` JSONB column."""
+
+    name: str
+    type: str  # string | int | float | bool | date | datetime (validation checks legality)
+    required: bool = False
+    max_length: int | None = None
+    enum_values: list[str] | None = None
+
+
+class SpecCustomFields(_SpecModel):
+    enabled: bool = False
+    max_keys: int = 50
+    max_bytes: int = 8192
+    defs: list[SpecCustomFieldDef] = Field(default_factory=list)
+
+
 class SpecEntity(_SpecModel):
     name: str
     table_name: str
     plural_path: str
     options: SpecEntityOptions = Field(default_factory=SpecEntityOptions)
     fields: list[SpecField] = Field(default_factory=list)
+    custom_fields: SpecCustomFields | None = None
 
 
 class SpecRelation(_SpecModel):

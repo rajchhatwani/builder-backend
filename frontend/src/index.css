@@ -1226,3 +1226,8 @@ body.is-viewing {
 .stage-table th, .stage-table td { text-align: start; padding: var(--space-1, 4px) var(--space-2); border-block-end: 1px solid var(--border); white-space: nowrap; max-width: 20rem; overflow: hidden; text-overflow: ellipsis; }
 .stage-token input { flex: 1 1 12rem; min-width: 0; }
 .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.import-steps { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; list-style: none; padding: 0; margin: 0 0 1rem; }
+.import-steps [aria-current='step'] { font-weight: 600; }
+.import-rows { list-style: none; padding: 0; }
+.import-rows dl { overflow-wrap: anywhere; }

@@ -24,6 +24,7 @@ from app.api import (
     authorization,
     behavior,
     billing,
+    data_import,
     dependencies,
     deployment,
     documents,
@@ -48,6 +49,7 @@ from app.api import (
     sso,
     status,
     storage,
+    usage,
     wellknown,
     workspaces,
 )
@@ -330,6 +332,7 @@ def create_app() -> FastAPI:
     app.include_router(scim.router)  # SCIM 2.0: authenticated by the org's SCIM bearer token
     app.include_router(scim.org_router)  # SCIM settings: org_context like every /orgs route
     app.include_router(ai_registry.org_router)  # AI cost/settings, org registry: org_context
+    app.include_router(usage.org_router)  # usage metering: org_context
 
     # Everything else sits behind the request guard (authentication + project membership).
     guarded = [Depends(guard)]
@@ -359,6 +362,7 @@ def create_app() -> FastAPI:
         agent_runs.router,
         agent_approvals.router,
         requirements.router,
+        data_import.router,
         dependencies.router,
         previews.project_router,
     ):

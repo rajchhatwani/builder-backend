@@ -7,6 +7,7 @@ entities, fields or relations in the inputs. Renames are NEVER guessed: only dec
 
 from typing import Any
 
+from app.core.custom_fields import PromotionPlan, promotion_column_type
 from app.core.spec_models import Spec
 
 from . import classify as C
@@ -242,6 +243,40 @@ def _diff_column(b: _Builder, t: Table, o: Col, n: Col) -> None:
                   note="queries filtering on it may slow down", sql=f"DROP INDEX {_q('ix_' + tbl + '_' + name)}")
 
 
+def _promote_custom_field(b: _Builder, o: Table, n: Table, c: Col) -> bool:
+    """A custom field def that became a real column of the same kind: move the data instead of adding an
+    empty column. False (plain add_column) when there was no such def, or the new column does not fit it."""
+    d = o.custom_defs.get(c.name)
+    if d is None or c.name in n.custom_defs:
+        return False
+    plan = PromotionPlan(
+        entity=n.entity, table=n.table, name=c.name, custom_type=d.type, column_type=c.type,
+        required=c.required, max_length=c.max_length, enum_values=c.enum_values,
+    )
+    try:
+        expected = promotion_column_type(d)
+    except KeyError:
+        return False
+    if c.type != expected:
+        return False
+    b.add(
+        "backfill", StepKind.promote_custom_field, n.entity, n.table, c.name,
+        Safety.backfill if c.required else Safety.safe,
+        f"custom field {n.entity}.{c.name} becomes a {C.pg_type(c)} column; its values move out of custom_fields",
+        strategy=(
+            "rows without a value stay NULL; with required=true the migration fails loudly if any row has none"
+            if c.required else None
+        ),
+        sql=";\n".join(plan.upgrade_sql()),
+        note="reversible: the downgrade moves the values back into custom_fields",
+    )
+    if c.unique:
+        _add_unique(b, n, c.name)
+    elif c.indexed:
+        _add_index(b, n, c.name)
+    return True
+
+
 def _pair_renames(dropped: list[str], added: list[str], old_cols: list[Col], new_cols: list[Col]) -> dict[str, str]:
     """Undeclared drop+add pairs with the same type: {dropped name: added name}. Flag only, never apply."""
     odx = {c.name: (i, c) for i, c in enumerate(old_cols)}
@@ -281,6 +316,8 @@ def _diff_table(b: _Builder, o: Table, n: Table) -> None:
             sql=f"ALTER TABLE {_q(n.table)} DROP COLUMN {_q(name)}",
         )
     for name in added:
+        if _promote_custom_field(b, o, n, nc[name]):
+            continue
         inv = {v: k for k, v in pairs.items()}
         _add_column(b, n, nc[name], note=f"looks like a rename of {inv[name]}; undeclared, so planned as drop + add" if name in flagged_new else None)
     for name in sorted(set(oc) & set(nc)):

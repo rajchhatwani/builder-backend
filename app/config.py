@@ -189,6 +189,8 @@ class Settings(BaseSettings):
     sandbox_reap_interval_seconds: int = 60
     workspace_max_active_per_project: int = 5
     workspace_max_checkpoints: int = 20
+    # B4-5: a workspace untouched this long is discarded by expire_idle_workspaces().
+    workspace_idle_ttl_days: int = 14
     # Per workspace: preview DB size (checked before every checkpoint) and worktree size.
     workspace_max_db_bytes: int = 1024**3
     workspace_max_disk_bytes: int = 200 * 1024**2

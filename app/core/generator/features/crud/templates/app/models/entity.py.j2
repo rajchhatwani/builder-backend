@@ -13,11 +13,19 @@ if _t.TYPE_CHECKING:
 
 class {{ e.name }}(_models_base.Base):
     __tablename__ = "{{ e.table }}"
+{% if e.custom %}
+    __table_args__ = (_sa.Index("ix_{{ e.table }}_custom_fields", "custom_fields", postgresql_using="gin"),)
+{% endif %}
 
     id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True, default=_uuid.uuid4)
 {% for f in e.fields %}
     {{ f.column }}
 {% endfor %}
+{% if e.custom %}
+    custom_fields: _orm.Mapped[dict[str, _t.Any]] = _orm.mapped_column(
+        _pg.JSONB(), nullable=False, default=dict, server_default=_sa.text("'{}'::jsonb")
+    )
+{% endif %}
 {% for fk in e.fks %}
     {{ fk.column_decl }}
 {% endfor %}

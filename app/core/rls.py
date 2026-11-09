@@ -55,6 +55,9 @@ ORG_TABLES: tuple[str, ...] = (
     "ai_org_settings",
     "ai_cost_ledger",
     "preview_org_limits",
+    "usage_events",
+    "usage_counters",
+    "usage_limits",
     "ai_spend_reservations",  # platform-scope rows have a NULL org: see NULL_ORG_TABLES
 )
 # Tables whose organization_id may be NULL for platform-level rows; those stay visible in a
@@ -97,6 +100,9 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "requirement_questions",
     "dependency_requests",
     "previews",
+    "import_batches",
+    "import_rows",
+    "imported_records",
 )
 # Tables that reach their org only through a parent row (no organization_id / project_id of
 # their own): table -> (column, parent table). Visible exactly when the parent row is (S2-010).
@@ -133,6 +139,7 @@ UNCONFINED_SESSION_MODULES: dict[str, str] = {
     "app/api/previews.py": "public preview proxy: only hands the shared limiter its session factory",
     "app/services/preview_service.py": "preview proxy sessions, sweeper and scheduler: lookups "
     "by preview id/secret; no org context exists before the preview is resolved",
+    "app/services/usage_service.py": "refused-usage event written on its own connection; rows carry explicit org_id",
     "app/services/agent/run_service.py": "agent run worker: rows are addressed by run/project id",
     "app/services/agent/sweeper.py": "agent sweeper re-drives expired leases across all orgs",
     "app/services/agent_eval/runner.py": "offline eval harness, test database only",

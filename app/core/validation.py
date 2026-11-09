@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel
 
 from app.core import naming
+from app.core.custom_fields import check_custom_fields
 from app.core.enums import (
     AuthCustomFieldType,
     AuthOperation,
@@ -399,6 +400,7 @@ def _check_fields(
                 namespace[field.name] = p
                 types[field.name] = field.type
         _check_field_definition(field, p, ctx)
+    check_custom_fields(entity, entity_path, ctx.add)
 
 
 def _check_field_definition(field: SpecField, p: str, ctx: _Ctx) -> None:

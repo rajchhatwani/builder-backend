@@ -134,6 +134,10 @@ ORG_ROUTE_ROLES: dict[tuple[str, str], OrgRole] = {
     ("GET", "/orgs/{slug}/ai/settings"): OrgRole.admin,
     ("PUT", "/orgs/{slug}/ai/settings"): OrgRole.admin,
     ("GET", "/orgs/{slug}/registry/projects"): OrgRole.admin,
+    # Usage metering (B4-5): members read, owners set limits.
+    ("GET", "/orgs/{slug}/usage"): OrgRole.member,
+    ("GET", "/orgs/{slug}/usage/events"): OrgRole.member,
+    ("PUT", "/orgs/{slug}/usage/limits/{metric}"): OrgRole.owner,
     ("GET", "/orgs/{slug}/sso"): OrgRole.admin,
     ("PUT", "/orgs/{slug}/sso"): OrgRole.admin,
     ("DELETE", "/orgs/{slug}/sso"): OrgRole.admin,

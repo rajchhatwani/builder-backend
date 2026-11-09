@@ -10,6 +10,8 @@ from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core import naming
+from app.core.custom_fields import COLUMN as CUSTOM_COLUMN
+from app.core.custom_fields import is_enabled
 from app.core.enums import OnDelete, RelationKind, RowRule
 from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation, SpecSequence
 from app.core.validation_authorization import (
@@ -148,6 +150,17 @@ class AccessCtx:
 
 
 @dataclass(frozen=True)
+class CustomCtx:
+    """Per-row custom fields of an entity (one JSONB column). `defs_literal` is built from repr() of
+    validated scalars: ((name, type, required, max_length, enum_values), ...)."""
+
+    defs_literal: str
+    max_keys: int
+    max_bytes: int
+    sample_literal: str  # a valid value for the required defs, used in the smoke tests
+
+
+@dataclass(frozen=True)
 class EntityCtx:
     name: str
     table: str
@@ -183,6 +196,7 @@ class EntityCtx:
     custom_hooks: bool = False  # has custom hooks declared in the spec (lifecycle stages)
     # (field, sequence, per_tenant, as_int) of fields the platform numbers from a sequence on create
     numbered: tuple[tuple[str, str, bool, bool], ...] = ()
+    custom: CustomCtx | None = None  # opted in to custom fields (the custom_fields JSONB column)
 
     @property
     def file_fields(self) -> tuple[FieldCtx, ...]:
@@ -593,6 +607,42 @@ def _m2m_attr(
 # --- entities ---------------------------------------------------------------------------
 
 
+_CUSTOM_SAMPLES = {
+    "string": "x",
+    "int": 1,
+    "float": 1.5,
+    "bool": True,
+    "date": "2026-01-01",
+    "datetime": "2026-01-01T00:00:00+00:00",
+}
+_CUSTOM_MIGRATION_COLUMN = (
+    'sa.Column("custom_fields", postgresql.JSONB(), nullable=False,'
+    " server_default=sa.text(\"'{}'::jsonb\")),"
+)
+
+
+def _custom_ctx(e: SpecEntity) -> CustomCtx | None:
+    if not is_enabled(e):
+        return None
+    assert e.custom_fields is not None
+    defs = sorted(e.custom_fields.defs, key=lambda d: d.name)
+    literal = tuple(
+        (d.name, d.type, d.required, d.max_length, tuple(d.enum_values) if d.enum_values else None)
+        for d in defs
+    )
+    sample = {
+        d.name: (d.enum_values[0] if d.enum_values else _CUSTOM_SAMPLES[d.type])
+        for d in defs
+        if d.required
+    }
+    return CustomCtx(
+        defs_literal=repr(literal),
+        max_keys=e.custom_fields.max_keys,
+        max_bytes=e.custom_fields.max_bytes,
+        sample_literal=repr(sample),
+    )
+
+
 def _build_entity(
     e: SpecEntity, relations: list[SpecRelation], tables: dict[str, str]
 ) -> EntityCtx:
@@ -635,6 +685,8 @@ def _build_entity(
         filterable.append((name, filter_type))
 
     non_nullable = [f.name for f in fields if f.required]
+    if is_enabled(e):
+        non_nullable.append(CUSTOM_COLUMN)
     non_nullable += [fk.column for fk in fks if fk.required]
 
     related: dict[str, str] = {}
@@ -650,8 +702,11 @@ def _build_entity(
     uniques = [(f"uq_{table}_{f.name}", f.name) for f in e.fields if f.unique]
     uniques += [(f"uq_{table}_{fk.column}", fk.column) for fk in fks if fk.unique]
 
+    custom = _custom_ctx(e)
     migration_columns = ['sa.Column("id", sa.Uuid(), nullable=False),']
     migration_columns += [f.migration_column for f in fields]
+    if custom is not None:
+        migration_columns.append(_CUSTOM_MIGRATION_COLUMN)
     for fk in fks:
         migration_columns.append(
             f'sa.Column("{fk.column}", sa.Uuid(), nullable={not fk.required}),'
@@ -688,6 +743,7 @@ def _build_entity(
         migration_columns=tuple(migration_columns),
         unique_constraints=tuple(sorted(uniques)),
         indexes=tuple(sorted(indexes)),
+        custom=custom,
     )
 
 

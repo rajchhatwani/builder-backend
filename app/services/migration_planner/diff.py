@@ -7,7 +7,9 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.core.enums import FieldType
-from app.core.spec_models import Spec
+from app.core.custom_fields import COLUMN as CUSTOM_COLUMN
+from app.core.custom_fields import enabled_defs, is_enabled
+from app.core.spec_models import Spec, SpecCustomFieldDef
 
 from .model import MigrationPlanError
 from .rename import Rename
@@ -33,6 +35,7 @@ class Table:
     table: str
     cols: list[Col]
     soft_delete: bool = False
+    custom_defs: dict[str, SpecCustomFieldDef] = field(default_factory=dict)  # per-row custom fields
 
 
 @dataclass(frozen=True)
@@ -116,7 +119,12 @@ def snapshot(spec: Spec, label: str) -> Snapshot:
                     tuple(f.enum_values) if f.enum_values is not None else None,
                 )
             )
-        snap.tables[e.name] = Table(e.name, e.table_name, cols, e.options.soft_delete)
+        custom: dict[str, SpecCustomFieldDef] = {}
+        if is_enabled(e):
+            # one JSONB column; the defs inside it are not columns but a promoted def becomes one
+            cols.append(Col(CUSTOM_COLUMN, "json", True, False, False, "{}", None, None))
+            custom = {d.name: d for d in enabled_defs(e)}
+        snap.tables[e.name] = Table(e.name, e.table_name, cols, e.options.soft_delete, custom)
     for r in spec.relations:
         for end in (r.from_entity, r.to_entity):
             if end not in snap.tables:
@@ -154,7 +162,7 @@ def apply_renames(old: Snapshot, new: Snapshot, renames: list[Rename]) -> Aligne
     out = Snapshot(multi_tenant=old.multi_tenant)
     for name, t in old.tables.items():
         nn = ent_map.get(name, name)
-        out.tables[nn] = Table(nn, t.table, list(t.cols), t.soft_delete)
+        out.tables[nn] = Table(nn, t.table, list(t.cols), t.soft_delete, dict(t.custom_defs))
     for rel in old.rels.values():
         fe, te = ent_map.get(rel.from_entity, rel.from_entity), ent_map.get(rel.to_entity, rel.to_entity)
         nr = Rel(rel.kind, fe, te, rel.from_name, rel.to_name, rel.on_delete, rel.required)

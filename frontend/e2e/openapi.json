@@ -3682,6 +3682,104 @@
     "title": "AwsSnsSecretsWrite",
     "type": "object"
    },
+   "BatchPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/BatchRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "BatchPage",
+    "type": "object"
+   },
+   "BatchRead": {
+    "properties": {
+     "committed_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Committed At"
+     },
+     "content_sha256": {
+      "title": "Content Sha256",
+      "type": "string"
+     },
+     "counts": {
+      "additionalProperties": true,
+      "title": "Counts",
+      "type": "object"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "filename": {
+      "title": "Filename",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "mapping": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Mapping",
+      "type": "object"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "entity",
+     "filename",
+     "content_sha256",
+     "status",
+     "mapping",
+     "counts",
+     "created_at",
+     "committed_at"
+    ],
+    "title": "BatchRead",
+    "type": "object"
+   },
    "BehaviorIssues": {
     "properties": {
      "issues": {
@@ -3793,6 +3891,39 @@
     "title": "Body_intake_projects__project_id__requirements_intake_post",
     "type": "object"
    },
+   "Body_upload_projects__project_id__imports_post": {
+    "properties": {
+     "entity": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Entity",
+      "type": "string"
+     },
+     "file": {
+      "contentMediaType": "application/octet-stream",
+      "title": "File",
+      "type": "string"
+     },
+     "mapping": {
+      "anyOf": [
+       {
+        "maxLength": 20000,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mapping"
+     }
+    },
+    "required": [
+     "file",
+     "entity"
+    ],
+    "title": "Body_upload_projects__project_id__imports_post",
+    "type": "object"
+   },
    "CheckoutCreate": {
     "properties": {
      "plan_id": {
@@ -3888,6 +4019,40 @@
      "created_at"
     ],
     "title": "CheckpointRead",
+    "type": "object"
+   },
+   "CommitResult": {
+    "properties": {
+     "batch_id": {
+      "format": "uuid",
+      "title": "Batch Id",
+      "type": "string"
+     },
+     "created": {
+      "title": "Created",
+      "type": "integer"
+     },
+     "duplicate": {
+      "title": "Duplicate",
+      "type": "integer"
+     },
+     "rejected": {
+      "title": "Rejected",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "batch_id",
+     "status",
+     "created",
+     "duplicate",
+     "rejected"
+    ],
+    "title": "CommitResult",
     "type": "object"
    },
    "Coverage": {
@@ -6783,6 +6948,105 @@
     "title": "ImpersonationWrites",
     "type": "object"
    },
+   "ImportCounts": {
+    "properties": {
+     "accepted": {
+      "default": 0,
+      "title": "Accepted",
+      "type": "integer"
+     },
+     "duplicate": {
+      "default": 0,
+      "title": "Duplicate",
+      "type": "integer"
+     },
+     "fixed": {
+      "default": 0,
+      "title": "Fixed",
+      "type": "integer"
+     },
+     "rejected": {
+      "default": 0,
+      "title": "Rejected",
+      "type": "integer"
+     },
+     "total": {
+      "default": 0,
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "title": "ImportCounts",
+    "type": "object"
+   },
+   "ImportPreview": {
+    "properties": {
+     "batch_id": {
+      "format": "uuid",
+      "title": "Batch Id",
+      "type": "string"
+     },
+     "counts": {
+      "$ref": "#/components/schemas/ImportCounts"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "headers": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Headers",
+      "type": "array"
+     },
+     "mapping": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Mapping",
+      "type": "object"
+     },
+     "rejected": {
+      "items": {
+       "$ref": "#/components/schemas/RowRead"
+      },
+      "title": "Rejected",
+      "type": "array"
+     },
+     "sample": {
+      "items": {
+       "$ref": "#/components/schemas/RowRead"
+      },
+      "title": "Sample",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "suggested_mapping": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "title": "Suggested Mapping",
+      "type": "object"
+     }
+    },
+    "required": [
+     "batch_id",
+     "entity",
+     "status",
+     "headers",
+     "mapping",
+     "suggested_mapping",
+     "counts",
+     "sample",
+     "rejected"
+    ],
+    "title": "ImportPreview",
+    "type": "object"
+   },
    "InvitationAccept": {
     "properties": {
      "token": {
@@ -7871,6 +8135,29 @@
      "password"
     ],
     "title": "LoginRequest",
+    "type": "object"
+   },
+   "MappingBody": {
+    "properties": {
+     "mapping": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "title": "Mapping",
+      "type": "object"
+     }
+    },
+    "required": [
+     "mapping"
+    ],
+    "title": "MappingBody",
     "type": "object"
    },
    "MemberAdd": {
@@ -12556,6 +12843,81 @@
     "title": "RecommendResponse",
     "type": "object"
    },
+   "RecordPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/RecordRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "RecordPage",
+    "type": "object"
+   },
+   "RecordRead": {
+    "properties": {
+     "batch_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Batch Id"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "data": {
+      "additionalProperties": true,
+      "title": "Data",
+      "type": "object"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "entity",
+     "data",
+     "batch_id",
+     "created_at"
+    ],
+    "title": "RecordRead",
+    "type": "object"
+   },
    "RecoveryCodesRead": {
     "description": "Shown once. Each code works one time instead of an authenticator code.",
     "properties": {
@@ -13102,6 +13464,104 @@
      "checkpoint_id"
     ],
     "title": "RollbackRequest",
+    "type": "object"
+   },
+   "RowFix": {
+    "properties": {
+     "values": {
+      "additionalProperties": true,
+      "maxProperties": 100,
+      "title": "Values",
+      "type": "object"
+     }
+    },
+    "required": [
+     "values"
+    ],
+    "title": "RowFix",
+    "type": "object"
+   },
+   "RowPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/RowRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "RowPage",
+    "type": "object"
+   },
+   "RowRead": {
+    "properties": {
+     "errors": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Errors",
+      "type": "array"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "raw": {
+      "additionalProperties": true,
+      "title": "Raw",
+      "type": "object"
+     },
+     "record": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Record"
+     },
+     "row_no": {
+      "title": "Row No",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "row_no",
+     "raw",
+     "record",
+     "status",
+     "errors"
+    ],
+    "title": "RowRead",
     "type": "object"
    },
    "RowRule": {
@@ -15913,6 +16373,85 @@
     "title": "SpecAuthorization",
     "type": "object"
    },
+   "SpecCustomFieldDef": {
+    "additionalProperties": false,
+    "description": "One per-row custom field, stored in the entity's `custom_fields` JSONB column.",
+    "properties": {
+     "enum_values": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Enum Values"
+     },
+     "max_length": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Length"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "default": false,
+      "title": "Required",
+      "type": "boolean"
+     },
+     "type": {
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "type"
+    ],
+    "title": "SpecCustomFieldDef",
+    "type": "object"
+   },
+   "SpecCustomFields": {
+    "additionalProperties": false,
+    "properties": {
+     "defs": {
+      "items": {
+       "$ref": "#/components/schemas/SpecCustomFieldDef"
+      },
+      "title": "Defs",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "max_bytes": {
+      "default": 8192,
+      "title": "Max Bytes",
+      "type": "integer"
+     },
+     "max_keys": {
+      "default": 50,
+      "title": "Max Keys",
+      "type": "integer"
+     }
+    },
+    "title": "SpecCustomFields",
+    "type": "object"
+   },
    "SpecDeployEnvironment": {
     "additionalProperties": false,
     "description": "One environment (dev, staging, prod ...). `profile` fills every number left empty.",
@@ -16132,6 +16671,16 @@
    "SpecEntity": {
     "additionalProperties": false,
     "properties": {
+     "custom_fields": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCustomFields"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "fields": {
       "items": {
        "$ref": "#/components/schemas/SpecField"
@@ -20745,6 +21294,190 @@
      "auth_token"
     ],
     "title": "TwilioSecretsWrite",
+    "type": "object"
+   },
+   "UsageEventPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/UsageEventRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "UsageEventPage",
+    "type": "object"
+   },
+   "UsageEventRead": {
+    "properties": {
+     "amount": {
+      "title": "Amount",
+      "type": "integer"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "metric": {
+      "title": "Metric",
+      "type": "string"
+     },
+     "outcome": {
+      "title": "Outcome",
+      "type": "string"
+     },
+     "project_id": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Project Id"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "metric",
+     "amount",
+     "outcome",
+     "created_at"
+    ],
+    "title": "UsageEventRead",
+    "type": "object"
+   },
+   "UsageLimitWrite": {
+    "properties": {
+     "limit_value": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Limit Value"
+     }
+    },
+    "title": "UsageLimitWrite",
+    "type": "object"
+   },
+   "UsageMetricRead": {
+    "properties": {
+     "limit": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Limit"
+     },
+     "metric": {
+      "title": "Metric",
+      "type": "string"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     },
+     "period_end": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Period End"
+     },
+     "period_start": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Period Start"
+     },
+     "refused": {
+      "title": "Refused",
+      "type": "integer"
+     },
+     "unit": {
+      "title": "Unit",
+      "type": "string"
+     },
+     "used": {
+      "title": "Used",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "metric",
+     "unit",
+     "period",
+     "period_start",
+     "period_end",
+     "used",
+     "limit",
+     "refused"
+    ],
+    "title": "UsageMetricRead",
+    "type": "object"
+   },
+   "UsageSummaryRead": {
+    "properties": {
+     "metrics": {
+      "items": {
+       "$ref": "#/components/schemas/UsageMetricRead"
+      },
+      "title": "Metrics",
+      "type": "array"
+     }
+    },
+    "required": [
+     "metrics"
+    ],
+    "title": "UsageSummaryRead",
     "type": "object"
    },
    "UserRead": {
@@ -26887,6 +27620,151 @@
     ]
    }
   },
+  "/orgs/{slug}/usage": {
+   "get": {
+    "operationId": "get_usage_orgs__slug__usage_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UsageSummaryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Get Usage",
+    "tags": [
+     "usage"
+    ]
+   }
+  },
+  "/orgs/{slug}/usage/events": {
+   "get": {
+    "operationId": "get_usage_events_orgs__slug__usage_events_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "metric",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Metric"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UsageEventPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Usage Events",
+    "tags": [
+     "usage"
+    ]
+   }
+  },
+  "/orgs/{slug}/usage/limits/{metric}": {
+   "put": {
+    "operationId": "put_usage_limit_orgs__slug__usage_limits__metric__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "metric",
+      "required": true,
+      "schema": {
+       "title": "Metric",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UsageLimitWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UsageSummaryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Usage Limit",
+    "tags": [
+     "usage"
+    ]
+   }
+  },
   "/permissions/{permission_id}": {
    "delete": {
     "operationId": "delete_permission_permissions__permission_id__delete",
@@ -31553,6 +32431,588 @@
     "summary": "List Generations",
     "tags": [
      "generate"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports": {
+   "get": {
+    "operationId": "list_imports_projects__project_id__imports_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Imports",
+    "tags": [
+     "import"
+    ]
+   },
+   "post": {
+    "operationId": "upload_projects__project_id__imports_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "multipart/form-data": {
+       "schema": {
+        "$ref": "#/components/schemas/Body_upload_projects__project_id__imports_post"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ImportPreview"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Upload",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/records": {
+   "get": {
+    "operationId": "list_records_projects__project_id__imports_records_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "maxLength": 120,
+       "minLength": 1,
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RecordPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Records",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}": {
+   "get": {
+    "operationId": "get_import_projects__project_id__imports__batch_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ImportPreview"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Import",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}/cancel": {
+   "post": {
+    "operationId": "cancel_projects__project_id__imports__batch_id__cancel_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/BatchRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Cancel",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}/commit": {
+   "post": {
+    "operationId": "commit_projects__project_id__imports__batch_id__commit_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CommitResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Commit",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}/mapping": {
+   "put": {
+    "operationId": "put_mapping_projects__project_id__imports__batch_id__mapping_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MappingBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ImportPreview"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Mapping",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}/rows": {
+   "get": {
+    "operationId": "list_rows_projects__project_id__imports__batch_id__rows_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "status",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 16,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Status"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 500,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RowPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Rows",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/{batch_id}/rows/{row_id}": {
+   "put": {
+    "operationId": "fix_row_projects__project_id__imports__batch_id__rows__row_id__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "batch_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Batch Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "row_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Row Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RowFix"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RowRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Fix Row",
+    "tags": [
+     "import"
     ]
    }
   },

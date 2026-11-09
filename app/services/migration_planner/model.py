@@ -44,6 +44,7 @@ class StepKind(StrEnum):
     shorten_length = "shorten_length"
     drop_enum_value = "drop_enum_value"
     change_type = "change_type"
+    promote_custom_field = "promote_custom_field"
 
 
 # Dependency order: tables first, then columns, then data fixes, then constraints, destructive last.

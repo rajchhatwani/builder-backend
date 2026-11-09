@@ -232,3 +232,9 @@ tests/api/test_cp4b_wpa_ledger.py
 tests/unit/test_agent_wpb.py
 tests/unit/test_cp4b_wpa.py
 tests/unit/test_sandbox_subnets.py
+tests/unit/test_data_import.py
+tests/api/test_data_import.py
+tests/unit/test_metering.py
+tests/api/test_usage_metering.py
+tests/unit/test_custom_fields.py
+tests/e2e/test_custom_fields_stack.py

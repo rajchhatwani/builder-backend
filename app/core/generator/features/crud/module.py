@@ -104,12 +104,16 @@ class CrudModule:
         files["app/models/_associations.py"] = render_template(
             self._env, "app/models/_associations.py.j2", **common
         )
+        if any(e.custom for e in project.entities):
+            files["app/core/custom_fields.py"] = read_verbatim(_TEMPLATES, "app/core/custom_fields.py.tpl")
         for entity in project.entities:
             for template, pattern in _PER_ENTITY:
                 files[pattern.format(table=entity.table)] = render_template(
                     self._env, template, e=entity
                 )
-        has_jsonb = any(f.type == "json" for e in project.entities for f in e.fields)
+        has_jsonb = any(f.type == "json" for e in project.entities for f in e.fields) or any(
+            e.custom for e in project.entities
+        )
         files["alembic/versions/0001_initial.py"] = render_template(
             self._env, "alembic/versions/0001_initial.py.j2", has_jsonb=has_jsonb, **common
         )

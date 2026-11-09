@@ -42,6 +42,17 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'import',
+    label: 'Import data',
+    icon: (
+      <>
+        <path d="M12 3v12" />
+        <path d="M7.5 10.5L12 15l4.5-4.5" />
+        <path d="M4 17v3h16v-3" />
+      </>
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: (

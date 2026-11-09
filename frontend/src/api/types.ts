@@ -1734,3 +1734,69 @@ export interface AccessDiff {
   weakens: boolean
   counts: Record<AccessEffect, number>
 }
+
+// ── Data import wizard (F4-1; hand-written, mirrors app/schemas/data_import.py) ──
+export interface ImportCounts {
+  total: number
+  accepted: number
+  rejected: number
+  duplicate: number
+  fixed: number
+}
+
+export interface ImportRowError {
+  field: string
+  code: string
+  message: string
+}
+
+export interface ImportRow {
+  id: string
+  row_no: number
+  raw: Record<string, string>
+  record: Record<string, unknown> | null
+  status: string
+  errors: ImportRowError[]
+}
+
+export interface ImportRowPage {
+  items: ImportRow[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ImportPreview {
+  batch_id: string
+  entity: string
+  status: string
+  headers: string[]
+  mapping: Record<string, string>
+  suggested_mapping: Record<string, string>
+  counts: ImportCounts
+  sample: ImportRow[]
+  rejected: ImportRow[]
+}
+
+export interface ImportCommitResult {
+  batch_id: string
+  status: string
+  created: number
+  duplicate: number
+  rejected: number
+}
+
+export interface ImportRecord {
+  id: string
+  entity: string
+  data: Record<string, unknown>
+  batch_id: string | null
+  created_at: string
+}
+
+export interface ImportRecordPage {
+  items: ImportRecord[]
+  total: number
+  limit: number
+  offset: number
+}

@@ -35,6 +35,9 @@ def upgrade() -> None:
 {% for name, column in e.indexes %}
     op.create_index("{{ name }}", "{{ e.table }}", ["{{ column }}"])
 {% endfor %}
+{% if e.custom %}
+    op.create_index("ix_{{ e.table }}_custom_fields", "{{ e.table }}", ["custom_fields"], postgresql_using="gin")
+{% endif %}
 {% endfor %}
 {% for j in joins %}
     op.create_table(

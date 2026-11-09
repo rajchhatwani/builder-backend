@@ -1,0 +1,39 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Contacts", "slug": "contacts", "description": null, "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Contact",
+      "table_name": "contacts",
+      "plural_path": "contacts",
+      "options": {},
+      "fields": [
+        {"name": "full_name", "type": "string", "required": true, "max_length": 120}
+      ],
+      "custom_fields": {
+        "enabled": true,
+        "max_keys": 20,
+        "max_bytes": 4096,
+        "defs": [
+          {"name": "score", "type": "int", "required": false},
+          {"name": "tier", "type": "string", "required": true, "enum_values": ["gold", "silver"]},
+          {"name": "nickname", "type": "string", "max_length": 40},
+          {"name": "rating", "type": "float"},
+          {"name": "vip", "type": "bool"},
+          {"name": "birthday", "type": "date"},
+          {"name": "last_seen", "type": "datetime"}
+        ]
+      }
+    },
+    {
+      "name": "Note",
+      "table_name": "notes",
+      "plural_path": "notes",
+      "options": {},
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120}
+      ]
+    }
+  ],
+  "relations": []
+}

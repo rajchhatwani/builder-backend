@@ -48,6 +48,7 @@ from app.services import audit_service, preview_runtime
 from app.services.preview_limits import Effective, effective, resolve
 from app.services.sandbox import Sandbox, make_sandbox, reap_expired
 from app.services.spec_service import SpecService
+from app.services.usage_service import UsageService
 
 log = logging.getLogger(__name__)
 
@@ -560,6 +561,10 @@ class PreviewService:
                 f"you already have {live} live preview(s); the limit is {lim.max_live_per_user}",
                 409,
             )
+        # B4-5: the org's daily preview quota, charged in the same transaction as the row.
+        await UsageService(self.session).consume(
+            project.organization_id, "previews.started", 1, project_id=project_id
+        )
         token = new_token()
         pid = uuid.uuid4()
         code_dir = root / pid.hex / "code"

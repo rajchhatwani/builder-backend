@@ -72,6 +72,7 @@ NAMES = [
     "combined_async",
     "webhooks_orders",
     "hooks_effects",
+    "custom_fields",
 ]
 
 

@@ -20,6 +20,9 @@ def sample_{{ e.table }}() -> dict[str, _t.Any]:
 {% for f in e.fields if not f.managed %}
         "{{ f.name }}": {{ f.sample }},
 {% endfor %}
+{% if e.custom and e.custom.sample_literal != "{}" %}
+        "custom_fields": {{ e.custom.sample_literal }},
+{% endif %}
     }
 
 

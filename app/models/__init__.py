@@ -6,6 +6,7 @@ from app.models.auth_secrets import ProjectAuthSecrets
 from app.models.authorization_config import ProjectAuthorization
 from app.models.base import Base
 from app.models.behavior_config import ProjectBehavior
+from app.models.data_import import ImportBatch, ImportedRecord, ImportRow  # noqa: F401
 from app.models.dependency_policy import DependencyRequest
 from app.models.deployment_config import ProjectDeployment
 from app.models.documents_config import ProjectDocuments
@@ -37,6 +38,7 @@ from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
 from app.models.spec_op import SpecOp
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
+from app.models.usage import UsageCounter, UsageEvent, UsageLimit  # noqa: F401
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 
 __all__ = [

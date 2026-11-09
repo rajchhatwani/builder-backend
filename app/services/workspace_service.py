@@ -32,6 +32,7 @@ from app.models.spec_op import SpecOp
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 from app.schemas.workspace import CheckpointRead, WorkspaceRead
 from app.services.spec_service import SpecService
+from app.services.usage_service import UsageService
 
 log = logging.getLogger(__name__)
 ACTIVE_STATES = ("active", "rolled_back")
@@ -351,6 +352,11 @@ class WorkspaceService:
         ).scalar_one()
         if active >= self.settings.workspace_max_active_per_project:
             raise AppError("workspace_limit", "too many active workspaces for this project", 409)
+        # B4-5 / FX-8: the org's workspace quota is charged in the SAME transaction as the row
+        # (atomic conditional counter); a refusal is a 429 `quota_exceeded` and creates nothing.
+        await UsageService(self.session).consume(
+            project.organization_id, "workspaces.active", 1, project_id=project_id
+        )
         seq = await self._spec_seq(project_id)
         self.session.add(
             Workspace(
@@ -405,6 +411,7 @@ class WorkspaceService:
             await self._cleanup(project_id, wt, branch, db, [x for x in snaps if x])
             gone = await self._get(project_id, ws_id, lock=True)
             await self.session.delete(gone)
+            await self._release_gauge(project_id)
             await self.session.commit()
             raise
         return await self.read(project_id, ws_id)
@@ -653,6 +660,16 @@ class WorkspaceService:
         return await self.read(project_id, ws_id)
 
     # -- discard ---------------------------------------------------------------------------
+    async def _release_gauge(self, project_id: uuid.UUID) -> None:
+        """Give the org's `workspaces.active` slot back (same transaction as the state change)."""
+        org_id = (
+            await self.session.execute(
+                select(Project.organization_id).where(Project.id == project_id)
+            )
+        ).scalar_one_or_none()
+        if org_id is not None:
+            await UsageService(self.session).release(org_id, "workspaces.active", 1)
+
     async def _drop_dbs(self, names: list[str]) -> list[str]:
         failed = []
         for name in names:
@@ -696,6 +713,8 @@ class WorkspaceService:
             raise AppError("workspace_busy", "another operation is running on this workspace", 409)
         if ws.state == "discarded" and ws.preview_db_name is None and ws.worktree_path is None:
             return await self.read(project_id, ws_id)
+        if ws.state != "discarded":  # a retried cleanup must not release the gauge twice
+            await self._release_gauge(project_id)
         ws.state = "discarded"  # write-ahead: nothing new can start from here
         await self.session.commit()
         ws = await self._get(project_id, ws_id, lock=True)
@@ -716,3 +735,36 @@ class WorkspaceService:
             log.error("workspace %s discarded with incomplete cleanup", ws_id)
         await self.session.commit()
         return await self.read(project_id, ws_id)
+
+
+async def expire_idle_workspaces(
+    session: AsyncSession,
+    now: datetime | None = None,
+    ttl: timedelta | None = None,
+    settings: Settings | None = None,
+) -> list[uuid.UUID]:
+    """FX-8 idle TTL sweep: discard every live workspace untouched for `ttl` (default
+    `workspace_idle_ttl_days`, 14) through the normal `discard` path, which also releases the
+    org's `workspaces.active` gauge. `updated_at` is the activity stamp (every checkpoint,
+    rollback and sync touches it). Busy workspaces are left alone. No scheduler is started here:
+    the caller (a job or an operator) decides when to run it. Returns the discarded ids."""
+    cfg = settings or get_settings()
+    now = now or datetime.now(UTC)
+    ttl = ttl if ttl is not None else timedelta(days=cfg.workspace_idle_ttl_days)
+    rows = (
+        await session.execute(
+            select(Workspace.id, Workspace.project_id).where(
+                Workspace.state.in_(ACTIVE_STATES), Workspace.updated_at < now - ttl
+            )
+        )
+    ).all()
+    svc = WorkspaceService(session, cfg)
+    done: list[uuid.UUID] = []
+    for ws_id, project_id in rows:
+        try:
+            await svc.discard(project_id, ws_id)
+            done.append(ws_id)
+        except AppError as exc:  # busy / vanished meanwhile: next sweep
+            log.warning("idle workspace %s not discarded: %s", ws_id, exc.code)
+            await session.rollback()
+    return done

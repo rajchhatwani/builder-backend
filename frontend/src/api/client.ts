@@ -77,6 +77,11 @@ import type {
   ObservabilityWrite,
   AuthorizationWrite,
   AccessDiff,
+  ImportPreview,
+  ImportRow,
+  ImportRowPage,
+  ImportCommitResult,
+  ImportRecordPage,
   AccessDiffRequest,
   AccessMatrix,
   CoverageResult,
@@ -364,6 +369,38 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(confirmWeakening ? { op_type: opType, payload, confirm_weakening: true } : { op_type: opType, payload }),
     }),
+  /** Uploads a CSV (multipart: the browser sets the boundary, so no JSON content type). */
+  uploadImport: async (projectId: string, file: File, entity: string, mapping?: Record<string, string>): Promise<ImportPreview> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('entity', entity)
+    if (mapping) form.append('mapping', JSON.stringify(mapping))
+    const send = () =>
+      fetch(`${BASE_URL}/projects/${projectId}/imports`, { method: 'POST', credentials: 'include', headers: authHeader('app'), body: form })
+    let response = await send()
+    if (response.status === 401 && (await refreshSession('app'))) response = await send()
+    if (!response.ok) {
+      const raw = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null
+      throw new ApiError(response.status, {
+        code: typeof raw?.code === 'string' ? raw.code : 'bad_response',
+        message: typeof raw?.message === 'string' ? raw.message : `The server answered ${response.status}`,
+        details: Array.isArray(raw?.details) ? raw.details : [],
+      })
+    }
+    return (await response.json()) as ImportPreview
+  },
+  setImportMapping: (projectId: string, batchId: string, mapping: Record<string, string | null>) =>
+    request<ImportPreview>(`/projects/${projectId}/imports/${batchId}/mapping`, { method: 'PUT', body: JSON.stringify({ mapping }) }),
+  listImportRows: (projectId: string, batchId: string, status?: string, limit = 100) =>
+    request<ImportRowPage>(`/projects/${projectId}/imports/${batchId}/rows?limit=${limit}${status ? `&status=${encodeURIComponent(status)}` : ''}`),
+  fixImportRow: (projectId: string, batchId: string, rowId: string, values: Record<string, unknown>) =>
+    request<ImportRow>(`/projects/${projectId}/imports/${batchId}/rows/${rowId}`, { method: 'PUT', body: JSON.stringify({ values }) }),
+  commitImport: (projectId: string, batchId: string) =>
+    request<ImportCommitResult>(`/projects/${projectId}/imports/${batchId}/commit`, { method: 'POST' }),
+  cancelImport: (projectId: string, batchId: string) =>
+    request<unknown>(`/projects/${projectId}/imports/${batchId}/cancel`, { method: 'POST' }),
+  listImportRecords: (projectId: string, entity: string, limit = 20) =>
+    request<ImportRecordPage>(`/projects/${projectId}/imports/records?entity=${encodeURIComponent(entity)}&limit=${limit}`),
   undoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/undo`, { method: 'POST' }),
   redoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/redo`, { method: 'POST' }),
   restoreSpec: (projectId: string, toSeq: number) =>

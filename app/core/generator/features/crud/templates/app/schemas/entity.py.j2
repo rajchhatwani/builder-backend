@@ -1,5 +1,11 @@
 """Pydantic schemas for {{ e.name }} (generated)."""
 @@ALIAS_IMPORTS@@
+{% if e.custom %}
+
+from app.core import custom_fields as _custom_fields
+
+_CUSTOM_DEFS = {{ e.custom.defs_literal }}
+{% endif %}
 {% set m2m = e.attrs | selectattr("many_to_many") | list %}
 {% set collections = e.attrs | rejectattr("scalar") | map(attribute="attr") | list %}
 {% set singles = e.attrs | selectattr("scalar") | map(attribute="attr") | list %}
@@ -15,8 +21,18 @@ class {{ e.name }}Create(_pd.BaseModel):
 {% for a in m2m %}
     {{ a.create_decl }}
 {% endfor %}
-{% if not (e.fields or e.fks or m2m) %}
+{% if e.custom %}
+    custom_fields: dict[str, _t.Any] = _pd.Field(default_factory=dict)
+{% endif %}
+{% if not (e.fields or e.fks or m2m or e.custom) %}
     pass
+{% endif %}
+{% if e.custom %}
+
+    @_pd.field_validator("custom_fields")
+    @classmethod
+    def check_custom_fields(cls, value: dict[str, _t.Any]) -> dict[str, _t.Any]:
+        return _custom_fields.validate(value, _CUSTOM_DEFS, max_keys={{ e.custom.max_keys }}, max_bytes={{ e.custom.max_bytes }})
 {% endif %}
 
 
@@ -30,8 +46,20 @@ class {{ e.name }}Update(_pd.BaseModel):
 {% for a in m2m %}
     {{ a.update_decl }}
 {% endfor %}
-{% if not (e.fields or e.fks or m2m) %}
+{% if e.custom %}
+    custom_fields: dict[str, _t.Any] | None = None
+{% endif %}
+{% if not (e.fields or e.fks or m2m or e.custom) %}
     pass
+{% endif %}
+{% if e.custom %}
+
+    @_pd.field_validator("custom_fields")
+    @classmethod
+    def check_custom_fields(cls, value: dict[str, _t.Any] | None) -> dict[str, _t.Any] | None:
+        if value is None:
+            return None
+        return _custom_fields.validate(value, _CUSTOM_DEFS, max_keys={{ e.custom.max_keys }}, max_bytes={{ e.custom.max_bytes }})
 {% endif %}
 {% if e.non_nullable %}
 
@@ -57,6 +85,9 @@ class {{ e.name }}Read(_pd.BaseModel):
 {% for a in e.attrs %}
     {{ a.read_decl }}
 {% endfor %}
+{% if e.custom %}
+    custom_fields: dict[str, _t.Any]
+{% endif %}
     created_at: _dt.datetime
     updated_at: _dt.datetime
 {% if collections %}
