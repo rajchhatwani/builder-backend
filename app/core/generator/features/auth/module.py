@@ -14,9 +14,11 @@ from typing import Any
 
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
+from app.core.generator.features.keycloak.module import docs_client_id
 from app.core.generator.features.tests.module import creatable
 from app.core.generator.render import make_environment, pyrepr, read_verbatim, render_template
 from app.core.spec_models import SpecAuth, SpecAuthCustomField
+from app.core.suite_identity import hub_base_url
 from app.core.validation import invitations_enabled
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -300,7 +302,9 @@ def _keycloak_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
     return {
         **_auth_context(project, auth),
         "kc": kc,
-        "docs_client_id": f"{kc.web_client_id}-docs",
+        "docs_client_id": docs_client_id(kc),
+        "suite": auth.suite,
+        "hub_base_url": hub_base_url(auth.suite.hub_issuer) if auth.suite and auth.suite.hub_issuer else None,
         "custom_fields": columns,
         "kc_fields": [
             {

@@ -1231,3 +1231,20 @@ body.is-viewing {
 .import-steps [aria-current='step'] { font-weight: 600; }
 .import-rows { list-style: none; padding: 0; }
 .import-rows dl { overflow-wrap: anywhere; }
+
+/* Trace waterfall (F4-5) */
+.trace-scroll { overflow-x: auto; border: 1px solid var(--border); margin-block-end: var(--space-3); }
+.trace-rows { list-style: none; margin: 0; padding: 0; min-inline-size: 40rem; }
+.trace-row { display: grid; grid-template-columns: minmax(16rem, 2fr) 3fr; gap: var(--space-2); inline-size: 100%; background: none; border: 0; border-block-end: 1px solid var(--border); color: inherit; font: inherit; text-align: start; padding: var(--space-1, 4px) var(--space-2); cursor: pointer; }
+.trace-row.is-selected { background: color-mix(in srgb, var(--accent, currentColor) 12%, transparent); font-weight: 600; }
+.trace-label { overflow-wrap: anywhere; }
+.trace-track { position: relative; block-size: 1rem; align-self: center; background: color-mix(in srgb, currentColor 6%, transparent); }
+.trace-bar { position: absolute; inset-block: 0; background: var(--accent, currentColor); opacity: 0.6; }
+.trace-bar.is-critical { opacity: 1; }
+.trace-bar.is-error { background: repeating-linear-gradient(45deg, currentColor 0 4px, transparent 4px 8px); outline: 1px solid currentColor; }
+
+/* ── Realtime indicator (F4-2): fixed width so a changing roster never shifts the header ── */
+.live-indicator { display: inline-flex; align-items: center; gap: 0.5rem; white-space: nowrap; }
+.live-indicator .live-status { min-width: 6.5rem; }
+.live-indicator .live-here { display: inline-block; width: 11rem; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 900px) { .live-indicator .live-here { display: none; } }

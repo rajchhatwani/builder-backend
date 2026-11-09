@@ -214,8 +214,18 @@ export interface AuthConfig {
   app_name: string | null
   app_url: string | null
   email_templates: Record<string, unknown> | null
+  /** Sign-in suite membership (F4-7); null when the project is not part of a suite. */
+  suite: SuiteRef | null
   created_at: string
   updated_at: string
+}
+
+export type SuiteJoinState = 'none' | 'planned' | 'joined'
+
+export interface SuiteRef {
+  suite_id: string
+  hub_issuer: string | null
+  join_state: SuiteJoinState
 }
 
 export interface AuthConfigCreate {
@@ -244,6 +254,8 @@ export interface AuthConfigCreate {
 }
 
 export interface AuthConfigUpdate {
+  /** null removes the project from its suite; omitted keeps it. */
+  suite?: SuiteRef | null
   enabled?: boolean | null
   token_store?: TokenStore | null
   access_token_ttl_minutes?: number | null
@@ -1799,4 +1811,102 @@ export interface ImportRecordPage {
   total: number
   limit: number
   offset: number
+}
+
+// F4-3: metrics layer and scheduled reports.
+export interface MetricFilterDef {
+  field: string
+  op: string
+  value: unknown
+}
+
+export interface MetricDefinition {
+  key: string
+  label: string
+  entity: string
+  agg: string
+  field?: string | null
+  filter: MetricFilterDef[]
+  group_by?: string | null
+  unit?: string | null
+}
+
+export interface MetricRead {
+  key: string
+  version: number
+  definition: MetricDefinition
+  updated_at: string
+}
+
+export interface MetricPage {
+  items: MetricRead[]
+  total: number
+}
+
+export interface MetricGroup {
+  key: string | null
+  value: number | string | null
+}
+
+export interface MetricValue {
+  key: string
+  version: number
+  value: number | string | null
+  groups?: MetricGroup[] | null
+  computed_at: string
+}
+
+export interface ReportBody {
+  name: string
+  metric_keys: string[]
+  schedule: string
+  timezone: string
+  enabled: boolean
+}
+
+export interface ReportRead extends ReportBody {
+  id: string
+  last_scheduled_for: string | null
+  updated_at: string
+}
+
+export interface ReportPage {
+  items: ReportRead[]
+  total: number
+}
+
+/** One metric's slot in a report run or live report: a value (and groups), or a stored error text. */
+export interface ReportMetricValue {
+  value?: number | string | null
+  groups?: MetricGroup[] | null
+  error?: string
+}
+
+export interface ReportRunRead {
+  id: string
+  report_id: string
+  scheduled_for: string
+  status: string
+  values: Record<string, ReportMetricValue | string | number | null>
+  created_at: string
+}
+
+export interface ReportRunPage {
+  items: ReportRunRead[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ReportValue {
+  report_id: string
+  values: Record<string, ReportMetricValue | string | number | null>
+  computed_at: string
+}
+
+export interface PresenceUserRead {
+  user_id: string
+  display: string
+  where: string
+  last_seen: string
 }

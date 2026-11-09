@@ -13,6 +13,7 @@ from app.core import naming
 from app.core.custom_fields import COLUMN as CUSTOM_COLUMN
 from app.core.custom_fields import is_enabled
 from app.core.enums import OnDelete, RelationKind, RowRule
+from app.core.suite_identity import apply_suite
 from app.core.spec_models import Spec, SpecAuth, SpecEntity, SpecField, SpecRelation, SpecSequence
 from app.core.validation_authorization import (
     authz_active,
@@ -748,6 +749,7 @@ def _build_entity(
 
 
 def build_context(spec: Spec) -> ProjectCtx:
+    spec = apply_suite(spec)  # a suite member's realm and client ids are derived
     entities_sorted = sorted(spec.entities, key=lambda e: e.table_name)
     tables = {e.name: e.table_name for e in entities_sorted}
     relations = sorted(spec.relations, key=lambda r: (r.from_entity, r.from_name, r.to_entity))

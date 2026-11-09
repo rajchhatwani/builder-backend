@@ -2491,6 +2491,16 @@
        }
       ]
      },
+     "suite": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteRef"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "token_store": {
       "$ref": "#/components/schemas/TokenStore",
       "default": "db"
@@ -2642,6 +2652,16 @@
        }
       ]
      },
+     "suite": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteRef"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "token_store": {
       "$ref": "#/components/schemas/TokenStore"
      },
@@ -2677,6 +2697,7 @@
      "app_name",
      "app_url",
      "email_templates",
+     "suite",
      "created_at",
      "updated_at"
     ],
@@ -2921,6 +2942,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SmtpConfig"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "suite": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteRef"
        },
        {
         "type": "null"
@@ -5983,6 +6014,19 @@
     "title": "HTTPValidationError",
     "type": "object"
    },
+   "HeartbeatBody": {
+    "additionalProperties": false,
+    "properties": {
+     "where": {
+      "default": "",
+      "maxLength": 80,
+      "title": "Where",
+      "type": "string"
+     }
+    },
+    "title": "HeartbeatBody",
+    "type": "object"
+   },
    "HistoryBody": {
     "properties": {
      "entity": {
@@ -8256,6 +8300,126 @@
      "role"
     ],
     "title": "MemberUpdate",
+    "type": "object"
+   },
+   "MetricBody": {
+    "description": "`definition` is parsed by app.core.metrics so every defect is the stable `metric_invalid`.",
+    "properties": {
+     "definition": {
+      "additionalProperties": true,
+      "title": "Definition",
+      "type": "object"
+     }
+    },
+    "required": [
+     "definition"
+    ],
+    "title": "MetricBody",
+    "type": "object"
+   },
+   "MetricPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/MetricRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "MetricPage",
+    "type": "object"
+   },
+   "MetricRead": {
+    "properties": {
+     "definition": {
+      "additionalProperties": true,
+      "title": "Definition",
+      "type": "object"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "key",
+     "version",
+     "definition",
+     "updated_at"
+    ],
+    "title": "MetricRead",
+    "type": "object"
+   },
+   "MetricValue": {
+    "properties": {
+     "computed_at": {
+      "format": "date-time",
+      "title": "Computed At",
+      "type": "string"
+     },
+     "groups": {
+      "anyOf": [
+       {
+        "items": {
+         "additionalProperties": true,
+         "type": "object"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Groups"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "key",
+     "version",
+     "value",
+     "computed_at"
+    ],
+    "title": "MetricValue",
     "type": "object"
    },
    "MfaChallengeRead": {
@@ -11246,6 +11410,35 @@
     "title": "PortalRead",
     "type": "object"
    },
+   "PresenceRead": {
+    "properties": {
+     "display": {
+      "title": "Display",
+      "type": "string"
+     },
+     "last_seen": {
+      "format": "date-time",
+      "title": "Last Seen",
+      "type": "string"
+     },
+     "user_id": {
+      "title": "User Id",
+      "type": "string"
+     },
+     "where": {
+      "title": "Where",
+      "type": "string"
+     }
+    },
+    "required": [
+     "user_id",
+     "display",
+     "where",
+     "last_seen"
+    ],
+    "title": "PresenceRead",
+    "type": "object"
+   },
    "PreviewCreate": {
     "properties": {
      "workspace_id": {
@@ -13237,6 +13430,233 @@
      "to"
     ],
     "title": "RenameHint",
+    "type": "object"
+   },
+   "ReportBody": {
+    "additionalProperties": false,
+    "properties": {
+     "enabled": {
+      "default": true,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "metric_keys": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 20,
+      "minItems": 1,
+      "title": "Metric Keys",
+      "type": "array"
+     },
+     "name": {
+      "maxLength": 120,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "schedule": {
+      "maxLength": 100,
+      "minLength": 1,
+      "title": "Schedule",
+      "type": "string"
+     },
+     "timezone": {
+      "default": "UTC",
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Timezone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "metric_keys",
+     "schedule"
+    ],
+    "title": "ReportBody",
+    "type": "object"
+   },
+   "ReportPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ReportRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total"
+    ],
+    "title": "ReportPage",
+    "type": "object"
+   },
+   "ReportRead": {
+    "properties": {
+     "enabled": {
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "last_scheduled_for": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Scheduled For"
+     },
+     "metric_keys": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Metric Keys",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "schedule": {
+      "title": "Schedule",
+      "type": "string"
+     },
+     "timezone": {
+      "title": "Timezone",
+      "type": "string"
+     },
+     "updated_at": {
+      "format": "date-time",
+      "title": "Updated At",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "metric_keys",
+     "schedule",
+     "timezone",
+     "enabled",
+     "last_scheduled_for",
+     "updated_at"
+    ],
+    "title": "ReportRead",
+    "type": "object"
+   },
+   "ReportRunPage": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/ReportRunRead"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "ReportRunPage",
+    "type": "object"
+   },
+   "ReportRunRead": {
+    "properties": {
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "report_id": {
+      "format": "uuid",
+      "title": "Report Id",
+      "type": "string"
+     },
+     "scheduled_for": {
+      "format": "date-time",
+      "title": "Scheduled For",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "values": {
+      "additionalProperties": true,
+      "title": "Values",
+      "type": "object"
+     }
+    },
+    "required": [
+     "id",
+     "report_id",
+     "scheduled_for",
+     "status",
+     "values",
+     "created_at"
+    ],
+    "title": "ReportRunRead",
+    "type": "object"
+   },
+   "ReportValue": {
+    "properties": {
+     "computed_at": {
+      "format": "date-time",
+      "title": "Computed At",
+      "type": "string"
+     },
+     "report_id": {
+      "format": "uuid",
+      "title": "Report Id",
+      "type": "string"
+     },
+     "values": {
+      "additionalProperties": true,
+      "title": "Values",
+      "type": "object"
+     }
+    },
+    "required": [
+     "report_id",
+     "values",
+     "computed_at"
+    ],
+    "title": "ReportValue",
     "type": "object"
    },
    "RequirementsRead": {
@@ -32223,6 +32643,64 @@
     ]
    }
   },
+  "/projects/{project_id}/events/stream": {
+   "get": {
+    "operationId": "stream_projects__project_id__events_stream_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "last_event_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 40,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Last Event Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Stream",
+    "tags": [
+     "realtime"
+    ]
+   }
+  },
   "/projects/{project_id}/generate/download": {
    "get": {
     "operationId": "download_projects__project_id__generate_download_get",
@@ -33537,6 +34015,307 @@
     ]
    }
   },
+  "/projects/{project_id}/metrics": {
+   "get": {
+    "operationId": "list_metrics_projects__project_id__metrics_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetricPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Metrics",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "post": {
+    "operationId": "create_metric_projects__project_id__metrics_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MetricBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetricRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Metric",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/metrics/{key}": {
+   "delete": {
+    "operationId": "delete_metric_projects__project_id__metrics__key__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "key",
+      "required": true,
+      "schema": {
+       "title": "Key",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Metric",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "get": {
+    "operationId": "get_metric_projects__project_id__metrics__key__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "key",
+      "required": true,
+      "schema": {
+       "title": "Key",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetricRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Metric",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "put": {
+    "operationId": "put_metric_projects__project_id__metrics__key__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "key",
+      "required": true,
+      "schema": {
+       "title": "Key",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/MetricBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetricRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Metric",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/metrics/{key}/value": {
+   "get": {
+    "operationId": "metric_value_projects__project_id__metrics__key__value_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "key",
+      "required": true,
+      "schema": {
+       "title": "Key",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/MetricValue"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Metric Value",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
   "/projects/{project_id}/migration-plan": {
    "post": {
     "description": "Plan the database change from the last generation (or `against_generation_id`) to the\ncurrent spec. Read-only; needs the editor role (the default for a POST).",
@@ -34160,6 +34939,99 @@
     "summary": "Bulk upsert permissions for a project (returns full updated list)",
     "tags": [
      "auth"
+    ]
+   }
+  },
+  "/projects/{project_id}/presence": {
+   "get": {
+    "operationId": "presence_projects__project_id__presence_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/PresenceRead"
+         },
+         "title": "Response Presence Projects  Project Id  Presence Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Presence",
+    "tags": [
+     "realtime"
+    ]
+   }
+  },
+  "/projects/{project_id}/presence/heartbeat": {
+   "post": {
+    "operationId": "heartbeat_projects__project_id__presence_heartbeat_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/HeartbeatBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Heartbeat",
+    "tags": [
+     "realtime"
     ]
    }
   },
@@ -34879,6 +35751,440 @@
     "summary": "Create Relation",
     "tags": [
      "relations"
+    ]
+   }
+  },
+  "/projects/{project_id}/reports": {
+   "get": {
+    "operationId": "list_reports_projects__project_id__reports_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Reports",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "post": {
+    "operationId": "create_report_projects__project_id__reports_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReportBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Report",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/reports/{report_id}": {
+   "delete": {
+    "operationId": "delete_report_projects__project_id__reports__report_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Delete Report",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "get": {
+    "operationId": "get_report_projects__project_id__reports__report_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Report",
+    "tags": [
+     "metrics"
+    ]
+   },
+   "put": {
+    "operationId": "put_report_projects__project_id__reports__report_id__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ReportBody"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Put Report",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/reports/{report_id}/run": {
+   "post": {
+    "operationId": "run_report_projects__project_id__reports__report_id__run_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportRunRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Run Report",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/reports/{report_id}/runs": {
+   "get": {
+    "operationId": "list_runs_projects__project_id__reports__report_id__runs_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportRunPage"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Runs",
+    "tags": [
+     "metrics"
+    ]
+   }
+  },
+  "/projects/{project_id}/reports/{report_id}/value": {
+   "get": {
+    "operationId": "report_value_projects__project_id__reports__report_id__value_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "report_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Report Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ReportValue"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Report Value",
+    "tags": [
+     "metrics"
     ]
    }
   },

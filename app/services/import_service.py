@@ -32,6 +32,7 @@ from app.schemas.data_import import (
     RowPage,
     RowRead,
 )
+from app.services.realtime_service import publish as publish_event
 from app.services.spec_service import SpecService
 from app.services.usage_service import consume_import_rows
 
@@ -357,6 +358,10 @@ class ImportService:
         batch.status = "committed"
         batch.committed_at = _utcnow()
         result = self._commit_result(batch)
+        await publish_event(  # B4-2: counts and names only, never row data
+            self.s, project_id, "imports", "import.committed",
+            {"batch_id": str(batch.id), "entity": batch.entity_name, **counts["commit"]},
+        )  # fmt: skip
         await self.s.commit()
         return result, True
 

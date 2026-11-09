@@ -22,6 +22,14 @@ API_CLIENT_ID = {{ kc.api_client_id | pyrepr }}
 # The public client browsers sign in with, and the one Swagger UI (/docs) uses.
 WEB_CLIENT_ID = {{ kc.web_client_id | pyrepr }}
 DOCS_CLIENT_ID = {{ docs_client_id | pyrepr }}
+{% if suite %}
+
+# This project is a member of a sign-in suite: it trusts the shared realm {{ kc.realm }}. People
+# sign in once for every member; this API accepts only tokens whose `aud` names API_CLIENT_ID.
+SUITE_ID = {{ suite.suite_id | pyrepr }}
+# The issuer the suite hub was announced with; when set, any other issuer is refused at start.
+HUB_ISSUER: str | None = {{ (suite.hub_issuer.rstrip("/") if suite.hub_issuer else None) | pyrepr }}
+{% endif %}
 
 EMAIL_VERIFICATION_REQUIRED = {{ verification_required | pyrepr }}
 SECURITY_HEADERS_ENABLED = {{ a.security_headers_enabled | pyrepr }}
@@ -102,6 +110,14 @@ class AuthSettings(BaseSettings):
                 "(terminate TLS in front of Keycloak)"
             )
         return self
+{% if suite %}
+
+    @model_validator(mode="after")
+    def issuer_is_the_suite_hub(self) -> "AuthSettings":
+        if HUB_ISSUER is not None and self.issuer != HUB_ISSUER:
+            raise ValueError(f"KEYCLOAK_PUBLIC_URL must give the suite issuer {HUB_ISSUER}")
+        return self
+{% endif %}
 
     @property
     def issuer(self) -> str:

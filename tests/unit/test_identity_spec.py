@@ -7,7 +7,6 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from app.core.generator import generate
 from app.core.spec_models import Spec, SpecSuiteRef
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures" / "specs"
@@ -27,10 +26,3 @@ def test_suite_ids_are_validated() -> None:
     for bad in ("", "Acme", "a b", "-x", "x" * 64):
         with pytest.raises(ValidationError):
             SpecSuiteRef(suite_id=bad)
-
-
-def test_the_generator_ignores_the_suite_block() -> None:
-    plain = generate(Spec.model_validate(_shop()))
-    data = _shop()
-    data["auth"]["suite"] = {"suite_id": "acme", "hub_issuer": "https://hub.example/realms/a"}
-    assert generate(Spec.model_validate(data)) == plain

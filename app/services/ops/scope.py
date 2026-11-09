@@ -52,6 +52,7 @@ from app.models.spec_op import SpecOp
 from app.models.storage_config import ProjectStorageConfig
 from app.services.ops.canon import canonical_hash
 from app.services.ops.registry import recognise
+from app.services.realtime_service import publish as publish_event
 
 # Every model SpecService.assemble reads. A write to one of these may change the spec.
 SPEC_MODELS: tuple[type, ...] = (
@@ -331,6 +332,10 @@ class OpScope:
         )
         self.session.add(row)
         await self.session.flush()
+        await publish_event(  # B4-2: ids and names only, in this same transaction
+            self.session, self.project_id, "spec", "spec.changed",
+            {"seq": seq, "op_type": op_type, "origin": origin},
+        )  # fmt: skip
         return row
 
     async def _record_legacy(self) -> None:

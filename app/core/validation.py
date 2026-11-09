@@ -47,6 +47,12 @@ from app.core.spec_models import (
     SpecProject,
     SpecRelation,
 )
+from app.core.suite_identity import (
+    JOIN_STATES,
+    MAX_SUITE_ID_LENGTH,
+    SUITE_REALM_PREFIX,
+    suite_realm,
+)
 from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
@@ -175,7 +181,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     entities_by_name = _check_entities(spec, ctx)
     _check_relations(spec, entities_by_name, ctx)
     if spec.auth is not None:
-        _check_auth(spec.auth, entities_by_name, ctx)
+        _check_auth(spec.auth, entities_by_name, ctx, spec.project.slug)
     check_payments(spec, entities_by_name, ctx.add, redirect_uri_problem)
     check_storage(spec, entities_by_name, ctx.add)
     check_authorization(spec, entities_by_name, ctx.add)
@@ -804,12 +810,16 @@ def _single_line(value: str) -> bool:
     )
 
 
-def _check_auth(auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx) -> None:
+def _check_auth(
+    auth: SpecAuth, entities: dict[str, SpecEntity], ctx: _Ctx, project_slug: str = ""
+) -> None:
     # Structural checks run even when auth is switched off: the stored model must always
     # be importable, so enum values and permission references have to make sense.
     _check_auth_structure(auth, entities, ctx)
     if not auth.enabled:
         return
+    if auth.suite is not None:
+        _check_suite(auth, project_slug, ctx)
     if auth.provider == AuthProvider.keycloak:
         _check_auth_keycloak(auth, entities, ctx)
         return
@@ -1397,6 +1407,56 @@ def _check_keycloak_exclusions(auth: SpecAuth, ctx: _Ctx) -> None:
                 f"auth.roles[{i}].invite_only",
                 "unsupported_value",
                 "invitations do not exist with Keycloak; create the user in Keycloak instead",
+            )
+
+
+def _check_suite(auth: SpecAuth, project_slug: str, ctx: _Ctx) -> None:
+    """A new project inside a suite (identity path a): the project joins the shared realm
+    `suite-<suite_id>`, which is derived, never typed."""
+    suite = auth.suite
+    if suite is None:
+        return
+    p = "auth.suite"
+    realm = suite_realm(suite.suite_id)
+    if auth.provider != AuthProvider.keycloak:
+        ctx.add(p, "suite_requires_keycloak", "a suite needs auth.provider keycloak")
+    if len(suite.suite_id) > MAX_SUITE_ID_LENGTH:
+        ctx.add(
+            f"{p}.suite_id",
+            "suite_id_too_long",
+            f"must be at most {MAX_SUITE_ID_LENGTH} characters (the realm is {SUITE_REALM_PREFIX}<id>)",
+        )
+    if suite.suite_id.endswith("-"):
+        ctx.add(f"{p}.suite_id", "invalid_identifier", "must not end with a hyphen")
+    if suite.join_state not in JOIN_STATES:
+        ctx.add(f"{p}.join_state", "invalid_value", "must be none, planned or joined")
+    if suite.hub_issuer is not None:
+        problem = redirect_uri_problem(suite.hub_issuer)
+        if problem is None and urlsplit(suite.hub_issuer).query:
+            problem = "must not contain a query"
+        if problem is not None:
+            ctx.add(f"{p}.hub_issuer", "invalid_hub_issuer", problem)
+        elif not urlsplit(suite.hub_issuer).path.rstrip("/").endswith(f"/realms/{realm}"):
+            ctx.add(
+                f"{p}.hub_issuer",
+                "hub_issuer_realm_mismatch",
+                f"must end with the realm path /realms/{realm}",
+            )
+    kc = auth.keycloak
+    if kc is not None and auth.provider == AuthProvider.keycloak:
+        if kc.realm != realm:
+            ctx.add(
+                "auth.keycloak.realm",
+                "suite_realm_derived",
+                f"is derived for a suite member: it must be {realm!r}",
+            )
+        if kc.mode != KeycloakMode.shared:
+            ctx.add("auth.keycloak.mode", "suite_requires_shared", "a suite member uses shared mode")
+        if not _CLIENT_ID_RE.fullmatch(project_slug):
+            ctx.add(
+                "project.slug",
+                "invalid_identifier",
+                "becomes the client id in the suite realm; use letters, digits, . _ -",
             )
 
 

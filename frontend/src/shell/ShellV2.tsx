@@ -6,6 +6,7 @@ import { Icon, link, orgLabel, type Section } from '../components/Sidebar'
 import { CommandPalette } from './CommandPalette'
 import { RAIL_GROUPS, type Command } from './groups'
 import { findSection, type AnySection } from './pages'
+import { LiveIndicator } from '../realtime/LiveIndicator'
 import { WorkbenchDrawer } from './workbench/WorkbenchDrawer'
 
 interface Props {
@@ -95,6 +96,7 @@ export function ShellV2({ project, section, problems, on = {}, onShare, org, chi
             )}
           </div>
           <div className="col-6 justify-end hstack">
+            <LiveIndicator projectId={project.id} section={section} selfId={user?.id ?? null} />
             <button className="outline small" onClick={() => setWorkbenchOpen((o) => !o)} aria-expanded={workbenchOpen} aria-controls="workbench-drawer" data-testid="workbench-toggle">
               Workbench
             </button>

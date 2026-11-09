@@ -47,6 +47,10 @@ const HooksPage = lazy(() => import('../shell/behavior/HooksPage').then((m) => (
 const HomePage = lazy(() => import('../shell/home/HomePage').then((m) => ({ default: m.HomePage })))
 const RulesPage = lazy(() => import('../shell/rules/RulesPage').then((m) => ({ default: m.RulesPage })))
 const AccessPage = lazy(() => import('../shell/access/AccessPage').then((m) => ({ default: m.AccessPage })))
+const TracesPage = lazy(() => import('../shell/traces/TracesPage').then((m) => ({ default: m.TracesPage })))
+const SpecDiffPage = lazy(() => import('../shell/specdiff/SpecDiffPage').then((m) => ({ default: m.SpecDiffPage })))
+const MetricsPage = lazy(() => import('../shell/metrics/MetricsPage').then((m) => ({ default: m.MetricsPage })))
+const SuitePage = lazy(() => import('../shell/suite/SuitePage').then((m) => ({ default: m.SuitePage })))
 const ImportPage = lazy(() => import('../shell/import/ImportPage').then((m) => ({ default: m.ImportPage })))
 // F2-2 / F2-3 pages: own chunks. All sit behind the single flag ui.shell=v2.
 const PaymentsFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.PaymentsFormPage })))
@@ -348,6 +352,26 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       {section === 'permissions' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <AccessPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'traces' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <TracesPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'specdiff' && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <SpecDiffPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'metrics' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <MetricsPage projectId={project.id} />
+        </Suspense>
+      )}
+      {section === 'suite' && v2 && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          <SuitePage projectId={project.id} />
         </Suspense>
       )}
       {section === 'import' && (

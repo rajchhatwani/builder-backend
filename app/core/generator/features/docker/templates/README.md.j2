@@ -217,6 +217,32 @@ is asked to prove it is theirs before the two are linked.
 - CORS is open (`CORS_ORIGINS=["*"]`) by default; set it to your frontend's origin. Swagger UI (`/docs`) is on
   by default; remove it in production by creating the app with `docs_url=None, openapi_url=None` in `app/main.py`.
 - The API does not hold any Keycloak secret. Keep it that way: browsers must use the public client, never a secret.
+{% elif suite %}
+
+### Sign-in suite "{{ suite.suite_id }}"
+
+This project is a **new member of the sign-in suite `{{ suite.suite_id }}`**. It does not start Keycloak: all apps
+of the suite share the realm **{{ kc.realm }}** (the realm name is derived from the suite id), so people sign in once
+for every app, while each app decides what they may do with its own roles.
+
+- The project has **one client**, `{{ kc.api_client_id }}` (the project slug). Its roles are client roles, so they never
+  clash with another app's. Give users roles on that client in Keycloak.
+- Tokens carry the realm's `{{ "suite-audience" }}` scope, so `aud` lists every app in the suite. This API accepts a
+  token only if its issuer is `KEYCLOAK_PUBLIC_URL/realms/{{ kc.realm }}` **and** its `aud` contains `{{ kc.api_client_id }}`.
+  A token from another realm or suite is refused.
+{% if suite.hub_issuer %}- The suite issuer is `{{ suite.hub_issuer }}`; the API refuses to start with a different issuer.
+{% endif %}- Users are matched by `(issuer, subject)` in `auth_identity`; the local user id stays the key of your data.
+
+1. Copy `.env.example` to `.env`, set `KEYCLOAK_PUBLIC_URL` (and `KEYCLOAK_INTERNAL_URL` if this API cannot use the public address).
+2. Register this project in the suite realm (creates the realm if this is the first member, adds the client, its roles and
+   this app to the suite audience; can be run again):
+
+```bash
+KEYCLOAK_PUBLIC_URL=https://id.example.com KEYCLOAK_ADMIN_USERNAME=... KEYCLOAK_ADMIN_PASSWORD=... \
+API_PUBLIC_URL=https://api.example.com python scripts/keycloak_register.py
+```
+
+3. `docker compose up --build`.
 {% else %}
 
 ### Using your existing Keycloak

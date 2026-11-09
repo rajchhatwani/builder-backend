@@ -49,6 +49,10 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/rules`, { page: 'project', projectId: PID, section: 'rules' }],
   // Added by F4-4 (addition): the v2-only Access matrix page (the id 'access' already means the classic Authorization panel).
   [`#/p/${PID}/permissions`, { page: 'project', projectId: PID, section: 'permissions' }],
+  // Added by F4-6 (addition): the v2-only Visual spec diff page.
+  [`#/p/${PID}/specdiff`, { page: 'project', projectId: PID, section: 'specdiff' }],
+  // Added by F4-7 (addition): the v2-only Suite identity page.
+  [`#/p/${PID}/suite`, { page: 'project', projectId: PID, section: 'suite' }],
   // Added by F4-1 (addition): the v2-only Import wizard page.
   [`#/p/${PID}/import`, { page: 'project', projectId: PID, section: 'import' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
@@ -63,6 +67,10 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/jobs`, { page: 'project', projectId: PID, section: 'jobs' }],
   [`#/p/${PID}/workers`, { page: 'project', projectId: PID, section: 'workers' }],
   [`#/p/${PID}/workflows`, { page: 'project', projectId: PID, section: 'workflows' }],
+  // Added by F4-5 (addition): the v2-only Traces page.
+  [`#/p/${PID}/traces`, { page: 'project', projectId: PID, section: 'traces' }],
+  // Added by F4-3 (addition): the v2-only Metrics & reports page.
+  [`#/p/${PID}/metrics`, { page: 'project', projectId: PID, section: 'metrics' }],
   [`#/p/${PID}/nonsense`, { page: 'project', projectId: PID, section: 'overview' }],
 ]
 

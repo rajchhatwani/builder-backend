@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { ApiError, api } from '../../api/client'
+import { useRealtimeRefresh } from '../../realtime/bus'
 import type { ImportCommitResult, ImportCounts, ImportPreview, ImportRecord, ImportRow } from '../../api/types'
 import { link } from '../../components/Sidebar'
 import {
@@ -387,6 +388,8 @@ function FixRow({ row, entity, mapping, onSave }: { row: ImportRow; entity: Spec
 function Done({ projectId, entity, result, onAgain }: { projectId: string; entity: string; result: ImportCommitResult; onAgain: () => void }) {
   const [records, setRecords] = useState<ImportRecord[] | null>(null)
   const [failed, setFailed] = useState(false)
+  const [tick, setTick] = useState(0)
+  useRealtimeRefresh(['imports'], () => setTick((t) => t + 1))
   useEffect(() => {
     let cancelled = false
     api
@@ -400,7 +403,7 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
     return () => {
       cancelled = true
     }
-  }, [projectId, entity])
+  }, [projectId, entity, tick])
 
   return (
     <section aria-label="Import finished">

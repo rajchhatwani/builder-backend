@@ -1,0 +1,88 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Suite Portal",
+    "slug": "suite-portal",
+    "description": "A new project inside the acme sign-in suite",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {},
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "provider": "keycloak",
+    "password_reset": {
+      "email_magic_link": false
+    },
+    "registration": {
+      "email_verification_required": false,
+      "invite_only": true
+    },
+    "keycloak": {
+      "mode": "shared",
+      "realm": "suite-acme",
+      "api_client_id": "suite-portal-api",
+      "web_client_id": "suite-portal-web",
+      "redirect_uris": [
+        "https://portal.acme.com/callback"
+      ]
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "agent",
+          "admin"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "agent",
+          "admin"
+        ]
+      },
+      {
+        "entity": "Ticket",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      }
+    ],
+    "suite": {
+      "suite_id": "acme",
+      "hub_issuer": "https://id.acme.com/realms/suite-acme",
+      "join_state": "planned"
+    }
+  }
+}

@@ -86,6 +86,7 @@ class AuthConfigService:
             app_name=data.app_name,
             app_url=data.app_url,
             email_templates=data.email_templates,
+            suite=data.suite.model_dump() if data.suite else None,
         )
         self.session.add(config)
         try:
@@ -110,6 +111,9 @@ class AuthConfigService:
         if "sms_config" in updates and updates["sms_config"] is not None:
             sms = data.sms_config
             updates["sms_config"] = sms.model_dump() if sms is not None else None
+
+        if "suite" in updates and updates["suite"] is not None:
+            updates["suite"] = data.suite.model_dump() if data.suite else None
 
         for key, value in updates.items():
             setattr(config, key, value)

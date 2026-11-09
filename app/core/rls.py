@@ -103,6 +103,11 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "import_batches",
     "import_rows",
     "imported_records",
+    "realtime_events",
+    "realtime_floors",
+    "metrics",
+    "reports",
+    "report_runs",
 )
 # Tables that reach their org only through a parent row (no organization_id / project_id of
 # their own): table -> (column, parent table). Visible exactly when the parent row is (S2-010).
@@ -141,6 +146,7 @@ UNCONFINED_SESSION_MODULES: dict[str, str] = {
     "by preview id/secret; no org context exists before the preview is resolved",
     "app/services/usage_service.py": "refused-usage event written on its own connection; rows carry explicit org_id",
     "app/services/agent/run_service.py": "agent run worker: rows are addressed by run/project id",
+    "app/jobs/report_scheduler.py": "operator job across all orgs; rows are addressed by report id, runs carry explicit project/org ids",
     "app/services/agent/sweeper.py": "agent sweeper re-drives expired leases across all orgs",
     "app/services/agent_eval/runner.py": "offline eval harness, test database only",
     "app/core/shared_limiter.py": "rate counters are platform infrastructure keyed by string",

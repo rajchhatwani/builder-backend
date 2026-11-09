@@ -42,6 +42,17 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'specdiff',
+    label: 'Visual spec diff',
+    icon: (
+      <>
+        <path d="M4 5h6v14H4z" />
+        <path d="M14 5h6v14h-6z" />
+        <path d="M6 9h2M16 9h2M16 13h2" />
+      </>
+    ),
+  },
+  {
     id: 'import',
     label: 'Import data',
     icon: (
@@ -182,6 +193,40 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
         <rect x="15" y="9" width="6" height="5" rx="1" />
         <rect x="3" y="16" width="6" height="5" rx="1" />
         <path d="M9 5.5h3v6h3M6 8v8" />
+      </>
+    ),
+  },
+  {
+    id: 'traces',
+    label: 'Traces',
+    icon: (
+      <>
+        <path d="M4 6h9M7 12h11M10 18h8" />
+        <path d="M4 3v18" />
+      </>
+    ),
+  },
+  {
+    id: 'metrics',
+    label: 'Metrics & reports',
+    icon: (
+      <>
+        <path d="M4 20V4" />
+        <path d="M4 20h16" />
+        <path d="M8 16v-4M12 16V8M16 16v-6" />
+      </>
+    ),
+  },
+  {
+    id: 'suite',
+    label: 'Suite identity',
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <circle cx="5" cy="6" r="2" />
+        <circle cx="19" cy="6" r="2" />
+        <circle cx="12" cy="20" r="2" />
+        <path d="M10 10L6.5 7.5M14 10l3.5-2.5M12 15v3" />
       </>
     ),
   },

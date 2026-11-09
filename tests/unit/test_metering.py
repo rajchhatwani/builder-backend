@@ -7,9 +7,9 @@ import pytest
 from app.core import metering
 
 
-def test_registry_has_the_four_metrics() -> None:
+def test_registry_has_the_metrics() -> None:
     assert set(metering.METRICS) == {
-        "imports.rows", "imports.batches", "workspaces.active", "previews.started",
+        "imports.rows", "imports.batches", "workspaces.active", "previews.started", "reports.runs",
     }  # fmt: skip
     assert metering.METRICS["imports.rows"].period == "month"
     assert metering.METRICS["imports.rows"].default_limit == 50_000

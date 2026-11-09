@@ -1,0 +1,125 @@
+{
+  "realm": "suite-acme",
+  "api_client_id": "suite-portal",
+  "browser_client_ids": [],
+  "clients": [
+    {
+      "clientId": "suite-portal",
+      "name": "Suite Portal",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "fullScopeAllowed": false,
+      "redirectUris": [
+        "https://portal.acme.com/callback",
+        "${API_PUBLIC_URL}/docs/oauth2-redirect"
+      ],
+      "webOrigins": [
+        "https://portal.acme.com",
+        "${API_PUBLIC_URL}"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "https://portal.acme.com/callback##${API_PUBLIC_URL}/docs/oauth2-redirect"
+      },
+      "protocolMappers": [
+        {
+          "name": "api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "suite-portal",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "introspection.token.claim": "true"
+          }
+        }
+      ],
+      "description": "This project's client in the suite realm.",
+      "defaultClientScopes": [
+        "web-origins",
+        "acr",
+        "profile",
+        "roles",
+        "basic",
+        "email",
+        "suite-audience"
+      ]
+    }
+  ],
+  "roles": [
+    {
+      "name": "admin",
+      "description": "Admin",
+      "composite": false,
+      "clientRole": true
+    },
+    {
+      "name": "agent",
+      "description": "Agent",
+      "composite": false,
+      "clientRole": true
+    }
+  ],
+  "user_profile_attributes": [],
+  "organizations": false,
+  "suite": {
+    "id": "acme",
+    "realm": "suite-acme",
+    "hub_issuer": "https://id.acme.com/realms/suite-acme",
+    "audience_scope": "suite-audience",
+    "audience": "suite-portal",
+    "realm_base": {
+      "realm": "suite-acme",
+      "displayName": "Suite acme",
+      "enabled": true,
+      "sslRequired": "external",
+      "registrationAllowed": false,
+      "registrationEmailAsUsername": true,
+      "loginWithEmailAllowed": true,
+      "duplicateEmailsAllowed": false,
+      "editUsernameAllowed": false,
+      "rememberMe": false,
+      "verifyEmail": false,
+      "resetPasswordAllowed": false,
+      "passwordPolicy": "length(12) and notUsername and notEmail and passwordHistory(5)",
+      "bruteForceProtected": true,
+      "permanentLockout": false,
+      "failureFactor": 5,
+      "waitIncrementSeconds": 60,
+      "maxFailureWaitSeconds": 900,
+      "minimumQuickLoginWaitSeconds": 60,
+      "quickLoginCheckMilliSeconds": 1000,
+      "maxDeltaTimeSeconds": 43200,
+      "accessTokenLifespan": 900,
+      "ssoSessionIdleTimeout": 1800,
+      "ssoSessionMaxLifespan": 36000,
+      "accessCodeLifespan": 60,
+      "revokeRefreshToken": true,
+      "refreshTokenMaxReuse": 0,
+      "defaultSignatureAlgorithm": "RS256",
+      "eventsEnabled": true,
+      "eventsExpiration": 7776000,
+      "eventsListeners": [
+        "jboss-logging"
+      ],
+      "adminEventsEnabled": true,
+      "adminEventsDetailsEnabled": true,
+      "browserSecurityHeaders": {
+        "contentSecurityPolicy": "frame-src 'self'; frame-ancestors 'self'; object-src 'none';",
+        "contentSecurityPolicyReportOnly": "",
+        "xContentTypeOptions": "nosniff",
+        "xRobotsTag": "none",
+        "xFrameOptions": "SAMEORIGIN",
+        "xXSSProtection": "1; mode=block",
+        "strictTransportSecurity": "max-age=31536000; includeSubDomains",
+        "referrerPolicy": "no-referrer"
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ from typing import Annotated, Any
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.core.spec_models import SpecSuiteRef
 from app.models.enums import (
     AuthProvider,
     DeletionMode,
@@ -103,6 +104,9 @@ class AuthConfigCreate(BaseModel):
     # Custom email templates (HTML strings per email type)
     email_templates: Annotated[dict[str, Any] | None, Field(default=None)] = None
 
+    # Sign-in suite membership (identity path a); see app/core/suite_identity.py
+    suite: SpecSuiteRef | None = None
+
     @model_validator(mode="after")
     def check_smtp_when_email_enabled(self) -> "AuthConfigCreate":
         if self.email_magic_link_enabled and self.smtp_config is None:
@@ -147,6 +151,8 @@ class AuthConfigUpdate(BaseModel):
     app_name: str | None = Field(default=None, max_length=100)
     app_url: str | None = Field(default=None, max_length=2000)
     email_templates: dict[str, Any] | None = None
+    # null removes the project from the suite; omitted leaves it as it is
+    suite: SpecSuiteRef | None = None
 
 
 # ── AuthConfig Read ───────────────────────────────────────────────────────────
@@ -183,5 +189,6 @@ class AuthConfigRead(BaseModel):
     app_name: str | None
     app_url: str | None
     email_templates: dict[str, Any] | None
+    suite: SpecSuiteRef | None
     created_at: datetime
     updated_at: datetime

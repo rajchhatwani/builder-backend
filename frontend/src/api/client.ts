@@ -82,6 +82,17 @@ import type {
   ImportRowPage,
   ImportCommitResult,
   ImportRecordPage,
+  MetricDefinition,
+  PresenceUserRead,
+  MetricPage,
+  MetricRead,
+  MetricValue,
+  ReportBody,
+  ReportPage,
+  ReportRead,
+  ReportRunPage,
+  ReportRunRead,
+  ReportValue,
   AccessDiffRequest,
   AccessMatrix,
   CoverageResult,
@@ -401,6 +412,31 @@ export const api = {
     request<unknown>(`/projects/${projectId}/imports/${batchId}/cancel`, { method: 'POST' }),
   listImportRecords: (projectId: string, entity: string, limit = 20) =>
     request<ImportRecordPage>(`/projects/${projectId}/imports/records?entity=${encodeURIComponent(entity)}&limit=${limit}`),
+  presenceHeartbeat: (projectId: string, where: string) =>
+    request<void>(`/projects/${projectId}/presence/heartbeat`, { method: 'POST', body: JSON.stringify({ where }) }),
+  listPresence: (projectId: string) => request<PresenceUserRead[]>(`/projects/${projectId}/presence`),
+  listMetrics: (projectId: string) => request<MetricPage>(`/projects/${projectId}/metrics`),
+  createMetric: (projectId: string, definition: MetricDefinition) =>
+    request<MetricRead>(`/projects/${projectId}/metrics`, { method: 'POST', body: JSON.stringify({ definition }) }),
+  updateMetric: (projectId: string, key: string, definition: MetricDefinition) =>
+    request<MetricRead>(`/projects/${projectId}/metrics/${encodeURIComponent(key)}`, { method: 'PUT', body: JSON.stringify({ definition }) }),
+  deleteMetric: (projectId: string, key: string) =>
+    request<void>(`/projects/${projectId}/metrics/${encodeURIComponent(key)}`, { method: 'DELETE' }),
+  getMetricValue: (projectId: string, key: string) =>
+    request<MetricValue>(`/projects/${projectId}/metrics/${encodeURIComponent(key)}/value`),
+  listReports: (projectId: string) => request<ReportPage>(`/projects/${projectId}/reports`),
+  createReport: (projectId: string, body: ReportBody) =>
+    request<ReportRead>(`/projects/${projectId}/reports`, { method: 'POST', body: JSON.stringify(body) }),
+  updateReport: (projectId: string, reportId: string, body: ReportBody) =>
+    request<ReportRead>(`/projects/${projectId}/reports/${reportId}`, { method: 'PUT', body: JSON.stringify(body) }),
+  deleteReport: (projectId: string, reportId: string) =>
+    request<void>(`/projects/${projectId}/reports/${reportId}`, { method: 'DELETE' }),
+  runReport: (projectId: string, reportId: string) =>
+    request<ReportRunRead>(`/projects/${projectId}/reports/${reportId}/run`, { method: 'POST' }),
+  listReportRuns: (projectId: string, reportId: string, limit = 20) =>
+    request<ReportRunPage>(`/projects/${projectId}/reports/${reportId}/runs?limit=${limit}`),
+  getReportValue: (projectId: string, reportId: string) =>
+    request<ReportValue>(`/projects/${projectId}/reports/${reportId}/value`),
   undoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/undo`, { method: 'POST' }),
   redoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/redo`, { method: 'POST' }),
   restoreSpec: (projectId: string, toSeq: number) =>

@@ -16,6 +16,7 @@ from urllib.parse import urlsplit
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.render import read_verbatim
+from app.core.suite_identity import AUDIENCE_SCOPE
 from app.core.spec_models import SpecAuth, SpecAuthCustomField, SpecIdentityProvider, SpecKeycloak
 
 _TEMPLATES = Path(__file__).parent / "templates"
@@ -190,8 +191,13 @@ def idp_secret_env(alias: str) -> str:
     return "KC_IDP_" + alias.upper().replace("-", "_") + "_CLIENT_SECRET"
 
 
+def is_suite_client(kc: SpecKeycloak) -> bool:
+    """A suite member has ONE client that is both the audience and the browser client."""
+    return kc.api_client_id == kc.web_client_id
+
+
 def docs_client_id(kc: SpecKeycloak) -> str:
-    return f"{kc.web_client_id}-docs"
+    return kc.web_client_id if is_suite_client(kc) else f"{kc.web_client_id}-docs"
 
 
 def _origin(uri: str) -> str:
@@ -366,6 +372,8 @@ def client_representations(
     origins = sorted({_origin(u) for u in kc.redirect_uris})
     mappers = [_attribute_mapper(f) for f in _custom_fields(auth)]
     organizations = auth.multi_tenant
+    if is_suite_client(kc):
+        return [_suite_client(kc, app, origins, mappers, organizations)]
     api = {
         "clientId": kc.api_client_id,
         "name": f"{app} API",
@@ -399,6 +407,30 @@ def client_representations(
         organizations=organizations,
     )
     return [api, web, docs]
+
+
+def _suite_client(
+    kc: SpecKeycloak,
+    app: str,
+    origins: list[str],
+    mappers: list[dict[str, Any]],
+    organizations: bool,
+) -> dict[str, Any]:
+    """The single client of a suite member: a public PKCE client (also used by Swagger UI) whose
+    own client roles are the project's roles. Its tokens carry the realm's `suite-audience` scope,
+    so `aud` lists every member of the suite; each API then accepts only tokens naming itself."""
+    client = _browser_client(
+        kc,
+        client_id=kc.web_client_id,
+        name=app,
+        redirect_uris=[*kc.redirect_uris, f"{API_URL_PLACEHOLDER}/docs/oauth2-redirect"],
+        web_origins=[*origins, API_URL_PLACEHOLDER],
+        extra_mappers=mappers,
+        organizations=organizations,
+    )
+    client["description"] = "This project's client in the suite realm."
+    client["defaultClientScopes"] = [*client.get("defaultClientScopes", _DEFAULT_SCOPES), AUDIENCE_SCOPE]
+    return client
 
 
 def role_representations(auth: SpecAuth) -> list[dict[str, Any]]:
@@ -636,16 +668,60 @@ def realm_representation(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) 
 
 def clients_document(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) -> dict[str, Any]:
     """What scripts/keycloak_register.py adds to a realm (own or shared)."""
+    suite_part: dict[str, Any] = {}
+    if auth.suite is not None and is_suite_client(kc):
+        suite_part = {"suite": suite_document(project, auth, kc)}
     return {
         "realm": kc.realm,
         "api_client_id": kc.api_client_id,
-        "browser_client_ids": [kc.web_client_id, docs_client_id(kc)],
+        "browser_client_ids": (
+            [] if is_suite_client(kc) else [kc.web_client_id, docs_client_id(kc)]
+        ),
         "clients": client_representations(project, auth, kc),
         "roles": role_representations(auth),
         # Merged into the realm's user profile when it is missing there.
         "user_profile_attributes": user_profile_attributes(auth),
         # Tenants are Keycloak organizations: the realm must have them switched on.
         "organizations": auth.multi_tenant,
+        **suite_part,
+    }
+
+
+def suite_realm_base(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) -> dict[str, Any]:
+    """The realm created when the first member of a suite registers and the realm is missing:
+    the hardened realm settings, nothing project specific (no clients, roles, mail or providers;
+    the hub owner adds those)."""
+    realm = realm_representation(project, auth, kc)
+    for key in (
+        "roles",
+        "clients",
+        "clientScopeMappings",
+        "defaultRole",
+        "identityProviders",
+        "smtpServer",
+        "components",
+        "requiredActions",
+    ):
+        realm.pop(key, None)
+    suite_id = auth.suite.suite_id if auth.suite else kc.realm
+    realm["displayName"] = f"Suite {suite_id}"
+    realm["registrationAllowed"] = False
+    realm["verifyEmail"] = False
+    realm["resetPasswordAllowed"] = False
+    return realm
+
+
+def suite_document(project: ProjectCtx, auth: SpecAuth, kc: SpecKeycloak) -> dict[str, Any]:
+    suite = auth.suite
+    assert suite is not None
+    return {
+        "id": suite.suite_id,
+        "realm": kc.realm,
+        "hub_issuer": suite.hub_issuer,
+        "audience_scope": AUDIENCE_SCOPE,
+        # This project's client id, added to the audience scope so every member's tokens name it.
+        "audience": kc.api_client_id,
+        "realm_base": suite_realm_base(project, auth, kc),
     }
 
 
@@ -664,7 +740,10 @@ class KeycloakModule:
         kc = auth.keycloak
         files: FileTree = {
             "keycloak/clients.json": _dump(clients_document(project, auth, kc)),
-            "scripts/keycloak_register.py": read_verbatim(_TEMPLATES, "keycloak_register.py.tpl"),
+            "scripts/keycloak_register.py": read_verbatim(
+                _TEMPLATES,
+                "keycloak_register_suite.py.tpl" if auth.suite is not None and is_suite_client(kc) else "keycloak_register.py.tpl",
+            ),
         }
         if kc.mode == "own":
             files["keycloak/realm.json"] = _dump(realm_representation(project, auth, kc))

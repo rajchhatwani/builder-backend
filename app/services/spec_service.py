@@ -36,6 +36,7 @@ from app.core.spec_models import (
     SpecObservability,
     SpecPasswordReset,
     SpecPayments,
+    SpecSuiteRef,
     SpecPermission,
     SpecProject,
     SpecRegistration,
@@ -209,6 +210,7 @@ class SpecService:
                 refresh_token_ttl_days=ac.refresh_token_ttl_days,
                 jwt_algorithm=ac.jwt_algorithm.value,
                 deletion_mode=ac.deletion_mode.value,
+                suite=SpecSuiteRef.model_validate(ac.suite) if ac.suite else None,
                 multi_tenant=ac.multi_tenant,
                 security_headers_enabled=ac.security_headers_enabled,
                 app_name=ac.app_name,
@@ -575,6 +577,7 @@ class SpecService:
         config.email_verification_required = auth.registration.email_verification_required
         config.invite_only = auth.registration.invite_only
         config.multi_tenant = auth.multi_tenant
+        config.suite = auth.suite.model_dump() if auth.suite else None
         config.deletion_mode = DeletionMode(auth.deletion_mode)
         config.smtp_config = auth.smtp.model_dump() if auth.smtp else None
         config.sms_provider = SmsProvider(auth.sms_provider) if auth.sms_provider else None

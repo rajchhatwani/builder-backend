@@ -25,6 +25,7 @@ from app.core.generator.features.storage.module import (
 )
 from app.core.generator.features.storage.module import active as storage_block
 from app.core.generator.render import make_environment, read_verbatim, render_template
+from app.core.suite_identity import hub_base_url
 from app.core.validation import invitations_enabled, uses_keycloak
 from app.core.validation_api_edge import api_edge_tables_active
 from app.core.validation_documents import documents_active
@@ -134,6 +135,10 @@ class DockerModule:
             "redis_store": builtin is not None and builtin.token_store == "redis",
             "keycloak": keycloak,
             "kc": kc,
+            "suite": auth.suite if auth is not None and kc is not None else None,
+            "suite_base_url": hub_base_url(auth.suite.hub_issuer)
+            if auth is not None and kc is not None and auth.suite and auth.suite.hub_issuer
+            else "",
             "kc_own": kc_own,
             "keycloak_image": KEYCLOAK_IMAGE,
             "keycloak_tag": KEYCLOAK_IMAGE_TAG,

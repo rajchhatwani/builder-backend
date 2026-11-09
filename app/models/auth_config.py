@@ -104,6 +104,9 @@ class ProjectAuthConfig(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     app_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
     app_url: Mapped[str | None] = mapped_column(Text, nullable=True)
 
+    # ── Sign-in suite (spec auth.suite: suite_id, hub_issuer, join_state); NULL = no suite ──
+    suite: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+
     # ── Notes / custom template overrides ─────────────────────────────────────
     # Reserved for future email template customisation (raw HTML per type).
     email_templates: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)

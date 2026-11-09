@@ -54,6 +54,8 @@
  "PaymentsSecurity.webhook_ip_allowlist_enabled: optional-in-api",
  "PaymentsSecurity.webhook_max_body_bytes: optional-in-api",
  "PaymentsSecurity.webhook_tolerance_seconds: optional-in-api",
+ "ReportBody.enabled: optional-in-api",
+ "ReportBody.timezone: optional-in-api",
  "ScimGroupSummary.mapped_role: optional-in-api",
  "SimulateRequest.env: optional-in-api",
  "SimulateRequest.resource: optional-in-api",

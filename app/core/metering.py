@@ -24,6 +24,7 @@ METRICS: dict[str, MetricDef] = {
     "imports.batches": MetricDef("batches", 50, "day"),
     "workspaces.active": MetricDef("workspaces", 5, "none"),
     "previews.started": MetricDef("previews", 20, "day"),
+    "reports.runs": MetricDef("runs", 1000, "month"),
 }
 
 

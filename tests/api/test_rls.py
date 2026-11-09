@@ -345,6 +345,8 @@ async def test_every_org_scoped_route_binds_the_scope(
     checked = 0
     for route in all_routes():
         path = route.path
+        if path.endswith("/events/stream"):
+            continue  # SSE: never ends; _frames binds the org itself (tests/api/test_realtime.py)
         if path.startswith("/orgs/{slug}"):
             url = path.replace("{slug}", "acme")
         elif path.startswith("/projects/{project_id}") and "{" not in path.replace(

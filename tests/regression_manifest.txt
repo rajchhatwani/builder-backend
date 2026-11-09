@@ -238,3 +238,10 @@ tests/unit/test_metering.py
 tests/api/test_usage_metering.py
 tests/unit/test_custom_fields.py
 tests/e2e/test_custom_fields_stack.py
+tests/unit/test_realtime.py
+tests/api/test_realtime.py
+tests/unit/test_metrics.py
+tests/api/test_metrics.py
+tests/unit/test_suite_identity.py
+tests/api/test_suite_auth.py
+tests/e2e/test_suite_identity_stack.py

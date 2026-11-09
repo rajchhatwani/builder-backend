@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useRealtimeRefresh } from '../../realtime/bus'
 import { api } from '../../api/client'
 import type { SpecOp } from '../../api/types'
 import { useUi } from '../../components/Ui'
@@ -43,6 +44,8 @@ export function TimelinePage({ projectId }: { projectId: string }) {
       return null
     }
   }, [projectId])
+
+  useRealtimeRefresh(['spec'], () => { void reload() })
 
   useEffect(() => {
     setLoad({ status: 'loading' })

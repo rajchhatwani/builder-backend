@@ -60,6 +60,7 @@ _READ_ONLY_POSTS: frozenset[tuple[str, str]] = frozenset(
         ("POST", "/projects/{project_id}/deployment/plan"),
         ("POST", "/projects/{project_id}/documents/preview"),
         ("POST", "/projects/{project_id}/behavior/expressions/check"),
+        ("POST", "/projects/{project_id}/presence/heartbeat"),
     }
 )
 
