@@ -1,0 +1,378 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Ledger",
+    "slug": "ledger",
+    "description": "Expenses with realtime updates and metrics",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Expense",
+      "table_name": "expenses",
+      "plural_path": "expenses",
+      "options": {
+        "filterable": [
+          "category"
+        ],
+        "sortable": [
+          "category"
+        ],
+        "soft_delete": true
+      },
+      "fields": [
+        {
+          "name": "category",
+          "type": "string",
+          "required": true,
+          "max_length": 40
+        },
+        {
+          "name": "amount",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "name": "qty",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "rate",
+          "type": "float",
+          "required": false
+        },
+        {
+          "name": "paid",
+          "type": "boolean",
+          "required": false
+        },
+        {
+          "name": "cost_basis",
+          "type": "decimal",
+          "required": false
+        },
+        {
+          "name": "spent_on",
+          "type": "date",
+          "required": false
+        },
+        {
+          "name": "logged_at",
+          "type": "datetime",
+          "required": false
+        },
+        {
+          "name": "code",
+          "type": "string",
+          "required": false,
+          "max_length": 20
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "approved"
+          ],
+          "default": "draft"
+        }
+      ]
+    },
+    {
+      "name": "Payroll",
+      "table_name": "payrolls",
+      "plural_path": "payrolls",
+      "options": {
+        "filterable": [],
+        "sortable": []
+      },
+      "fields": [
+        {
+          "name": "person",
+          "type": "string",
+          "required": true,
+          "max_length": 80
+        },
+        {
+          "name": "salary",
+          "type": "decimal",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://ledger.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@ledger.example.com",
+      "from_name": "Ledger"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin",
+        "inherits_from": "staff"
+      },
+      {
+        "name": "staff",
+        "label": "Staff",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Expense",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "staff"
+        ]
+      },
+      {
+        "entity": "Expense",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "role_scoped"
+      },
+      {
+        "entity": "Expense",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Expense",
+        "operation": "replace",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Expense",
+        "operation": "update",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Expense",
+        "operation": "delete",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "owner"
+      },
+      {
+        "entity": "Payroll",
+        "operation": "create",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Payroll",
+        "operation": "list",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Payroll",
+        "operation": "get",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Payroll",
+        "operation": "update",
+        "roles": [
+          "admin"
+        ]
+      },
+      {
+        "entity": "Payroll",
+        "operation": "delete",
+        "roles": [
+          "admin"
+        ]
+      }
+    ]
+  },
+  "authorization": {
+    "model": "rbac",
+    "field_access": [
+      {
+        "entity": "Expense",
+        "field": "cost_basis",
+        "read_roles": [
+          "admin"
+        ],
+        "write_roles": [
+          "admin"
+        ]
+      }
+    ]
+  },
+  "realtime": {
+    "enabled": true
+  },
+  "metrics_layer": {
+    "definitions": [
+      {
+        "key": "expense_total",
+        "label": "Total expenses",
+        "entity": "Expense",
+        "agg": "sum",
+        "field": "amount",
+        "unit": "USD"
+      },
+      {
+        "key": "expense_average",
+        "label": "Average expense",
+        "entity": "Expense",
+        "agg": "avg",
+        "field": "amount"
+      },
+      {
+        "key": "expense_count",
+        "label": "Expense count",
+        "entity": "Expense",
+        "agg": "count"
+      },
+      {
+        "key": "expense_by_category",
+        "label": "Expenses by category",
+        "entity": "Expense",
+        "agg": "sum",
+        "field": "amount",
+        "group_by": "category"
+      },
+      {
+        "key": "expense_by_paid",
+        "label": "Expenses by paid flag",
+        "entity": "Expense",
+        "agg": "count",
+        "group_by": "paid"
+      },
+      {
+        "key": "big_expense_max",
+        "label": "Largest paid expense",
+        "entity": "Expense",
+        "agg": "max",
+        "field": "amount",
+        "filter": [
+          {
+            "field": "paid",
+            "op": "eq",
+            "value": true
+          },
+          {
+            "field": "amount",
+            "op": "gte",
+            "value": "10"
+          }
+        ]
+      },
+      {
+        "key": "rate_total",
+        "label": "Total rate",
+        "entity": "Expense",
+        "agg": "sum",
+        "field": "rate"
+      },
+      {
+        "key": "categories_used",
+        "label": "Distinct categories",
+        "entity": "Expense",
+        "agg": "count_distinct",
+        "field": "category"
+      },
+      {
+        "key": "cost_basis_total",
+        "label": "Total cost basis",
+        "entity": "Expense",
+        "agg": "sum",
+        "field": "cost_basis"
+      },
+      {
+        "key": "payroll_total",
+        "label": "Payroll total",
+        "entity": "Payroll",
+        "agg": "sum",
+        "field": "salary"
+      },
+      {
+        "key": "codes_used",
+        "label": "Distinct codes",
+        "entity": "Expense",
+        "agg": "count_distinct",
+        "field": "code"
+      },
+      {
+        "key": "expense_by_day",
+        "label": "Expenses by day",
+        "entity": "Expense",
+        "agg": "sum",
+        "field": "amount",
+        "group_by": "spent_on"
+      },
+      {
+        "key": "expense_by_logged",
+        "label": "Expenses by log time",
+        "entity": "Expense",
+        "agg": "count",
+        "group_by": "logged_at"
+      },
+      {
+        "key": "codes_by_category",
+        "label": "Codes by category",
+        "entity": "Expense",
+        "agg": "count_distinct",
+        "field": "code",
+        "group_by": "category"
+      }
+    ]
+  },
+  "state_machines": [
+    {
+      "entity": "Expense",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "approve",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "approved"
+        }
+      ]
+    }
+  ]
+}

@@ -11,6 +11,9 @@ from pydantic import BaseModel
 
 {% if auth %}
 from app.auth import access as _access
+{% if routes | selectattr("e.guarded") | list %}
+from app.auth import field_access as _fx
+{% endif %}
 {% if routes | selectattr("update_ops") | list %}
 from app.auth.deps import CurrentUser
 {% endif %}
@@ -38,7 +41,7 @@ class TransitionInfo(BaseModel):
     name: str
     to_state: str
     allowed: bool
-    refused_because: str | None = None  # "role" or "guard"
+    refused_because: str | None = None  # "role", "guard", or "unavailable" (guard hidden from this caller)
 
 
 class StateChange(BaseModel):
@@ -96,10 +99,17 @@ async def list_{{ e.table }}_transitions(
 {% if settings_guards %}
     await engine.prime_settings(session, item)
 {% endif %}
-    return engine.available("{{ e.name }}", item, _roles_{{ e.table }}({% if auth %}access{% endif %}))
+    return engine.available(
+        "{{ e.name }}",
+        item,
+        _roles_{{ e.table }}({% if auth %}access{% endif %}),
+{% if e.guarded %}
+        mask_guard=bool(_fx.hidden_read("{{ e.name }}", access.user)),
+{% endif %}
+    )
 
 
-@router.post("/{{ e.path }}/{item_id}/transitions/{name}", response_model={{ e.name }}Read)
+@router.post("/{{ e.path }}/{item_id}/transitions/{name}", response_model={{ e.name }}Read{{ ", response_model_exclude_unset=True" if e.guarded else "" }})
 async def apply_{{ e.table }}_transition(
     item_id: _uuid.UUID,
     name: str,
@@ -130,8 +140,15 @@ async def apply_{{ e.table }}_transition(
         name,
         roles=_roles_{{ e.table }}({% if auth %}access{% endif %}),
         actor_id={% if auth %}access.user.id if access.user is not None else None{% else %}None{% endif %},
+{% if e.guarded %}
+        mask_guard=bool(_fx.hidden_read("{{ e.name }}", access.user)),
+{% endif %}
     )
+{% if e.guarded %}
+    return _fx.shape("{{ e.name }}", access.user, {{ e.name }}Read.model_validate(item))
+{% else %}
     return {{ e.name }}Read.model_validate(item)
+{% endif %}
 
 
 @router.get("/{{ e.path }}/{item_id}/state-history", response_model=list[StateChange])

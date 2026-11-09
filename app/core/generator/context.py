@@ -198,6 +198,13 @@ class EntityCtx:
     # (field, sequence, per_tenant, as_int) of fields the platform numbers from a sequence on create
     numbered: tuple[tuple[str, str, bool, bool], ...] = ()
     custom: CustomCtx | None = None  # opted in to custom fields (the custom_fields JSONB column)
+    # spec.authorization.field_access rules of this entity: (field, read_roles | None, write_roles | None)
+    field_rules: tuple[tuple[str, tuple[str, ...] | None, tuple[str, ...] | None], ...] = ()
+
+    @property
+    def guarded(self) -> bool:
+        """Some field of this entity has a read / write role rule (see app/auth/field_access.py)."""
+        return bool(self.field_rules)
 
     @property
     def file_fields(self) -> tuple[FieldCtx, ...]:
@@ -778,6 +785,7 @@ def build_context(spec: Spec) -> ProjectCtx:
     entity_ctxs = _attach_numbering(spec, entity_ctxs)
     entity_ctxs = _attach_history(spec, entity_ctxs)
     entity_ctxs = _attach_hooks(spec, entity_ctxs)
+    entity_ctxs = _attach_field_rules(spec, entity_ctxs)
     if spec.events is not None and spec.events.enabled:
         entity_ctxs = tuple(replace(e, events=True) for e in entity_ctxs)
     all_tables = sorted({e.table for e in entity_ctxs} | {j.name for j in joins})
@@ -882,6 +890,49 @@ def _filter_literal(field_type: str, value: str) -> str:
             return "True" if value == "true" else "False"
         case _:
             return repr(value)
+
+
+def _attach_field_rules(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Field layer: the rules of spec.authorization.field_access, only when sign-in is on.
+
+    A field whose read is restricted becomes optional-with-default in the Read schema so the
+    router can leave it out of one caller's response (the key is omitted, never null)."""
+    auth = spec.auth
+    block = spec.authorization
+    if block is None or not block.field_access or auth is None or not auth.enabled:
+        return entities
+    result: list[EntityCtx] = []
+    for entity in entities:
+        rules = sorted(
+            (r for r in block.field_access if r.entity == entity.name), key=lambda r: r.field
+        )
+        if not rules:
+            result.append(entity)
+            continue
+        by_field = {r.field: r for r in rules}
+        fields = tuple(
+            replace(f, read_decl=_optional_read(f.read_decl))
+            if f.name in by_field and by_field[f.name].read_roles is not None
+            else f
+            for f in entity.fields
+        )
+        literal = tuple(
+            (
+                r.field,
+                tuple(sorted(r.read_roles)) if r.read_roles is not None else None,
+                tuple(sorted(r.write_roles)) if r.write_roles is not None else None,
+            )
+            for r in rules
+        )
+        result.append(replace(entity, fields=fields, field_rules=literal))
+    return tuple(result)
+
+
+def _optional_read(decl: str) -> str:
+    name, annotation = decl.split(": ", 1)
+    if not annotation.endswith(" | None"):
+        annotation += " | None"
+    return f"{name}: {annotation} = None"
 
 
 def _attach_policy_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:

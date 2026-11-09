@@ -24,6 +24,9 @@ from app.core.generator.features.storage.module import (
     clamd_limit_mb,
 )
 from app.core.generator.features.storage.module import active as storage_block
+from app.core.generator.features.metrics.module import metrics_definitions
+from app.core.generator.features.realtime.module import realtime_entities
+from app.core.generator.features.search.module import search_entities
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.suite_identity import hub_base_url
 from app.core.validation import invitations_enabled, uses_keycloak
@@ -116,8 +119,12 @@ class DockerModule:
                     payments_active(project.spec),
                     storage_active(project.spec),
                     bool(project.spec.state_machines),
+                    bool(realtime_entities(project)),
                 )
             ),
+            "search_entities": search_entities(project),
+            "realtime_entities": realtime_entities(project),
+            "metric_defs": metrics_definitions(project),
             "provider_vault": providers_active(project.spec) and project.auth is not None,
             "prov": PROVIDERS[pay.provider] if pay is not None else None,
             "sizing": sizing,

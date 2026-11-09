@@ -18,10 +18,13 @@ from app.core.generator.features.hooks.module import HooksModule, build_manifest
 from app.core.generator.features.jobs.module import JobsModule
 from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.notifications.module import NotificationsModule
+from app.core.generator.features.metrics.module import MetricsModule
 from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.providers.module import ProvidersModule
+from app.core.generator.features.realtime.module import RealtimeModule
 from app.core.generator.features.runtime_config.module import RuntimeConfigModule
+from app.core.generator.features.search.module import SearchModule
 from app.core.generator.features.seed.module import SeedModule
 from app.core.generator.features.state_machines.module import StateMachinesModule
 from app.core.generator.features.storage.module import StorageModule
@@ -64,6 +67,9 @@ def default_modules() -> list[FeatureModule]:
         WebhooksModule(),
         NotificationsModule(),
         WorkflowsModule(),
+        SearchModule(),
+        RealtimeModule(),
+        MetricsModule(),
     ]
 
 

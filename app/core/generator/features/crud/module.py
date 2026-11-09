@@ -8,6 +8,9 @@ from app.core.generator.context import ProjectCtx
 from app.core.generator.features.change_history.module import (
     router_present as history_router_present,
 )
+from app.core.generator.features.metrics.module import metrics_definitions
+from app.core.generator.features.realtime.module import realtime_entities
+from app.core.generator.features.search.module import search_entities
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.validation_api_edge import api_edge_active, api_edge_tables_active
 from app.core.validation_documents import documents_active
@@ -96,6 +99,9 @@ class CrudModule:
             and providers_active(project.spec)
             and project.auth is not None,
             "workflows": workflows_active(project.spec) and project.auth is not None,
+            "search": bool(search_entities(project)),
+            "realtime": bool(realtime_entities(project)),
+            "metrics": bool(metrics_definitions(project)),
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(
@@ -106,10 +112,16 @@ class CrudModule:
         )
         if any(e.custom for e in project.entities):
             files["app/core/custom_fields.py"] = read_verbatim(_TEMPLATES, "app/core/custom_fields.py.tpl")
+        if project.auth is not None and any(e.guarded for e in project.entities):
+            files["app/auth/field_access.py"] = render_template(
+                self._env, "app/auth/field_access.py.j2", entities=project.entities
+            )
+        searched = {e.name for e in search_entities(project)}
+        streamed = {e.name for e in realtime_entities(project)}
         for entity in project.entities:
             for template, pattern in _PER_ENTITY:
                 files[pattern.format(table=entity.table)] = render_template(
-                    self._env, template, e=entity
+                    self._env, template, e=entity, search=entity.name in searched, realtime=entity.name in streamed
                 )
         has_jsonb = any(f.type == "json" for e in project.entities for f in e.fields) or any(
             e.custom for e in project.entities

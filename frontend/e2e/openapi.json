@@ -15769,6 +15769,16 @@
       "title": "Lists",
       "type": "array"
      },
+     "metrics_layer": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecMetricsLayer"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "notifications": {
       "anyOf": [
        {
@@ -15806,6 +15816,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "realtime": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRealtime"
        },
        {
         "type": "null"
@@ -16007,6 +16027,16 @@
       "title": "Lists",
       "type": "array"
      },
+     "metrics_layer": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecMetricsLayer"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "notifications": {
       "anyOf": [
        {
@@ -16044,6 +16074,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecProviders"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "realtime": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRealtime"
        },
        {
         "type": "null"
@@ -18020,6 +18060,22 @@
     "title": "SpecListItem",
     "type": "object"
    },
+   "SpecMetricsLayer": {
+    "additionalProperties": false,
+    "description": "Named metrics served by the generated app (GET /metrics, GET /metrics/{key}). Each definition has\nthe shape of app/core/metrics.MetricDef (key, label, entity, agg, field, filter, group_by, unit): DATA\nonly, validated against the entities; the app computes it in SQL through the caller's own row scope.",
+    "properties": {
+     "definitions": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Definitions",
+      "type": "array"
+     }
+    },
+    "title": "SpecMetricsLayer",
+    "type": "object"
+   },
    "SpecNotificationTemplate": {
     "additionalProperties": false,
     "description": "The default template of one notification type for one channel. `{{ name }}` placeholders may\nonly name the type's declared `variables` (no expressions, no filters). For email, `html: true`\nmakes the body HTML: every variable is HTML-escaped. `subject` is the email subject / push title.",
@@ -19157,6 +19213,19 @@
      }
     },
     "title": "SpecRateLimits",
+    "type": "object"
+   },
+   "SpecRealtime": {
+    "additionalProperties": false,
+    "description": "Realtime stream in the generated app (GET /realtime/stream, Server-Sent Events). Off unless\n`enabled`. Events carry ids only (never field values) and each caller receives only events of rows\nthey may list.",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     }
+    },
+    "title": "SpecRealtime",
     "type": "object"
    },
    "SpecRegistration": {
@@ -36576,6 +36645,147 @@
     "summary": "Create a role for a project",
     "tags": [
      "auth"
+    ]
+   }
+  },
+  "/projects/{project_id}/search": {
+   "get": {
+    "operationId": "search_project_projects__project_id__search_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "maxLength": 120,
+       "minLength": 1,
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "q",
+      "required": true,
+      "schema": {
+       "maxLength": 200,
+       "minLength": 1,
+       "title": "Q",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_role",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 120,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Role"
+      }
+     },
+     {
+      "in": "query",
+      "name": "adapter",
+      "required": false,
+      "schema": {
+       "default": "fts",
+       "maxLength": 20,
+       "title": "Adapter",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_tenant",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 64,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As Tenant"
+      }
+     },
+     {
+      "in": "query",
+      "name": "as_user",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "maxLength": 64,
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "As User"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 20,
+       "maximum": 100,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Search Project Projects  Project Id  Search Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Search Project",
+    "tags": [
+     "search"
     ]
    }
   },

@@ -1,6 +1,10 @@
 """HTTP routes for {{ e.name }} (generated). Custom routes belong in app/custom_routers/."""
 @@ALIAS_IMPORTS@@
-{% macro repo(op) %}{{ e.name }}Repository(session{% if op in e.access_ops %}, **access.repo_kwargs{% endif %}){% endmacro %}
+{% macro user(op) %}{% if op in e.access_ops %}access.user{% else %}None{% endif %}{% endmacro %}
+{% macro repo(op) %}{{ e.name }}Repository(session{% if op in e.access_ops %}, **access.repo_kwargs{% endif %}{% if e.guarded and op == "list" %}, hidden_fields=_fx.hidden_read("{{ e.name }}", {{ user(op) }}){% endif %}){% endmacro %}
+{% macro shape(op, expr) %}{% if e.guarded %}_fx.shape("{{ e.name }}", {{ user(op) }}, {{ expr }}){% else %}{{ expr }}{% endif %}{% endmacro %}
+{% macro body(op, mode) %}{% if e.guarded %}_fx.payload("{{ e.name }}", {{ user(op) }}, body, "{{ mode }}"){% elif mode == "update" %}body.model_dump(exclude_unset=True){% else %}body.model_dump(){% endif %}{% endmacro %}
+{% set xs = ", response_model_exclude_unset=True" if e.guarded else "" %}
 {% macro acc(op) %}{% if op in e.access_ops %}, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["{{ op }}"])]{% endif %}{% endmacro %}
 
 {% if e.ops %}
@@ -11,6 +15,9 @@ from app.auth import access as _access
 {% endif %}
 {% if e.policy %}
 from app.auth import authorize as _authz
+{% endif %}
+{% if e.guarded %}
+from app.auth import field_access as _fx
 {% endif %}
 {% if "head" in e.ops %}
 from app.core import errors as _errors
@@ -42,7 +49,7 @@ _ACCESS = {
 {% if "list" in e.ops %}
 
 
-@router.get("", response_model=_pagination.Page[{{ e.name }}Read])
+@router.get("", response_model=_pagination.Page[{{ e.name }}Read]{{ xs }})
 async def list_{{ e.table }}(
     session: _db.SessionDep,
     page: _t.Annotated[
@@ -77,7 +84,7 @@ async def list_{{ e.table }}(
         sort=sort,
     )
     return _pagination.Page[{{ e.name }}Read](
-        items=[{{ e.name }}Read.model_validate(item) for item in items],
+        items=[{{ shape("list", e.name ~ "Read.model_validate(item)") }} for item in items],
         total=total,
         limit=page.limit,
         offset=page.offset,
@@ -86,7 +93,7 @@ async def list_{{ e.table }}(
 {% if "get" in e.ops %}
 
 
-@router.get("/{item_id}", response_model={{ e.name }}Read)
+@router.get("/{item_id}", response_model={{ e.name }}Read{{ xs }})
 {% if "get" in e.access_ops %}
 async def get_{{ e.table }}(
     item_id: _uuid.UUID, session: _db.SessionDep{{ acc("get") }}
@@ -95,7 +102,7 @@ async def get_{{ e.table }}(
 async def get_{{ e.table }}(item_id: _uuid.UUID, session: _db.SessionDep) -> {{ e.name }}Read:
 {% endif %}
     item = await {{ repo("get") }}.get(item_id)
-    return {{ e.name }}Read.model_validate(item)
+    return {{ shape("get", e.name ~ "Read.model_validate(item)") }}
 {% endif %}
 {% if "head" in e.ops %}
 
@@ -115,7 +122,7 @@ async def head_{{ e.table }}(item_id: _uuid.UUID, session: _db.SessionDep) -> _f
 {% if "create" in e.ops %}
 
 
-@router.post("", response_model={{ e.name }}Read, status_code=201)
+@router.post("", response_model={{ e.name }}Read, status_code=201{{ xs }})
 {% if "create" in e.access_ops %}
 async def create_{{ e.table }}(
     body: {{ e.name }}Create, session: _db.SessionDep{{ acc("create") }}
@@ -123,28 +130,28 @@ async def create_{{ e.table }}(
 {% else %}
 async def create_{{ e.table }}(body: {{ e.name }}Create, session: _db.SessionDep) -> {{ e.name }}Read:
 {% endif %}
-    item = await {{ repo("create") }}.create(body.model_dump())
-    return {{ e.name }}Read.model_validate(item)
+    item = await {{ repo("create") }}.create({{ body("create", "create") }})
+    return {{ shape("create", e.name ~ "Read.model_validate(item)") }}
 {% endif %}
 {% if "replace" in e.ops %}
 
 
-@router.put("/{item_id}", response_model={{ e.name }}Read)
+@router.put("/{item_id}", response_model={{ e.name }}Read{{ xs }})
 async def replace_{{ e.table }}(
     item_id: _uuid.UUID, body: {{ e.name }}Create, session: _db.SessionDep{{ acc("replace") }}
 ) -> {{ e.name }}Read:
-    item = await {{ repo("replace") }}.replace(item_id, body.model_dump())
-    return {{ e.name }}Read.model_validate(item)
+    item = await {{ repo("replace") }}.replace(item_id, {{ body("replace", "replace") }})
+    return {{ shape("replace", e.name ~ "Read.model_validate(item)") }}
 {% endif %}
 {% if "update" in e.ops %}
 
 
-@router.patch("/{item_id}", response_model={{ e.name }}Read)
+@router.patch("/{item_id}", response_model={{ e.name }}Read{{ xs }})
 async def update_{{ e.table }}(
     item_id: _uuid.UUID, body: {{ e.name }}Update, session: _db.SessionDep{{ acc("update") }}
 ) -> {{ e.name }}Read:
-    item = await {{ repo("update") }}.update(item_id, body.model_dump(exclude_unset=True))
-    return {{ e.name }}Read.model_validate(item)
+    item = await {{ repo("update") }}.update(item_id, {{ body("update", "update") }})
+    return {{ shape("update", e.name ~ "Read.model_validate(item)") }}
 {% endif %}
 {% if "delete" in e.ops %}
 

@@ -19,10 +19,13 @@ from app.routers.books import router as books_router
 from app.routers.members import router as members_router
 from app.routers.profiles import router as profiles_router
 from app.routers.shelves import router as shelves_router
+from app.search import config as _search_config
+from app.search.router import router as _search_router
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    _search_config.check_boot()  # an unknown backend, or opensearch without SEARCH_OPENSEARCH_URL, stops the app here
     yield
     await engine.dispose()
 
@@ -50,6 +53,7 @@ def create_app() -> FastAPI:
     app.add_middleware(RequestIdMiddleware)
     register_exception_handlers(app)
     app.include_router(_health_router)
+    app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id
     app.include_router(authors_router)
     app.include_router(books_router)
     app.include_router(members_router)

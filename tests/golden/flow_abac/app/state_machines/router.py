@@ -22,7 +22,7 @@ class TransitionInfo(BaseModel):
     name: str
     to_state: str
     allowed: bool
-    refused_because: str | None = None  # "role" or "guard"
+    refused_because: str | None = None  # "role", "guard", or "unavailable" (guard hidden from this caller)
 
 
 class StateChange(BaseModel):
@@ -50,7 +50,11 @@ async def list_tickets_transitions(
     access: Annotated[_access.Access, Depends(_access_tickets)],
 ) -> list[dict[str, object]]:
     item = await TicketRepository(session, **access.repo_kwargs).get(item_id)
-    return engine.available("Ticket", item, _roles_tickets(access))
+    return engine.available(
+        "Ticket",
+        item,
+        _roles_tickets(access),
+    )
 
 
 @router.post("/tickets/{item_id}/transitions/{name}", response_model=TicketRead)

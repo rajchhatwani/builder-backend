@@ -20,6 +20,9 @@ from starlette.concurrency import run_in_threadpool
 {% if bound %}
 from app.auth import access as _access
 {% endif %}
+{% if entities_used | selectattr("guarded") | list %}
+from app.auth import field_access as _fx
+{% endif %}
 from app.auth.deps import CurrentUser, require_roles
 from app.auth.ratelimit import RateLimiter
 from app.auth.service import effective_roles
@@ -114,7 +117,13 @@ async def render_{{ t.id }}_record(
     body: RecordBody | None = None,
 ) -> Response:
     item = await {{ e.name }}Repository(session, **access.repo_kwargs).get(record_id)
+{% if e.guarded %}
+    row = _fx.shape("{{ e.name }}", access.user, {{ e.name }}Read.model_validate(item)).model_dump(
+        mode="json", exclude_unset=True
+    )
+{% else %}
     row = {{ e.name }}Read.model_validate(item).model_dump(mode="json")
+{% endif %}
     # The record's own values are `row`; caller-supplied `extra` can never replace them.
     data = {"row": row, "extra": body.extra if body else {}, "now": datetime.date.today().isoformat()}
     return await _respond("{{ t.id }}", data)

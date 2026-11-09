@@ -24,7 +24,7 @@ class TransitionInfo(BaseModel):
     name: str
     to_state: str
     allowed: bool
-    refused_because: str | None = None  # "role" or "guard"
+    refused_because: str | None = None  # "role", "guard", or "unavailable" (guard hidden from this caller)
 
 
 class StateChange(BaseModel):
@@ -68,7 +68,11 @@ async def list_orders_transitions(
     access: Annotated[_access.Access, Depends(_access_orders)],
 ) -> list[dict[str, object]]:
     item = await OrderRepository(session, **access.repo_kwargs).get(item_id)
-    return engine.available("Order", item, _roles_orders(access))
+    return engine.available(
+        "Order",
+        item,
+        _roles_orders(access),
+    )
 
 
 @router.post("/orders/{item_id}/transitions/{name}", response_model=OrderRead)

@@ -73,6 +73,12 @@ from app.core.validation_payments import PAYMENTS_TABLES, check_payments, paymen
 from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
 from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
 from app.core.validation_secrets import check_block_secrets
+from app.core.validation_realtime import (
+    RT_TABLES,
+    check_metrics_layer,
+    check_realtime,
+    realtime_active,
+)
 from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
 from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
 from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
@@ -157,6 +163,9 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     if events_active(spec):
         for table in EV_TABLES:
             ctx.tables[table] = "events"
+    if realtime_active(spec):
+        for table in RT_TABLES:
+            ctx.tables[table] = "realtime"
     if api_edge_active(spec):
         for table in API_EDGE_TABLES:
             ctx.tables[table] = "api_edge"
@@ -195,6 +204,8 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_hooks(spec, entities_by_name, ctx.add)
     check_seed(spec, entities_by_name, ctx.add)
     check_events(spec, ctx.add)
+    check_realtime(spec, ctx.add)
+    check_metrics_layer(spec, entities_by_name, ctx.add)
     check_api_edge(spec, ctx.add)
     check_jobs(spec, ctx.add)
     check_workflows(spec, ctx.add)

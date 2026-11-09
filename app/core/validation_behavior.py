@@ -6,6 +6,7 @@ from typing import NamedTuple
 
 from app.core.expr import ExprError, Schema, check_scoped, settings_used
 from app.core.spec_models import Spec, SpecEntity, SpecStateMachine
+from app.core.validation_guard_access import check_guard_field_access
 from app.core.validation_seed import multi_tenant, tenant_scoped
 
 Add = Callable[[str, str, str], None]
@@ -104,6 +105,7 @@ def _check_machine(
             add(f"{tp}.to_state", "unknown_state", f"{t.to_state!r} is not a state")
         if t.when is not None:
             _check_guard(t.when, schema, f"{tp}.when", add, settings)
+            check_guard_field_access(spec, entity, t, tp, schema, settings, add)
             if (
                 _reads_settings(t.when, schema, settings)
                 and multi_tenant(spec)

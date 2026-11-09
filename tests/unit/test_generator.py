@@ -73,6 +73,9 @@ NAMES = [
     "webhooks_orders",
     "hooks_effects",
     "custom_fields",
+    "field_access",
+    "search",
+    "realtime_metrics",
 ]
 
 

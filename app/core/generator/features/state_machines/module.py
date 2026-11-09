@@ -106,9 +106,7 @@ def _role_probe(
 
 
 _GUARD_IMPORT_ANCHOR = "from app.core.errors import AppError, NotFoundError\n"
-_GUARD_CALL_ANCHOR = (
-    '        raise AppError("transition_refused", f"the conditions for {name} are not met", 409)\n'
-)
+_GUARD_CALL_ANCHOR = '        raise AppError("transition_refused", detail, 409)\n'
 
 
 def with_guard_hooks(engine_source: str) -> str:

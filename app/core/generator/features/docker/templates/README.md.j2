@@ -76,6 +76,79 @@ Relations:
 {% endfor %}
 
 Errors always look like `{"code": "...", "message": "...", "details": []}`.
+{% if search_entities %}
+
+## Search
+
+{% for e in search_entities %}
+- `GET /{{ e.path }}/search?q=&limit=` searches {% for n in e.searchable %}`{{ n }}`{{ ", " if not loop.last }}{% endfor %} of {{ e.name }}.
+{% endfor %}
+
+A search sees exactly the rows the caller may list (roles, tenant, owner / row scope, policy; soft-deleted rows never),
+`total` counts only those rows, and a field the caller may not read is neither searched nor returned. `q` is 1-200
+characters and `limit` at most 100 (default 20). Engine, set with environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `SEARCH_BACKEND` | `fts` (default: Postgres full-text, nothing to run) or `opensearch`. `opensearch-fake` is an in-memory engine for tests and is refused in production. |
+| `SEARCH_OPENSEARCH_URL` | Required with `opensearch`: the app refuses to start without it (no silent fallback). |
+| `SEARCH_OPENSEARCH_API_KEY` | Optional credential sent as `Authorization: ApiKey ...`; never logged. |
+| `SEARCH_OPENSEARCH_INDEX_PREFIX` | Index name prefix (default `app-`). |
+
+With `opensearch`, the index only ranks candidate ids; rows are always re-read from Postgres through the access scope, so an
+out-of-date index cannot show a row the caller may not see. Writes through the API keep the index in step after commit; rows
+created some other way (imports, SQL) are not indexed until they are saved again, or until you rebuild the index:
+`python -m app.search.reindex [--entity NAME]` streams every live row of the searchable entities (in batches of 500) into the
+configured engine, through the same document builder as the write hook (with `fts` it only says there is no index). Run it
+after switching from `fts` to `opensearch`. When the engine is down the search answers 503.
+{% endif %}
+{% if realtime_entities %}
+
+## Realtime
+
+`GET /realtime/stream` is a Server-Sent Events stream of what changes in: {% for e in realtime_entities %}{{ e.name }}{{ ", " if not loop.last }}{% endfor %}.
+Each event is `{"id", "topic", "type", "data": {"entity", "record_id", "op"}, "at"}` with `op` = `created`, `updated` or
+`deleted` (a state-machine transition is an `updated`): it names the record and never carries a field value, so read the record through the API (which applies your
+field rules). Send the access token as for any other route.
+
+- Resume with the `Last-Event-ID` header (browsers do it by themselves) or `?last_event_id=`: events after that id are
+  replayed in order, exactly once, then the stream follows live. Without a cursor only new events arrive.
+- A cursor that cannot be replayed (older than the retention, or from another database) gets one `resync` event with the
+  new cursor: reload what you show.
+- You receive only events of entities you may `list`; for owner / role-scoped and tenant-scoped entities only events of
+  rows inside your own scope. Entities governed by abac / pbac policies are not streamed.
+- A heartbeat comment every 15 s keeps the connection open; the stream ends after 300 s and the client reconnects (it is
+  authorised again each time). At most 5 live streams per person and 20 connects per minute (429 beyond that, in-process
+  counters: with several workers the limits apply per worker).
+- The event log is the table `rt_events`, written in the same transaction as the change, so a rolled-back write leaves no
+  event. Events older than 24 h or beyond the newest 10 000 are pruned (every 100th write does it; `python -m app.realtime.prune`
+  does it on demand). Writes that do not go through the repositories (raw SQL, imports) are not announced. Tracked writes
+  take one short database lock each, so they are serialised with each other.
+
+| Variable | Meaning |
+|---|---|
+| `REALTIME_MAX_STREAMS_PER_USER` | Concurrent streams per person (default 5). |
+| `REALTIME_MAX_STREAMS` | Concurrent streams in this process, all people together (default 50); more get 503 `realtime_at_capacity`. |
+| `REALTIME_RECONNECT_MAX` | Connects per person per minute (default 20). |
+| `REALTIME_MAX_STREAM_SECONDS` | Stream age before the client must reconnect (default 300). |
+| `REALTIME_POLL_SECONDS` | How often the stream looks for new events (default 0.5); an idle stream backs off up to `REALTIME_IDLE_POLL_SECONDS` (default 1). |
+{% endif %}
+{% if metric_defs %}
+
+## Metrics
+
+`GET /metrics` lists the metrics you may read and `GET /metrics/{key}` computes one in the database:
+{% for m in metric_defs %}
+- `{{ m.key }}`: {{ m.label }} ({{ m.agg }}{{ " of " ~ m.field if m.field }} on {{ m.entity }}{{ ", grouped by " ~ m.group_by if m.group_by }}{{ ", " ~ m.filter | length ~ " filter(s)" if m.filter }}).
+{% endfor %}
+
+A metric is computed over exactly the rows you may list (soft-deleted, owner / tenant scope applied), so two people can
+get different numbers from the same definition. You need the `list` permission on the entity (else 403), and a metric
+that uses a field you may not read (the field, the group-by or a filter) is refused with 403. Sums, minimums and maximums
+are exact; `avg` is rounded to 6 decimal places (half to even); results other than counts are decimal strings without
+trailing zeros; counts are integers; an empty set gives 0 for count / sum and `null` for avg / min / max. With a group-by
+the answer has `groups` sorted by key, the empty key last, and `value` is the total over all groups.
+{% endif %}
 
 {% if auth and not keycloak %}
 ## Authentication

@@ -245,3 +245,8 @@ tests/api/test_metrics.py
 tests/unit/test_suite_identity.py
 tests/api/test_suite_auth.py
 tests/e2e/test_suite_identity_stack.py
+tests/unit/test_generator_field_access.py
+tests/unit/test_generator_search.py
+tests/e2e/test_search_stack.py
+tests/unit/test_generator_realtime_metrics.py
+tests/e2e/test_realtime_metrics_stack.py

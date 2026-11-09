@@ -1,0 +1,75 @@
+"""Rebuild the external search index from the database: `python -m app.search.reindex [--entity NAME]`.
+
+Streams every live row of the searchable entities in batches through the same document builder the write
+hook uses, into the engine SEARCH_BACKEND names. Use it after switching from fts to opensearch, or for rows
+that were created without the API (imports, seed, SQL). With fts there is no index: it says so and exits."""
+
+import argparse
+import asyncio
+import sys
+from typing import Any
+
+import sqlalchemy as sa
+
+from app.crud.posts import PostRepository
+from app.db import session_factory
+from app.search import config
+from app.search.adapters import get_adapter
+from app.search.hooks import build_document
+
+BATCH = 500
+ENTITIES = {
+    'Post': (PostRepository, ("body", "title")),
+}
+
+
+async def reindex(only: str | None = None, batch: int = BATCH) -> dict[str, int]:
+    """Index every live row of `only` (or of all searchable entities); returns entity -> rows indexed."""
+    adapter = get_adapter()
+    if adapter is None:
+        raise config.SearchConfigError("SEARCH_BACKEND=fts searches the database: there is no index to rebuild")
+    names = [only] if only is not None else list(ENTITIES)
+    done: dict[str, int] = {}
+    for name in names:
+        if name not in ENTITIES:
+            raise config.SearchConfigError(f"{name!r} is not searchable (one of: {', '.join(ENTITIES)})")
+        repo_cls, fields = ENTITIES[name]
+        count = 0
+        last: Any = None
+        while True:
+            async with session_factory() as session:  # a short session per batch
+                repo = repo_cls(session)
+                query = sa.select(repo.model).where(*repo._alive()).order_by(repo.model.id).limit(batch)
+                if last is not None:
+                    query = query.where(repo.model.id > last)
+                rows = list((await session.execute(query)).scalars())
+            for item in rows:
+                await adapter.index(name, str(item.id), build_document(item, fields))
+            count += len(rows)
+            if len(rows) < batch:
+                break
+            last = rows[-1].id
+        done[name] = count
+    return done
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="python -m app.search.reindex", description=__doc__)
+    parser.add_argument("--entity", help="only this entity (default: all searchable entities)")
+    args = parser.parse_args(argv)
+    config.check_boot()
+    if config.backend() == config.FTS:
+        print("SEARCH_BACKEND=fts: searches run on the database, there is no index to rebuild.")
+        return 0
+    try:
+        done = asyncio.run(reindex(args.entity))
+    except config.SearchConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    for name, count in done.items():
+        print(f"{name}: {count} rows indexed")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

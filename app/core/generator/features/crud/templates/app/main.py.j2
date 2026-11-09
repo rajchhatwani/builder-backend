@@ -40,6 +40,9 @@ from app.documents.router import router as _documents_router
 {% if events %}
 from app.events.relay import start_relay, stop_relay
 {% endif %}
+{% if metrics %}
+from app.metrics.router import router as _metrics_router
+{% endif %}
 {% if notifications %}
 from app.notifications.dispatcher import start_dispatcher, stop_dispatcher
 from app.notifications.router import router as _notifications_router
@@ -52,12 +55,19 @@ from app.payments.router import router as _payments_router
 from app.providers import config as _providers_config
 from app.providers.router import router as _providers_router
 {% endif %}
+{% if realtime %}
+from app.realtime.router import router as _realtime_router
+{% endif %}
 from app.routers._health import router as _health_router
 {% for e in entities %}
 from app.routers.{{ e.table }} import router as {{ e.table }}_router
 {% endfor %}
 {% if runtime_router %}
 from app.runtime_config.router import router as _runtime_config_router
+{% endif %}
+{% if search %}
+from app.search import config as _search_config
+from app.search.router import router as _search_router
 {% endif %}
 {% if state_machines %}
 from app.state_machines.router import router as _state_machines_router
@@ -82,6 +92,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% if auth %}
     get_auth_settings()  # a missing secret stops the app here, with a clear message
     await ensure_provider_lock()  # refuses to start on a database used by another provider
+{% endif %}
+{% if search %}
+    _search_config.check_boot()  # an unknown backend, or opensearch without SEARCH_OPENSEARCH_URL, stops the app here
 {% endif %}
 {% if payments %}
     await ensure_payments_lock()  # unsafe or missing payment settings stop the app here
@@ -181,6 +194,15 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if documents %}
     app.include_router(_documents_router)
+{% endif %}
+{% if realtime %}
+    app.include_router(_realtime_router)
+{% endif %}
+{% if metrics %}
+    app.include_router(_metrics_router)
+{% endif %}
+{% if search %}
+    app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id
 {% endif %}
 {% for e in entities %}
     app.include_router({{ e.table }}_router)

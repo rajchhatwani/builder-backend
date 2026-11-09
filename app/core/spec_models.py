@@ -565,6 +565,22 @@ class SpecEvents(_SpecModel):
     retention_days: int = 14
 
 
+class SpecRealtime(_SpecModel):
+    """Realtime stream in the generated app (GET /realtime/stream, Server-Sent Events). Off unless
+    `enabled`. Events carry ids only (never field values) and each caller receives only events of rows
+    they may list."""
+
+    enabled: bool = False
+
+
+class SpecMetricsLayer(_SpecModel):
+    """Named metrics served by the generated app (GET /metrics, GET /metrics/{key}). Each definition has
+    the shape of app/core/metrics.MetricDef (key, label, entity, agg, field, filter, group_by, unit): DATA
+    only, validated against the entities; the app computes it in SQL through the caller's own row scope."""
+
+    definitions: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class SpecRateBucket(_SpecModel):
     """A token bucket: holds at most `capacity` tokens and gets `refill_per_second` back each second."""
 
@@ -995,6 +1011,8 @@ class Spec(_SpecModel):
     api_edge: SpecApiEdge | None = None
     webhooks: SpecWebhooks | None = None
     hook_effects: SpecHookEffects | None = None
+    realtime: SpecRealtime | None = None
+    metrics_layer: SpecMetricsLayer | None = None
 
 
 def spec_hash(spec: Spec) -> str:

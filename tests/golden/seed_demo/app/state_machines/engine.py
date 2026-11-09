@@ -99,8 +99,15 @@ def settle(session: AsyncSession, entity: str, item: Any) -> None:
     raise AppError("state_loop", "automatic transitions did not settle", 500)
 
 
-def available(entity: str, item: Any, roles: set[str]) -> list[dict[str, Any]]:
-    """The manual transitions out of the record's current state, and whether the caller may use each."""
+GENERIC_REASON = "unavailable"
+
+
+def available(
+    entity: str, item: Any, roles: set[str], *, mask_guard: bool = False
+) -> list[dict[str, Any]]:
+    """The manual transitions out of the record's current state, and whether the caller may use each.
+    `mask_guard`: the caller cannot read some fields of the record, so a refused guard is reported as
+    the generic reason (the answer must not tell them how the hidden values compare)."""
     m = machine(entity)
     state = current_state(entity, item)
     values = row_values(item)
@@ -112,7 +119,7 @@ def available(entity: str, item: Any, roles: set[str]) -> list[dict[str, Any]]:
         if t["roles"] and not roles & set(t["roles"]):
             reason = "role"
         elif not guard_holds(entity, t, values):
-            reason = "guard"
+            reason = GENERIC_REASON if mask_guard else "guard"
         out.append(
             {"name": t["name"], "to_state": t["to"], "allowed": reason is None, "refused_because": reason}
         )
@@ -127,6 +134,7 @@ async def apply(
     *,
     roles: set[str],
     actor_id: uuid.UUID | None,
+    mask_guard: bool = False,
 ) -> Any:
     """Move one record through a manual transition. `repo` finds the record under the caller's access
     rules; the row is then locked so two simultaneous moves cannot both start from the same state."""
@@ -154,7 +162,8 @@ async def apply(
         )
     if not guard_holds(entity, t, row_values(item)):
         await session.rollback()
-        raise AppError("transition_refused", f"the conditions for {name} are not met", 409)
+        detail = f"{name} is not available" if mask_guard else f"the conditions for {name} are not met"
+        raise AppError("transition_refused", detail, 409)
     setattr(item, m["field"], t["to"])
     log_state(session, entity, item, name, state, t["to"], actor_id, automatic=False)
     ctx = repo._ctx("transition", {})

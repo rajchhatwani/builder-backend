@@ -1,0 +1,48 @@
+{
+  "spec_version": 1,
+  "project": {"name": "Helpdesk", "slug": "helpdesk", "description": "Tickets with row scope, field access and search", "db_engine": "postgres"},
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "filterable": ["title"],
+        "sortable": ["title"],
+        "searchable": ["title", "internal_note"],
+        "soft_delete": true
+      },
+      "fields": [
+        {"name": "title", "type": "string", "required": true, "max_length": 120},
+        {"name": "internal_note", "type": "text", "required": false}
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://helpdesk.example.com",
+    "password_reset": {"email_magic_link": true, "sms_otp": false},
+    "registration": {"email_verification_required": true},
+    "smtp": {"host": "smtp.example.com", "port": 587, "use_tls": true, "from_email": "noreply@helpdesk.example.com", "from_name": "Helpdesk"},
+    "roles": [
+      {"name": "admin", "label": "Admin", "inherits_from": "staff"},
+      {"name": "customer", "label": "Customer", "is_default": true},
+      {"name": "staff", "label": "Staff"}
+    ],
+    "permissions": [
+      {"entity": "Ticket", "operation": "create", "roles": ["customer", "staff"]},
+      {"entity": "Ticket", "operation": "list", "roles": ["admin", "customer"], "row_rule": "role_scoped"},
+      {"entity": "Ticket", "operation": "get", "roles": ["admin", "customer"], "row_rule": "owner"},
+      {"entity": "Ticket", "operation": "replace", "roles": ["admin", "customer"], "row_rule": "owner"},
+      {"entity": "Ticket", "operation": "update", "roles": ["admin", "customer"], "row_rule": "owner"},
+      {"entity": "Ticket", "operation": "delete", "roles": ["admin", "customer"], "row_rule": "owner"}
+    ]
+  },
+  "authorization": {
+    "model": "rbac",
+    "field_access": [
+      {"entity": "Ticket", "field": "internal_note", "read_roles": ["admin"], "write_roles": ["admin"]}
+    ]
+  }
+}

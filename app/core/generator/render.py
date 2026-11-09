@@ -48,6 +48,13 @@ def pyrepr(value: Any) -> str:
     raise TypeError(f"pyrepr cannot render {type(value).__name__}")
 
 
+def roles_repr(value: tuple[str, ...] | None) -> str:
+    """None or a tuple of role names, as a source literal (each name through repr)."""
+    if value is None:
+        return "None"
+    return "(" + "".join(f"{pyrepr(v)}, " for v in value).rstrip() + ")" if value else "()"
+
+
 def make_environment(templates_dir: Path) -> SandboxedEnvironment:
     env = SandboxedEnvironment(
         loader=FileSystemLoader(str(templates_dir), encoding="utf-8"),
@@ -58,6 +65,7 @@ def make_environment(templates_dir: Path) -> SandboxedEnvironment:
         lstrip_blocks=True,
     )
     env.filters["pyrepr"] = pyrepr
+    env.filters["roles_repr"] = roles_repr
     env.filters["tuple_lit"] = tuple_literal
     env.filters["tuple_lit_args"] = lambda names: ", ".join(f'"{n}"' for n in names)
     return env

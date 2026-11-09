@@ -1,0 +1,184 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "People",
+    "slug": "people",
+    "description": "Employees with field-level access",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Employee",
+      "table_name": "employees",
+      "plural_path": "employees",
+      "options": {
+        "filterable": [
+          "name",
+          "salary"
+        ],
+        "sortable": [
+          "name",
+          "salary"
+        ],
+        "searchable": [
+          "name",
+          "notes"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "salary",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "approved",
+            "archived"
+          ],
+          "default": "draft"
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://people.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@people.example.com",
+      "from_name": "People"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin",
+        "inherits_from": "hr"
+      },
+      {
+        "name": "hr",
+        "label": "HR",
+        "inherits_from": "staff"
+      },
+      {
+        "name": "staff",
+        "label": "Staff",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Employee",
+        "operation": "list",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "get",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "create",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "replace",
+        "roles": [
+          "staff"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "operation": "update",
+        "roles": [
+          "staff"
+        ]
+      }
+    ]
+  },
+  "authorization": {
+    "model": "rbac",
+    "field_access": [
+      {
+        "entity": "Employee",
+        "field": "salary",
+        "read_roles": [
+          "hr",
+          "admin"
+        ],
+        "write_roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "field": "notes",
+        "read_roles": [
+          "hr"
+        ]
+      }
+    ]
+  },
+  "state_machines": [
+    {
+      "entity": "Employee",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "approve",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "approved",
+          "when": "salary > 100000",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "archive",
+          "from_states": [
+            "draft",
+            "approved"
+          ],
+          "to_state": "archived",
+          "when": "name != \"Frozen\""
+        }
+      ]
+    }
+  ]
+}

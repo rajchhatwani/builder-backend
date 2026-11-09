@@ -95,6 +95,28 @@ Relations:
 
 Errors always look like `{"code": "...", "message": "...", "details": []}`.
 
+## Search
+
+- `GET /posts/search?q=&limit=` searches `body`, `title` of Post.
+
+A search sees exactly the rows the caller may list (roles, tenant, owner / row scope, policy; soft-deleted rows never),
+`total` counts only those rows, and a field the caller may not read is neither searched nor returned. `q` is 1-200
+characters and `limit` at most 100 (default 20). Engine, set with environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `SEARCH_BACKEND` | `fts` (default: Postgres full-text, nothing to run) or `opensearch`. `opensearch-fake` is an in-memory engine for tests and is refused in production. |
+| `SEARCH_OPENSEARCH_URL` | Required with `opensearch`: the app refuses to start without it (no silent fallback). |
+| `SEARCH_OPENSEARCH_API_KEY` | Optional credential sent as `Authorization: ApiKey ...`; never logged. |
+| `SEARCH_OPENSEARCH_INDEX_PREFIX` | Index name prefix (default `app-`). |
+
+With `opensearch`, the index only ranks candidate ids; rows are always re-read from Postgres through the access scope, so an
+out-of-date index cannot show a row the caller may not see. Writes through the API keep the index in step after commit; rows
+created some other way (imports, SQL) are not indexed until they are saved again, or until you rebuild the index:
+`python -m app.search.reindex [--entity NAME]` streams every live row of the searchable entities (in batches of 500) into the
+configured engine, through the same document builder as the write hook (with `fts` it only says there is no index). Run it
+after switching from `fts` to `opensearch`. When the engine is down the search answers 503.
+
 ## Database migrations
 
 `alembic/versions/0001_initial.py` was rendered from your model. For later changes edit

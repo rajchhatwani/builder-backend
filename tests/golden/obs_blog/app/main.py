@@ -19,10 +19,13 @@ from app.routers.comments import router as comments_router
 from app.routers.posts import router as posts_router
 from app.routers.tags import router as tags_router
 from app.routers.users import router as users_router
+from app.search import config as _search_config
+from app.search.router import router as _search_router
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    _search_config.check_boot()  # an unknown backend, or opensearch without SEARCH_OPENSEARCH_URL, stops the app here
     yield
     telemetry.shutdown()  # flush what has not been exported yet
     await engine.dispose()
@@ -52,6 +55,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     telemetry.setup(app)  # traces, metrics and log correlation; configured by OTEL_* variables
     app.include_router(_health_router)
+    app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id
     app.include_router(comments_router)
     app.include_router(posts_router)
     app.include_router(tags_router)

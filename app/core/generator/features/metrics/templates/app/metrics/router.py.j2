@@ -1,0 +1,105 @@
+"""Metrics routes (generated): GET /metrics lists the definitions, GET /metrics/{key} computes one value.
+
+The definitions are data in app/metrics/definitions.py (from the spec). A caller may read a metric only when
+they may `list` its entity, and the value is computed over exactly the rows their list would return (soft
+delete, owner / tenant scope), never over rows they cannot see. A metric that reads a field the caller may
+not read (the field, the group-by or a filter) is refused with 403: it would reveal that field."""
+
+import typing as _t
+
+import fastapi as _fa
+
+from app import db as _db
+{% if guarded %}
+from app.auth import field_access as _fx
+{% endif %}
+{% if auth %}
+from app.auth.deps import CurrentUser
+{% endif %}
+from app.core.errors import AppError
+{% for e in entities %}
+from app.crud.{{ e.table }} import {{ e.name }}Repository
+{% endfor %}
+from app.metrics import engine as _engine
+from app.metrics.definitions import FIELD_TYPES, METRICS
+{% for e in entities if e.scoped %}
+from app.routers.{{ e.table }} import _ACCESS as _ACCESS_{{ e.table }}
+{% endfor %}
+
+router = _fa.APIRouter(tags=["metrics"])
+
+_REPOS: dict[str, _t.Any] = {
+{% for e in entities %}
+    "{{ e.name }}": {{ e.name }}Repository,
+{% endfor %}
+}
+
+
+async def _repo_kwargs(entity: str, user: _t.Any) -> dict[str, _t.Any]:
+    """The row scope of the caller's `list` on this entity (403 when their roles do not allow it)."""
+{% for e in entities if e.scoped %}
+    if entity == "{{ e.name }}":
+        return dict((await _ACCESS_{{ e.table }}["list"]({{ "user" if e.needs_user else "" }})).repo_kwargs)
+{% endfor %}
+    return {}  # a public list: no scope
+
+
+def _used_fields(d: dict[str, _t.Any]) -> set[str]:
+    used = {f["field"] for f in d["filter"]}
+    used.update(n for n in (d["field"], d["group_by"]) if n is not None)
+    return used
+
+
+def _hidden(d: dict[str, _t.Any], user: _t.Any) -> set[str]:
+{% if guarded %}
+    return _used_fields(d) & _fx.hidden_read(d["entity"], user)
+{% else %}
+    return set()
+{% endif %}
+
+
+def _public(d: dict[str, _t.Any]) -> dict[str, _t.Any]:
+    return {k: d[k] for k in ("key", "label", "entity", "agg", "field", "filter", "group_by", "unit")}
+
+
+@router.get("/metrics")
+async def list_metrics(
+{% if auth %}
+    user: CurrentUser,
+{% endif %}
+) -> list[dict[str, _t.Any]]:
+    """The metrics this caller may read (entity listable by them, no field hidden from them)."""
+{% if not auth %}
+    user = None
+{% endif %}
+    out: list[dict[str, _t.Any]] = []
+    for d in METRICS.values():
+        try:
+            await _repo_kwargs(d["entity"], user)
+        except AppError:
+            continue
+        if not _hidden(d, user):
+            out.append(_public(d))
+    return out
+
+
+@router.get("/metrics/{key}")
+async def get_metric(
+    key: str,
+    session: _db.SessionDep,
+{% if auth %}
+    user: CurrentUser,
+{% endif %}
+) -> dict[str, _t.Any]:
+{% if not auth %}
+    user = None
+{% endif %}
+    d = METRICS.get(key)
+    if d is None:
+        raise AppError("not_found", f"metric {key!r} not found", 404)
+    kwargs = await _repo_kwargs(d["entity"], user)
+    if _hidden(d, user):
+        raise AppError("forbidden", "you do not have permission to read a field this metric uses", 403)
+    repo = _REPOS[d["entity"]](session, **kwargs)
+    result = await _engine.compute(repo, d, FIELD_TYPES[d["entity"]])
+    return {"key": d["key"], "label": d["label"], "unit": d["unit"], **result}

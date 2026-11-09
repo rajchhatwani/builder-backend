@@ -5,6 +5,7 @@ from app.models.authors import Author
 from app.models.books import Book
 from app.models.members import Member
 from app.models.shelves import Shelf
+from app.search import hooks as _search_hooks
 
 
 class BookRepository(_crud_base.Repository[Book]):
@@ -16,3 +17,9 @@ class BookRepository(_crud_base.Repository[Book]):
     eager = ("borrowers",)
     references = {"author_id": Author, "shelf_id": Shelf}
     many_to_many = {"borrowers": Member}
+
+
+# Keeps the external search index in step (no-op with SEARCH_BACKEND=fts).
+BookRepository.hooks = _search_hooks.attach(
+    "Book", ("isbn", "title"), BookRepository.hooks
+)

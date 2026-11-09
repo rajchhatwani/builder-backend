@@ -24,7 +24,7 @@ class TransitionInfo(BaseModel):
     name: str
     to_state: str
     allowed: bool
-    refused_because: str | None = None  # "role" or "guard"
+    refused_because: str | None = None  # "role", "guard", or "unavailable" (guard hidden from this caller)
 
 
 class StateChange(BaseModel):
@@ -59,7 +59,11 @@ async def list_invoices_transitions(
     access: Annotated[_access.Access, Depends(_access_invoices)],
 ) -> list[dict[str, object]]:
     item = await InvoiceRepository(session, **access.repo_kwargs).get(item_id)
-    return engine.available("Invoice", item, _roles_invoices(access))
+    return engine.available(
+        "Invoice",
+        item,
+        _roles_invoices(access),
+    )
 
 
 @router.post("/invoices/{item_id}/transitions/{name}", response_model=InvoiceRead)

@@ -24,7 +24,7 @@ class TransitionInfo(BaseModel):
     name: str
     to_state: str
     allowed: bool
-    refused_because: str | None = None  # "role" or "guard"
+    refused_because: str | None = None  # "role", "guard", or "unavailable" (guard hidden from this caller)
 
 
 class StateChange(BaseModel):
@@ -60,7 +60,11 @@ async def list_leave_requests_transitions(
 ) -> list[dict[str, object]]:
     item = await LeaveRequestRepository(session, **access.repo_kwargs).get(item_id)
     await engine.prime_settings(session, item)
-    return engine.available("LeaveRequest", item, _roles_leave_requests(access))
+    return engine.available(
+        "LeaveRequest",
+        item,
+        _roles_leave_requests(access),
+    )
 
 
 @router.post("/leave_requests/{item_id}/transitions/{name}", response_model=LeaveRequestRead)

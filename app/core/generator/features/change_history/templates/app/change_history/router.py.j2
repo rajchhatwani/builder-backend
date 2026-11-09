@@ -12,6 +12,9 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from app.auth import access as _access
+{% if routes | selectattr("e.guarded") | list %}
+from app.auth import field_access as _fx
+{% endif %}
 from app.auth.service import effective_roles
 from app.change_history.definitions import HISTORY
 from app.change_history.models import Change
@@ -61,6 +64,9 @@ async def {{ e.table }}_history(
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "{{ e.name }}", Change.record_id == item_id)
+{% if e.guarded %}
+        .where(Change.field.not_in(_fx.hidden_read("{{ e.name }}", access.user)))
+{% endif %}
         .order_by(Change.created_at, Change.id)
         .limit(limit)
         .offset(offset)
