@@ -26,7 +26,7 @@ pydantic-settings>=2.16.1
 {% if documents %}
 reportlab>=5.1.0
 {% endif %}
-{% if storage %}
+{% if storage or data_import %}
 # Reads multipart uploads. Older versions have denial-of-service and path-traversal bugs
 # (CVE-2024-24762, CVE-2024-53981, CVE-2026-24486): keep this floor.
 python-multipart>=0.0.22

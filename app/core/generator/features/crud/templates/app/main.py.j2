@@ -40,6 +40,9 @@ from app.documents.router import router as _documents_router
 {% if events %}
 from app.events.relay import start_relay, stop_relay
 {% endif %}
+{% if data_import %}
+from app.imports.router import router as _imports_router
+{% endif %}
 {% if metrics %}
 from app.metrics.router import router as _metrics_router
 {% endif %}
@@ -203,6 +206,9 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if search %}
     app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id
+{% endif %}
+{% if data_import %}
+    app.include_router(_imports_router)  # before the entity routers: `/<entity>/import` is not an item id
 {% endif %}
 {% for e in entities %}
     app.include_router({{ e.table }}_router)

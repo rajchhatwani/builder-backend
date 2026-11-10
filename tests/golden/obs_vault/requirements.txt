@@ -8,6 +8,9 @@ opentelemetry-instrumentation-fastapi>=0.66b1,<0.67
 opentelemetry-instrumentation-redis>=0.66b1,<0.67
 opentelemetry-sdk>=1.45.1,<2
 pydantic-settings>=2.16.1
+# Reads multipart uploads. Older versions have denial-of-service and path-traversal bugs
+# (CVE-2024-24762, CVE-2024-53981, CVE-2026-24486): keep this floor.
+python-multipart>=0.0.22
 redis>=5.0.0
 sqlalchemy[asyncio]>=2.1.5
 structlog>=26.1.0

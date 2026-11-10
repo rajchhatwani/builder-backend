@@ -1,0 +1,14 @@
+"""Importable fields per entity (generated from the spec): the columns a CSV may fill, with their limits."""
+
+from app.imports.csv_import import SpecEntity, SpecField
+
+ENTITIES: dict[str, SpecEntity] = {
+    'Ticket': SpecEntity(
+        name='Ticket',
+        fields=(
+            SpecField(name='title', type='string', required=True, unique=False, default=None, max_length=120, min_value=None, max_value=None, enum_values=None),
+            SpecField(name='priority', type='integer', required=True, unique=False, default=None, max_length=None, min_value=None, max_value=None, enum_values=None),
+            SpecField(name='department', type='string', required=True, unique=False, default=None, max_length=40, min_value=None, max_value=None, enum_values=None),
+        ),
+    ),
+}

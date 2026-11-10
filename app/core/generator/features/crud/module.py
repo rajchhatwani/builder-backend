@@ -8,6 +8,7 @@ from app.core.generator.context import ProjectCtx
 from app.core.generator.features.change_history.module import (
     router_present as history_router_present,
 )
+from app.core.generator.features.data_import.module import import_entities
 from app.core.generator.features.metrics.module import metrics_definitions
 from app.core.generator.features.realtime.module import realtime_entities
 from app.core.generator.features.search.module import search_entities
@@ -100,6 +101,7 @@ class CrudModule:
             and project.auth is not None,
             "workflows": workflows_active(project.spec) and project.auth is not None,
             "search": bool(search_entities(project)),
+            "data_import": bool(import_entities(project)),
             "realtime": bool(realtime_entities(project)),
             "metrics": bool(metrics_definitions(project)),
         }

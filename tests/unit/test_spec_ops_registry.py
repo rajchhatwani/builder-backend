@@ -8,6 +8,8 @@ import pytest
 from app.core.spec_models import (
     Spec,
     SpecAuth,
+    SpecCustomFieldDef,
+    SpecCustomFields,
     SpecEntity,
     SpecField,
     SpecPermission,
@@ -33,7 +35,13 @@ def _spec() -> Spec:
                     SpecField(name="note", type="text"),
                 ],
             ),
-            SpecEntity(name="Order", table_name="orders", plural_path="orders", fields=[]),
+            SpecEntity(
+                name="Order",
+                table_name="orders",
+                plural_path="orders",
+                fields=[],
+                custom_fields=SpecCustomFields(enabled=True, defs=[SpecCustomFieldDef(name="score", type="int")]),
+            ),
         ],
         relations=[
             SpecRelation(
@@ -95,6 +103,10 @@ SAMPLES: dict[str, dict[str, Any]] = {
         "section": "settings",
         "items": [{"key": "page_size", "type": "int", "default": 20}],
     },
+    "define_custom_field": {"entity": "Customer", "def": {"name": "region", "type": "string", "max_length": 10}},
+    "update_custom_field": {"entity": "Order", "name": "score", "changes": {"required": True}},
+    "remove_custom_field": {"entity": "Order", "name": "score"},
+    "promote_custom_field": {"entity": "Order", "name": "score"},
     "replace_spec": {"spec": json.loads(_spec().model_dump_json())},
 }
 

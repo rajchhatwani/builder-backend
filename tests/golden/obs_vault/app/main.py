@@ -18,6 +18,7 @@ from app.core import telemetry
 from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
+from app.imports.router import router as _imports_router
 from app.routers._health import router as _health_router
 from app.routers.secrets import router as secrets_router
 
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
     telemetry.setup(app)  # traces, metrics and log correlation; configured by OTEL_* variables
     app.include_router(_health_router)
     app.include_router(_auth_router)
+    app.include_router(_imports_router)  # before the entity routers: `/<entity>/import` is not an item id
     app.include_router(secrets_router)
     include_custom_routers(app)
     return app

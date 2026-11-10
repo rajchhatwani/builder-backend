@@ -74,6 +74,8 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
   const [result, setResult] = useState<ImportCommitResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pendingMapping, setPendingMapping] = useState<{ field: string; header: string } | null>(null)
+  const [fixedCount, setFixedCount] = useState(0)
   const entityId = useId()
   const fileId = useId()
 
@@ -86,6 +88,7 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
     setMapping(initialMapping(p))
     setCounts(p.counts)
     setRows(p.rejected)
+    setFixedCount(0)
   }
 
   const upload = async () => {
@@ -101,7 +104,15 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
     }
   }
 
+  // A mapping change re-checks every row and drops row fixes, so ask first when fixes exist (or always when rows were edited).
+  const askMapping = (field: string, header: string) => {
+    if (!preview || (mapping[field] ?? '') === header) return
+    if (fixedCount > 0) setPendingMapping({ field, header })
+    else void changeMapping(field, header)
+  }
+
   const changeMapping = async (field: string, header: string) => {
+    setPendingMapping(null)
     if (!preview) return
     setBusy(true)
     setError(null)
@@ -129,6 +140,23 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
     }
   }
 
+  const loadMore = async () => {
+    if (!preview) return
+    setBusy(true)
+    setError(null)
+    try {
+      const page = await api.listImportRows(projectId, preview.batch_id, 'rejected', 100, rows.length)
+      setRows((all) => {
+        const seen = new Set(all.map((r) => r.id))
+        return [...all, ...page.items.filter((r) => !seen.has(r.id))]
+      })
+    } catch (err) {
+      setError(msg(err, 'Could not load more rows'))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const saveRow = useCallback(
     async (row: ImportRow, edits: Record<string, string>) => {
       if (!preview || !counts) return
@@ -137,6 +165,7 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
       const saved = await api.fixImportRow(projectId, preview.batch_id, row.id, values)
       if (saved.status === 'fixed') {
         setCounts(applyRowSave(counts, saved))
+        setFixedCount((n) => n + 1)
         setRows((all) => all.filter((r) => r.id !== row.id))
       } else {
         setRows((all) => all.map((r) => (r.id === row.id ? saved : r)))
@@ -217,6 +246,19 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
             {summarise(counts)}
           </div>
           <p>Pick which column of your file feeds each field. Changing a column checks every row again and discards the fixes you made to rows.</p>
+          {pendingMapping && (
+            <div role="alertdialog" aria-label="Confirm column change" data-testid="mapping-confirm">
+              <p>
+                Changing the column for {pendingMapping.field} checks every row again and discards the {fixedCount} {fixedCount === 1 ? 'fix' : 'fixes'} you made. Continue?
+              </p>
+              <button onClick={() => void changeMapping(pendingMapping.field, pendingMapping.header)} disabled={busy}>
+                Change column and discard fixes
+              </button>{' '}
+              <button className="secondary" onClick={() => setPendingMapping(null)} disabled={busy}>
+                Keep my fixes
+              </button>
+            </div>
+          )}
           <div className="table-scroll" tabIndex={0} role="region" aria-label="Column mapping table">
             <table>
               <caption>Columns for {preview.entity}</caption>
@@ -234,7 +276,7 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
                       {f.required ? ' (required)' : ''}
                     </th>
                     <td>
-                      <MappingSelect field={f.name} headers={preview.headers} value={mapping[f.name] ?? ''} disabled={busy} onPick={(h) => void changeMapping(f.name, h)} />
+                      <MappingSelect field={f.name} headers={preview.headers} value={mapping[f.name] ?? ''} disabled={busy} onPick={(h) => askMapping(f.name, h)} />
                     </td>
                   </tr>
                 ))}
@@ -292,6 +334,13 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
                 <FixRow key={r.id} row={r} entity={entity} mapping={mapping} onSave={saveRow} />
               ))}
             </ul>
+          )}
+          {counts.rejected > rows.length && (
+            <p>
+              <button className="secondary" onClick={() => void loadMore()} disabled={busy} data-testid="import-load-more">
+                Show more rows ({rows.length} of {counts.rejected})
+              </button>
+            </p>
           )}
           <p>
             <button onClick={() => void commit()} disabled={busy || readyCount(counts) === 0}>

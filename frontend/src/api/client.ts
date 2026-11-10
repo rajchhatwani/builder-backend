@@ -80,6 +80,7 @@ import type {
   ImportPreview,
   ImportRow,
   ImportRowPage,
+  CustomFieldDef, CustomFieldList, PromoteCheck, PromoteResult,
   ImportCommitResult,
   ImportRecordPage,
   MetricDefinition,
@@ -402,8 +403,8 @@ export const api = {
   },
   setImportMapping: (projectId: string, batchId: string, mapping: Record<string, string | null>) =>
     request<ImportPreview>(`/projects/${projectId}/imports/${batchId}/mapping`, { method: 'PUT', body: JSON.stringify({ mapping }) }),
-  listImportRows: (projectId: string, batchId: string, status?: string, limit = 100) =>
-    request<ImportRowPage>(`/projects/${projectId}/imports/${batchId}/rows?limit=${limit}${status ? `&status=${encodeURIComponent(status)}` : ''}`),
+  listImportRows: (projectId: string, batchId: string, status?: string, limit = 100, offset = 0) =>
+    request<ImportRowPage>(`/projects/${projectId}/imports/${batchId}/rows?limit=${limit}&offset=${offset}${status ? `&status=${encodeURIComponent(status)}` : ''}`),
   fixImportRow: (projectId: string, batchId: string, rowId: string, values: Record<string, unknown>) =>
     request<ImportRow>(`/projects/${projectId}/imports/${batchId}/rows/${rowId}`, { method: 'PUT', body: JSON.stringify({ values }) }),
   commitImport: (projectId: string, batchId: string) =>
@@ -412,6 +413,16 @@ export const api = {
     request<unknown>(`/projects/${projectId}/imports/${batchId}/cancel`, { method: 'POST' }),
   listImportRecords: (projectId: string, entity: string, limit = 20) =>
     request<ImportRecordPage>(`/projects/${projectId}/imports/records?entity=${encodeURIComponent(entity)}&limit=${limit}`),
+  listCustomFields: (projectId: string, entity: string) =>
+    request<CustomFieldList>(`/projects/${projectId}/entities/${encodeURIComponent(entity)}/custom-fields`),
+  defineCustomField: (projectId: string, entity: string, def: CustomFieldDef) =>
+    request<CustomFieldDef>(`/projects/${projectId}/entities/${encodeURIComponent(entity)}/custom-fields`, { method: 'POST', body: JSON.stringify(def) }),
+  removeCustomField: (projectId: string, entity: string, name: string) =>
+    request<void>(`/projects/${projectId}/entities/${encodeURIComponent(entity)}/custom-fields/${encodeURIComponent(name)}`, { method: 'DELETE' }),
+  checkPromoteCustomField: (projectId: string, entity: string, name: string) =>
+    request<PromoteCheck>(`/projects/${projectId}/entities/${encodeURIComponent(entity)}/custom-fields/${encodeURIComponent(name)}/promote-check`, { method: 'POST', body: JSON.stringify({}) }),
+  promoteCustomField: (projectId: string, entity: string, name: string) =>
+    request<PromoteResult>(`/projects/${projectId}/entities/${encodeURIComponent(entity)}/custom-fields/${encodeURIComponent(name)}/promote`, { method: 'POST' }),
   presenceHeartbeat: (projectId: string, where: string) =>
     request<void>(`/projects/${projectId}/presence/heartbeat`, { method: 'POST', body: JSON.stringify({ where }) }),
   listPresence: (projectId: string) => request<PresenceUserRead[]>(`/projects/${projectId}/presence`),

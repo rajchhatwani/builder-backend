@@ -26,6 +26,7 @@ from app.core.generator.features.storage.module import (
 from app.core.generator.features.storage.module import active as storage_block
 from app.core.generator.features.metrics.module import metrics_definitions
 from app.core.generator.features.realtime.module import realtime_entities
+from app.core.generator.features.data_import.module import import_entities
 from app.core.generator.features.search.module import search_entities
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.suite_identity import hub_base_url
@@ -123,6 +124,7 @@ class DockerModule:
                 )
             ),
             "search_entities": search_entities(project),
+            "data_import": bool(import_entities(project)),
             "realtime_entities": realtime_entities(project),
             "metric_defs": metrics_definitions(project),
             "provider_vault": providers_active(project.spec) and project.auth is not None,

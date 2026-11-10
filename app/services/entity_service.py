@@ -77,6 +77,9 @@ class EntityService:
     async def update(self, entity_id: uuid.UUID, data: EntityUpdate) -> Entity:
         entity = await self.get(entity_id)
         updates = data.model_dump(exclude_unset=True)
+        if "options" in updates and "custom_fields" in (entity.options or {}):
+            # custom field definitions ride along in the options column; PATCH never owns them
+            updates["options"] = {**updates["options"], "custom_fields": entity.options["custom_fields"]}
         for key, value in updates.items():
             setattr(entity, key, value)
         try:

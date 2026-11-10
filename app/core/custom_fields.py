@@ -6,9 +6,12 @@ function (spec in, spec + plan out); the plan renders the Alembic migration that
 can be downgraded. Pure logic: no database, no clock, no randomness.
 """
 
+import math
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any
 
 from app.core import naming
 from app.core.spec_models import Spec, SpecCustomFieldDef, SpecEntity, SpecField
@@ -271,3 +274,136 @@ def promote(spec: Spec, entity_name: str, field_name: str) -> tuple[Spec, Promot
         enum_values=tuple(d.enum_values) if d.enum_values else None,
     )
     return new, plan
+
+
+# --- promotion pre-flight (pure: the caller supplies sample values, nothing touches a customer DB) ---
+
+MAX_SAMPLES = 1000
+_INT_RE = re.compile(r"\s*[+-]?\d+\s*")
+_BOOL_WORDS = frozenset({"true", "false", "t", "f", "yes", "no", "y", "n", "on", "off", "1", "0"})
+
+
+@dataclass(frozen=True)
+class PromoteProblem:
+    """severity `error` blocks the promotion; `warning` is information (type change, no default)."""
+
+    code: str
+    message: str
+    sample_index: int | None = None
+    severity: str = "error"
+
+
+def _text_of(v: Any) -> str:
+    if isinstance(v, bool):
+        return "true" if v else "false"
+    return v if isinstance(v, str) else str(v)
+
+
+def _cast_problem(d: SpecCustomFieldDef, v: Any) -> tuple[str, str] | None:
+    """(code, message) when the value would not survive the migration's `->>` text cast."""
+    t = d.type
+    if t == "int":
+        if isinstance(v, bool) or not (
+            isinstance(v, int) or (isinstance(v, str) and _INT_RE.fullmatch(v))
+        ):
+            return "custom_field_promote_bad_value", "not an integer"
+        try:
+            n = int(v) if isinstance(v, str) else v
+        except ValueError:  # > 4300 digits
+            return "custom_field_promote_int_out_of_range", f"outside {INT_RANGE[0]}..{INT_RANGE[1]}"
+        if not INT_RANGE[0] <= n <= INT_RANGE[1]:
+            return "custom_field_promote_int_out_of_range", f"outside {INT_RANGE[0]}..{INT_RANGE[1]}"
+    elif t == "float":
+        try:
+            ok = not isinstance(v, bool) and isinstance(v, (int, float, str)) and math.isfinite(float(v))
+        except (ValueError, OverflowError):
+            ok = False
+        if not ok:
+            return "custom_field_promote_bad_value", "not a number"
+    elif t == "bool":
+        if not (isinstance(v, bool) or (isinstance(v, (str, int)) and str(v).strip().lower() in _BOOL_WORDS)):
+            return "custom_field_promote_bad_value", "not a boolean"
+    elif t == "date":
+        try:
+            date.fromisoformat(v if isinstance(v, str) else "")
+        except ValueError:
+            return "custom_field_promote_bad_date", "not an ISO date (YYYY-MM-DD)"
+    elif t == "datetime":
+        try:
+            datetime.fromisoformat(v if isinstance(v, str) else "")
+        except ValueError:
+            return "custom_field_promote_bad_datetime", "not an ISO 8601 date-time"
+    else:  # string
+        text = _text_of(v)
+        limit = d.max_length or DEFAULT_STRING_LENGTH
+        if d.enum_values:
+            if text not in d.enum_values:
+                return "custom_field_promote_not_in_enum", "not one of the allowed values"
+            limit = 64
+        if len(text) > limit:
+            return "custom_field_promote_too_long", f"longer than {limit} characters"
+    return None
+
+
+def preflight_cast(d: SpecCustomFieldDef, sample_values: Sequence[Any]) -> list[PromoteProblem]:
+    """Would these sample values (None = row has no value) survive promoting `d` to a column?
+    Pure; reports at most one problem per sample and never echoes a value. Stable codes:
+    custom_field_promote_required_without_default, _bad_value, _int_out_of_range, _too_long,
+    _not_in_enum, _bad_date, _bad_datetime."""
+    out: list[PromoteProblem] = []
+    for i, v in enumerate(sample_values[:MAX_SAMPLES]):
+        if v is None:
+            if d.required:
+                out.append(
+                    PromoteProblem(
+                        "custom_field_promote_required_without_default",
+                        "a row has no value and the column would be NOT NULL (custom fields have no default)",
+                        i,
+                    )
+                )
+            continue
+        bad = _cast_problem(d, v)
+        if bad is not None:
+            out.append(PromoteProblem(bad[0], bad[1], i))
+    return out
+
+
+def check_promotable(
+    spec: Spec, entity: str, name: str, sample_values: Sequence[Any] | None = None
+) -> list[PromoteProblem]:
+    """Static checks on the spec (always) plus the sample cast check (when samples are given)."""
+    try:
+        promote(spec, entity, name)
+    except CustomFieldError as exc:
+        return [PromoteProblem("custom_field_promote_unavailable", str(exc))]
+    ent = next(e for e in spec.entities if e.name == entity)
+    d = next(x for x in enabled_defs(ent) if x.name == name)
+    out: list[PromoteProblem] = []
+    target = promotion_column_type(d)
+    if target != d.type:
+        out.append(
+            PromoteProblem(
+                "custom_field_promote_type_change",
+                f"custom type {d.type!r} becomes column type {target!r}",
+                severity="warning",
+            )
+        )
+    elif d.type in ("int", "float", "bool", "date", "datetime"):
+        out.append(
+            PromoteProblem(
+                "custom_field_promote_type_change",
+                f"values are cast from text to {_PROMOTION[d.type][1]}",
+                severity="warning",
+            )
+        )
+    if d.required and sample_values is None:
+        out.append(
+            PromoteProblem(
+                "custom_field_promote_required_without_default",
+                "the column would be NOT NULL: the migration fails if any row has no value",
+                severity="warning",
+            )
+        )
+    if sample_values is not None:
+        out += preflight_cast(d, sample_values)
+    return out

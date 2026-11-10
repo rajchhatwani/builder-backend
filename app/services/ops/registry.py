@@ -12,13 +12,23 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
-from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    ValidationError,
+    field_validator,
+    model_serializer,
+)
 
+from app.core.custom_fields import CustomFieldError, promote
 from app.core.naming import pluralize, to_snake_case
 from app.core.spec_models import (
     Spec,
-    SpecEntity,
+    SpecCustomFieldDef,
     SpecCustomFields,
+    SpecEntity,
     SpecEntityOptions,
     SpecField,
     SpecRelation,
@@ -143,6 +153,60 @@ class RemoveField(_P):
     name: str
 
 
+_CF_KEYS = ("name", "type", "required", "max_length", "enum_values")
+
+
+class DefineCustomField(_P):
+    """Add a per-row custom field definition; enables custom fields on the entity if needed."""
+
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
+    entity: str
+    field_def: SpecCustomFieldDef = Field(alias="def")
+    index: int | None = None
+
+    @model_serializer(mode="wrap")
+    def _ser(self, handler: Any) -> dict[str, Any]:
+        out: dict[str, Any] = handler(self)
+        out["def"] = out.pop("field_def")
+        return out
+
+    @field_validator("index")
+    @classmethod
+    def _i(cls, v: int | None) -> int | None:
+        if v is not None and v < 0:
+            raise ValueError("index must be >= 0")
+        return v
+
+
+class UpdateCustomField(_P):
+    entity: str
+    name: str
+    changes: dict[str, Any]
+
+    @field_validator("changes")
+    @classmethod
+    def _c(cls, v: dict[str, Any]) -> dict[str, Any]:
+        if not v:
+            raise ValueError("changes must name at least one attribute")
+        unknown = sorted(set(v) - set(_CF_KEYS))
+        if unknown:
+            raise ValueError(f"unknown attribute(s): {unknown}")
+        return v
+
+
+class RemoveCustomField(_P):
+    entity: str
+    name: str
+
+
+class PromoteCustomField(_P):
+    """Turn a custom field into a real column (data moves in the migration, not here)."""
+
+    entity: str
+    name: str
+
+
 class AddRelation(_P):
     relation: SpecRelation
 
@@ -216,6 +280,17 @@ def _find_field(entity: SpecEntity, name: str) -> int:
         if f.name == name:
             return i
     raise _not_found(f"field '{name}' on '{entity.name}'")
+
+
+def _cf_defs(entity: SpecEntity) -> list[SpecCustomFieldDef]:
+    return entity.custom_fields.defs if entity.custom_fields is not None else []
+
+
+def _find_cf(entity: SpecEntity, name: str) -> int:
+    for i, d in enumerate(_cf_defs(entity)):
+        if d.name == name:
+            return i
+    raise _not_found(f"custom field '{name}' on '{entity.name}'")
 
 
 def _find_relation(spec: Spec, key: tuple[str, str, str]) -> int:
@@ -315,6 +390,55 @@ def _remove_field(spec: Spec, p: RemoveField) -> Spec:
     return normalize(out)
 
 
+def _define_custom_field(spec: Spec, p: DefineCustomField) -> Spec:
+    out = spec.model_copy(deep=True)
+    entity = _find_entity(out, p.entity)
+    if entity.custom_fields is None:
+        entity.custom_fields = SpecCustomFields(enabled=True)
+    cf = entity.custom_fields
+    cf.enabled = True
+    if any(d.name == p.field_def.name for d in cf.defs):
+        raise _conflict("a custom field with this name already exists on this entity")
+    index = len(cf.defs) if p.index is None else min(p.index, len(cf.defs))
+    cf.defs.insert(index, p.field_def.model_copy(deep=True))
+    return normalize(out)
+
+
+def _update_custom_field(spec: Spec, p: UpdateCustomField) -> Spec:
+    out = spec.model_copy(deep=True)
+    entity = _find_entity(out, p.entity)
+    i = _find_cf(entity, p.name)
+    assert entity.custom_fields is not None
+    merged = {**entity.custom_fields.defs[i].model_dump(), **p.changes}
+    try:
+        new = SpecCustomFieldDef.model_validate(merged)
+    except ValidationError as exc:
+        raise _bad("invalid custom field change") from exc
+    entity.custom_fields.defs[i] = new
+    if sum(1 for d in entity.custom_fields.defs if d.name == new.name) > 1:
+        raise _conflict("a custom field with this name already exists on this entity")
+    return normalize(out)
+
+
+def _remove_custom_field(spec: Spec, p: RemoveCustomField) -> Spec:
+    out = spec.model_copy(deep=True)
+    entity = _find_entity(out, p.entity)
+    i = _find_cf(entity, p.name)
+    assert entity.custom_fields is not None
+    del entity.custom_fields.defs[i]
+    return normalize(out)
+
+
+def _promote_custom_field(spec: Spec, p: PromoteCustomField) -> Spec:
+    entity = _find_entity(spec, p.entity)
+    _find_cf(entity, p.name)
+    try:
+        new, _plan = promote(spec, p.entity, p.name)
+    except CustomFieldError as exc:
+        raise _conflict(str(exc)) from exc
+    return normalize(new)
+
+
 def _add_relation(spec: Spec, p: AddRelation) -> Spec:
     out = spec.model_copy(deep=True)
     _find_entity(out, p.relation.from_entity)
@@ -406,6 +530,33 @@ def _inv_remove_field(before: Spec, p: RemoveField) -> Call:
     return "add_field", {"entity": p.entity, "field": dump(entity.fields[i]), "index": i}
 
 
+def _inv_define_custom_field(before: Spec, p: DefineCustomField) -> Call:
+    return "remove_custom_field", {"entity": p.entity, "name": p.field_def.name}
+
+
+def _inv_update_custom_field(before: Spec, p: UpdateCustomField) -> Call:
+    entity = _find_entity(before, p.entity)
+    d = _cf_defs(entity)[_find_cf(entity, p.name)]
+    return "update_custom_field", {
+        "entity": p.entity,
+        "name": p.changes.get("name", p.name),
+        "changes": _old_values(d, p.changes),
+    }
+
+
+def _inv_remove_custom_field(before: Spec, p: RemoveCustomField) -> Call:
+    entity = _find_entity(before, p.entity)
+    i = _find_cf(entity, p.name)
+    return "define_custom_field", {"entity": p.entity, "def": dump(_cf_defs(entity)[i]), "index": i}
+
+
+def _inv_promote_custom_field(before: Spec, p: PromoteCustomField) -> Call:
+    # Not re-creatable as a typed op (the def moved into a real field): undo restores the exact
+    # earlier spec through a snapshot, like any other inverse that cannot be proven. The data
+    # that a migration already moved is not moved back by undo.
+    return "replace_spec", {"spec": dump(before)}
+
+
 def _inv_add_relation(before: Spec, p: AddRelation) -> Call:
     r = p.relation
     return "remove_relation", {
@@ -453,6 +604,12 @@ REGISTRY: dict[str, OpDef] = {
     "add_field": OpDef(AddField, _add_field, _inv_add_field),
     "update_field": OpDef(UpdateField, _update_field, _inv_update_field),
     "remove_field": OpDef(RemoveField, _remove_field, _inv_remove_field),
+    "define_custom_field": OpDef(DefineCustomField, _define_custom_field, _inv_define_custom_field),
+    "update_custom_field": OpDef(UpdateCustomField, _update_custom_field, _inv_update_custom_field),
+    "remove_custom_field": OpDef(RemoveCustomField, _remove_custom_field, _inv_remove_custom_field),
+    "promote_custom_field": OpDef(
+        PromoteCustomField, _promote_custom_field, _inv_promote_custom_field
+    ),
     "add_relation": OpDef(AddRelation, _add_relation, _inv_add_relation),
     "update_relation": OpDef(UpdateRelation, _update_relation, _inv_update_relation),
     "remove_relation": OpDef(RemoveRelation, _remove_relation, _inv_remove_relation),

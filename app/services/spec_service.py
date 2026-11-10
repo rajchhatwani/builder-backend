@@ -23,6 +23,7 @@ from app.core.enums import (
 )
 from app.core.spec_models import (
     Spec,
+    SpecCustomFields,
     SpecAuth,
     SpecAuthCustomField,
     SpecAuthorization,
@@ -284,8 +285,15 @@ class SpecService:
                     name=e.name,
                     table_name=e.table_name,
                     plural_path=e.plural_path,
-                    options=SpecEntityOptions.model_validate(e.options),
+                    options=SpecEntityOptions.model_validate(
+                        {k: v for k, v in e.options.items() if k != "custom_fields"}
+                    ),
                     fields=fields_by_entity[e.id],
+                    custom_fields=(
+                        SpecCustomFields.model_validate(e.options["custom_fields"])
+                        if e.options.get("custom_fields") is not None
+                        else None
+                    ),
                 )
                 for e in entities
             ],
@@ -427,7 +435,14 @@ class SpecService:
                 name=spec_entity.name,
                 table_name=spec_entity.table_name,
                 plural_path=spec_entity.plural_path,
-                options=spec_entity.options.model_dump(),
+                options={
+                    **spec_entity.options.model_dump(),
+                    **(
+                        {"custom_fields": spec_entity.custom_fields.model_dump()}
+                        if spec_entity.custom_fields is not None
+                        else {}
+                    ),
+                },
             )
             ids_by_name[entity.name] = entity.id
             self.session.add(entity)

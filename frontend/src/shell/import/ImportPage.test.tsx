@@ -123,6 +123,41 @@ describe('ImportPage', () => {
     expect(q('[data-testid=import-result]')).toBeNull()
   })
 
+  it('asks before a mapping change that would discard row fixes, and keeps them on cancel', async () => {
+    await toReview()
+    m.fix.mockResolvedValue({ ...BAD, status: 'fixed', errors: [] })
+    await type(q('input[id]:not([type=file])') as HTMLInputElement, '30')
+    await click(/Save row 3/)
+    await click(/Back to columns/)
+    const sel = host.querySelectorAll('select')[1] as HTMLSelectElement
+    await act(async () => { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })) })
+    await flush()
+    expect(q('[data-testid=mapping-confirm]')?.textContent).toContain('discards the 1 fix')
+    expect(m.mapping).not.toHaveBeenCalled()
+    await click(/Keep my fixes/)
+    expect(q('[data-testid=mapping-confirm]')).toBeNull()
+    expect(m.mapping).not.toHaveBeenCalled()
+    m.mapping.mockResolvedValue({ ...PREVIEW, mapping: { invoice_no: 'No' }, counts: { total: 3, accepted: 0, rejected: 3, duplicate: 0, fixed: 0 } })
+    await act(async () => { sel.value = ''; sel.dispatchEvent(new Event('change', { bubbles: true })) })
+    await click(/Change column and discard fixes/)
+    expect(m.mapping).toHaveBeenCalledWith('p', 'b1', { invoice_no: 'No', amount: null })
+    expect(q('[data-testid=mapping-confirm]')).toBeNull()
+  })
+
+  it('pages the review queue past 100 rows', async () => {
+    const many = Array.from({ length: 100 }, (_, i) => row(i + 10, 'abc', 'rejected', [{ field: 'amount', code: 'x', message: 'bad' }]))
+    const more = Array.from({ length: 20 }, (_, i) => row(i + 110, 'abc', 'rejected', [{ field: 'amount', code: 'x', message: 'bad' }]))
+    m.spec.mockResolvedValue(SPEC)
+    m.upload.mockResolvedValue({ ...PREVIEW, counts: { total: 120, accepted: 0, rejected: 120, duplicate: 0, fixed: 0 }, rejected: many })
+    m.rows.mockResolvedValueOnce({ items: many, total: 120, limit: 100, offset: 0 }).mockResolvedValueOnce({ items: more, total: 120, limit: 100, offset: 100 })
+    await mount(); await chooseFile(); await click(/Continue/)
+    expect(host.querySelectorAll('[data-testid=import-row]').length).toBe(100)
+    await click(/Show more rows \(100 of 120\)/)
+    expect(m.rows).toHaveBeenLastCalledWith('p', 'b1', 'rejected', 100, 100)
+    expect(host.querySelectorAll('[data-testid=import-row]').length).toBe(120)
+    expect(q('[data-testid=import-load-more]')).toBeNull()
+  })
+
   it('shows an empty state without entities', async () => {
     m.spec.mockResolvedValue({ entities: [] })
     await mount()

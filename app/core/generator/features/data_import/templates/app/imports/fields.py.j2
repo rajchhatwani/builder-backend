@@ -1,0 +1,16 @@
+"""Importable fields per entity (generated from the spec): the columns a CSV may fill, with their limits."""
+
+from app.imports.csv_import import SpecEntity, SpecField
+
+ENTITIES: dict[str, SpecEntity] = {
+{% for e, literals in entities %}
+    {{ e.name | pyrepr }}: SpecEntity(
+        name={{ e.name | pyrepr }},
+        fields=(
+{% for lit in literals %}
+            {{ lit }},
+{% endfor %}
+        ),
+    ),
+{% endfor %}
+}

@@ -64,6 +64,16 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'customfields',
+    label: 'Custom fields',
+    icon: (
+      <>
+        <rect x="4" y="4" width="16" height="16" rx="2" />
+        <path d="M12 8v8M8 12h8" />
+      </>
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: (

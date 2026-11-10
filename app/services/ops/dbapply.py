@@ -134,6 +134,42 @@ async def remove_field(s: AsyncSession, pid: uuid.UUID, p: r.RemoveField) -> Non
     await FieldService(s).delete((await _field(s, await _entity(s, pid, p.entity), p.name)).id)
 
 
+def _store_cf(entity: Entity, cf: Any) -> None:
+    opts = dict(entity.options)
+    opts["custom_fields"] = cf.model_dump()
+    entity.options = opts  # reassigned so the JSONB change is seen
+
+
+async def define_custom_field(s: AsyncSession, pid: uuid.UUID, p: r.DefineCustomField) -> None:
+    entity = await _entity(s, pid, p.entity)
+    after = r._define_custom_field(await SpecService(s).assemble(pid), p)  # noqa: SLF001
+    _store_cf(entity, next(e for e in after.entities if e.name == p.entity).custom_fields)
+
+
+async def update_custom_field(s: AsyncSession, pid: uuid.UUID, p: r.UpdateCustomField) -> None:
+    entity = await _entity(s, pid, p.entity)
+    after = r._update_custom_field(await SpecService(s).assemble(pid), p)  # noqa: SLF001
+    _store_cf(entity, next(e for e in after.entities if e.name == p.entity).custom_fields)
+
+
+async def remove_custom_field(s: AsyncSession, pid: uuid.UUID, p: r.RemoveCustomField) -> None:
+    entity = await _entity(s, pid, p.entity)
+    after = r._remove_custom_field(await SpecService(s).assemble(pid), p)  # noqa: SLF001
+    _store_cf(entity, next(e for e in after.entities if e.name == p.entity).custom_fields)
+
+
+async def promote_custom_field(s: AsyncSession, pid: uuid.UUID, p: r.PromoteCustomField) -> Field:
+    entity = await _entity(s, pid, p.entity)
+    before = await SpecService(s).assemble(pid)
+    after = r._promote_custom_field(before, p)  # noqa: SLF001
+    new = next(e for e in after.entities if e.name == p.entity)
+    created = await FieldService(s).create(
+        entity.id, FieldCreate(**new.fields[-1].model_dump(), position=None)
+    )
+    _store_cf(entity, new.custom_fields)
+    return created
+
+
 async def add_relation(s: AsyncSession, pid: uuid.UUID, p: r.AddRelation) -> Relation:
     rel = p.relation
     return await RelationService(s).create(
@@ -212,6 +248,10 @@ DB_APPLY: dict[str, DbApply] = {
     "add_field": add_field,
     "update_field": update_field,
     "remove_field": remove_field,
+    "define_custom_field": define_custom_field,
+    "update_custom_field": update_custom_field,
+    "remove_custom_field": remove_custom_field,
+    "promote_custom_field": promote_custom_field,
     "add_relation": add_relation,
     "update_relation": update_relation,
     "remove_relation": remove_relation,

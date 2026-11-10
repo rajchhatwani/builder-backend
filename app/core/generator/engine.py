@@ -8,6 +8,7 @@ from app.core.generator.features.api_edge.module import ApiEdgeModule
 from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.authz.module import AuthzModule
 from app.core.generator.features.change_history.module import ChangeHistoryModule
+from app.core.generator.features.data_import.module import DataImportModule
 from app.core.generator.features.crud.module import CrudModule
 from app.core.generator.features.deploy.module import DeployModule
 from app.core.generator.features.docker.module import DockerModule
@@ -68,6 +69,7 @@ def default_modules() -> list[FeatureModule]:
         NotificationsModule(),
         WorkflowsModule(),
         SearchModule(),
+        DataImportModule(),
         RealtimeModule(),
         MetricsModule(),
     ]

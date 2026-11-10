@@ -74,7 +74,12 @@
     "app/hooks_gen/contracts.py": "f0791a0479f4b2d9ae0127771eef1f9fc3a3ac04ae2208121eb0193e07f0fb31",
     "app/hooks_gen/registry.py": "aa09486d57cf554bdaf6f8d0afa2e2b0ed95f1e0c940f9c19aad497b1f7df444",
     "app/hooks_gen/runtime.py": "9c2b58f859e1406a58810ecb8cff5221e205fb87d2d36aff15af793a267cb386",
-    "app/main.py": "f40c5a9c35c57f662ef8cbfe8bd11123b0ba6e9db84542b358cf4d8c12a0a4fd",
+    "app/imports/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "app/imports/csv_import.py": "7c842dbe510e2270d23432aeccba824ceed2fcfcef7e9a2366be276a2f518076",
+    "app/imports/fields.py": "8fdc43e6afe3092f3524ad5e93524ac19791022bc63775521f26a85ece2538c9",
+    "app/imports/router.py": "dae7e0549e0a9ff69fafb720842d44cdbb3a740390ab0f844082a09750def0e2",
+    "app/imports/service.py": "457010f145621f8bb53bd6c0c5532ac3d36d3d14941e94a6ab78d145b173f3cd",
+    "app/main.py": "c2fc42904c0c018c147d5fe3a7ce20c7cb6ab4ebca0b51b9753362e527af6c63",
     "app/models/__init__.py": "a8c0f097a39150353bbf5be0122ede089b36160f79823f850ccf11a1b68bbe77",
     "app/models/_associations.py": "e01dface66784e19c42edf5047cb2709668ee370b8800ad689786c3dbfe9386a",
     "app/models/_base.py": "93717ae7c7f0bc758b104307008dafc4b90eb257633223686b140d1c8bdc45b0",
@@ -130,7 +135,7 @@
     "alembic/versions/0021_notifications.py": "4d17e54943c00365a56a3ac329da399bf8aa2dce7ce674c98ab5f988ee22fc51",
     "docker-compose.yml": "07e85823381aa66239feafd3c3fd641ad1aacccb04e06e52537ca432ec88f4e6",
     "requirements-dev.txt": "19f18546389f41f7571e67802b7fde4a09e1cef00039792142cf6d6944a46780",
-    "requirements.txt": "56c448364cf42072c34c18556fabecaa7b13ad081fa8c3955ff7cd411c3bbf24",
+    "requirements.txt": "bb5570e17370947e0686b3c89162b0ef7bae95c66a8802a57399f6610a6defdd",
     "tests/conftest.py": "f3920f3ea83a971427855f27100611f8a3a7f061c5b73293183d343493820a74"
   },
   "hooks": [

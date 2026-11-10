@@ -1771,6 +1771,12 @@ export interface ImportRow {
   errors: ImportRowError[]
 }
 
+export interface CustomFieldDef { name: string; type: string; required?: boolean; max_length?: number | null; enum_values?: string[] | null }
+export interface CustomFieldList { entity: string; enabled: boolean; max_keys: number; max_bytes: number; items: CustomFieldDef[] }
+export interface PromoteProblem { code: string; message: string; sample_index: number | null; severity: string }
+export interface PromoteCheck { ok: boolean; problems: PromoteProblem[]; plan_sql: string[] }
+export interface PromoteResult { entity: string; name: string; op_seq: number; plan_sql: string[] }
+
 export interface ImportRowPage {
   items: ImportRow[]
   total: number

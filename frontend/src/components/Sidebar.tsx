@@ -20,7 +20,7 @@ export type Section =
   | 'generate'
 
 /** Pages that exist only in the new shell (flag ui.shell=v2); the old sidebar never lists them. */
-export type V2Section = 'machines' | 'rules' | 'permissions' | 'specdiff' | 'import' | 'settings' | 'history' | 'hooks' | 'seed' | 'forms' | 'timeline' | 'notifications' | 'webhooks' | 'providers' | 'jobs' | 'workers' | 'workflows' | 'traces' | 'metrics' | 'suite' | 'intake' | 'plan' | 'build' | 'approvals' | 'see'
+export type V2Section = 'machines' | 'rules' | 'permissions' | 'specdiff' | 'import' | 'customfields' | 'settings' | 'history' | 'hooks' | 'seed' | 'forms' | 'timeline' | 'notifications' | 'webhooks' | 'providers' | 'jobs' | 'workers' | 'workflows' | 'traces' | 'metrics' | 'suite' | 'intake' | 'plan' | 'build' | 'approvals' | 'see'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
   {

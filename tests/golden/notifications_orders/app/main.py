@@ -18,6 +18,7 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
 from app.events.relay import start_relay, stop_relay
+from app.imports.router import router as _imports_router
 from app.notifications.dispatcher import start_dispatcher, stop_dispatcher
 from app.notifications.router import router as _notifications_router
 from app.providers import config as _providers_config
@@ -67,6 +68,7 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(_health_router)
     app.include_router(_auth_router)
+    app.include_router(_imports_router)  # before the entity routers: `/<entity>/import` is not an item id
     app.include_router(customers_router)
     app.include_router(orders_router)
     app.include_router(_providers_router)

@@ -14,7 +14,7 @@ export const RAIL_GROUPS: RailGroup[] = [
   { id: 'home', label: 'Home', sections: ['overview'] },
   { id: 'map', label: 'Map', sections: [], soon: true },
   { id: 'ai', label: 'Build with AI', sections: ['intake', 'plan', 'build', 'approvals', 'see'] },
-  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'documents'] },
+  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'customfields', 'documents'] },
   { id: 'secure', label: 'Secure', sections: ['auth', 'keycloak', 'suite', 'access'] },
   { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'webhooks', 'providers', 'import'] },
   { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics'] },

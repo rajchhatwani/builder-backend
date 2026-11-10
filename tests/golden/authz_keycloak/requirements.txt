@@ -3,6 +3,9 @@ asyncpg>=0.32.0
 cryptography>=44.0.0
 fastapi>=0.156.8
 pydantic-settings>=2.16.1
+# Reads multipart uploads. Older versions have denial-of-service and path-traversal bugs
+# (CVE-2024-24762, CVE-2024-53981, CVE-2026-24486): keep this floor.
+python-multipart>=0.0.22
 sqlalchemy[asyncio]>=2.1.5
 structlog>=26.1.0
 uvicorn[standard]>=0.54.0

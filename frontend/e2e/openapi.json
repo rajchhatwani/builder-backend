@@ -4145,6 +4145,167 @@
     "title": "CoverageResponse",
     "type": "object"
    },
+   "CustomFieldDef": {
+    "additionalProperties": false,
+    "properties": {
+     "enum_values": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 100,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Enum Values"
+     },
+     "max_length": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Length"
+     },
+     "name": {
+      "maxLength": 63,
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "default": false,
+      "title": "Required",
+      "type": "boolean"
+     },
+     "type": {
+      "maxLength": 20,
+      "minLength": 1,
+      "title": "Type",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "type"
+    ],
+    "title": "CustomFieldDef",
+    "type": "object"
+   },
+   "CustomFieldList": {
+    "properties": {
+     "enabled": {
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/CustomFieldDef"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "max_bytes": {
+      "title": "Max Bytes",
+      "type": "integer"
+     },
+     "max_keys": {
+      "title": "Max Keys",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "entity",
+     "enabled",
+     "max_keys",
+     "max_bytes",
+     "items"
+    ],
+    "title": "CustomFieldList",
+    "type": "object"
+   },
+   "CustomFieldPatch": {
+    "additionalProperties": false,
+    "description": "Only the attributes sent are changed (send null to clear max_length / enum_values).",
+    "properties": {
+     "enum_values": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "maxItems": 100,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Enum Values"
+     },
+     "max_length": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Max Length"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "maxLength": 63,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "required": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Required"
+     },
+     "type": {
+      "anyOf": [
+       {
+        "maxLength": 20,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Type"
+     }
+    },
+    "title": "CustomFieldPatch",
+    "type": "object"
+   },
    "DayCount": {
     "properties": {
      "count": {
@@ -8861,6 +9022,40 @@
     "title": "MigrationPlanStepOut",
     "type": "object"
    },
+   "MigrationStepRead": {
+    "properties": {
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     },
+     "safety": {
+      "title": "Safety",
+      "type": "string"
+     },
+     "sql_hint": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sql Hint"
+     }
+    },
+    "required": [
+     "kind",
+     "safety",
+     "reason"
+    ],
+    "title": "MigrationStepRead",
+    "type": "object"
+   },
    "NextStep": {
     "properties": {
      "dismissed": {
@@ -12748,6 +12943,128 @@
      "version"
     ],
     "title": "ProjectUpdate",
+    "type": "object"
+   },
+   "PromoteCheckBody": {
+    "additionalProperties": false,
+    "properties": {
+     "samples": {
+      "anyOf": [
+       {
+        "items": {},
+        "maxItems": 1000,
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Samples"
+     }
+    },
+    "title": "PromoteCheckBody",
+    "type": "object"
+   },
+   "PromoteCheckResult": {
+    "properties": {
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "plan_sql": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Plan Sql",
+      "type": "array"
+     },
+     "problems": {
+      "items": {
+       "$ref": "#/components/schemas/PromoteProblemRead"
+      },
+      "title": "Problems",
+      "type": "array"
+     }
+    },
+    "required": [
+     "ok",
+     "problems",
+     "plan_sql"
+    ],
+    "title": "PromoteCheckResult",
+    "type": "object"
+   },
+   "PromoteProblemRead": {
+    "properties": {
+     "code": {
+      "title": "Code",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     },
+     "sample_index": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sample Index"
+     },
+     "severity": {
+      "default": "error",
+      "title": "Severity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "code",
+     "message"
+    ],
+    "title": "PromoteProblemRead",
+    "type": "object"
+   },
+   "PromoteResult": {
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "migration_steps": {
+      "items": {
+       "$ref": "#/components/schemas/MigrationStepRead"
+      },
+      "title": "Migration Steps",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "op_seq": {
+      "title": "Op Seq",
+      "type": "integer"
+     },
+     "plan_sql": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Plan Sql",
+      "type": "array"
+     }
+    },
+    "required": [
+     "entity",
+     "name",
+     "op_seq",
+     "plan_sql",
+     "migration_steps"
+    ],
+    "title": "PromoteResult",
     "type": "object"
    },
    "ProvidersRead": {
@@ -32712,6 +33029,380 @@
     ]
    }
   },
+  "/projects/{project_id}/entities/{entity}/custom-fields": {
+   "get": {
+    "operationId": "list_custom_fields_projects__project_id__entities__entity__custom_fields_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomFieldList"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Custom Fields",
+    "tags": [
+     "custom-fields"
+    ]
+   },
+   "post": {
+    "operationId": "define_custom_field_projects__project_id__entities__entity__custom_fields_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CustomFieldDef"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomFieldDef"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Define Custom Field",
+    "tags": [
+     "custom-fields"
+    ]
+   }
+  },
+  "/projects/{project_id}/entities/{entity}/custom-fields/{name}": {
+   "delete": {
+    "operationId": "remove_custom_field_projects__project_id__entities__entity__custom_fields__name__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "204": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Remove Custom Field",
+    "tags": [
+     "custom-fields"
+    ]
+   },
+   "patch": {
+    "operationId": "update_custom_field_projects__project_id__entities__entity__custom_fields__name__patch",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/CustomFieldPatch"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CustomFieldDef"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Update Custom Field",
+    "tags": [
+     "custom-fields"
+    ]
+   }
+  },
+  "/projects/{project_id}/entities/{entity}/custom-fields/{name}/promote": {
+   "post": {
+    "operationId": "promote_custom_field_projects__project_id__entities__entity__custom_fields__name__promote_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PromoteResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Promote Custom Field",
+    "tags": [
+     "custom-fields"
+    ]
+   }
+  },
+  "/projects/{project_id}/entities/{entity}/custom-fields/{name}/promote-check": {
+   "post": {
+    "operationId": "promote_check_projects__project_id__entities__entity__custom_fields__name__promote_check_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "title": "Entity",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "name",
+      "required": true,
+      "schema": {
+       "title": "Name",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/PromoteCheckBody"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PromoteCheckResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Promote Check",
+    "tags": [
+     "custom-fields"
+    ]
+   }
+  },
   "/projects/{project_id}/events/stream": {
    "get": {
     "operationId": "stream_projects__project_id__events_stream_get",
@@ -33170,6 +33861,53 @@
      }
     },
     "summary": "List Records",
+    "tags": [
+     "import"
+    ]
+   }
+  },
+  "/projects/{project_id}/imports/records/export.csv": {
+   "get": {
+    "operationId": "export_records_projects__project_id__imports_records_export_csv_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "entity",
+      "required": true,
+      "schema": {
+       "maxLength": 120,
+       "minLength": 1,
+       "title": "Entity",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Export Records",
     "tags": [
      "import"
     ]
