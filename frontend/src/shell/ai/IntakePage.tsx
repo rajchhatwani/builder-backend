@@ -35,6 +35,11 @@ function ItemRow({ item, busy, onSave }: { item: RequirementItem; busy: boolean;
             <button className="small outline" disabled={busy} onClick={() => onSave(item, item.text, out ? 'open' : 'out_of_scope')}>
               {out ? 'Put back in scope' : 'Mark out of scope'}
             </button>
+            {!out && (
+              <button className="small outline" data-testid="req-unmet" disabled={busy} onClick={() => onSave(item, item.text, item.status === 'unmet' ? 'open' : 'unmet')}>
+                {item.status === 'unmet' ? 'Not an accepted gap' : 'Accept as gap'}
+              </button>
+            )}
           </div>
         </>
       )}
@@ -125,7 +130,7 @@ export function IntakePage({ projectId }: { projectId: string }) {
         <textarea id="ai-prompt" rows={8} value={prompt} maxLength={50000} onChange={(e) => setPrompt(e.target.value)}
           placeholder="For example: a leave-request system where employees ask for time off and managers approve it." />
         <div className="hstack">
-          <input ref={fileRef} type="file" multiple accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" aria-label="Add documents" onChange={(e) => pick(e.target.files)} />
+          <input ref={fileRef} type="file" multiple accept=".pdf,.txt,.md,.docx,.xlsx,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="Add documents" onChange={(e) => pick(e.target.files)} />
           <button disabled={!canSubmit} onClick={() => void submit()} data-testid="intake-submit">{busy ? 'Working…' : map ? 'Add to requirements' : 'Understand my request'}</button>
         </div>
         {files.length > 0 && (

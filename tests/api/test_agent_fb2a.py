@@ -362,7 +362,7 @@ async def test_step_and_wall_budgets_are_run_wide(
     install(provider)
     pid = await make_project(client)
     steps_run = await _new(client, pid)
-    await _patch_run(session_factory, steps_run, state="running", phase="build", steps_used=40)  # used by earlier drives
+    await _patch_run(session_factory, steps_run, state="running", phase="build", steps_used=60)  # used by earlier drives
     r = await client.post(_url(pid, steps_run, "/resume"))
     assert r.json()["state"] == "stopped" and r.json()["stop_code"] == "budget_steps"
     wall_run = await _new(client, pid)

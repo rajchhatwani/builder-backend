@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "SpecIdempotency": {
+      "additionalProperties": false,
+      "description": "`Idempotency-Key` on the listed methods: the same key and request replays the first response.",
+      "properties": {
+        "max_response_bytes": {
+          "default": 65536,
+          "title": "Max Response Bytes",
+          "type": "integer"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "ttl_hours": {
+          "default": 24,
+          "title": "Ttl Hours",
+          "type": "integer"
+        }
+      },
+      "title": "SpecIdempotency",
+      "type": "object"
+    },
+    "SpecQuota": {
+      "additionalProperties": false,
+      "description": "A hard cap on a named meter per tenant and period (`day` or `month`, UTC). Requests whose method\nis in `methods` (empty = all) and whose path is under `path_prefix` use `cost` of the meter.",
+      "properties": {
+        "cost": {
+          "default": 1,
+          "title": "Cost",
+          "type": "integer"
+        },
+        "limit": {
+          "title": "Limit",
+          "type": "integer"
+        },
+        "meter": {
+          "title": "Meter",
+          "type": "string"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "path_prefix": {
+          "default": "/",
+          "title": "Path Prefix",
+          "type": "string"
+        },
+        "period": {
+          "title": "Period",
+          "type": "string"
+        }
+      },
+      "required": [
+        "meter",
+        "period",
+        "limit"
+      ],
+      "title": "SpecQuota",
+      "type": "object"
+    },
+    "SpecRateLimits": {
+      "additionalProperties": false,
+      "description": "Rate limits per (tenant, caller) and per tenant, stored in Postgres so they hold across processes.\nCallers without a valid token are limited per client address (`anonymous`). A store error refuses\nwrites with 503; reads are refused too unless `read_fail_open`.",
+      "properties": {
+        "anonymous": {
+          "$ref": "#/$defs/SpecRateBucket",
+          "default": {
+            "capacity": 30,
+            "refill_per_second": 0.5
+          }
+        },
+        "groups": {
+          "items": {
+            "$ref": "#/$defs/SpecRateGroup"
+          },
+          "title": "Groups",
+          "type": "array"
+        },
+        "read_fail_open": {
+          "default": false,
+          "title": "Read Fail Open",
+          "type": "boolean"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpecRateBucket"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user": {
+          "$ref": "#/$defs/SpecRateBucket",
+          "default": {
+            "capacity": 120,
+            "refill_per_second": 2.0
+          }
+        }
+      },
+      "title": "SpecRateLimits",
+      "type": "object"
+    },
+    "SpecRateBucket": {
+      "additionalProperties": false,
+      "description": "A token bucket: holds at most `capacity` tokens and gets `refill_per_second` back each second.",
+      "properties": {
+        "capacity": {
+          "title": "Capacity",
+          "type": "integer"
+        },
+        "refill_per_second": {
+          "title": "Refill Per Second",
+          "type": "number"
+        }
+      },
+      "required": [
+        "capacity",
+        "refill_per_second"
+      ],
+      "title": "SpecRateBucket",
+      "type": "object"
+    },
+    "SpecRateGroup": {
+      "additionalProperties": false,
+      "description": "Limits for a group of routes (first matching group wins; `methods` empty = every method).\n`user` / `tenant` replace the defaults for this group (callers without a valid token always use\n`anonymous`); `cost` is what one request takes out.",
+      "properties": {
+        "cost": {
+          "default": 1,
+          "title": "Cost",
+          "type": "integer"
+        },
+        "methods": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Methods",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "path_prefix": {
+          "title": "Path Prefix",
+          "type": "string"
+        },
+        "tenant": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpecRateBucket"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "user": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpecRateBucket"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "path_prefix"
+      ],
+      "title": "SpecRateGroup",
+      "type": "object"
+    },
+    "SpecApiVersioning": {
+      "additionalProperties": false,
+      "description": "Dated API versions. `default` is what a client without an `API-Version` header gets; the newest\nversion's shape is the one the code produces, older ones come from transformers in\napp/hooks/api_versions.py.",
+      "properties": {
+        "default": {
+          "title": "Default",
+          "type": "string"
+        },
+        "versions": {
+          "items": {
+            "$ref": "#/$defs/SpecApiVersion"
+          },
+          "title": "Versions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "default",
+        "versions"
+      ],
+      "title": "SpecApiVersioning",
+      "type": "object"
+    },
+    "SpecApiVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "date": {
+          "title": "Date",
+          "type": "string"
+        },
+        "note": {
+          "default": "",
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date"
+      ],
+      "title": "SpecApiVersion",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "The API edge (C14), off unless `enabled`: idempotency keys, rate limits and quotas, dated API\nversions. Each part is on when its section is present.",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "idempotency": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecIdempotency"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quotas": {
+      "items": {
+        "$ref": "#/$defs/SpecQuota"
+      },
+      "title": "Quotas",
+      "type": "array"
+    },
+    "rate_limits": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecRateLimits"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "versioning": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecApiVersioning"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "title": "SpecApiEdge",
+  "type": "object"
+}

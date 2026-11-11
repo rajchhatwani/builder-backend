@@ -47,6 +47,7 @@ from app.models.scim import ScimDirectory, ScimGroup, ScimUser
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.services import audit_service
 from app.services.platform_auth_service import normalize_email
+from app.services.usage_service import reconcile_gauges
 
 INVITATION_TTL = timedelta(days=14)
 DEFAULT_PERSONAL_PLAN_ID = "free"
@@ -699,6 +700,8 @@ class OrganizationService:
         )
         for project in projects:
             await self.db.delete(project)  # entities, configs, members cascade in the DB
+        await self.db.flush()
+        await reconcile_gauges(self.db, org.id)  # the cascade took workspaces the gauge still counts
         member_ids = list(
             (
                 await self.db.execute(

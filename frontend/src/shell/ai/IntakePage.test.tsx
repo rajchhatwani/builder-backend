@@ -56,4 +56,11 @@ describe('IntakePage', () => {
     await click([...host.querySelectorAll('button')].find((b) => b.textContent === 'Mark out of scope') ?? null)
     expect(m.putItem).toHaveBeenCalledWith('p', { id: '2', text: 'Leave request', status: 'out_of_scope' })
   })
+  it('accepts an item as a gap (unmet)', async () => {
+    m.getRequirements.mockResolvedValue(MAP)
+    m.putItem.mockResolvedValue(MAP)
+    await mount()
+    await click(host.querySelector('[data-testid=req-unmet]'))
+    expect(m.putItem).toHaveBeenCalledWith('p', { id: '2', text: 'Leave request', status: 'unmet' })
+  })
 })

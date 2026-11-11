@@ -236,3 +236,83 @@ def test_auth_disabled_means_everything_public_and_is_a_weakening() -> None:
 
 def test_non_string_roles_do_not_crash() -> None:
     assert readable_fields(spec(), "Person", [["admin"], 3, "hr"]) == {"name", "notes", "salary"}  # type: ignore[list-item]
+
+
+def _with_perm(raw: dict[str, Any], op: str, **over: Any) -> dict[str, Any]:
+    raw = copy.deepcopy(raw)
+    next(p for p in raw["auth"]["permissions"] if p["operation"] == op).update(over)
+    return raw
+
+
+def test_rename_of_entity_role_field_is_not_removal_plus_addition() -> None:
+    """WP-A (a): an unambiguous rename carries its cells; nothing is added/removed/gained."""
+    raw = copy.deepcopy(base())
+    raw["entities"][0]["name"] = "Human"
+    for p in raw["auth"]["permissions"]:
+        p["entity"] = "Human"
+        p["roles"] = ["worker" if r == "staff" else r for r in p["roles"]]
+    raw["auth"]["roles"][2]["name"] = "worker"
+    raw["authorization"]["field_access"][0].update(
+        entity="Human", read_roles=["hr", "admin"], field="pay"
+    )
+    raw["entities"][0]["fields"][2]["name"] = "pay"
+    d = access_diff(spec(), spec(raw))
+    kinds = {(r["kind"], r["before"], r["after"]) for r in d["renames"]}
+    assert kinds == {("entity", "Person", "Human"), ("role", "staff", "worker"), ("field", "salary", "pay")}
+    assert d["changes"] == [] and d["weakens"] is False and d["counts"]["renamed"] == 3
+    # a rename that also widens access is still a gain, reported under the NEW names
+    raw2 = _with_perm(raw, "delete", roles=["admin", "worker", "hr"])
+    d2 = access_diff(spec(), spec(raw2))
+    assert d2["weakens"] is True and "object:Human.delete" in d2["roles_gaining"]["hr"]
+    assert not any(c["effect"] in ("added", "removed") for c in d2["changes"])
+
+
+def test_ambiguous_or_different_names_stay_removed_and_added() -> None:
+    raw = copy.deepcopy(base())
+    raw["auth"]["roles"][1]["label"] = "Human Resources"  # different label: not the same role
+    raw["auth"]["roles"][1]["name"] = "people_ops"
+    for p in raw["auth"]["permissions"]:
+        p["roles"] = ["people_ops" if r == "hr" else r for r in p["roles"]]
+    raw["authorization"]["field_access"][0]["read_roles"] = ["people_ops", "admin"]
+    raw["authorization"]["field_access"][0]["write_roles"] = ["people_ops"]
+    d = access_diff(spec(), spec(raw))
+    assert d["renames"] == []
+    assert {c["effect"] for c in d["changes"]} == {"added", "removed"}
+
+
+def test_added_entity_without_permission_slots_is_flagged() -> None:
+    """WP-A (b): a new entity nobody wrote permissions for is public while sign-in is on."""
+    raw = copy.deepcopy(base())
+    team = {"name": "Team", "table_name": "teams", "plural_path": "teams", "options": {},
+            "fields": [{"name": "title", "type": "string"}]}  # fmt: skip
+    raw["entities"].append(team)
+    assert access_diff(spec(), spec(raw))["unprotected_entities"] == ["Team"]
+    raw["auth"]["permissions"].append({"entity": "Team", "operation": "list", "roles": ["admin"]})
+    assert access_diff(spec(), spec(raw))["unprotected_entities"] == []
+    assert access_diff(spec(), spec())["unprotected_entities"] == []
+
+
+def _filter_spec(field: str, value: str) -> Spec:
+    raw = _with_perm(
+        base(), "list", row_rule="custom_filter", custom_filter_field=field, custom_filter_value=value
+    )
+    return spec(raw)
+
+
+def test_custom_filter_value_change_is_classed_by_semantics() -> None:
+    """WP-A (d): same filter = no change; other value / other field / other opaque scope = gain
+    (unknown reach fails closed); all <-> filter and own-chain are ordered exactly."""
+    a = _filter_spec("name", "x")
+    assert access_diff(a, _filter_spec("name", "x"))["changes"] == []
+    for other in (_filter_spec("name", "y"), _filter_spec("notes", "x")):
+        d = access_diff(a, other)
+        assert d["weakens"] is True and {c["effect"] for c in d["changes"]} == {"gain"}
+    open_list = spec(_with_perm(base(), "list", row_rule=None))
+    assert access_diff(a, open_list)["weakens"] is True  # filter -> all
+    d = access_diff(open_list, a)
+    assert d["weakens"] is False and {c["effect"] for c in d["changes"]} == {"lose"}
+    tenant = spec(_with_perm(base(), "list", row_rule="tenant"))
+    assert access_diff(a, tenant)["weakens"] is True  # filter -> tenant: incomparable
+    own = spec(_with_perm(base(), "list", row_rule="owner"))
+    assert access_diff(open_list, own)["weakens"] is False
+    assert access_diff(spec(), own)["weakens"] is False  # own (admins: all) -> own narrows

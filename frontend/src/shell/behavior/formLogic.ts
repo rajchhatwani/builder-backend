@@ -200,6 +200,8 @@ export function clientErrors(section: 'settings' | 'sequences' | 'lists' | 'hist
       const r = row as SequenceRow
       if (!nonNegInt(r.padding)) out[`${i}.padding`] = NEED_INT
       if (!nonNegInt(r.start)) out[`${i}.start`] = NEED_INT
+      if (r.entity && !r.field) out[`${i}.field`] = 'Name the field, or clear the entity'
+      if (r.field && !r.entity) out[`${i}.entity`] = 'Name the entity, or clear the field'
     } else if (section === 'lists') {
       const r = row as ListRow
       if (!nonNegInt(r.max_items)) out[`${i}.max_items`] = NEED_INT

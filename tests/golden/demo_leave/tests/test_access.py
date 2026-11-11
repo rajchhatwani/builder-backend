@@ -34,7 +34,7 @@ def _call(client: AsyncClient, op: str, path: str):  # type: ignore[no-untyped-d
 
 
 async def test_employees_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "list", "update"):
+    for op in ("create", "delete", "get", "list", "update", "head"):
         response = await _call(client, op, "employees")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -46,7 +46,7 @@ async def test_employees_routes_reject_users_without_the_required_role(
 ) -> None:
     # A freshly registered user only holds the default role(s).
     async with client_for(await sign_in_plain(client, "plain@example.com")) as plain:
-        for op in ("create", "delete", "get", "list", "update"):
+        for op in ("create", "delete", "get", "list", "update", "head"):
             response = await _call(plain, op, "employees")
             assert response.status_code == 403, (op, response.text)
             if op != "head":
@@ -54,7 +54,7 @@ async def test_employees_routes_reject_users_without_the_required_role(
 
 
 async def test_leave_requests_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "list", "update"):
+    for op in ("create", "delete", "get", "list", "update", "head"):
         response = await _call(client, op, "leave_requests")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -66,7 +66,7 @@ async def test_leave_requests_routes_reject_users_without_the_required_role(
 ) -> None:
     # A freshly registered user only holds the default role(s).
     async with client_for(await sign_in_plain(client, "plain@example.com")) as plain:
-        for op in ("create", "delete", "get", "list", "update"):
+        for op in ("create", "delete", "get", "list", "update", "head"):
             response = await _call(plain, op, "leave_requests")
             assert response.status_code == 403, (op, response.text)
             if op != "head":

@@ -28,8 +28,6 @@ PUBLIC = "(public)"  # someone who is not signed in
 READ_OPS = ("list", "get")
 WRITE_OPS = ("create", "replace", "update")
 _NO_ACCESS_RANK = {"no": 0, "conditional": 1, "yes": 2}
-# Lower = broader. Moving a cell to a lower number lets the role reach more rows.
-_ROW_RANK = {"all": 0, "policy": 1, "filter": 2, "tenant": 2, "own (admins: all)": 3, "own": 4}
 
 
 def _held(role: str, parents: Mapping[str, str | None]) -> set[str]:
@@ -55,8 +53,23 @@ def _row_label(rule: str | None, field: str | None, value: str | None) -> str:
     return str(rule)
 
 
-def _row_rank(label: str) -> int:
-    return _ROW_RANK.get(label.split(":", 1)[0], _ROW_RANK.get(label, 2))
+# Row scopes that are strictly ordered by the rows they reach: all > own (admins: all) > own.
+# Everything else (a custom filter, tenant, policy) is an opaque set: two different opaque scopes
+# cannot be compared, so a move between them is treated as a gain (fail closed).
+_CHAIN = {"all": 0, "own (admins: all)": 1, "own": 2}
+
+
+def _row_effect(before: str, after: str) -> str:
+    if before == after:
+        return "change"
+    a, b = _CHAIN.get(before), _CHAIN.get(after)
+    if a is not None and b is not None:
+        return "gain" if b < a else "lose"
+    if before == "all":
+        return "lose"  # everything -> a narrower scope
+    if after == "all":
+        return "gain"
+    return "gain"  # opaque -> other scope: unknown reach, so assume it can be wider
 
 
 class AccessMatrix:
@@ -196,15 +209,96 @@ def _effect(layer: str, before: str | None, after: str | None) -> str:
     if after is None:
         return "removed"
     if layer == "row":
-        a, b = _row_rank(before), _row_rank(after)
-        return "gain" if b < a else "lose" if b > a else "change"
+        return _row_effect(before, after)
     a, b = _NO_ACCESS_RANK.get(before, 0), _NO_ACCESS_RANK.get(after, 0)
     return "gain" if b > a else "lose" if b < a else "change"
+
+
+def _unique_pairs(gone: dict[str, Any], new: dict[str, Any]) -> dict[str, str]:
+    """old -> new for names whose signature matches exactly one name on the other side."""
+    out: dict[str, str] = {}
+    for old, sig in gone.items():
+        twins = [n for n, s in new.items() if s == sig]
+        back = [o for o, s in gone.items() if s == sig]
+        if len(twins) == 1 and len(back) == 1:
+            out[old] = twins[0]
+    return out
+
+
+def detect_renames(before: Spec, after: Spec) -> dict[str, Any]:
+    """Names that vanished and reappeared with an identical definition: renames, not removal plus
+    addition. Conservative: only an unambiguous 1:1 match counts; anything else stays a removal and
+    an addition (which the diff treats as it always did). Roles must keep label and flags; entities
+    their ordered field definitions (names aside); fields everything but the name."""
+    b_ents = {e.name: e for e in before.entities}
+    a_ents = {e.name: e for e in after.entities}
+
+    def ent_sig(e: Any) -> Any:
+        return tuple(repr(f.model_dump(exclude={"name"})) for f in e.fields) or None
+
+    ents = _unique_pairs(
+        {n: ent_sig(e) for n, e in b_ents.items() if n not in a_ents and ent_sig(e)},
+        {n: ent_sig(e) for n, e in a_ents.items() if n not in b_ents and ent_sig(e)},
+    )
+    b_roles = {r.name: r for r in before.auth.roles} if before.auth else {}
+    a_roles = {r.name: r for r in after.auth.roles} if after.auth else {}
+
+    def role_sig(r: Any) -> Any:
+        return (r.label, r.is_default, r.self_assignable, r.invite_only, r.inherits_from)
+
+    roles = _unique_pairs(
+        {n: role_sig(r) for n, r in b_roles.items() if n not in a_roles},
+        {n: role_sig(r) for n, r in a_roles.items() if n not in b_roles},
+    )
+    fields: dict[str, dict[str, str]] = {}
+    for old_name, e1 in b_ents.items():
+        new_name = ents.get(old_name, old_name)
+        e2 = a_ents.get(new_name)
+        if e2 is None:
+            continue
+        have1, have2 = {f.name for f in e1.fields}, {f.name for f in e2.fields}
+        pairs = _unique_pairs(
+            {f.name: f.model_dump(exclude={"name"}).__repr__() for f in e1.fields if f.name not in have2},
+            {f.name: f.model_dump(exclude={"name"}).__repr__() for f in e2.fields if f.name not in have1},
+        )
+        if pairs:
+            fields[new_name] = pairs
+    return {"entities": ents, "roles": roles, "fields": fields}
+
+
+def _remap(m: AccessMatrix, renames: dict[str, Any]) -> None:
+    """Rewrite a matrix built from the OLD spec so renamed things carry their new names."""
+    ents, roles, fields = renames["entities"], renames["roles"], renames["fields"]
+    cells: dict[tuple[str, str, str, str], str] = {}
+    for (layer, entity, target, role), value in m.cells.items():
+        entity2 = ents.get(entity, entity)
+        fmap = fields.get(entity2, {})
+        if layer == "field":
+            name, _, mode = target.rpartition(".")
+            target = f"{fmap.get(name, name)}.{mode}"
+        elif layer == "row" and value.startswith("filter: "):
+            fld, eq, rest = value[len("filter: ") :].partition("=")
+            value = f"filter: {fmap.get(fld, fld)}{eq}{rest}"
+        cells[(layer, entity2, target, roles.get(role, role))] = value
+    m.cells = cells
+    m.entities = [ents.get(e, e) for e in m.entities]
+    m.roles = [roles.get(r, r) for r in m.roles]
+
+
+def _unprotected(m: AccessMatrix, spec: Spec, names: Iterable[str]) -> list[str]:
+    """Entities with no permission slot at all while sign-in is on: every route is public."""
+    auth = spec.auth
+    if auth is None or not auth.enabled or spec.authorization is not None and m._pset is not None:
+        return []
+    with_slot = {p.entity for p in auth.permissions if p.roles}
+    return sorted(n for n in names if n not in with_slot)
 
 
 def access_diff(before: Spec, after: Spec) -> dict[str, Any]:
     """Every access cell that differs between two specs, and which roles gain or lose."""
     m1, m2 = AccessMatrix(before), AccessMatrix(after)
+    renames = detect_renames(before, after)
+    _remap(m1, renames)
     changes: list[dict[str, Any]] = []
     for key in sorted(set(m1.cells) | set(m2.cells)):
         b, a = m1.cells.get(key), m2.cells.get(key)
@@ -244,15 +338,30 @@ def access_diff(before: Spec, after: Spec) -> dict[str, Any]:
             gaining.setdefault(c["role"], []).append(label)
         elif c["effect"] == "lose":
             losing.setdefault(c["role"], []).append(label)
+    rename_list = (
+        [{"kind": "entity", "entity": new, "before": old, "after": new} for old, new in renames["entities"].items()]
+        + [{"kind": "role", "entity": "", "before": old, "after": new} for old, new in renames["roles"].items()]
+        + [
+            {"kind": "field", "entity": ent, "before": old, "after": new}
+            for ent, pairs in renames["fields"].items()
+            for old, new in pairs.items()
+        ]
+    )
+    counts = {
+        e: sum(1 for c in changes if c["effect"] == e)
+        for e in ("gain", "lose", "change", "added", "removed")
+    }
+    counts["renamed"] = len(rename_list)
+    added_entities = [e for e in m2.entities if e not in m1.entities]
     return {
         "changes": changes,
         "roles_gaining": gaining,
         "roles_losing": losing,
         "weakens": bool(gaining),
-        "counts": {
-            e: sum(1 for c in changes if c["effect"] == e)
-            for e in ("gain", "lose", "change", "added", "removed")
-        },
+        "counts": counts,
+        "renames": rename_list,
+        # added entities nobody wrote a permission for: reachable by everyone while sign-in is on
+        "unprotected_entities": _unprotected(m2, after, added_entities),
     }
 
 

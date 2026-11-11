@@ -14,7 +14,15 @@ from typing import Any
 
 from app.services.agent.contract import StopReason
 
-DEFAULT_MAX_STEPS = 40
+# Cap math (CP-E real-run baseline, 4 runs): a model call cost 0.026-0.038 USD (0.243/9, 0.289/11,
+# 0.499/16, 0.647/17). The per-run cost cap of 1.50 USD therefore binds at ~40-58 calls, and the
+# 900 s wall cap at ~15 s per call for 60 calls. A run that really is productive (the good run used
+# 17 model calls; a 3-5 entity project with hooks plus repair rounds is ~2-3x that) must not be cut by
+# the steps cap while the money and time caps still have room, so steps is set to 60: the backstop
+# against cheap-call spinning, just above where the cost cap normally ends a run. It is still run-wide
+# (persisted, never reset by approvals or resumes) and CEILINGS["max_steps"] still bounds any override.
+# Plan extensions are now batched into one approval per turn, which also saves calls.
+DEFAULT_MAX_STEPS = 60
 DEFAULT_MAX_COST_MICRO_USD = 1_500_000  # 1.50 USD per run (platform total is capped separately)
 DEFAULT_MAX_WALL_SECONDS = 900
 DEFAULT_MAX_REPAIRS = 3

@@ -54,6 +54,15 @@ def call(tool: str, /, **inp: Any) -> Completion:
     )  # fmt: skip
 
 
+def calls(*specs: tuple[str, dict[str, Any]]) -> Completion:
+    """One model turn with several tool calls."""
+    return Completion(
+        model="m", text="",
+        tool_calls=[ToolCall(id=f"c-{uuid.uuid4().hex[:8]}", name=t, input=i) for t, i in specs],
+        usage=Usage(input_tokens=100, output_tokens=50), stop_reason="tool_use",
+    )  # fmt: skip
+
+
 @pytest.fixture
 def ws_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, database_url: str) -> Settings:
     s = Settings(environment="test", workspace_root=str(tmp_path / "ws"), workspace_db_admin_url=SecretStr(database_url))
@@ -206,6 +215,36 @@ async def test_approved_extension_widens_the_plan_so_the_retry_succeeds(
     steps = await _steps(client, pid, rid)
     adds = [s for s in steps if s.get("tool_name") == "add_entity"]
     assert [s["ok"] for s in adds][:2] == [False, True], adds  # later repeats hit the existing entity
+
+
+async def test_several_extensions_in_one_turn_become_one_batched_approval(
+    client: AsyncClient, ws_settings: Settings
+) -> None:
+    """CP-4F3: N plan extensions asked for by one model turn = ONE approval, and approving widens the plan by all."""
+    pid, _ws, rid = await _setup(client)
+    names = ["Payroll", "Shift", "Badge"]
+    ents = [{"name": n, "fields": [{"name": "title", "type": "string"}]} for n in names]
+    install(Script([
+        call("finish", summary="plan", plan=PLAN),
+        calls(*[("add_entity", {"entity": e}) for e in ents]),
+        call("list_blocks"),
+    ]))  # fmt: skip
+    await _resume(client, pid, rid)
+    await _decide(client, pid)
+    run = await _resume(client, pid, rid)
+    assert run["state"] == "awaiting_approval"
+    pend = (await client.get(f"/projects/{pid}/agent/approvals?state=pending")).json()
+    items = pend["items"] if isinstance(pend, dict) else pend
+    assert len(items) == 1, items  # one approval for three extensions, not three
+    assert [e["name"] for e in items[0]["payload"]["extend_items"]] == names
+    assert items[0]["subject"].startswith("extend plan: 3 items")
+    await _decide(client, pid)
+    await _resume(client, pid, rid, allow_stop=True)  # applying the decision widens the plan by all three
+    from app.models.agent import AiRun
+
+    async with _FACTORY() as s:
+        plan = (await s.get(AiRun, uuid.UUID(rid))).plan  # type: ignore[union-attr]
+    assert set(names) <= set(plan["entities"])
 
 
 async def test_run_gates_tool_passes_on_a_hookless_draft(client: AsyncClient, ws_settings: Settings) -> None:

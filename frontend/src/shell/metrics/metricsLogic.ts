@@ -167,7 +167,7 @@ export function slotOf(values: Record<string, ReportMetricValue | string | numbe
   if (!(key in values)) return { error: 'No value was stored for this metric.' }
   const v = values[key]
   if (isObj(v)) return v as ReportMetricValue
-  return { value: v }
+  return { value: v as string | number | null }
 }
 
 /** The text a slot shows. */

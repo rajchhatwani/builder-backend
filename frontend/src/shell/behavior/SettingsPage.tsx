@@ -138,6 +138,12 @@ function SequencesEditor({ rows, msgs, issues, onEdit, onRemove }: EditorProps<S
               <Field id={`${id}-start`} label="First number" messages={msgs(i, 'start')}>
                 {(p) => <input {...p} inputMode="numeric" value={r.start} onChange={(e) => onEdit(i, { start: e.target.value }, 'start')} />}
               </Field>
+              <Field id={`${id}-entity`} label="Bound to entity" hint="Optional: fill this field automatically on create" messages={msgs(i, 'entity')}>
+                {(p) => <input {...p} data-testid="seq-entity" value={r.entity ?? ''} onChange={(e) => onEdit(i, { entity: e.target.value.trim() ? e.target.value : null }, 'entity')} />}
+              </Field>
+              <Field id={`${id}-field`} label="Bound to field" hint="Needs an entity as well" messages={msgs(i, 'field')}>
+                {(p) => <input {...p} data-testid="seq-field" value={r.field ?? ''} onChange={(e) => onEdit(i, { field: e.target.value.trim() ? e.target.value : null }, 'field')} />}
+              </Field>
               <Field id={`${id}-view`} label="Who can see the counters" hint={`${ROLES_HINT}. Empty: nobody`} messages={msgs(i, 'view_roles')}>
                 {(p) => <input {...p} value={r.view_roles} onChange={(e) => onEdit(i, { view_roles: e.target.value }, 'view_roles')} />}
               </Field>

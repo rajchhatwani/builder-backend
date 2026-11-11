@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "description": "Transactional outbox and typed event bus (C10). Off unless `enabled`. Every entity gets\ncreated / updated / deleted events, and every state machine a `<entity>.transitioned` event; each\nis written to the outbox in the write's own transaction and delivered at least once, in order per\nrecord, by a relay. `adapter` is where events go: `in_process` (subscribers in the same app) or\n`redis_streams` (not implemented yet). Delivered rows are purged after `retention_days`.",
+  "properties": {
+    "adapter": {
+      "default": "in_process",
+      "title": "Adapter",
+      "type": "string"
+    },
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "retention_days": {
+      "default": 14,
+      "title": "Retention Days",
+      "type": "integer"
+    }
+  },
+  "title": "SpecEvents",
+  "type": "object"
+}

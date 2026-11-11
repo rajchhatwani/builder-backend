@@ -12,7 +12,7 @@ Design decisions:
     and decrypts only at generation time.
 """
 
-from sqlalchemy import ForeignKey, Text
+from sqlalchemy import ForeignKey, Index, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -24,6 +24,7 @@ class ProjectAuthSecrets(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """Encrypted credential store for a project's auth integrations."""
 
     __tablename__ = "project_auth_secrets"
+    __table_args__ = (Index("ix_project_auth_secrets_project_id", "project_id"),)
 
     # 1:1 with project_auth_configs (which is 1:1 with projects)
     project_id: Mapped[str] = mapped_column(

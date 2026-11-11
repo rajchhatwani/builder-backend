@@ -25,7 +25,7 @@ export function sourceLabel(it: Pick<RequirementItem, 'source_doc' | 'source_pag
   return parts.length ? parts.join(', ') : 'Your prompt'
 }
 
-export const STATUS_LABEL: Record<string, string> = { open: 'Not covered yet', covered: 'Covered', out_of_scope: 'Out of scope' }
+export const STATUS_LABEL: Record<string, string> = { open: 'Not covered yet', covered: 'Covered', out_of_scope: 'Out of scope', unmet: 'Accepted gap' }
 export const statusLabel = (s: string) => STATUS_LABEL[s] ?? s
 
 export const coveredByList = (it: Pick<RequirementItem, 'covered_by'>): string[] =>

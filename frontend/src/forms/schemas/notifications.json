@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "SpecNotificationType": {
+      "additionalProperties": false,
+      "description": "One kind of notification. `category`: `transactional` (always sent) or `optional` (a user can opt\nout per channel). `on_event` (e.g. `order.created`) sends it when that event is delivered by the\noutbox: `recipient_key_field` is the event-data field naming the recipient (a user id, compared with\nthe preferences) and `address_fields` maps each channel to the data field holding the address.",
+      "properties": {
+        "address_fields": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Address Fields",
+          "type": "object"
+        },
+        "category": {
+          "default": "optional",
+          "title": "Category",
+          "type": "string"
+        },
+        "channels": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Channels",
+          "type": "array"
+        },
+        "default_enabled": {
+          "default": true,
+          "title": "Default Enabled",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "on_event": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "On Event"
+        },
+        "recipient_key_field": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Recipient Key Field"
+        },
+        "templates": {
+          "items": {
+            "$ref": "#/$defs/SpecNotificationTemplate"
+          },
+          "title": "Templates",
+          "type": "array"
+        },
+        "variables": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Variables",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecNotificationType",
+      "type": "object"
+    },
+    "SpecNotificationTemplate": {
+      "additionalProperties": false,
+      "description": "The default template of one notification type for one channel. `{{ name }}` placeholders may\nonly name the type's declared `variables` (no expressions, no filters). For email, `html: true`\nmakes the body HTML: every variable is HTML-escaped. `subject` is the email subject / push title.",
+      "properties": {
+        "body": {
+          "title": "Body",
+          "type": "string"
+        },
+        "channel": {
+          "title": "Channel",
+          "type": "string"
+        },
+        "html": {
+          "default": false,
+          "title": "Html",
+          "type": "boolean"
+        },
+        "subject": {
+          "default": "",
+          "title": "Subject",
+          "type": "string"
+        }
+      },
+      "required": [
+        "channel",
+        "body"
+      ],
+      "title": "SpecNotificationTemplate",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Notifications over the provider adapters (C17). Off unless `enabled`. Needs `providers` and auth.\nMessages are queued as delivery-log rows and sent by a dispatcher with retries and backoff.",
+  "properties": {
+    "admin_role": {
+      "default": "admin",
+      "title": "Admin Role",
+      "type": "string"
+    },
+    "backoff_seconds": {
+      "default": 30,
+      "title": "Backoff Seconds",
+      "type": "integer"
+    },
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "max_attempts": {
+      "default": 5,
+      "title": "Max Attempts",
+      "type": "integer"
+    },
+    "retention_days": {
+      "default": 90,
+      "title": "Retention Days",
+      "type": "integer"
+    },
+    "types": {
+      "items": {
+        "$ref": "#/$defs/SpecNotificationType"
+      },
+      "title": "Types",
+      "type": "array"
+    }
+  },
+  "title": "SpecNotifications",
+  "type": "object"
+}

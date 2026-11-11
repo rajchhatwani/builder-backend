@@ -43,7 +43,7 @@ def _call(client: AsyncClient, op: str, path: str):  # type: ignore[no-untyped-d
 
 
 async def test_notes_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "get", "list"):
+    for op in ("create", "get", "list", "head"):
         response = await _call(client, op, "notes")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -80,6 +80,8 @@ async def test_notes_rows_belong_to_their_creator(
         assert listing.json()["total"] == 1
         fetched = await other.get(f"/notes/{item_id}")
         assert fetched.status_code == 404, fetched.text
+        probed = await other.head(f"/notes/{item_id}")
+        assert probed.status_code == 404
 
 
 async def test_reports_routes_need_a_signed_in_user(client: AsyncClient) -> None:

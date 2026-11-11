@@ -20,6 +20,7 @@ _ACCESS = {
     "get": _access.access_dependency(roles=("admin", "agent", "auditor")),
     "list": _access.access_dependency(roles=("admin", "agent", "auditor")),
     "update": _access.access_dependency(roles=("admin", "agent")),
+    "head": _access.access_dependency(roles=("admin", "agent", "auditor")),
 }
 
 
@@ -63,8 +64,10 @@ async def get_notes(
 
 
 @router.head("/{item_id}")
-async def head_notes(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
-    if not await NoteRepository(session).exists(item_id):
+async def head_notes(
+    item_id: _uuid.UUID, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["head"])]
+) -> _fa.Response:
+    if not await NoteRepository(session, **access.repo_kwargs).exists(item_id):
         raise _errors.NotFoundError("Note not found")
     return _fa.Response(status_code=200)
 

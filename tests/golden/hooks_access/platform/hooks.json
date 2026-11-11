@@ -77,7 +77,7 @@
     "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
     "app/routers/ledgers.py": "7020cc9021e764e3db92ef386859677fd3da0b5172ede4089c8743e2637ad6f2",
-    "app/routers/notes.py": "08680aee561b57408ed60f90d2ca5cf5b91600145a345ab0942f06653c599a08",
+    "app/routers/notes.py": "b3a60907510c646e6ba32df1eb5f386cd6345cdf8cab56937b8a315ada555de1",
     "app/schemas/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/schemas/ledgers.py": "5c919e9888d367a461308f74ada8ca6cdc460b4b848a1d6af72a5df8d084a11d",
     "app/schemas/notes.py": "6f8bed8fa211c3e2447d6b3034c88eff3beb59d9cf2dc94f21f02e0bc24058f9"

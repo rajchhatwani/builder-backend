@@ -1,7 +1,7 @@
 import uuid
 from typing import Any
 
-from sqlalchemy import Boolean, Float, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, Float, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -40,6 +40,7 @@ class AuthCustomField(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "auth_custom_fields"
     __table_args__ = (
         UniqueConstraint("project_id", "name", name="uq_auth_custom_fields_project_name"),
+        Index("ix_auth_custom_fields_project_id", "project_id"),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(

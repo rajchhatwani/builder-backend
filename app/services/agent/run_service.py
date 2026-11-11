@@ -200,6 +200,22 @@ PLAN_KEYS = ("entities", "hooks", "zones", "dependencies")
 _EXTEND_KEYS = {"entity": "entities", "hook": "hooks", "zone": "zones", "dependency": "dependencies"}
 
 
+MAX_EXTEND_ITEMS = 20
+
+
+def extension_request(items: list[tuple[str, str]]) -> ApprovalRequest:
+    """ONE approval for every plan extension a model turn asked for (a batch, not one per item).
+    `extend` stays the first item (readers of the single-item payload keep working);
+    `extend_items` lists them all."""
+    uniq = list(dict.fromkeys(items))[:MAX_EXTEND_ITEMS]
+    listed = [{"kind": k, "name": n} for k, n in uniq]
+    if len(uniq) == 1:
+        subject = f"extend plan: {uniq[0][0]} {uniq[0][1]}"
+    else:
+        subject = f"extend plan: {len(uniq)} items (" + ", ".join(f"{k} {n}" for k, n in uniq[:5]) + (", ..." if len(uniq) > 5 else "") + ")"
+    return ApprovalRequest(ApprovalKind.A, subject[:300], {"extend": listed[0], "extend_items": listed})
+
+
 def clean_plan(raw: Any) -> dict[str, list[str]] | None:
     """Only lists of short strings survive; anything else is dropped (the model wrote it)."""
     if not isinstance(raw, dict):
@@ -1021,12 +1037,16 @@ class RunDriver:
             ):
                 # An approved plan extension widens the contract by exactly that one item (found in
                 # the first real run: it used to be recorded and then ignored, so the agent looped).
-                ext = (a.payload or {})["extend"]
-                key = _EXTEND_KEYS.get(str(ext.get("kind")))
+                payload = a.payload or {}
+                raw_items = payload.get("extend_items")
+                batch = raw_items if isinstance(raw_items, list) and raw_items else [payload["extend"]]
                 cur = fields.get("plan") or run.plan
-                name = str(ext.get("name", "")).strip()[:120]
-                if key and name and isinstance(cur, dict):
-                    cur = {**cur, key: sorted({*(cur.get(key) or []), name})}
+                for ext in batch[:MAX_EXTEND_ITEMS]:
+                    key = _EXTEND_KEYS.get(str(ext.get("kind"))) if isinstance(ext, dict) else None
+                    name = str(ext.get("name", "")).strip()[:120] if isinstance(ext, dict) else ""
+                    if key and name and isinstance(cur, dict):
+                        cur = {**cur, key: sorted({*(cur.get(key) or []), name})}
+                if isinstance(cur, dict) and cur is not (fields.get("plan") or run.plan):
                     core = {k: cur.get(k, []) for k in PLAN_KEYS}
                     fields["plan"] = cur
                     fields["plan_hash"] = hashlib.sha256(
@@ -1204,6 +1224,8 @@ class RunDriver:
         rp = self._state
         phase = Phase(run.phase)
         allowed = {d.name for d in self.toolbox.definitions(phase)}
+        extensions: list[tuple[str, str]] = []  # plan extensions asked for by this turn: ONE batch approval
+        ext_step: uuid.UUID | None = None
         for idx, call in enumerate(calls):
             cid, name, tin = str(call["id"]), str(call["name"]), call.get("input") or {}
             existing = (
@@ -1295,12 +1317,13 @@ class RunDriver:
 
             request = res.approval
             if request is None and res.needs_plan_extension is not None:
-                kind, what = res.needs_plan_extension
-                request = ApprovalRequest(
-                    ApprovalKind.A,
-                    f"extend plan: {kind} {what}"[:300],
-                    {"extend": {"kind": kind, "name": what}},
-                )
+                extensions.append(res.needs_plan_extension)
+                ext_step = ext_step or step_id
+                if idx + 1 < len(calls):
+                    continue  # the rest of the turn may need more; they all go into one approval
+            if extensions and (request is not None or finishing or no_changes or idx + 1 == len(calls)):
+                request, finishing, no_changes = extension_request(extensions), False, False
+                step_id = ext_step or step_id
             if no_changes:
                 await self._skip_rest(run, calls[idx + 1 :])
                 await self._stop(run.id, StopReason(
@@ -1337,6 +1360,9 @@ class RunDriver:
                 return True
             if bud.Verdict.reflect in (loop_v, rep_v):
                 await self._add_step(run, "system", output={"note": REFLECT_NOTE, "reflect": True})
+        if extensions and ext_step is not None:  # the turn ended on skipped/replayed calls: still one approval
+            await self._pause(run, extension_request(extensions), ext_step)
+            return True
         return False
 
     async def _empty_change(self, run: AiRun) -> bool:

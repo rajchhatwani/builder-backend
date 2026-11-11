@@ -7,19 +7,30 @@
   G11  static analysis (bandit, else semgrep) over the custom-zone Python files, ONLY when the tool is
        installed locally. Nothing is installed or downloaded. No tool = recorded as `skipped` with the
        reason, never green. Only high-severity findings fail -> g11.<tool>.
-  G12  strict typing (opt-in): every function of the custom Python files has annotated parameters and
-       return type (the `disallow_untyped_defs` core of mypy --strict) -> g12.untyped_def.
+  G12  strict typing (opt-in): first the cheap pre-filter (every function of the custom Python files
+       has annotated parameters and return type -> g12.untyped_def), then a REAL mypy run over the
+       custom files with the generated project's own mypy config (a config that loads plugins is
+       refused: plugins are code). mypy missing, timing out or crashing FAILS the gate (closed),
+       it never passes -> g12.mypy_error | g12.mypy_unavailable | g12.mypy_plugin.
+  G13  requirements coverage: every item of the project's requirements map is linked to a spec
+       element or test (covered + covered_by), or explicitly marked out_of_scope / unmet. An item
+       that is still open (never reached) fails -> g13.unreached | g13.unlinked.
 
 Each gate reports `pass | fail | skipped` plus, for skipped, the reason (`GateReport.skipped`).
 Pure reads: no project code is imported or executed (bandit and semgrep parse source only).
 """
 
 import ast
+import configparser
 import importlib.metadata
+import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
+import tomllib
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,10 +38,12 @@ from pathlib import Path
 from app.services.agent.contract import RuleFailure
 from app.services.dependency_policy_service import parse_requirement
 
-LICENCE, STATIC, TYPING = "G10", "G11", "G12"
-EXTRA_GATES = (LICENCE, STATIC, TYPING)
+LICENCE, STATIC, TYPING, COVERAGE = "G10", "G11", "G12", "G13"
+EXTRA_GATES = (LICENCE, STATIC, TYPING, COVERAGE)
 CUSTOM_PY_PREFIXES = ("app/custom_routers/", "app/hooks/", "app/custom/")
 TOOL_TIMEOUT = 20
+MYPY_TIMEOUT = 60
+MAX_COVERAGE_FAILURES = 50
 TOOL_OUTPUT_CAP = 200_000
 _DENIED_LICENCE = re.compile(r"(?<![A-Za-z])(AGPL|GPL|SSPL|BUSL|Commons Clause)", re.IGNORECASE)
 _LGPL = re.compile(r"\bLGPL|Lesser General Public", re.IGNORECASE)
@@ -155,15 +168,51 @@ def static_gate(
 # -- G12 --------------------------------------------------------------------------------------
 
 
-def typing_gate(root: Path, files: Iterable[str], enabled: bool) -> ExtraResult:
-    res = ExtraResult()
-    if not enabled:
-        res.skip(TYPING, "strict typing is not enabled (agent_gate_strict_typing)")
-        return res
-    targets = sorted(f for f in files if f.endswith(".py") and f.startswith(CUSTOM_PY_PREFIXES))
-    if not targets:
-        res.skip(TYPING, "no custom Python files to check")
-        return res
+MYPY_CONFIG_FILES = ("mypy.ini", ".mypy.ini", "pyproject.toml", "setup.cfg")
+_MYPY_LINE = re.compile(r"^(?P<file>[^:\n]+):(?P<line>\d+):(?:\d+:)? error: (?P<msg>.*?)(?:  \[(?P<code>[a-z0-9-]+)\])?$")
+
+
+def mypy_available() -> bool:
+    return importlib.util.find_spec("mypy") is not None
+
+
+def _mypy_config(root: Path) -> tuple[Path | None, bool]:
+    """(config file of the generated project or None, True if it loads plugins). Config is read,
+    never executed; only a `plugins` entry (code) makes it unacceptable."""
+    for name in MYPY_CONFIG_FILES:
+        path = root / name
+        if not path.is_file() or path.is_symlink():
+            continue
+        try:
+            text = path.read_text("utf-8", "replace")[:200_000]
+            if name == "pyproject.toml":
+                conf = tomllib.loads(text).get("tool", {}).get("mypy")
+                if conf is None:
+                    continue
+                return path, "plugins" in json.dumps(conf)
+            cp = configparser.ConfigParser(interpolation=None)
+            cp.read_string(text)
+            sections = [s for s in cp.sections() if s == "mypy" or s.startswith("mypy-")]
+            if not sections:
+                continue
+            return path, any(cp.has_option(s, "plugins") for s in sections)
+        except (configparser.Error, ValueError, OSError):
+            return path, True  # an unreadable config is not trusted
+    return None, False
+
+
+def _mypy_argv(root: Path, targets: list[str]) -> tuple[list[str], str | None]:
+    config, plugins = _mypy_config(root)
+    if plugins:
+        return [], f"{config.name if config else 'mypy config'} loads mypy plugins, which would run project code"
+    argv = [sys.executable, "-m", "mypy", "--no-error-summary", "--no-pretty", "--show-column-numbers",
+            "--no-incremental", "--cache-dir", os.devnull, "--follow-imports=silent"]  # fmt: skip
+    argv += ["--config-file", str(config)] if config else ["--ignore-missing-imports"]
+    return [*argv, *targets], None
+
+
+def _typing_untyped_defs(root: Path, targets: list[str]) -> list[RuleFailure]:
+    out: list[RuleFailure] = []
     for rel in targets:
         try:
             mod = ast.parse((root / rel).read_bytes())
@@ -178,7 +227,107 @@ def typing_gate(root: Path, files: Iterable[str], enabled: bool) -> ExtraResult:
             missing = [p.arg for p in params if p.annotation is None and p.arg not in ("self", "cls")]
             if missing or node.returns is None:
                 what = ("parameter " + ", ".join(missing[:3])) if missing else "return type"
-                res.failures.append(_fail("g12.untyped_def", f"{rel}:{node.lineno}", "fully annotated function",
-                                          f"{node.name}: missing {what}", "annotate parameters and return type"))
+                out.append(_fail("g12.untyped_def", f"{rel}:{node.lineno}", "fully annotated function",
+                                 f"{node.name}: missing {what}", "annotate parameters and return type"))
+    return out
+
+
+def typing_gate(
+    root: Path,
+    files: Iterable[str],
+    enabled: bool,
+    *,
+    runner: Runner | None = None,
+    available: Callable[[], bool] = mypy_available,
+) -> ExtraResult:
+    res = ExtraResult()
+    if not enabled:
+        res.skip(TYPING, "strict typing is not enabled (agent_gate_strict_typing)")
+        return res
+    targets = sorted(f for f in files if f.endswith(".py") and f.startswith(CUSTOM_PY_PREFIXES))
+    if not targets:
+        res.skip(TYPING, "no custom Python files to check")
+        return res
+    res.failures += _typing_untyped_defs(root, targets)  # cheap pre-filter, reported even if mypy is absent
+    if res.failures:
+        res.gates[TYPING] = "fail"  # fix the annotations first; mypy would only repeat them
+        return res
+    if not available():
+        res.failures.append(_fail("g12.mypy_unavailable", "mypy", "mypy installed in the platform environment",
+                                  "mypy is not available, so the code could not be type-checked",
+                                  "install mypy; the gate never passes unchecked code"))
+        res.gates[TYPING] = "fail"
+        return res
+    argv, refused = _mypy_argv(root, targets)
+    if refused:
+        res.failures.append(_fail("g12.mypy_plugin", "mypy config", "a mypy config without plugins", refused,
+                                  "remove the plugins entry"))
+        res.gates[TYPING] = "fail"
+        return res
+    run = runner or _run_mypy
+    try:
+        code, out = run(argv, root)
+    except subprocess.TimeoutExpired:
+        code, out = -1, f"mypy timed out after {MYPY_TIMEOUT}s"
+    except (subprocess.SubprocessError, OSError) as exc:
+        code, out = -1, f"mypy could not be run: {type(exc).__name__}"
+    found = [m for m in (_MYPY_LINE.match(line.strip()) for line in out.splitlines()) if m]
+    for m in found[:MAX_COVERAGE_FAILURES]:
+        suffix = f" [{m['code']}]" if m["code"] else ""
+        res.failures.append(_fail("g12.mypy_error", f"{m['file']}:{m['line']}", "code that type-checks",
+                                  f"{m['msg']}{suffix}", "fix the type error"))
+    if not found and code != 0:  # crash, timeout, config error: closed, not green
+        res.failures.append(_fail("g12.mypy_unavailable", "mypy", "a completed mypy run",
+                                  f"mypy did not finish cleanly (exit {code}): {out.strip()[:200]}", "see the tool output"))
     res.gates[TYPING] = "fail" if res.failures else "pass"
+    return res
+
+
+def _run_mypy(argv: list[str], cwd: Path) -> tuple[int, str]:
+    """mypy over local files only: no shell, empty-ish environment (no proxies), the cache disabled."""
+    proc = subprocess.run(  # noqa: S603 - fixed argv of the local mypy, no shell, no network use
+        argv, cwd=cwd, capture_output=True, timeout=MYPY_TIMEOUT, check=False,
+        env={"PATH": "/usr/local/bin:/usr/bin:/bin", "HOME": "/nonexistent", "PYTHONDONTWRITEBYTECODE": "1"},
+    )
+    return proc.returncode, (proc.stdout + proc.stderr).decode("utf-8", "replace")[:TOOL_OUTPUT_CAP]
+
+
+# -- G13 --------------------------------------------------------------------------------------
+
+
+def coverage_gate(items: Iterable[dict[str, object]] | None) -> ExtraResult:
+    """`items`: the requirement items of the run's requirements map ({id, kind, text, status,
+    covered_by}); None = the project has no requirements map. Pure, no I/O."""
+    res = ExtraResult()
+    if items is None:
+        res.skip(COVERAGE, "no requirements map for this project")
+        return res
+    reqs = [i for i in items if i.get("kind") != "out_of_scope"]
+    if not reqs:
+        res.skip(COVERAGE, "the requirements map has no requirements to cover")
+        return res
+    unmet: list[str] = []
+    for it in sorted(reqs, key=lambda i: str(i.get("id", ""))):
+        status, rid = str(it.get("status") or "open"), str(it.get("id", ""))[:8]
+        text = str(it.get("text", ""))[:150]
+        loc = f"requirement:{rid}"
+        if status == "out_of_scope":
+            continue
+        if status == "unmet":
+            unmet.append(rid)
+        elif status == "covered":
+            if not str(it.get("covered_by") or "").strip():
+                res.failures.append(_fail("g13.unlinked", loc, "a covered requirement links to a spec element or test",
+                                          f"[{it.get('kind')}] {text} is marked covered but links to nothing",
+                                          "set covered_by to the spec element or test, or mark it unmet"))
+        else:
+            res.failures.append(_fail("g13.unreached", loc, "linked to a spec element or test, or explicitly marked unmet",
+                                      f"[{it.get('kind')}] {text}", "build it and link it (covered_by), or mark it unmet"))
+    if len(res.failures) > MAX_COVERAGE_FAILURES:
+        extra = len(res.failures) - MAX_COVERAGE_FAILURES
+        res.failures = res.failures[:MAX_COVERAGE_FAILURES]
+        res.failures.append(_fail("g13.more", "requirements", "every requirement covered", f"{extra} more unreached"))
+    res.gates[COVERAGE] = "fail" if res.failures else "pass"
+    if unmet and not res.failures:
+        res.skipped[COVERAGE] = f"{len(unmet)} requirement(s) explicitly marked unmet: {', '.join(unmet[:10])}"
     return res

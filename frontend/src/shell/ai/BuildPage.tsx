@@ -2,14 +2,39 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState, type Keyboard
 import { aiApi } from './aiApi'
 import { approvalList, effectiveState, reviewHref } from './approvalLogic'
 import { ProvenanceBadge } from './Provenance'
-import { POLL_MS, STAGE_TABS, TAB_READY, budgetRows, canSeeItWork, friendlyStep, pendingFor, platformRow, pollInterval, runActions, runStateLabel, stepLine, stopInfo, type StageTab } from './buildLogic'
+import { POLL_MS, STAGE_TABS, TAB_READY, budgetRows, canSeeItWork, friendlyStep, gateRows, pendingFor, platformRow, pollInterval, runActions, runStateLabel, stepLine, stopInfo, type StageTab } from './buildLogic'
+import { trapTab } from './focusTrap'
+import { LEAVE_MESSAGE, useLeaveBuildGuard } from './leaveGuard'
 import { PLAN_KEYS, PLAN_LABEL, phasesOf, planRows } from './planLogic'
 import { tokenFor } from './seeItLogic'
-import type { Approval, PlatformBudget, Preview, RunDetail } from './types'
+import type { Approval, GateRunResult, PlatformBudget, Preview, RunDetail } from './types'
 import { useNow } from './useNow'
 import { errMsg, useRunParam, runLink } from './useRunParam'
 
 const StageTabs = lazy(() => import('./StageTabs').then((m) => ({ default: m.StageTabs })))
+function GateReport({ r }: { r: GateRunResult }) {
+  const rows = gateRows(r.failures)
+  return (
+    <div className="card" data-testid="gate-report" data-ok={r.ok} role="status">
+      <h2>{r.ok ? 'All checks passed' : `${r.failure_count} ${r.failure_count === 1 ? 'check' : 'checks'} failed`}</h2>
+      {r.ok && <p data-testid="gate-pass">Every gate passed on the current draft.</p>}
+      {rows.length > 0 && (
+        <ul data-testid="gate-list">
+          {rows.map((g, i) => (
+            <li key={`${g.id}-${i}`} data-testid="gate-row" data-gate={g.id} data-ok="false">
+              <span className="badge badge-muted" data-testid="gate-id">{g.id}</span> <span className="ai-bad">fail</span>{' '}
+              <span data-testid="gate-message">{g.message}</span>
+              {g.detail.length > 0 && <small className="muted"> {g.detail.map(([k, v]) => `${k}: ${v}`).join(' | ')}</small>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.failure_count > rows.length && <p className="muted small-text">Showing the first {rows.length} of {r.failure_count}.</p>}
+      <p className="muted small-text">Report <code data-testid="gate-hash">{r.report_hash.slice(0, 12)}</code>. Read-only: nothing was changed.</p>
+    </div>
+  )
+}
+
 const TAB_LABEL: Record<StageTab, string> = { gates: 'Gates', details: 'Details', plan: 'Plan', diagrams: 'Diagrams', api: 'API', stage: 'Code, logs and data' }
 
 function PlatformBar({ b, error }: { b: PlatformBudget | null; error: boolean }) {
@@ -52,6 +77,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   const [confirmTake, setConfirmTake] = useState(false)
   const [platform, setPlatform] = useState<PlatformBudget | null>(null)
   const [platformError, setPlatformError] = useState(false)
+  const [gateReport, setGateReport] = useState<GateRunResult | null>(null)
   const [stagePreview, setStagePreview] = useState<Preview | null>(null)
   const inflight = useRef<string | null>(null) // S3-002: the run a refresh is in flight for
   const current = useRef<string | null>(runId)
@@ -59,6 +85,8 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   const codeDirty = useRef(false) // S3-010: the code view reports unsaved edits
   const now = useNow()
   const onDirty = useCallback((d: boolean) => { codeDirty.current = d }, [])
+  useLeaveBuildGuard(codeDirty, projectId) // S3-010r: leaving the section
+  const wasTaking = useRef(false)
   const takeRef = useRef<HTMLDivElement>(null)
   const takeBtn = useRef<HTMLButtonElement>(null)
   const tabRefs = useRef<Record<string, HTMLButtonElement | null>>({})
@@ -72,12 +100,22 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
     codeDirty.current = false
     setRunId(paramRun)
   }, [paramRun, projectId])
-  useEffect(() => { if (confirmTake) takeRef.current?.focus() }, [confirmTake])
-  const closeTake = () => { setConfirmTake(false); takeBtn.current?.focus() }
+  useEffect(() => {
+    if (confirmTake) takeRef.current?.focus()
+    else if (wasTaking.current) takeBtn.current?.focus() // restore focus however the dialog closed
+    wasTaking.current = confirmTake
+  }, [confirmTake])
+  const closeTake = () => setConfirmTake(false)
+  // S3-010r: leaving the code view (another tab) drops unsaved edits, so ask first
+  const selectTab = (t: StageTab) => {
+    if (t === tab) return
+    if (tab === 'stage' && codeDirty.current) { if (!window.confirm(LEAVE_MESSAGE)) return; codeDirty.current = false }
+    setTab(t)
+  }
   // switching runs: forget the old run's data so it is never shown under the new id
   useEffect(() => {
     current.current = runId
-    if (runId) { setRun(null); setApprovals([]); setError(''); setLoading(true) }
+    if (runId) { setRun(null); setApprovals([]); setError(''); setLoading(true); setGateReport(null) }
   }, [runId])
 
   // no ?run=: show the latest run
@@ -136,7 +174,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
     const i = STAGE_TABS.indexOf(tab)
     const n = e.key === 'ArrowRight' ? (i + 1) % STAGE_TABS.length : e.key === 'ArrowLeft' ? (i + STAGE_TABS.length - 1) % STAGE_TABS.length : e.key === 'Home' ? 0 : e.key === 'End' ? STAGE_TABS.length - 1 : -1
     if (n < 0) return
-    e.preventDefault(); setTab(STAGE_TABS[n]); tabRefs.current[STAGE_TABS[n]]?.focus()
+    e.preventDefault(); selectTab(STAGE_TABS[n]); tabRefs.current[STAGE_TABS[n]]?.focus()
   }
 
   if (loading) return <section data-testid="build-page"><h1>Build</h1><p className="empty-state">Loading…</p></section>
@@ -168,12 +206,15 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
         <span className="badge badge-muted" data-testid="chip-phase">Phase: {run.phase}</span>
         {run.stop_code && <span className="badge badge-muted" data-testid="chip-stop">{run.stop_code}</span>}
         <span className="grow" />
+        {run.paused_at && actions.paused && <span className="badge badge-muted" data-testid="chip-paused">Paused</span>}
+        <button className="outline" disabled={busy || !actions.pause} onClick={() => void act(() => aiApi.pauseRun(projectId, run.id))} data-testid="run-pause" title={actions.pause ? 'Stop at the next step; the draft is kept' : 'Only a running build can be paused'}>Pause</button>
+        <button className="outline" disabled={busy || !actions.gates} onClick={() => void act(async () => { setGateReport(await aiApi.runGates(projectId, run.id)) })} data-testid="run-gates">Run gates</button>
         {actions.resume && <button disabled={busy} onClick={() => void act(() => aiApi.resumeRun(projectId, run.id), true)} data-testid="run-resume">{actions.resumeLabel}</button>}
         {actions.cancel && <button className="outline" disabled={busy} onClick={() => void act(() => aiApi.cancelRun(projectId, run.id))} data-testid="run-cancel">Cancel</button>}
         {actions.cancel && <button ref={takeBtn} className="outline" disabled={busy} onClick={() => setConfirmTake(true)} data-testid="run-takeover">Take over</button>}
       </div>
       {confirmTake && (
-        <div className="card" role="alertdialog" ref={takeRef} tabIndex={-1} onKeyDown={(e) => { if (e.key === 'Escape') closeTake() }} aria-labelledby="takeover-title" aria-describedby="takeover-text" data-testid="takeover-confirm">
+        <div className="card" role="alertdialog" ref={takeRef} tabIndex={-1} onKeyDown={(e) => { if (e.key === 'Escape') closeTake(); else trapTab(e, takeRef.current) }} aria-labelledby="takeover-title" aria-describedby="takeover-text" data-testid="takeover-confirm">
           <h2 id="takeover-title">Take over from the agent?</h2>
           <p id="takeover-text">This cancels the run. The agent stops and does nothing more; requests it left open can no longer lead to changes. You can then work on the project yourself.</p>
           <div className="hstack">
@@ -182,6 +223,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
           </div>
         </div>
       )}
+      {gateReport && <GateReport r={gateReport} />}
       {stop && (
         <div className="card" role="status" data-testid="stop-info" data-code={run.stop_code}>
           <h2>{stop.title}</h2>
@@ -238,11 +280,11 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
 
       <div role="tablist" aria-label="Stage" className="bh-tabs" onKeyDown={onTabKey}>
         {STAGE_TABS.map((t) => (
-          <button key={t} ref={(el) => { tabRefs.current[t] = el }} tabIndex={tab === t ? 0 : -1} role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls="stage-panel" className={tab === t ? '' : 'outline'} onClick={() => setTab(t)}>{TAB_LABEL[t]}</button>
+          <button key={t} ref={(el) => { tabRefs.current[t] = el }} tabIndex={tab === t ? 0 : -1} role="tab" id={`tab-${t}`} aria-selected={tab === t} aria-controls="stage-panel" className={tab === t ? '' : 'outline'} onClick={() => selectTab(t)}>{TAB_LABEL[t]}</button>
         ))}
       </div>
       <div role="tabpanel" id="stage-panel" aria-labelledby={`tab-${tab}`} data-testid="stage-panel">
-        {!TAB_READY.includes(tab) && <p className="empty-state" data-testid="tab-soon">{TAB_LABEL[tab]} — coming in a later cycle.</p>}
+        {!TAB_READY.includes(tab) && <p className="empty-state" data-testid="tab-soon">{TAB_LABEL[tab]}: Coming in a later cycle.</p>}
         {tab === 'stage' && (
           !workspaceId ? <p className="empty-state" data-testid="stage-none">This run has no draft workspace to show.</p> : (
             <Suspense fallback={<p className="empty-state">Loading…</p>}>

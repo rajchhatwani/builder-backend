@@ -158,7 +158,7 @@ async def test_start_run_accepting_assumptions(client: AsyncClient, provider: An
 
 @pytest.mark.parametrize(
     ("name", "data", "status"),
-    [("x.docx", b"PK", 415), ("x.pdf", b"nope", 422), ("x.txt", b"", 422)],
+    [("x.exe", b"MZ", 415), ("x.docx", b"PK", 422), ("x.pdf", b"nope", 422), ("x.txt", b"", 422)],
 )
 async def test_bad_files_refused(
     client: AsyncClient, provider: Any, name: str, data: bytes, status: int

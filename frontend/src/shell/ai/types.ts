@@ -14,6 +14,8 @@ export interface Run {
   cost_micro_usd: number
   stop_code: string | null
   stop_detail: string | null
+  /** Set when a person asked the run to stop at its next step (POST .../pause). */
+  paused_at?: string | null
   started_at: string | null
   finished_at: string | null
   created_at: string
@@ -114,4 +116,12 @@ export interface RequirementsMap {
   sources: Array<{ name: string; kind: string; pages: number; chunks: number; chars: number }>
   coverage?: { total: number; open: number; covered: number; out_of_scope: number; percent_covered: number; open_questions: number }
   phases?: Array<{ number: number; name: string; kinds: string[]; items: number }>
+}
+
+/** POST /agent/runs/{id}/gates: failures are generic rows (rule_id, location, expected, actual, hint); render by key, never by id. */
+export interface GateRunResult {
+  ok: boolean
+  failure_count: number
+  failures: Record<string, string>[]
+  report_hash: string
 }

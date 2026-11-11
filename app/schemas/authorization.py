@@ -151,3 +151,5 @@ class AccessDiffResponse(BaseModel):
     roles_losing: dict[str, list[str]]
     weakens: bool  # true = some role gains access: applying needs an explicit confirmation
     counts: dict[str, int]
+    renames: list[dict[str, str]] = []  # kind | entity | before | after: a rename, not removal+addition
+    unprotected_entities: list[str] = []  # added entities with no permission slot (public while sign-in is on)

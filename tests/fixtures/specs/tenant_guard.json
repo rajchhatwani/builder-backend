@@ -1,0 +1,286 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Tenant Guard",
+    "slug": "tenant-guard",
+    "description": "Multi-tenant HR with guarded fields across transitions, documents, history, search, realtime and metrics",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Employee",
+      "table_name": "employees",
+      "plural_path": "employees",
+      "options": {
+        "filterable": [
+          "name",
+          "salary"
+        ],
+        "sortable": [
+          "name",
+          "salary"
+        ],
+        "searchable": [
+          "name",
+          "notes"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "salary",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "draft",
+            "approved",
+            "archived"
+          ],
+          "default": "draft"
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "app_url": "https://tenantguard.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@tenantguard.example.com",
+      "from_name": "Tenant Guard"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin",
+        "inherits_from": "hr"
+      },
+      {
+        "name": "hr",
+        "label": "HR",
+        "inherits_from": "staff"
+      },
+      {
+        "name": "staff",
+        "label": "Staff",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Employee",
+        "operation": "list",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Employee",
+        "operation": "get",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Employee",
+        "operation": "create",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Employee",
+        "operation": "replace",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Employee",
+        "operation": "update",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Employee",
+        "operation": "delete",
+        "roles": [
+          "staff"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "multi_tenant": true
+  },
+  "authorization": {
+    "model": "rbac",
+    "field_access": [
+      {
+        "entity": "Employee",
+        "field": "salary",
+        "read_roles": [
+          "hr",
+          "admin"
+        ],
+        "write_roles": [
+          "hr"
+        ]
+      },
+      {
+        "entity": "Employee",
+        "field": "notes",
+        "read_roles": [
+          "hr"
+        ]
+      }
+    ]
+  },
+  "state_machines": [
+    {
+      "entity": "Employee",
+      "field": "status",
+      "initial": "draft",
+      "transitions": [
+        {
+          "name": "approve",
+          "from_states": [
+            "draft"
+          ],
+          "to_state": "approved",
+          "when": "salary > 100000",
+          "roles": [
+            "hr"
+          ]
+        },
+        {
+          "name": "archive",
+          "from_states": [
+            "draft",
+            "approved"
+          ],
+          "to_state": "archived",
+          "when": "name != \"Frozen\""
+        }
+      ]
+    }
+  ],
+  "realtime": {
+    "enabled": true
+  },
+  "history": [
+    {
+      "entity": "Employee",
+      "fields": [
+        "name",
+        "salary",
+        "notes"
+      ],
+      "retention_days": 30,
+      "view_roles": [
+        "staff"
+      ]
+    }
+  ],
+  "documents": {
+    "enabled": true,
+    "rate_limit": "600/minute",
+    "templates": [
+      {
+        "id": "employee_card",
+        "title": "Employee card",
+        "kind": "custom",
+        "entity": "Employee",
+        "compute": null,
+        "roles": [
+          "staff"
+        ],
+        "template": {
+          "title": "Card {{row.name}}",
+          "page": {
+            "size": "A4",
+            "orientation": "portrait",
+            "margin_mm": 18
+          },
+          "blocks": [
+            {
+              "type": "heading",
+              "text": "Employee"
+            },
+            {
+              "type": "kv",
+              "rows": [
+                {
+                  "label": "Name",
+                  "value": "{{row.name}}"
+                },
+                {
+                  "label": "Salary",
+                  "value": "{{row.salary}}"
+                },
+                {
+                  "label": "Notes",
+                  "value": "{{row.notes}}"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "metrics_layer": {
+    "definitions": [
+      {
+        "key": "employee_count",
+        "label": "Employees",
+        "entity": "Employee",
+        "agg": "count"
+      },
+      {
+        "key": "salary_total",
+        "label": "Salary total",
+        "entity": "Employee",
+        "agg": "sum",
+        "field": "salary"
+      },
+      {
+        "key": "employee_by_status",
+        "label": "By status",
+        "entity": "Employee",
+        "agg": "count",
+        "group_by": "status"
+      }
+    ]
+  }
+}

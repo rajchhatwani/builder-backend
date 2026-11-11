@@ -15,14 +15,7 @@ from tests.api.test_migrations import _alembic, fresh_db  # noqa: F401
 
 # Known benign differences: (diff kind, "table.name"), each with the reason it is not a bug. Keep this list empty
 # unless a difference is understood and cannot be expressed in the model; every entry needs a reason.
-_DB_ONLY = "index is created by a migration but the model does not declare it (harmless; add index=True/Index() to the model to retire this entry)"
-KNOWN_BENIGN: dict[tuple[str, str], str] = {
-    ("remove_index", "auth_custom_fields.ix_auth_custom_fields_project_id"): _DB_ONLY,
-    ("remove_index", "organizations.ix_organizations_deletion_due"): _DB_ONLY,
-    ("remove_index", "project_auth_secrets.ix_project_auth_secrets_project_id"): _DB_ONLY,
-    ("remove_index", "project_permissions.ix_project_permissions_project_id"): _DB_ONLY,
-    ("remove_index", "project_roles.ix_project_roles_project_id"): _DB_ONLY,
-}
+KNOWN_BENIGN: dict[tuple[str, str], str] = {}
 # Server defaults are not compared: the models leave database-side defaults to the migrations on purpose, so
 # comparing them reports dozens of non-differences.
 

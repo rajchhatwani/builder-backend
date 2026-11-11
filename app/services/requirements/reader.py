@@ -93,7 +93,7 @@ class Chunk:
 @dataclass
 class ReadDoc:
     name: str
-    kind: str  # pdf | text | prompt
+    kind: str  # pdf | docx | xlsx | text | prompt
     pages: int
     chars: int
     chunks: list[Chunk] = field(default_factory=list)
@@ -216,7 +216,7 @@ def _heading(text: str, previous: str | None) -> str | None:
 
 
 def read_document(filename: str, data: bytes) -> ReadDoc:
-    """Validate and chunk one uploaded file. PDF, txt and md only; size and page caps."""
+    """Validate and chunk one uploaded file. PDF, DOCX, XLSX, txt and md; size, page and expansion caps."""
     name = _safe_name(filename)
     ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
     if len(data) > MAX_FILE_BYTES:
@@ -262,17 +262,31 @@ def read_document(filename: str, data: bytes) -> ReadDoc:
         if cur.strip():
             doc.chunks.append(Chunk(name, cur, lo, hi))
         return doc
+    section: str | None = None
     if ext in ("txt", "md", "markdown"):
         if b"\x00" in data[:4096]:
             raise AppError("file_invalid", f"{name} is not a text file", 422)
         text = data.decode("utf-8", errors="replace")
         doc = ReadDoc(name=name, kind="text", pages=1, chars=len(text))
-        section: str | None = None
         for part in _split_text(text):
             section = _heading(part, section)
             doc.chunks.append(Chunk(name, part, None, None, section))
         return doc
-    raise AppError("file_type_not_supported", f"{name}: only PDF, TXT and MD files are accepted", 415)
+    if ext in ("docx", "xlsx"):
+        from app.services.requirements import office
+
+        extract = office.docx_text if ext == "docx" else office.xlsx_text
+        text = extract(name, data, MAX_TOTAL_CHARS, time.monotonic() + EXTRACT_SECONDS)
+        if not text.strip():
+            raise AppError("file_empty", f"{name} has no readable text", 422)
+        doc = ReadDoc(name=name, kind=ext, pages=1, chars=len(text))
+        for part in _split_text(text):
+            section = _heading(part, section)
+            doc.chunks.append(Chunk(name, part, None, None, section))
+        return doc
+    raise AppError(
+        "file_type_not_supported", f"{name}: only PDF, DOCX, XLSX, TXT and MD files are accepted", 415
+    )
 
 
 async def read_document_async(filename: str, data: bytes) -> ReadDoc:

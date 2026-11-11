@@ -43,7 +43,7 @@ from app.services.agent import gates_extra as gx
 from app.services.agent.contract import RuleFailure
 from app.services.dependency_policy_service import Pin, check_requirements, is_dependency_manifest
 
-GATE_ORDER = ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12")
+GATE_ORDER = ("G0", "G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10", "G11", "G12", "G13")
 MAX_FILES = 5_000
 MAX_FILE_BYTES = 1_048_576
 MAX_TOTAL_BYTES = 64 * 1_048_576
@@ -70,7 +70,7 @@ _ROUTE_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "op
 class GateReport:
     ok: bool
     failures: list[RuleFailure] = field(default_factory=list)
-    gates: dict[str, str] = field(default_factory=dict)  # "G0".."G12" -> pass | fail | skipped
+    gates: dict[str, str] = field(default_factory=dict)  # "G0".."G13" -> pass | fail | skipped
     skipped: dict[str, str] = field(default_factory=dict)  # gate -> why it did not (fully) run; not in the hash
 
 
@@ -448,8 +448,9 @@ def run_gates(
     licence: bool = True,
     static_analysis: bool = True,
     strict_typing: bool = False,
+    requirements: list[dict[str, Any]] | None = None,
 ) -> GateReport:
-    """G0-G7 (hook gates) and, when `upto` is G8, the security gate plus the extra gates G10-G12
+    """G0-G7 (hook gates) and, when `upto` is G8, the security gate plus the extra gates G10-G13
     (gates_extra). Never executes project code."""
     if upto not in ("G7", "G8"):
         raise ValueError("upto must be 'G7' or 'G8' (G9 is replay())")
@@ -464,7 +465,7 @@ def run_gates(
         failures += g8
         gates["G8"] = "fail" if g8 else "pass"
         if not tree.hazard:
-            for ex in _extras(root, tree, licence, static_analysis, strict_typing):
+            for ex in _extras(root, tree, licence, static_analysis, strict_typing, requirements):
                 failures += ex.failures
                 gates.update(ex.gates)
                 skipped.update(ex.skipped)
@@ -474,7 +475,10 @@ def run_gates(
     return GateReport(ok=not ordered, failures=ordered, gates=gates, skipped=skipped)
 
 
-def _extras(root: Path, tree: _Tree, licence: bool, static_analysis: bool, strict_typing: bool) -> list[gx.ExtraResult]:
+def _extras(
+    root: Path, tree: _Tree, licence: bool, static_analysis: bool, strict_typing: bool,
+    requirements: list[dict[str, Any]] | None = None,
+) -> list[gx.ExtraResult]:
     zones_doc = _json(root, tree, hook_gates.ZONES_PATH) or {}
     zones = {k: v for k, v in (zones_doc.get("zones") or {}).items() if isinstance(v, str)}
     out: list[gx.ExtraResult] = []
@@ -490,6 +494,7 @@ def _extras(root: Path, tree: _Tree, licence: bool, static_analysis: bool, stric
     if static_analysis:
         out.append(gx.static_gate(root, tree.files))
     out.append(gx.typing_gate(root, tree.files, strict_typing))
+    out.append(gx.coverage_gate(requirements))
     return out
 
 

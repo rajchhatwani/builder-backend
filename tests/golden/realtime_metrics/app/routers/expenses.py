@@ -22,6 +22,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("admin", "staff"), owner=True, admin_sees_all=True, authenticate=True),
     "replace": _access.access_dependency(roles=("admin", "staff"), owner=True, authenticate=True),
     "update": _access.access_dependency(roles=("admin", "staff"), owner=True, authenticate=True),
+    "head": _access.access_dependency(roles=("admin", "staff"), owner=True, authenticate=True),
 }
 
 
@@ -65,8 +66,10 @@ async def get_expenses(
 
 
 @router.head("/{item_id}")
-async def head_expenses(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
-    if not await ExpenseRepository(session).exists(item_id):
+async def head_expenses(
+    item_id: _uuid.UUID, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["head"])]
+) -> _fa.Response:
+    if not await ExpenseRepository(session, **access.repo_kwargs).exists(item_id):
         raise _errors.NotFoundError("Expense not found")
     return _fa.Response(status_code=200)
 

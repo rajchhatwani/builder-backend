@@ -18,10 +18,10 @@ _ACCESS = {
     "create": _access.access_dependency(roles=("admin", "member"), stamp=True, authenticate=True, tenant=True),
     "delete": _access.access_dependency(authenticate=True, tenant=True),
     "get": _access.access_dependency(roles=("admin", "member"), owner=True, authenticate=True, tenant=True),
-    "head": _access.access_dependency(authenticate=True, tenant=True),
     "list": _access.access_dependency(roles=("admin", "member"), authenticate=True, tenant=True),
     "replace": _access.access_dependency(authenticate=True, tenant=True),
     "update": _access.access_dependency(authenticate=True, tenant=True),
+    "head": _access.access_dependency(roles=("admin", "member"), owner=True, authenticate=True, tenant=True),
 }
 
 

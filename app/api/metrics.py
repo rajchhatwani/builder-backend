@@ -15,7 +15,7 @@ GET    /projects/{project_id}/reports/{report_id}/value    live values of its me
 
 import uuid
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, Query, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
@@ -32,6 +32,12 @@ from app.schemas.metrics import (
     ReportValue,
 )
 from app.services.metrics_service import MetricsService
+
+def _role(request: Request) -> str | None:
+    """The caller's project role (set by the access guard); None fails closed in the service."""
+    role = getattr(request.state, "member_role", None)
+    return str(role.value) if role is not None else None
+
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["metrics"])
 
@@ -70,9 +76,9 @@ async def delete_metric(
 
 @router.get("/metrics/{key}/value", response_model=MetricValue)
 async def metric_value(
-    project_id: uuid.UUID, key: str, db: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID, key: str, request: Request, db: AsyncSession = Depends(get_session)
 ) -> MetricValue:
-    return await MetricsService(db).metric_value(project_id, key)
+    return await MetricsService(db).metric_value(project_id, key, _role(request))
 
 
 @router.get("/reports", response_model=ReportPage)
@@ -114,24 +120,25 @@ async def delete_report(
 
 @router.post("/reports/{report_id}/run", response_model=ReportRunRead)
 async def run_report(
-    project_id: uuid.UUID, report_id: uuid.UUID, db: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID, report_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_session)
 ) -> ReportRunRead:
-    return await MetricsService(db).run_now(project_id, report_id)
+    return await MetricsService(db).run_now(project_id, report_id, _role(request))
 
 
 @router.get("/reports/{report_id}/runs", response_model=ReportRunPage)
 async def list_runs(
     project_id: uuid.UUID,
     report_id: uuid.UUID,
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     db: AsyncSession = Depends(get_session),
 ) -> ReportRunPage:
-    return await MetricsService(db).list_runs(project_id, report_id, limit, offset)
+    return await MetricsService(db).list_runs(project_id, report_id, limit, offset, _role(request))
 
 
 @router.get("/reports/{report_id}/value", response_model=ReportValue)
 async def report_value(
-    project_id: uuid.UUID, report_id: uuid.UUID, db: AsyncSession = Depends(get_session)
+    project_id: uuid.UUID, report_id: uuid.UUID, request: Request, db: AsyncSession = Depends(get_session)
 ) -> ReportValue:
-    return await MetricsService(db).report_value(project_id, report_id)
+    return await MetricsService(db).report_value(project_id, report_id, _role(request))

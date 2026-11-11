@@ -1,6 +1,6 @@
 import { ApiError } from '../../api/client'
 import { BASE_URL, CSRF_HEADERS, authHeader, refreshSession } from '../../api/session'
-import type { Approval, PlatformBudget, Preview, PreviewCreated, RequirementItem, RequirementsMap, Run, RunDetail, RunPage } from './types'
+import type { Approval, GateRunResult, PlatformBudget, Preview, PreviewCreated, RequirementItem, RequirementsMap, Run, RunDetail, RunPage } from './types'
 
 /** Thin client for the agent + requirements endpoints. Same auth as api/client.ts; multipart is sent without a JSON content type. */
 async function call<T>(path: string, init: RequestInit = {}, retried = false): Promise<T> {
@@ -55,6 +55,8 @@ export const aiApi = {
   listRuns: (pid: string, limit = 20) => call<RunPage>(`${P(pid)}/agent/runs?limit=${limit}`),
   getRun: (pid: string, rid: string) => call<RunDetail>(`${P(pid)}/agent/runs/${rid}?limit=200`),
   cancelRun: (pid: string, rid: string) => call<Run>(`${P(pid)}/agent/runs/${rid}/cancel`, json('POST')),
+  pauseRun: (pid: string, rid: string) => call<Run>(`${P(pid)}/agent/runs/${rid}/pause`, json('POST')),
+  runGates: (pid: string, rid: string) => call<GateRunResult>(`${P(pid)}/agent/runs/${rid}/gates`, json('POST')),
   resumeRun: (pid: string, rid: string) => call<Run>(`${P(pid)}/agent/runs/${rid}/resume`, json('POST')),
   listApprovals: (pid: string, q: { state?: string; run_id?: string } = {}) => {
     const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()

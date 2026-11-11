@@ -200,7 +200,7 @@ async def test_create_list_get_cancel(client: AsyncClient) -> None:
     rid = await _new(client, pid)
     r = (await client.get(_url(pid, rid))).json()
     assert r["state"] == "created" and r["phase"] == "plan" and r["steps"] == []
-    assert r["budgets"]["max_steps"] == 40 and "lease_owner" not in r
+    assert r["budgets"]["max_steps"] == 60 and "lease_owner" not in r
     lst = (await client.get(f"/projects/{pid}/agent/runs")).json()
     assert lst["total"] == 1 and lst["items"][0]["id"] == rid
     c = await client.post(_url(pid, rid, "/cancel"))

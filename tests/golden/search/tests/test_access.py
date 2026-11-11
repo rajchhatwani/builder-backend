@@ -42,7 +42,7 @@ def _call(client: AsyncClient, op: str, path: str):  # type: ignore[no-untyped-d
 
 
 async def test_tickets_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "list", "replace", "update"):
+    for op in ("create", "delete", "get", "list", "replace", "update", "head"):
         response = await _call(client, op, "tickets")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -79,6 +79,8 @@ async def test_tickets_rows_belong_to_their_creator(
         assert listing.json()["total"] == 1
         fetched = await other.get(f"/tickets/{item_id}")
         assert fetched.status_code == 404, fetched.text
+        probed = await other.head(f"/tickets/{item_id}")
+        assert probed.status_code == 404
         removed = await other.delete(f"/tickets/{item_id}")
         assert removed.status_code == 404, removed.text
         # The creator is unaffected by the refused attempt.

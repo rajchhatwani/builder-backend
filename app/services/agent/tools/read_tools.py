@@ -179,14 +179,18 @@ async def last_gate_report(ctx: ToolContext) -> dict[str, Any]:
     ]
     # Same tree + same draft spec + same pins = same report: reuse it instead of recomputing (the
     # gates are deterministic and pure). The cache holds the last result of each run only.
-    key = await asyncio.to_thread(_tree_key, root, spec_digest(spec), pins)
+    from app.services.agent.coverage import load_requirement_views, requirements_digest
+
+    reqs = await load_requirement_views(ctx.session, ctx.project_id)
+    key = await asyncio.to_thread(_tree_key, root, spec_digest(spec) + requirements_digest(reqs), pins)
     cached = _REPORT_CACHE.get(ctx.run_id)
     if cached is not None and cached[0] == key:
         return {**cached[1], "cached": True}
     cfg = ctx.settings
     lic, sta, typ = cfg.agent_gate_licence, cfg.agent_gate_static_analysis, cfg.agent_gate_strict_typing
     first = await asyncio.to_thread(
-        lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta, strict_typing=typ))
+        lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta,
+                                   strict_typing=typ, requirements=reqs))
     second = await asyncio.to_thread(
         lambda: gate_lib.replay(root, spec, pins, licence=lic, static_analysis=sta, strict_typing=typ))
     failures = [*first.failures, *second.failures]

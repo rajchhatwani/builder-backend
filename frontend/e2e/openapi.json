@@ -144,6 +144,17 @@
       "title": "Counts",
       "type": "object"
      },
+     "renames": {
+      "default": [],
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Renames",
+      "type": "array"
+     },
      "roles_gaining": {
       "additionalProperties": {
        "items": {
@@ -163,6 +174,14 @@
       },
       "title": "Roles Losing",
       "type": "object"
+     },
+     "unprotected_entities": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Unprotected Entities",
+      "type": "array"
      },
      "weakens": {
       "title": "Weakens",

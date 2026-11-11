@@ -74,6 +74,50 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'events',
+    label: 'Events',
+    icon: (
+      <>
+        <circle cx="6" cy="12" r="2.5" />
+        <path d="M8.5 12h4M12.5 12l4-5M12.5 12l4 5" />
+        <circle cx="18.5" cy="6" r="1.5" />
+        <circle cx="18.5" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'apiedge',
+    label: 'API edge',
+    icon: (
+      <>
+        <path d="M3 12h6M15 12h6" />
+        <path d="M9 7v10M15 7v10" />
+        <path d="M9 12h6" />
+      </>
+    ),
+  },
+  {
+    id: 'hookeffects',
+    label: 'Hook effects',
+    icon: (
+      <>
+        <path d="M5 19c0-6 4-9 9-9" />
+        <path d="M11 6l4 4-4 4" />
+        <path d="M19 5v6" />
+      </>
+    ),
+  },
+  {
+    id: 'notiftypes',
+    label: 'Notification types',
+    icon: (
+      <>
+        <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" />
+        <path d="M9 9h6M9 12h4" />
+      </>
+    ),
+  },
+  {
     id: 'settings',
     label: 'Settings',
     icon: (

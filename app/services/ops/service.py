@@ -123,12 +123,14 @@ class OpsService:
         expect_before: str,
         expect_after: str,
         guard: Any = None,
+        confirm_weakening: bool = False,
     ) -> int:
         """All-or-nothing replay of several operations in ONE transaction under the project lock:
         the live spec must still be exactly (`base_seq`, `expect_before`) once the lock is held and
         must equal `expect_after` at the end, else nothing is written (no undo step is ever needed,
         so a person's concurrent edit can never be rolled back). `guard`, if given, is awaited under
-        the lock and may raise to abort (e.g. the run was cancelled)."""
+        the lock and may raise to abort (e.g. the run was cancelled). Like every single-op path, the batch's NET effect on access is checked:
+        a role gaining access refuses it with `access_weakened` unless `confirm_weakening`."""
 
         async def body(scope: OpScope) -> int:
             top = (
@@ -140,10 +142,16 @@ class OpsService:
                 raise _err("apply_conflict", "the live spec changed since the plan; nothing was applied")
             if guard is not None:
                 await guard()
+            access_before = await scope.assemble()
             for op_type, payload in ops:
                 await self._run(scope, op_type, payload, actor, "do", None, True)
-            if canonical_hash(await scope.assemble()) != expect_after:
+            access_after = await scope.assemble()
+            if canonical_hash(access_after) != expect_after:
                 raise _err("apply_mismatch", "the applied spec differs from the reviewed draft")
+            if not confirm_weakening:
+                gained = access_weakens(access_before, access_after)
+                if gained:
+                    raise _access_weakened(gained)
             return len(ops)
 
         n: int = await self._transaction(project_id, actor, body)

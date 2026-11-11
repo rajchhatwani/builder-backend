@@ -12,11 +12,29 @@ export function pollInterval(run: Pick<Run, 'state'> | null, hidden = false): nu
   return isLive(run) ? POLL_MS : null
 }
 
-export interface RunActions { cancel: boolean; resume: boolean; resumeLabel: string }
-/** The API has cancel and resume (no pause). Resume continues a stopped run or starts a created one; it is held back while an approval is pending. */
-export function runActions(run: Pick<Run, 'state'>, pendingApprovals: number): RunActions {
-  const resumable = run.state === 'stopped' || run.state === 'created' || ((run.state === 'planning' || run.state === 'running' || run.state === 'awaiting_approval') && pendingApprovals === 0)
-  return { cancel: isLive(run), resume: resumable, resumeLabel: run.state === 'created' ? 'Start' : 'Resume' }
+export interface RunActions { cancel: boolean; pause: boolean; paused: boolean; gates: boolean; resume: boolean; resumeLabel: string }
+/** Cancel, pause (ask a live run to stop at its next step), run-gates (read-only static checks over the draft) and resume.
+ *  Pause is offered only on a live run that is not applying and not already paused (the API answers 409 otherwise).
+ *  Gates need a live run with a draft. Resume continues a stopped or paused run or starts a created one; it is held back while an approval is pending. */
+export function runActions(run: Pick<Run, 'state'> & { paused_at?: string | null; workspace_id?: string | null }, pendingApprovals: number): RunActions {
+  const paused = !!run.paused_at && isLive(run)
+  const resumable = run.state === 'stopped' || run.state === 'created' || paused || ((run.state === 'planning' || run.state === 'running' || run.state === 'awaiting_approval') && pendingApprovals === 0)
+  return {
+    cancel: isLive(run), paused, resume: resumable, resumeLabel: run.state === 'created' ? 'Start' : 'Resume',
+    pause: isLive(run) && run.state !== 'applying' && run.state !== 'created' && !paused,
+    gates: isLive(run) && run.workspace_id !== null,
+  }
+}
+
+/** Rows for the gate report. Generic: shows whatever keys the API sent (rule_id first), so new gates need no change here. */
+export interface GateRow { id: string; message: string; detail: [string, string][] }
+export function gateRows(failures: Record<string, string>[]): GateRow[] {
+  return failures.map((f) => {
+    const id = f.rule_id ?? f.gate ?? f.id ?? 'check'
+    const message = f.hint || f.actual || f.message || f.expected || ''
+    const skip = new Set(['rule_id', 'gate', 'id'])
+    return { id, message, detail: Object.entries(f).filter(([k, v]) => !skip.has(k) && v !== '') }
+  })
 }
 
 export interface BudgetRow { key: 'steps' | 'repairs' | 'cost'; label: string; used: number; limit: number | null; pct: number | null; level: 'ok' | 'warn' | 'full'; text: string }

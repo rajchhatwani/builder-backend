@@ -1,0 +1,42 @@
+"""state machines
+
+Revision ID: 0005
+Revises: 0002
+Create Date: rendered from the spec by Backend Builder
+
+The state log: who moved which record from which state to which, and when.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0005"
+down_revision: str | None = "0002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "state_transitions",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("entity", sa.String(80), nullable=False),
+        sa.Column("record_id", sa.Uuid(), nullable=False),
+        sa.Column("transition", sa.String(40), nullable=False),
+        sa.Column("from_state", sa.String(64), nullable=True),
+        sa.Column("to_state", sa.String(64), nullable=False),
+        sa.Column("actor_id", sa.Uuid(), nullable=True),
+        sa.Column("automatic", sa.Boolean(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_state_transitions"),
+    )
+    op.create_index(
+        "ix_state_transitions_record", "state_transitions", ["entity", "record_id", "created_at"]
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("ix_state_transitions_record", table_name="state_transitions")
+    op.drop_table("state_transitions")

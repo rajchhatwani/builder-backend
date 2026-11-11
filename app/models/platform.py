@@ -14,6 +14,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
@@ -255,6 +256,11 @@ class Organization(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         CheckConstraint(
             "session_ttl_hours IS NULL OR (session_ttl_hours BETWEEN 1 AND 720)",
             name="ck_organizations_session_ttl",
+        ),
+        Index(
+            "ix_organizations_deletion_due",
+            "deletion_scheduled_for",
+            postgresql_where=text("deletion_scheduled_for IS NOT NULL AND deleted_at IS NULL"),
         ),
     )
 

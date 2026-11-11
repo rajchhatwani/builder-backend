@@ -38,6 +38,7 @@ from app.schemas.metrics import (
     ReportRunRead,
     ReportValue,
 )
+from app.services.import_service import _hidden_fields
 from app.services.spec_service import SpecService
 from app.services.usage_service import UsageService
 
@@ -50,7 +51,7 @@ USAGE_METRIC = "reports.runs"
 
 
 def _invalid(exc: mx.MetricError) -> AppError:
-    return AppError("metric_invalid", str(exc), 422)
+    return AppError(exc.code, str(exc), 422)
 
 
 def _metric_read(m: Metric) -> MetricRead:
@@ -59,6 +60,12 @@ def _metric_read(m: Metric) -> MetricRead:
 
 def _second(now: datetime) -> datetime:
     return now.astimezone(UTC).replace(microsecond=0)
+
+
+def _used_fields(d: mx.MetricDef) -> set[str]:
+    used = {f.field for f in d.filter}
+    used.update(x for x in (d.field, d.group_by) if x is not None)
+    return used
 
 
 class MetricsService:
@@ -104,11 +111,25 @@ class MetricsService:
         return list(rows)
 
     async def _compute(
-        self, project_id: uuid.UUID, m: Metric, cache: dict[str, list[dict[str, Any]]]
+        self,
+        project_id: uuid.UUID,
+        m: Metric,
+        cache: dict[str, list[dict[str, Any]]],
+        role: str | None = None,
+        enforce: bool = False,
     ) -> dict[str, Any]:
+        """`enforce` = a person is asking as `role` (None fails closed): a metric that reads, filters
+        or groups by a field that role may not read is refused (C7 field access). Scheduled runs
+        compute as the system (enforce False) and are redacted per viewer when read."""
         d = mx.parse_metric(m.definition)
         entity = await self._entity(project_id, d.entity)
         mx.validate_metric(d, entity)  # the spec may have changed since the definition was saved
+        if enforce and entity is not None:
+            spec = await SpecService(self.s).assemble(project_id)
+            if _used_fields(d) & _hidden_fields(spec, entity, role):
+                raise AppError(
+                    "field_access_denied", "the metric uses a field your role may not read", 403
+                )
         if d.entity not in cache:
             cache[d.entity] = await self._records(project_id, d.entity)
         return mx.compute(d, cache[d.entity], entity).as_dict()
@@ -181,10 +202,12 @@ class MetricsService:
         await self.s.delete(m)
         await self.s.commit()
 
-    async def metric_value(self, project_id: uuid.UUID, key: str) -> MetricValue:
+    async def metric_value(
+        self, project_id: uuid.UUID, key: str, role: str | None = None
+    ) -> MetricValue:
         m = await self._metric(project_id, key)
         try:
-            out = await self._compute(project_id, m, {})
+            out = await self._compute(project_id, m, {}, role, True)
         except mx.MetricError as exc:
             raise _invalid(exc) from None
         return MetricValue(
@@ -255,7 +278,9 @@ class MetricsService:
 
     # -- values and runs ---------------------------------------------------------------------
 
-    async def _values(self, report: Report) -> dict[str, Any]:
+    async def _values(
+        self, report: Report, role: str | None = None, enforce: bool = False
+    ) -> dict[str, Any]:
         cache: dict[str, list[dict[str, Any]]] = {}
         out: dict[str, Any] = {}
         metrics = {
@@ -272,9 +297,9 @@ class MetricsService:
                 out[key] = {"error": "metric_missing"}
                 continue
             try:
-                res = await self._compute(report.project_id, m, cache)
+                res = await self._compute(report.project_id, m, cache, role, enforce)
             except (mx.MetricError, AppError) as exc:
-                code = exc.code if isinstance(exc, AppError) else "metric_invalid"
+                code = exc.code
                 out[key] = {"version": m.version, "error": code}
                 continue
             out[key] = {"value": res["value"], "version": m.version}
@@ -282,12 +307,56 @@ class MetricsService:
                 out[key]["groups"] = res["groups"]
         return out
 
-    async def report_value(self, project_id: uuid.UUID, report_id: uuid.UUID) -> ReportValue:
+    async def report_value(
+        self, project_id: uuid.UUID, report_id: uuid.UUID, role: str | None = None
+    ) -> ReportValue:
         r = await self._report(project_id, report_id)
-        return ReportValue(report_id=r.id, values=await self._values(r), computed_at=datetime.now(UTC))
+        return ReportValue(
+            report_id=r.id, values=await self._values(r, role, True), computed_at=datetime.now(UTC)
+        )
+
+    async def _redact(
+        self, project_id: uuid.UUID, runs: list[ReportRunRead], role: str | None
+    ) -> list[ReportRunRead]:
+        """Stored values were computed as the system; hide the ones the viewer may not read."""
+        keys = {k for r in runs for k in r.values if isinstance(r.values.get(k), dict)}
+        if not keys:
+            return runs
+        spec = await SpecService(self.s).assemble(project_id)
+        metrics = (
+            await self.s.execute(select(Metric).where(Metric.project_id == project_id, Metric.key.in_(keys)))
+        ).scalars()
+        denied: set[str] = set()
+        found: dict[str, Any] = {}
+        for m in metrics:
+            found[m.key] = m
+            try:
+                d = mx.parse_metric(m.definition)
+            except mx.MetricError:
+                denied.add(m.key)
+                continue
+            ent = next((e for e in spec.entities if e.name == d.entity), None)
+            if ent is None or _used_fields(d) & _hidden_fields(spec, ent, role):
+                denied.add(m.key)
+        for r in runs:
+            # a metric deleted since, or edited after the run was stored, may have read a field the
+            # current definition no longer shows: fail closed for that run's value
+            gone = {k for k in keys if k not in found}
+            stale = {k for k, m in found.items() if m.updated_at and r.created_at and m.updated_at > r.created_at}
+            hide = denied | gone | stale
+            r.values = {
+                k: ({"error": "field_access_denied"} if k in hide and isinstance(v, dict) else v)
+                for k, v in r.values.items()
+            }
+        return runs
 
     async def list_runs(
-        self, project_id: uuid.UUID, report_id: uuid.UUID, limit: int, offset: int
+        self,
+        project_id: uuid.UUID,
+        report_id: uuid.UUID,
+        limit: int,
+        offset: int,
+        role: str | None = None,
     ) -> ReportRunPage:
         await self._report(project_id, report_id)
         q = select(ReportRun).where(ReportRun.report_id == report_id)
@@ -295,9 +364,8 @@ class MetricsService:
         rows = (
             await self.s.execute(q.order_by(ReportRun.scheduled_for.desc()).limit(limit).offset(offset))
         ).scalars().all()
-        return ReportRunPage(
-            items=[ReportRunRead.model_validate(x) for x in rows], total=total, limit=limit, offset=offset
-        )
+        items = await self._redact(project_id, [ReportRunRead.model_validate(x) for x in rows], role)
+        return ReportRunPage(items=items, total=total, limit=limit, offset=offset)
 
     async def _store_run(
         self, report: Report, org_id: uuid.UUID, slot: datetime, *, refuse_raises: bool
@@ -333,7 +401,9 @@ class MetricsService:
         run.status = "ok"
         return run
 
-    async def run_now(self, project_id: uuid.UUID, report_id: uuid.UUID) -> ReportRunRead:
+    async def run_now(
+        self, project_id: uuid.UUID, report_id: uuid.UUID, role: str | None = None
+    ) -> ReportRunRead:
         """Manual run, stored under the current second as its slot (a repeat in the same second
         returns the stored run)."""
         r = await self._report(project_id, report_id)
@@ -353,7 +423,7 @@ class MetricsService:
                 )
             ).scalar_one()
         await self.s.commit()
-        return ReportRunRead.model_validate(run)
+        return (await self._redact(project_id, [ReportRunRead.model_validate(run)], role))[0]
 
 
 async def fire_due_reports(session: AsyncSession, now: datetime) -> int:

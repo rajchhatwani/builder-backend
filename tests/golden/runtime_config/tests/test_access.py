@@ -32,7 +32,7 @@ def _call(client: AsyncClient, op: str, path: str):  # type: ignore[no-untyped-d
 
 
 async def test_orders_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "head", "list", "replace", "update"):
+    for op in ("create", "delete", "get", "list", "replace", "update", "head"):
         response = await _call(client, op, "orders")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from

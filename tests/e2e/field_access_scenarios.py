@@ -151,3 +151,13 @@ async def test_a_guard_is_not_an_oracle_for_someone_who_cannot_read_the_record_f
     assert moved.status_code == 200 and moved.json()["status"] == "approved" and moved.json()["salary"] == 200000
     archived = await http.post(f"/employees/{rich['id']}/transitions/archive", headers=people["staff"])
     assert archived.status_code == 200 and archived.json()["status"] == "archived" and "salary" not in archived.json()
+
+
+async def test_head_and_delete_need_the_entity_access(http, people) -> None:  # noqa: ANN001
+    row = await make(http, people["hr"], "Probe")
+    url = f"/employees/{row['id']}"
+    assert (await http.head(url)).status_code == 401  # no anonymous existence probe
+    assert (await http.delete(url)).status_code == 401
+    assert (await http.head(url, headers=people["staff"])).status_code == 200
+    assert (await http.delete(url, headers=people["staff"])).status_code == 204
+    assert (await http.head(url, headers=people["staff"])).status_code == 404

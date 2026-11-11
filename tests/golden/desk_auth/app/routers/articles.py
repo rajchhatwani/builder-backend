@@ -20,6 +20,7 @@ _ACCESS = {
     "get": _access.access_dependency(match=('status', 'published')),
     "list": _access.access_dependency(match=('status', 'published')),
     "update": _access.access_dependency(roles=("staff",)),
+    "head": _access.access_dependency(match=('status', 'published')),
 }
 
 
@@ -61,8 +62,10 @@ async def get_articles(
 
 
 @router.head("/{item_id}")
-async def head_articles(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
-    if not await ArticleRepository(session).exists(item_id):
+async def head_articles(
+    item_id: _uuid.UUID, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["head"])]
+) -> _fa.Response:
+    if not await ArticleRepository(session, **access.repo_kwargs).exists(item_id):
         raise _errors.NotFoundError("Article not found")
     return _fa.Response(status_code=200)
 

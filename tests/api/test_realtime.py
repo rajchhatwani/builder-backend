@@ -315,3 +315,27 @@ async def test_presence_heartbeat_roster_and_keepalive(
     assert users[0]["where"] == "import wizard" and "id" not in s.of_type("presence")[0]
     await s.wait(lambda x: "keepalive" in x.comments)
     await s.close()
+
+
+async def test_presence_expires_on_the_api_path(
+    client: AsyncClient, client_for: ClientFor, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """WP-A: a client that stops heartbeating drops out of GET /presence once the TTL lapses."""
+    from types import SimpleNamespace
+
+    rt_api.reset_state()
+    clock = [1000.0]
+    monkeypatch.setattr(rt_api, "time", SimpleNamespace(monotonic=lambda: clock[0]))
+    pid, b = await shared_project(client, client_for)
+    assert (await b.post(f"/projects/{pid}/presence/heartbeat", json={"where": "x"})).status_code == 204
+    clock[0] += 10
+    assert (await client.post(f"/projects/{pid}/presence/heartbeat", json={"where": "y"})).status_code == 204
+    roster = (await client.get(f"/projects/{pid}/presence")).json()
+    assert len(roster) == 2
+    clock[0] += rt.PresenceBook().ttl - 5  # b is now past its TTL, the owner is not
+    roster = (await client.get(f"/projects/{pid}/presence")).json()
+    assert [e["where"] for e in roster] == ["y"]
+    clock[0] += 1000  # everyone gone: empty roster, no leftover book
+    assert (await client.get(f"/projects/{pid}/presence")).json() == []
+    assert pid not in {str(k) for k in rt_api._books}
+    rt_api.reset_state()

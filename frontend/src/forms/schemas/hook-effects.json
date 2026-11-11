@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "description": "Per-project opt-in for effectful hooks (H2). OFF unless `enabled`. Hooks are written by TRUSTED\nauthors only until the Cycle 3 sandbox exists: `trusted_authors_only` must be true to turn this on.\n`webhook_hosts` is the allow-list of hosts a hook may post to (SSRF guard still applies).",
+  "properties": {
+    "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+    },
+    "trusted_authors_only": {
+      "default": false,
+      "title": "Trusted Authors Only",
+      "type": "boolean"
+    },
+    "webhook_hosts": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Webhook Hosts",
+      "type": "array"
+    }
+  },
+  "title": "SpecHookEffects",
+  "type": "object"
+}

@@ -24,6 +24,15 @@ describe('settings mapping', () => {
   })
 })
 
+describe('sequence binding', () => {
+  it('needs entity and field together', () => {
+    const r = { ...blankSequence(), entity: 'Order', field: null }
+    expect(clientErrors('sequences', [r])).toEqual({ '0.field': 'Name the field, or clear the entity' })
+    expect(clientErrors('sequences', [{ ...r, field: 'number' }])).toEqual({})
+    expect(clientErrors('sequences', [{ ...r, entity: null, field: 'number' }])).toEqual({ '0.entity': 'Name the entity, or clear the field' })
+  })
+})
+
 describe('sequences and lists mapping', () => {
   it('round-trips a sequence', () => {
     const b = { name: 'order_no', prefix: 'ORD-', padding: 4, start: 1, per_tenant: false, reset_yearly: true, view_roles: [] }

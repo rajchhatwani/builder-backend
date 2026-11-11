@@ -19,6 +19,7 @@ from app.exceptions import AppError
 from app.models.agent import AiApproval, AiRun
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 from app.services.agent import gates as gate_lib
+from app.services.agent.coverage import load_requirement_views
 from app.services.agent import promote as promote_lib
 from app.services.agent import tools as tool_lib
 from app.services.agent.approval_service import ApprovalService
@@ -292,8 +293,10 @@ class Gates:
         root = Path(path)
         cfg = get_settings()
         lic, sta, typ = cfg.agent_gate_licence, cfg.agent_gate_static_analysis, cfg.agent_gate_strict_typing
+        reqs = await load_requirement_views(session, run.project_id)
         first = await asyncio.to_thread(
-            lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta, strict_typing=typ))
+            lambda: gate_lib.run_gates(root, spec, approved_pins=pins, licence=lic, static_analysis=sta,
+                                       strict_typing=typ, requirements=reqs))
         second = await asyncio.to_thread(
             lambda: gate_lib.replay(root, spec, pins, licence=lic, static_analysis=sta, strict_typing=typ))
         failures = [*first.failures, *second.failures]

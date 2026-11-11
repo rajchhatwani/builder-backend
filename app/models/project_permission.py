@@ -1,7 +1,7 @@
 import uuid
 
 from sqlalchemy import Enum as SAEnum
-from sqlalchemy import ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,6 +37,7 @@ class ProjectPermission(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             "operation",
             name="uq_project_permissions_project_entity_op",
         ),
+        Index("ix_project_permissions_project_id", "project_id"),
     )
 
     project_id: Mapped[uuid.UUID] = mapped_column(

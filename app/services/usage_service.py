@@ -10,14 +10,16 @@ Postgres serialises writers on the counter row and re-evaluates the WHERE agains
 value, so N parallel callers against a quota of L are granted exactly L (never more). The granted
 event and the counter move together inside one SAVEPOINT; they commit or roll back with the
 caller's transaction (a failed operation is not charged). The refused event is written on its OWN
-connection so the refusal stays visible although the caller's request rolls back.
+connection so the refusal stays visible although the caller's request rolls back. Refused events
+are bounded (REFUSED_EVENTS_PER_HOUR rows per org+metric+hour, the rest folded into
+`occurrences`), so a retry storm cannot grow the table without limit.
 """
 
 import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
@@ -39,6 +41,11 @@ _UPSERT_CAPPED = text(
 _READ = text(
     "SELECT used FROM usage_counters WHERE organization_id = :o AND metric = :m AND period_start = :p"
 )
+
+
+# Refusals are bounded: at most this many event rows per (org, metric) per UTC hour; further
+# refusals in the hour fold into the newest row's `occurrences` (and `amount`).
+REFUSED_EVENTS_PER_HOUR = 20
 
 
 class _Refused(Exception):
@@ -200,17 +207,44 @@ class UsageService:
         """Own connection + commit: the refusal must outlive the caller's rolled-back request."""
         bind = self.session.get_bind()
         engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(bind)  # type: ignore[arg-type]
+        now = self._clock()
+        window = now.replace(minute=0, second=0, microsecond=0)
         async with AsyncSession(engine, expire_on_commit=False) as s:
-            s.add(
-                UsageEvent(
-                    organization_id=org_id,
-                    project_id=project_id,
-                    metric=metric,
-                    amount=amount,
-                    outcome="refused",
-                    created_at=self._clock(),
-                )
+            # serialise refusals of one (org, metric) so the cap holds under parallel callers
+            await s.execute(
+                text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),
+                {"k": f"usage-refused:{org_id}:{metric}"},
             )
+            where = (
+                UsageEvent.organization_id == org_id,
+                UsageEvent.metric == metric,
+                UsageEvent.outcome == "refused",
+                UsageEvent.created_at >= window,
+            )
+            n = (await s.execute(select(func.count()).select_from(UsageEvent).where(*where))).scalar_one()
+            if n >= REFUSED_EVENTS_PER_HOUR:
+                newest = (
+                    await s.execute(
+                        select(UsageEvent.id).where(*where).order_by(UsageEvent.created_at.desc(), UsageEvent.id).limit(1)
+                    )
+                ).scalar_one()
+                await s.execute(
+                    update(UsageEvent)
+                    .where(UsageEvent.id == newest)
+                    .values(occurrences=UsageEvent.occurrences + 1, amount=UsageEvent.amount + amount)
+                )
+            else:
+                s.add(
+                    UsageEvent(
+                        organization_id=org_id,
+                        project_id=project_id,
+                        metric=metric,
+                        amount=amount,
+                        outcome="refused",
+                        occurrences=1,
+                        created_at=now,
+                    )
+                )
             await s.commit()
 
     # -- reads -----------------------------------------------------------------------------
@@ -218,7 +252,7 @@ class UsageService:
         out: list[dict[str, Any]] = []
         for name, mdef in metering.METRICS.items():
             start, end = metering.period_bounds(self._clock(), mdef.period)
-            refused_q = select(func.count()).select_from(UsageEvent).where(
+            refused_q = select(func.coalesce(func.sum(UsageEvent.occurrences), 0)).where(
                 UsageEvent.organization_id == org_id,
                 UsageEvent.metric == name,
                 UsageEvent.outcome == "refused",
@@ -283,3 +317,76 @@ async def consume_import_rows(
         org_id, "imports.rows", n, project_id=project_id,
         idempotency_key=f"{key}:r" if key else None,
     )  # fmt: skip
+
+
+async def reconcile_gauges(session: AsyncSession, org_id: uuid.UUID | None = None) -> int:
+    """Recompute every gauge from its source rows (one org, or all orgs) and fix drift.
+
+    A gauge only moves through consume/release, so rows that vanish by cascade (project or org
+    delete) leave it too high. `workspaces.active` is recomputed as the count of the org's
+    workspaces in a counted state; orgs whose gauge row exists but whose workspaces are gone go
+    to 0. Runs in the caller's transaction (the caller commits). Returns how many gauge rows
+    were changed or created."""
+    from app.models.project import Project
+    from app.models.workspace import Workspace
+    from app.services.workspace_service import COUNTED_STATES
+
+    where = "WHERE c.organization_id = :o" if org_id else ""
+    params: dict[str, Any] = {"p": metering.GAUGE_EPOCH, "m": "workspaces.active"}
+    if org_id:
+        params["o"] = org_id
+    # lock the gauge rows first so a concurrent consume/release waits; the count below then sees
+    # every workspace that was committed before the lock was granted (no lost quota slot)
+    await session.execute(
+        text(
+            "SELECT 1 FROM usage_counters c "
+            f"{where}{' AND' if where else 'WHERE'} c.metric = :m AND c.period_start = :p FOR UPDATE"
+        ),
+        params,
+    )
+    # existing gauge rows, with the true count (0 when no workspace is left)
+    rows = (
+        await session.execute(
+            text(
+                "SELECT c.organization_id, c.used, COALESCE(w.n, 0) FROM usage_counters c "
+                "LEFT JOIN (SELECT p.organization_id AS org, count(*) AS n FROM workspaces x "
+                "JOIN projects p ON p.id = x.project_id WHERE x.state = ANY(:states) "
+                "GROUP BY p.organization_id) w ON w.org = c.organization_id "
+                f"{where}{' AND' if where else 'WHERE'} c.metric = :m AND c.period_start = :p"
+            ),
+            {**params, "states": list(COUNTED_STATES)},
+        )
+    ).all()
+    seen = {r[0] for r in rows}
+    fixed = 0
+    for org, used, real in rows:
+        if int(used) != int(real):
+            await session.execute(
+                text(
+                    "UPDATE usage_counters SET used = :u WHERE organization_id = :o "
+                    "AND metric = :m AND period_start = :p"
+                ),
+                {**params, "o": org, "u": int(real)},
+            )
+            fixed += 1
+    # orgs with live workspaces but no gauge row yet
+    q = (
+        select(Project.organization_id, func.count())
+        .select_from(Workspace)
+        .join(Project, Project.id == Workspace.project_id)
+        .where(Workspace.state.in_(COUNTED_STATES))
+        .group_by(Project.organization_id)
+    )
+    if org_id:
+        q = q.where(Project.organization_id == org_id)
+    for org, n in (await session.execute(q)).all():
+        if org not in seen:
+            await session.execute(
+                text(
+                    "INSERT INTO usage_counters (organization_id, metric, period_start, used) "
+                    "VALUES (:o, :m, :p, :u) ON CONFLICT DO NOTHING"
+                ),
+                {**params, "o": org, "u": int(n)},
+            )
+            fixed += 1
+    return fixed

@@ -76,7 +76,7 @@
     "app/platform_sdk/helpers.py": "47833db406bfdb1161597af0a7dbf40b2216d259aac22b47547e7e37022da544",
     "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
-    "app/routers/invoices.py": "8fa650027dbddb3cb424b7aad7a1f566f311f4fe2ca3b98b5aeaee1c93249c27",
+    "app/routers/invoices.py": "f3858f244a02dc06e01b334de3f3ff82056e458e329e03f0a2547323e57ba21d",
     "app/schemas/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/schemas/invoices.py": "2b8d43d20e3667e6ffea247558efec9fec567d6c70612122a5661d2720bcc236",
     "app/state_machines/__init__.py": "01be60eda6d8cc7974d48fdc8c1ec455070375d36a379aa3752682ec28d19587",

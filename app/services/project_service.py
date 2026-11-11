@@ -11,6 +11,7 @@ from app.models.enums import MemberRole
 from app.models.platform import PlatformUser, ProjectMember
 from app.models.project import Project
 from app.schemas.project import ProjectCreate, ProjectUpdate
+from app.services.usage_service import reconcile_gauges
 
 
 def _slug_conflict() -> AppError:
@@ -158,5 +159,9 @@ class ProjectService:
 
     async def delete(self, project_id: uuid.UUID) -> None:
         project = await self.get(project_id)
+        org_id = project.organization_id
         await self.session.delete(project)
+        await self.session.flush()
+        # workspaces vanish by cascade: recompute the org's gauges from the rows that are left
+        await reconcile_gauges(self.session, org_id)
         await self.session.commit()

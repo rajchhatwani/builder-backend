@@ -43,7 +43,7 @@ def _call(client: AsyncClient, op: str, path: str):  # type: ignore[no-untyped-d
 
 
 async def test_customers_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "head", "list", "replace", "update"):
+    for op in ("create", "delete", "get", "list", "replace", "update", "head"):
         response = await _call(client, op, "customers")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -63,7 +63,7 @@ async def test_customers_routes_reject_users_without_the_required_role(
 
 
 async def test_deals_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "head", "list", "replace", "update"):
+    for op in ("create", "delete", "get", "list", "replace", "update", "head"):
         response = await _call(client, op, "deals")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -97,3 +97,5 @@ async def test_deals_rows_belong_to_their_creator(
     ) as other:
         fetched = await other.get(f"/deals/{item_id}")
         assert fetched.status_code == 404, fetched.text
+        probed = await other.head(f"/deals/{item_id}")
+        assert probed.status_code == 404

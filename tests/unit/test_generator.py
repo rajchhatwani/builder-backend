@@ -76,6 +76,7 @@ NAMES = [
     "field_access",
     "search",
     "realtime_metrics",
+    "tenant_guard",
 ]
 
 

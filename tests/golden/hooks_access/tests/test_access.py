@@ -63,7 +63,7 @@ async def test_ledgers_routes_reject_users_without_the_required_role(
 
 
 async def test_notes_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "head", "list", "replace", "update"):
+    for op in ("create", "delete", "get", "list", "replace", "update", "head"):
         response = await _call(client, op, "notes")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -100,3 +100,5 @@ async def test_notes_rows_belong_to_their_creator(
         assert listing.json()["total"] == 1
         fetched = await other.get(f"/notes/{item_id}")
         assert fetched.status_code == 200, fetched.text
+        probed = await other.head(f"/notes/{item_id}")
+        assert probed.status_code == 200

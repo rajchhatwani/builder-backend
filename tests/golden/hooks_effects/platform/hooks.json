@@ -117,8 +117,8 @@
     "app/providers/vault.py": "74bac320dbe59430b611a81343cf03efa4a2243e85caffff0c1e083aa86b6bb4",
     "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
-    "app/routers/customers.py": "4afe3a8992d2d4090996b488c269866a73fd425e35986b431b16f47a01abeaf9",
-    "app/routers/orders.py": "17a6ed3b7ebd4c3dd62977b250c7d73fcb171f56d5b66685004595b85218143e",
+    "app/routers/customers.py": "54f30bf7468fcd6fcaeec9065039f0f2a88b1f520e7a2b70bff6b5aa73d80162",
+    "app/routers/orders.py": "e9b41648485965faae38ca03da91161c8322d44e311af58c339d2e62b95a601a",
     "app/schemas/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/schemas/customers.py": "c11911e265a8740f66abc800b35613c49e940ce97b9b0278b872182db84b0ef4",
     "app/schemas/orders.py": "c13637b741887f88656313af5d0de852cd3b7d1da7333b93a2ce207b050b0cb4"

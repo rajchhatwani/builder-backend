@@ -14,6 +14,7 @@ Rules (deterministic, so two reports over one definition always agree):
   * Empty input: count/count_distinct/sum are 0; avg/min/max are None (no value to report).
   * A null or missing field value is skipped by sum/avg/min/max/count_distinct. A null never
     matches ANY filter (not even `ne`), like SQL.
+  * Group-by is capped at MAX_GROUPS distinct groups; beyond it `TooManyGroups` (never truncated).
   * Group-by output is a list sorted by group key (text order), the null group last; each group's
     key is the value as text (None for null/missing).
 """
@@ -35,12 +36,21 @@ ORDERED_TYPES = NUMERIC_TYPES | {"date", "datetime"}
 SCALAR_TYPES = ORDERED_TYPES | {"string", "text", "boolean", "uuid", "enum"}
 MAX_FILTERS = 10
 MAX_IN_VALUES = 100
+MAX_GROUPS = 100  # distinct group-by values one metric may return
 AVG_PLACES = Decimal("0.000001")
 _KEY_RE = re.compile(r"^[a-z][a-z0-9_]{0,59}$")
 
 
 class MetricError(ValueError):
     """The definition is not acceptable; the API renders it as `metric_invalid`."""
+
+    code = "metric_invalid"
+
+
+class TooManyGroups(MetricError):
+    """The group-by produced more than MAX_GROUPS groups; refused, never silently truncated."""
+
+    code = "metric_too_many_groups"
 
 
 class MetricFilter(BaseModel):
@@ -298,6 +308,10 @@ def compute(d: MetricDef, records: list[dict[str, Any]], entity: SpecEntity | No
     buckets: dict[str | None, list[dict[str, Any]]] = {}
     for r in rows:
         buckets.setdefault(_group_key(r.get(d.group_by)), []).append(r)
+    if len(buckets) > MAX_GROUPS:
+        raise TooManyGroups(
+            f"group_by: {d.group_by!r} has more than {MAX_GROUPS} distinct values; group by a coarser field"
+        )
     order = sorted(buckets, key=lambda k: (k is None, k or ""))
     return MetricResult(
         _aggregate(d, rows),

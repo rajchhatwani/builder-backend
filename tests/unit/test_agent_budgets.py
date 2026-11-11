@@ -2,6 +2,7 @@
 
 from app.services.agent.budgets import (
     CEILINGS,
+    DEFAULT_MAX_STEPS,
     Budgets,
     LoopDetector,
     RepairTracker,
@@ -13,7 +14,8 @@ from app.services.agent.budgets import (
 
 def test_defaults_and_tolerant_parsing() -> None:
     b = Budgets()
-    assert (b.max_steps, b.max_repairs) == (40, 3)
+    assert (b.max_steps, b.max_repairs) == (DEFAULT_MAX_STEPS, 3)
+    assert DEFAULT_MAX_STEPS == 60
     assert Budgets.from_dict(None) == b
     junk = {"max_steps": -1, "max_cost_micro_usd": "9", "max_wall_seconds": True, "x": 1}
     assert Budgets.from_dict(junk) == b

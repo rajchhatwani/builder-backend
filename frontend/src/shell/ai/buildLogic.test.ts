@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { budgetRows, canSeeItWork, friendlyStep, platformRow, stopInfo, pct, pollInterval, runActions, usd } from './buildLogic'
+import { gateRows, budgetRows, canSeeItWork, friendlyStep, platformRow, stopInfo, pct, pollInterval, runActions, usd } from './buildLogic'
 
 describe('build logic', () => {
   it('computes percentages safely', () => {
@@ -64,5 +64,25 @@ describe('stop codes, system steps and platform budget', () => {
   it('offers See it work only for an applied run', () => {
     expect(canSeeItWork({ state: 'applied' })).toBe(true)
     expect(canSeeItWork({ state: 'stopped' })).toBe(false)
+  })
+})
+
+describe('pause and gate-run logic', () => {
+  it('pause only for a live, running, unpaused run', () => {
+    expect(runActions({ state: 'running' }, 0).pause).toBe(true)
+    expect(runActions({ state: 'running', paused_at: 'x' }, 0)).toMatchObject({ pause: false, paused: true, resume: true })
+    expect(runActions({ state: 'applying' }, 0).pause).toBe(false)
+    expect(runActions({ state: 'stopped' }, 0).pause).toBe(false)
+    expect(runActions({ state: 'applied' }, 0).pause).toBe(false)
+  })
+  it('gates need a live run with a draft', () => {
+    expect(runActions({ state: 'running', workspace_id: 'w' }, 0).gates).toBe(true)
+    expect(runActions({ state: 'running', workspace_id: null }, 0).gates).toBe(false)
+    expect(runActions({ state: 'applied', workspace_id: 'w' }, 0).gates).toBe(false)
+  })
+  it('gateRows reads any gate id and falls back across message keys', () => {
+    expect(gateRows([{ rule_id: 'G-77', hint: 'h', actual: 'a', location: 'l' }])[0]).toMatchObject({ id: 'G-77', message: 'h' })
+    expect(gateRows([{ gate: 'x', message: 'm' }])[0]).toMatchObject({ id: 'x', message: 'm' })
+    expect(gateRows([{}])[0].id).toBe('check')
   })
 })

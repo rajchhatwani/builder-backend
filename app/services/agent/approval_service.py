@@ -263,7 +263,9 @@ def requires_owner(kind: str, payload: dict[str, Any], policy: ApprovalPolicy | 
     ext = payload.get("extend")
     # A plan extension that grants hooks, custom-zone paths or dependencies is an owner decision
     # (the kind is a VALUE, so _mentions_hook cannot see it); so is a plan that lists any of them.
-    grants = isinstance(ext, dict) and ext.get("kind") in _OWNER_EXTEND_KINDS
+    items = payload.get("extend_items")
+    listed = [e for e in (items if isinstance(items, list) else []) if isinstance(e, dict)]
+    grants = any(e.get("kind") in _OWNER_EXTEND_KINDS for e in [*([ext] if isinstance(ext, dict) else []), *listed])
     plan = payload.get("plan")
     plan_grants = isinstance(plan, dict) and any(plan.get(k) for k in ("hooks", "zones", "dependencies"))
     return floor == "owner" or _mentions_hook(payload) or grants or plan_grants

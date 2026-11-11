@@ -89,7 +89,8 @@ def test_closing_tag_cannot_escape_the_wrapper() -> None:
 
 def test_invalid_files_are_refused() -> None:
     for name, data, code in [
-        ("a.docx", b"PK\x03\x04", "file_type_not_supported"),
+        ("a.exe", b"MZ\x90\x00", "file_type_not_supported"),
+        ("a.docx", b"PK\x03\x04", "file_invalid"),
         ("a.pdf", b"not a pdf", "file_invalid"),
         ("a.txt", b"", "file_empty"),
         ("a.txt", b"x" * (rd.MAX_FILE_BYTES + 1), "file_too_large"),

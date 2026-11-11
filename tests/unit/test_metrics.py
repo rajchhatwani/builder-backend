@@ -139,3 +139,13 @@ def test_bad_definitions(raw: dict[str, Any]) -> None:
 def test_non_object_definition() -> None:
     with pytest.raises(mx.MetricError):
         mx.parse_metric(["x"])
+
+
+def test_group_by_cardinality_cap_is_a_stable_error() -> None:
+    """WP-A: more than MAX_GROUPS distinct group values is refused (never truncated)."""
+    defn = d(group_by="status")
+    ok = [{"status": f"s{i}"} for i in range(mx.MAX_GROUPS)]
+    assert len(run(defn, ok)["groups"]) == mx.MAX_GROUPS
+    with pytest.raises(mx.TooManyGroups) as exc:
+        run(defn, [*ok, {"status": "one-too-many"}])
+    assert exc.value.code == "metric_too_many_groups" and isinstance(exc.value, mx.MetricError)

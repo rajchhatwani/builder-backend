@@ -311,3 +311,100 @@ async def test_idle_ttl_sweep_removes_only_idle_workspaces(
         assert await workspace_service.expire_idle_workspaces(
             s, datetime.now(UTC), timedelta(days=14), ws_settings
         ) == []
+
+
+# -- CP-4F3 WP-B: bounded refusals, gauge reconcile, scheduled sweep ----------------------------
+
+
+async def test_a_refusal_storm_is_bounded_but_still_counted(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    from app.services.usage_service import REFUSED_EVENTS_PER_HOUR
+
+    org, slug = await _org(client, "storm")
+    await _limit(client, slug, "previews.started", 0)
+    for _ in range(1000):
+        with pytest.raises(AppError) as exc:
+            await _consume(session_factory, org, "previews.started")
+        assert exc.value.code == "quota_exceeded" and exc.value.status_code == 429
+    assert await _count(session_factory, org, "refused") <= REFUSED_EVENTS_PER_HOUR
+    m = {x["metric"]: x for x in (await client.get(f"/orgs/{slug}/usage")).json()["metrics"]}
+    assert m["previews.started"]["refused"] == 1000  # the count survives the coalescing
+
+
+@needs_git
+async def test_deleting_a_project_leaves_the_gauge_equal_to_the_real_count(
+    client: AsyncClient, ws_settings: Settings, session_factory: Factory
+) -> None:
+    from app.services.usage_service import reconcile_gauges
+
+    _, slug = await _personal(client)
+    doomed, kept = await make_project(client, "Doomed"), await make_project(client, "Kept")
+    for pid, n in ((doomed, 2), (kept, 1)):
+        for i in range(n):
+            assert (await client.post(f"/projects/{pid}/workspaces", json={"name": f"w{i}"})).status_code == 201
+    assert await _gauge(client, slug) == 3
+    assert (await client.delete(f"/projects/{doomed}")).status_code in (200, 204)
+    async with session_factory() as s:
+        real = (await s.execute(text("SELECT count(*) FROM workspaces WHERE state = 'active'"))).scalar_one()
+    assert real == 1 and await _gauge(client, slug) == 1
+    # drift from any other cause is healed by the reconcile (and only the reconcile changes it)
+    async with session_factory() as s:
+        await s.execute(text("UPDATE usage_counters SET used = 7 WHERE metric = 'workspaces.active'"))
+        await s.commit()
+    async with session_factory() as s:
+        assert await reconcile_gauges(s) == 1
+        await s.commit()
+        assert await reconcile_gauges(s) == 0
+    assert await _gauge(client, slug) == 1
+
+
+@needs_git
+async def test_idle_sweep_job_expires_once_and_is_idempotent(
+    client: AsyncClient,
+    ws_settings: Settings,
+    session_factory: Factory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.jobs import idle_sweep
+
+    monkeypatch.setattr(idle_sweep, "get_session_factory", lambda: session_factory)
+    _, slug = await _personal(client)
+    pid = await make_project(client)
+    base = f"/projects/{pid}/workspaces"
+    old = (await client.post(base, json={"name": "old"})).json()
+    await client.post(base, json={"name": "fresh"})
+    async with session_factory() as s:
+        await s.execute(
+            text("UPDATE workspaces SET updated_at = :t WHERE id = :i"),
+            {"t": datetime.now(UTC) - timedelta(days=30), "i": uuid.UUID(old["id"])},
+        )
+        await s.commit()
+    assert await idle_sweep.main() == 0
+    assert await _gauge(client, slug) == 1
+    assert await idle_sweep.sweep() == (0, 0)  # second run: nothing left to do
+    assert await _gauge(client, slug) == 1
+
+
+async def test_combined_scheduler_runs_every_job_and_survives_a_failing_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.jobs import scheduler
+
+    calls: list[str] = []
+
+    async def ok() -> int:
+        calls.append("ok")
+        return 0
+
+    async def boom() -> int:
+        calls.append("boom")
+        raise RuntimeError("x")
+
+    monkeypatch.setattr(scheduler, "jobs", lambda: [("a", ok, 1), ("b", boom, 1)])
+    stop = asyncio.Event()
+    task = asyncio.create_task(scheduler.run(stop))
+    await asyncio.sleep(0.2)
+    stop.set()
+    await task
+    assert sorted(calls) == ["boom", "ok"]

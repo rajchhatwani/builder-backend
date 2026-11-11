@@ -52,6 +52,10 @@ const SpecDiffPage = lazy(() => import('../shell/specdiff/SpecDiffPage').then((m
 const MetricsPage = lazy(() => import('../shell/metrics/MetricsPage').then((m) => ({ default: m.MetricsPage })))
 const SuitePage = lazy(() => import('../shell/suite/SuitePage').then((m) => ({ default: m.SuitePage })))
 const CustomFieldsPage = lazy(() => import('../shell/customfields/CustomFieldsPage').then((m) => ({ default: m.CustomFieldsPage })))
+const EventsPage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.EventsPage })))
+const ApiEdgePage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.ApiEdgePage })))
+const HookEffectsPage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.HookEffectsPage })))
+const NotificationTypesPage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.NotificationTypesPage })))
 const ImportPage = lazy(() => import('../shell/import/ImportPage').then((m) => ({ default: m.ImportPage })))
 // F2-2 / F2-3 pages: own chunks. All sit behind the single flag ui.shell=v2.
 const PaymentsFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.PaymentsFormPage })))
@@ -373,6 +377,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       {section === 'suite' && v2 && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <SuitePage projectId={project.id} />
+        </Suspense>
+      )}
+      {v2 && (section === 'events' || section === 'apiedge' || section === 'hookeffects' || section === 'notiftypes') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          {section === 'events' && <EventsPage projectId={project.id} />}
+          {section === 'apiedge' && <ApiEdgePage projectId={project.id} />}
+          {section === 'hookeffects' && <HookEffectsPage projectId={project.id} />}
+          {section === 'notiftypes' && <NotificationTypesPage projectId={project.id} />}
         </Suspense>
       )}
       {section === 'customfields' && v2 && (

@@ -220,3 +220,74 @@ async def test_manual_run_is_metered(client: AsyncClient) -> None:
     again = await client.post(f"/projects/{pid}/reports/{rid}/run")
     assert again.status_code == 429 and "quota_exceeded" in again.text
     assert (await client.get(f"/projects/{pid}/reports/{rid}/runs")).json()["total"] == 1
+
+
+async def _guard_amount(client: AsyncClient, pid: str) -> None:
+    """Spec roles owner + viewer; `amount` may only be read by owner (C7 field access)."""
+    spec = (await client.get(f"/projects/{pid}/spec")).json()
+    spec["auth"] = {
+        "enabled": True,
+        "password_reset": {"email_magic_link": False, "sms_otp": False},
+        "registration": {"email_verification_required": False},
+        "roles": [{"name": "owner", "label": "Owner"}, {"name": "viewer", "label": "Viewer", "is_default": True}],
+        "permissions": [],
+    }
+    spec["authorization"] = {
+        "model": "rbac",
+        "field_access": [{"entity": "Order", "field": "amount", "read_roles": ["owner"], "write_roles": ["owner"]}],
+    }
+    put = await client.put(f"/projects/{pid}/spec", json=spec)
+    assert put.status_code == 200, put.text
+
+
+async def test_metric_values_honour_field_access(
+    client: AsyncClient, client_for: ClientFor, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """WP-A: a viewer lacking read on a field gets no value computed from / filtered / grouped by it."""
+    pid = await project_with_orders(client)
+    await make_metric(client, pid)  # sum(amount)
+    await make_metric(client, pid, key="n_orders", label="N", agg="count", field=None)
+    await make_metric(client, pid, key="by_amount", label="By", agg="count", field=None, group_by="amount")
+    await make_metric(client, pid, key="paid_n", label="P", agg="count", field=None, filter=[{"field": "amount", "op": "gt", "value": 5}])
+    await make_metric(client, pid, key="by_status", label="S", agg="count", field=None, group_by="status")
+    rid = await make_report(client, pid, "R", "0 6 * * *")
+    await add_to_project_org(pid, "v@example.com")
+    viewer = await client_for("v@example.com")
+    await add_to_project_org(pid, "v@example.com")
+    assert (await client.post(f"/projects/{pid}/members", json={"email": "v@example.com", "role": "viewer"})).status_code == 201
+    await _guard_amount(client, pid)
+
+    for key, total in (("total_amount", "30.6"), ("n_orders", None), ("by_status", None)):
+        assert (await client.get(f"/projects/{pid}/metrics/{key}/value")).status_code == 200, key  # owner reads
+    for key in ("total_amount", "by_amount", "paid_n"):  # uses, groups by, or filters on amount
+        denied = await viewer.get(f"/projects/{pid}/metrics/{key}/value")
+        assert denied.status_code == 403 and denied.json()["code"] == "field_access_denied", key
+        assert (await client.get(f"/projects/{pid}/metrics/{key}/value")).status_code == 200
+    ok = await viewer.get(f"/projects/{pid}/metrics/n_orders/value")  # unguarded fields only
+    assert ok.status_code == 200 and ok.json()["value"] == 3
+    assert (await viewer.get(f"/projects/{pid}/metrics/by_status/value")).status_code == 200
+    # reports: the guarded metric is excluded from the viewer's values, never computed
+    v = (await viewer.get(f"/projects/{pid}/reports/{rid}/value")).json()["values"]["total_amount"]
+    assert v == {"version": 1, "error": "field_access_denied"}
+    mine = (await client.get(f"/projects/{pid}/reports/{rid}/value")).json()["values"]["total_amount"]
+    assert mine["value"] == "30.6"
+    # a stored run (computed as the system) is redacted for the viewer too
+    run = await client.post(f"/projects/{pid}/reports/{rid}/run")
+    assert run.json()["values"]["total_amount"]["value"] == "30.6"
+    runs = (await viewer.get(f"/projects/{pid}/reports/{rid}/runs")).json()["items"]
+    assert runs[0]["values"]["total_amount"] == {"error": "field_access_denied"}
+
+
+async def test_group_by_cardinality_cap_over_the_api(client: AsyncClient) -> None:
+    from app.core import metrics as mx
+
+    pid = await project_with_orders(client)
+    rows = "Ref,Amount,Status\n" + "".join(f"R{i},1,s{i}\n" for i in range(mx.MAX_GROUPS + 1))
+    up = await client.post(
+        f"/projects/{pid}/imports", files={"file": ("m.csv", rows.encode(), "text/csv")}, data={"entity": "Order"}
+    )
+    assert (await client.post(f"/projects/{pid}/imports/{up.json()['batch_id']}/commit")).status_code == 200
+    assert (await make_metric(client, pid, key="by_status", label="S", agg="count", field=None, group_by="status")).status_code == 201
+    r = await client.get(f"/projects/{pid}/metrics/by_status/value")
+    assert r.status_code == 422 and r.json()["code"] == "metric_too_many_groups", r.text
+    assert "100" in r.json()["message"]

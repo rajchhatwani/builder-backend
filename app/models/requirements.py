@@ -21,7 +21,7 @@ KINDS = (
     "nonfunctional",
     "out_of_scope",
 )
-ITEM_STATES = ("open", "covered", "out_of_scope")
+ITEM_STATES = ("open", "covered", "out_of_scope", "unmet")  # unmet = explicitly accepted gap (G13)
 
 
 def _project_fk() -> ForeignKey:

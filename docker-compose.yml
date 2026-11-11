@@ -44,6 +44,20 @@ services:
       - ./alembic:/app/alembic
       - ./scripts:/app/scripts
 
+  # Periodic operator jobs: scheduled reports (every minute) and the idle-workspace sweep plus
+  # usage-gauge reconcile (hourly). Same image and database role as the API.
+  scheduler:
+    build: .
+    environment:
+      BUILDER_DATABASE_URL: postgresql+asyncpg://builder_app:builder_app@postgres:5432/builder
+      SECRET_KEY: ${SECRET_KEY:-local-development-only-secret-key-change-me}
+      BUILDER_ENVIRONMENT: ${BUILDER_ENVIRONMENT:-local}
+    depends_on:
+      api:
+        condition: service_started
+    command: ["uv", "run", "python", "-m", "app.jobs.scheduler"]
+    restart: unless-stopped
+
   # The dashboard: http://localhost:5173 (talks to the API on http://localhost:8000).
   frontend:
     image: node:22-alpine

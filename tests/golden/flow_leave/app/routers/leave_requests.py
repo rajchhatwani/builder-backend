@@ -19,6 +19,7 @@ _ACCESS = {
     "delete": _access.access_dependency(roles=("hr",)),
     "get": _access.access_dependency(roles=("employee", "hr", "manager")),
     "list": _access.access_dependency(roles=("employee", "hr", "manager")),
+    "head": _access.access_dependency(roles=("employee", "hr", "manager")),
 }
 
 
@@ -62,8 +63,10 @@ async def get_leave_requests(
 
 
 @router.head("/{item_id}")
-async def head_leave_requests(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
-    if not await LeaveRequestRepository(session).exists(item_id):
+async def head_leave_requests(
+    item_id: _uuid.UUID, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["head"])]
+) -> _fa.Response:
+    if not await LeaveRequestRepository(session, **access.repo_kwargs).exists(item_id):
         raise _errors.NotFoundError("LeaveRequest not found")
     return _fa.Response(status_code=200)
 

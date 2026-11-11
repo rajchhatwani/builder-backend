@@ -41,6 +41,10 @@ class UsageEvent(UUIDPrimaryKeyMixin, Base):
     amount: Mapped[int] = mapped_column(BigInteger, nullable=False)
     outcome: Mapped[str] = mapped_column(String(10), nullable=False)  # granted | refused
     idempotency_key: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    # how many refusals this row stands for (coalesced past the per-window cap); 1 otherwise
+    occurrences: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, default=1, server_default="1"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

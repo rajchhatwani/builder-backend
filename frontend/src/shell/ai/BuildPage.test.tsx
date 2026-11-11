@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import { BuildPage } from './BuildPage'
 
-const m = vi.hoisted(() => ({ getRun: vi.fn(), listApprovals: vi.fn(), listRuns: vi.fn(), platformBudget: vi.fn(), listPreviews: vi.fn(), cancelRun: vi.fn(), resumeRun: vi.fn() }))
+const m = vi.hoisted(() => ({ getRun: vi.fn(), listApprovals: vi.fn(), listRuns: vi.fn(), platformBudget: vi.fn(), listPreviews: vi.fn(), cancelRun: vi.fn(), resumeRun: vi.fn(), pauseRun: vi.fn(), runGates: vi.fn() }))
 vi.mock('./aiApi', () => ({ aiApi: m }))
 vi.mock('./StageTabs', () => ({ StageTabs: (p: { workspaceId: string; onDirtyChange?: (d: boolean) => void }) => createElement('div', { 'data-testid': 'stage-mock' }, p.workspaceId, createElement('button', { 'data-testid': 'make-dirty', onClick: () => p.onDirtyChange?.(true) })) }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -180,5 +180,107 @@ describe('Build view', () => {
       await act(async () => { await vi.advanceTimersByTimeAsync(10_000) })
       expect(m.getRun).not.toHaveBeenCalled()
     } finally { vi.useRealTimers() }
+  })
+})
+
+describe('FX-12 / 6a: pause, gates, focus trap, leave guard, placeholders', () => {
+  it('Pause is enabled only on a running build, calls the API, and shows the paused chip', async () => {
+    await mount(run({ state: 'running' }))
+    const pause = q('run-pause') as HTMLButtonElement
+    expect(pause.disabled).toBe(false)
+    m.pauseRun.mockResolvedValue(run({ state: 'running', paused_at: '2026-01-01T00:00:00Z' }))
+    m.getRun.mockResolvedValue(run({ state: 'running', paused_at: '2026-01-01T00:00:00Z' }))
+    await act(async () => { pause.click() })
+    await act(async () => { await Promise.resolve() })
+    expect(m.pauseRun).toHaveBeenCalledWith('p', 'a1a1a1a1-aaaa')
+    expect(q('chip-paused')).not.toBeNull()
+    expect((q('run-pause') as HTMLButtonElement).disabled).toBe(true)
+  })
+  it('Pause is disabled for a stopped or finished run', async () => {
+    await mount(run({ state: 'stopped' }))
+    expect((q('run-pause') as HTMLButtonElement).disabled).toBe(true)
+    expect((q('run-gates') as HTMLButtonElement).disabled).toBe(true)
+  })
+  it('Pause shows the error envelope when the API refuses', async () => {
+    await mount(run({ state: 'running' }))
+    m.pauseRun.mockRejectedValue(new ApiError(409, { code: 'illegal_transition', message: 'only a live run that is not applying can be paused', details: [] }))
+    await act(async () => { (q('run-pause') as HTMLElement).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(q('build-error')?.textContent).toContain('can be paused')
+  })
+  it('Run gates renders the returned report generically (no hardcoded gate ids)', async () => {
+    await mount(run({ state: 'running' }))
+    m.runGates.mockResolvedValue({ ok: false, failure_count: 2, report_hash: 'abcdef0123456789', failures: [
+      { rule_id: 'G-NEW-9', location: 'spec.x', expected: 'a', actual: 'b', hint: 'fix x' },
+      { rule_id: 'G-1', location: 'spec.y', expected: 'c', actual: 'd', hint: '' },
+    ] })
+    await act(async () => { (q('run-gates') as HTMLElement).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(m.runGates).toHaveBeenCalledWith('p', 'a1a1a1a1-aaaa')
+    const rows = [...host.querySelectorAll('[data-testid=gate-row]')]
+    expect(rows.map((r) => r.getAttribute('data-gate'))).toEqual(['G-NEW-9', 'G-1'])
+    expect(rows[0].querySelector('[data-testid=gate-message]')?.textContent).toBe('fix x')
+    expect(rows[1].querySelector('[data-testid=gate-message]')?.textContent).toBe('d')
+    expect(q('gate-hash')?.textContent).toBe('abcdef012345')
+  })
+  it('Run gates shows a pass report and the API error envelope', async () => {
+    await mount(run({ state: 'running' }))
+    m.runGates.mockResolvedValue({ ok: true, failure_count: 0, report_hash: 'h'.repeat(64), failures: [] })
+    await act(async () => { (q('run-gates') as HTMLElement).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(q('gate-pass')).not.toBeNull()
+    m.runGates.mockRejectedValue(new ApiError(429, { code: 'gates_busy', message: 'a gate run for this run is already in progress', details: [] }))
+    await act(async () => { (q('run-gates') as HTMLElement).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(q('build-error')?.textContent).toContain('already in progress')
+  })
+  it('FX-11: the Diagrams and API tabs say Coming in a later cycle and keep their test id', async () => {
+    await mount(run())
+    await act(async () => { (host.querySelector('#tab-diagrams') as HTMLElement).click() })
+    expect(q('tab-soon')?.textContent).toContain('Coming in a later cycle')
+  })
+  it('FX-12: Tab and Shift+Tab stay inside the takeover dialog and focus returns on close', async () => {
+    await mount(run({ state: 'running' }))
+    await act(async () => { (q('run-takeover') as HTMLElement).click() })
+    const yes = q('takeover-yes') as HTMLElement; const no = q('takeover-no') as HTMLElement
+    const key = (shiftKey: boolean) => { const e = new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }); q('takeover-confirm')!.dispatchEvent(e); return e }
+    no.focus()
+    expect(key(false).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(yes)
+    expect(key(true).defaultPrevented).toBe(true)
+    expect(document.activeElement).toBe(no)
+    yes.focus()
+    expect(key(false).defaultPrevented).toBe(false) // middle of the cycle: the browser moves focus itself
+    await act(async () => { no.click() })
+    expect(document.activeElement).toBe(q('run-takeover'))
+  })
+  it('S3-010r: leaving the code view tab with unsaved edits asks first', async () => {
+    await mount(run())
+    await act(async () => { (host.querySelector('#tab-stage') as HTMLElement).click() })
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    await act(async () => { (q('make-dirty') as HTMLElement).click() })
+    const conf = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await act(async () => { (host.querySelector('#tab-gates') as HTMLElement).click() })
+    expect(conf).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('#tab-stage')?.getAttribute('aria-selected')).toBe('true')
+    conf.mockReturnValue(true)
+    await act(async () => { (host.querySelector('#tab-gates') as HTMLElement).click() })
+    expect(host.querySelector('#tab-gates')?.getAttribute('aria-selected')).toBe('true')
+    conf.mockRestore()
+  })
+  it('S3-010r: leaving the Build section with unsaved edits asks; declining restores the hash', async () => {
+    await mount(run())
+    await act(async () => { (host.querySelector('#tab-stage') as HTMLElement).click() })
+    await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    await act(async () => { (q('make-dirty') as HTMLElement).click() })
+    const before = window.location.hash
+    const conf = vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await act(async () => { window.location.hash = '#/p/p/rules'; window.dispatchEvent(new HashChangeEvent('hashchange')) })
+    expect(conf).toHaveBeenCalledTimes(1)
+    expect(window.location.hash).toBe(before)
+    conf.mockReturnValue(true)
+    await act(async () => { window.location.hash = '#/p/p/rules'; window.dispatchEvent(new HashChangeEvent('hashchange')) })
+    expect(window.location.hash).toBe('#/p/p/rules')
+    conf.mockRestore()
   })
 })

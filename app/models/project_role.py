@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -20,7 +20,10 @@ class ProjectRole(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """
 
     __tablename__ = "project_roles"
-    __table_args__ = (UniqueConstraint("project_id", "name", name="uq_project_roles_project_name"),)
+    __table_args__ = (
+        UniqueConstraint("project_id", "name", name="uq_project_roles_project_name"),
+        Index("ix_project_roles_project_id", "project_id"),
+    )
 
     project_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

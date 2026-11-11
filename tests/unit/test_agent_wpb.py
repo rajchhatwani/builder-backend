@@ -77,6 +77,10 @@ async def test_read_gate_report_is_reused_until_the_tree_changes(tmp_path: Path,
         async def approved_pins(self, _p: Any) -> list[Any]:
             return []
 
+    async def no_requirements(*_a: Any, **_k: Any) -> None:
+        return None
+
+    monkeypatch.setattr("app.services.agent.coverage.load_requirement_views", no_requirements)  # no DB here
     monkeypatch.setattr(gates, "run_gates", counting)
     monkeypatch.setattr(read_tools, "run_spec", fake_spec)
     monkeypatch.setattr("app.services.dependency_policy_service.DependencyPolicyService", NoPins)

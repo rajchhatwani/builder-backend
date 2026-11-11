@@ -4,6 +4,7 @@ of an op-log edit that gives a role more access."""
 import copy
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 
 from tests.api._auth_helpers import make_project
@@ -132,3 +133,49 @@ async def test_undo_restore_and_put_cannot_reopen_access_silently(client_for: Cl
 
 def _list_roles(spec: dict[str, Any]) -> list[str]:
     return next(p["roles"] for p in spec["auth"]["permissions"] if p["operation"] == "list")
+
+
+async def test_apply_batch_refuses_a_net_access_gain_unless_confirmed(
+    client_for: ClientFor, session_factory: Any
+) -> None:
+    """WP-A (c): the agent-draft batch path runs the same weakening check as single ops."""
+    from sqlalchemy import func, select
+
+    from app.exceptions import AppError
+    from app.models.spec_op import SpecOp
+    from app.services.ops.canon import canonical_hash
+    from app.services.ops.scope import SYSTEM
+    from app.services.ops.service import OpsService
+    from app.services.spec_service import SpecService
+
+    import uuid
+
+    client = await client_for("a@example.com")
+    project_id, raw = await project_with_spec(client)
+    wide = copy.deepcopy(raw)
+    for p in wide["auth"]["permissions"]:
+        if p["operation"] == "delete":
+            p["roles"] = ["admin", "staff"]  # staff gains delete
+
+    async def run(confirm: bool) -> int:
+        async with session_factory() as s:
+            pid = uuid.UUID(project_id)
+            live = await SpecService(s).assemble(pid)
+            top = (await s.execute(select(func.coalesce(func.max(SpecOp.seq), 0)).where(SpecOp.project_id == pid))).scalar_one()
+            from app.core.spec_models import Spec
+
+            target = Spec.model_validate(wide)
+            return await OpsService(s).apply_batch(
+                pid, [("replace_spec", {"spec": wide})], SYSTEM, base_seq=int(top),
+                expect_before=canonical_hash(live), expect_after=canonical_hash(target),
+                confirm_weakening=confirm,
+            )  # fmt: skip
+
+    with pytest.raises(AppError) as exc:
+        await run(False)
+    assert exc.value.code == "access_weakened" and exc.value.status_code == 409
+    live = (await client.get(f"/projects/{project_id}/spec")).json()
+    assert next(p["roles"] for p in live["auth"]["permissions"] if p["operation"] == "delete") == ["admin"]
+    assert await run(True) == 1
+    live = (await client.get(f"/projects/{project_id}/spec")).json()
+    assert "staff" in next(p["roles"] for p in live["auth"]["permissions"] if p["operation"] == "delete")

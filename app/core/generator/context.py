@@ -962,6 +962,27 @@ def _attach_policy_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[
     return tuple(result)
 
 
+def _inherit_unlisted_access(
+    entity: EntityCtx, perms: dict[str, Any], access: list[AccessCtx]
+) -> list[AccessCtx]:
+    """An operation without its own permission on an entity that has permissions must not be a
+    side door: HEAD (an existence probe) follows `get`, DELETE follows `update` (else `replace`)."""
+    if not perms:
+        return access
+    by_op = {a.op: a for a in access}
+    extra: list[AccessCtx] = []
+    inherited: set[str] = set()
+    for op, sources in (("head", ("get",)), ("delete", ("update", "replace"))):
+        if op not in entity.ops or op in perms:
+            continue
+        src = next((by_op[s] for s in sources if s in perms and s in by_op), None)
+        if src is not None:
+            extra.append(replace(src, op=op))
+            inherited.add(op)
+    # a tenant-only slot for the same op (no roles) is superseded by the inherited one
+    return [*(a for a in access if a.op not in inherited), *extra]
+
+
 def _attach_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
     if authz_active(spec) and spec.auth is not None and spec.auth.enabled:
         return _attach_policy_access(spec, entities)
@@ -1008,6 +1029,7 @@ def _attach_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityC
             )
             if ctx.needs_user or ctx.match is not None:
                 access.append(ctx)  # anything else is a public slot: nothing to enforce
+        access = _inherit_unlisted_access(entity, perms, access)
         # The smoke tests create rows from sample data, so a field that a custom_filter looks
         # at must get the value the filter lets through (or the test would never see its row).
         wanted = {a.match[0]: a.match[1] for a in reversed(access) if a.match is not None}

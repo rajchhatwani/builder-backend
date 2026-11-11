@@ -20,6 +20,7 @@ _ACCESS = {
     "get": _access.access_dependency(roles=("admin", "approver", "clerk")),
     "list": _access.access_dependency(roles=("admin", "approver", "clerk")),
     "update": _access.access_dependency(roles=("admin",)),
+    "head": _access.access_dependency(roles=("admin", "approver", "clerk")),
 }
 
 
@@ -63,8 +64,10 @@ async def get_suppliers(
 
 
 @router.head("/{item_id}")
-async def head_suppliers(item_id: _uuid.UUID, session: _db.SessionDep) -> _fa.Response:
-    if not await SupplierRepository(session).exists(item_id):
+async def head_suppliers(
+    item_id: _uuid.UUID, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["head"])]
+) -> _fa.Response:
+    if not await SupplierRepository(session, **access.repo_kwargs).exists(item_id):
         raise _errors.NotFoundError("Supplier not found")
     return _fa.Response(status_code=200)
 
