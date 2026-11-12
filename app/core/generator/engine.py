@@ -20,6 +20,8 @@ from app.core.generator.features.jobs.module import JobsModule
 from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.metrics.module import MetricsModule
+from app.core.generator.features.money_currency.module import MoneyCurrencyModule
+from app.core.generator.features.money_ledger.module import MoneyLedgerModule
 from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.providers.module import ProvidersModule
@@ -72,6 +74,8 @@ def default_modules() -> list[FeatureModule]:
         DataImportModule(),
         RealtimeModule(),
         MetricsModule(),
+        MoneyCurrencyModule(),
+        MoneyLedgerModule(),
     ]
 
 
@@ -89,6 +93,12 @@ def module_registry(modules: list[FeatureModule] | None = None) -> dict[str, Mod
             if dep not in registry:
                 raise RuntimeError(f"block {manifest.id!r} depends on unknown block {dep!r}")
     return registry
+
+
+def pack_registry(modules: list[FeatureModule] | None = None) -> dict[str, ModuleManifest]:
+    """Dotted pack id (e.g. "money.ledger") -> the manifest of the block that renders it, for every block that
+    belongs to a domain pack. A pack block renders only when the spec declares the pack."""
+    return {m.pack: m for m in module_registry(modules).values() if m.pack is not None}
 
 
 _MIGRATION_PATH = re.compile(r"^alembic/versions/[^/]+\.py$")

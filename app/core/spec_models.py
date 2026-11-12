@@ -14,7 +14,7 @@ import hashlib
 import json
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictInt
 
 SPEC_VERSION = 1
 ALLOWED_OPERATIONS = frozenset({"list", "get", "create", "replace", "update", "delete", "head"})
@@ -581,6 +581,44 @@ class SpecMetricsLayer(_SpecModel):
     definitions: list[dict[str, Any]] = Field(default_factory=list)
 
 
+class SpecLedger(_SpecModel):
+    """Money pack, D1 double-entry ledger (generated routes under /ledger). Amounts are integer minor units;
+    every transaction sums to zero per currency, enforced by the database. Needs `auth` and the `currency`
+    block. `read_roles` / `post_roles` name auth roles (empty list = any signed-in user)."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    post_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    max_amount_minor: StrictInt = 2**53 - 1  # per entry line, in minor units (JSON-exact in a browser)
+    max_entries: StrictInt = 100  # lines per transaction
+
+
+class SpecTax(_SpecModel):
+    """Static tax rates (no network): name -> rate in basis points (1 bp = 0.01%), integers only."""
+
+    rates_bp: dict[str, StrictInt] = Field(default_factory=dict)
+
+
+class SpecCurrency(_SpecModel):
+    """Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode
+    (`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only."""
+
+    currencies: list[str] = Field(default_factory=lambda: ["USD"])
+    rounding: str = "half_even"
+    tax: SpecTax | None = None
+
+
+class SpecMoneyPack(_SpecModel):
+    ledger: SpecLedger | None = None
+    currency: SpecCurrency | None = None
+
+
+class SpecPacks(_SpecModel):
+    """Domain packs (Cycle 5). A pack is generated only when it is declared here; unknown packs and options
+    are refused (extra=forbid)."""
+
+    money: SpecMoneyPack | None = None
+
+
 class SpecRateBucket(_SpecModel):
     """A token bucket: holds at most `capacity` tokens and gets `refill_per_second` back each second."""
 
@@ -1013,11 +1051,13 @@ class Spec(_SpecModel):
     hook_effects: SpecHookEffects | None = None
     realtime: SpecRealtime | None = None
     metrics_layer: SpecMetricsLayer | None = None
+    packs: SpecPacks | None = None
 
 
 def spec_hash(spec: Spec) -> str:
     """Stable SHA-256 of the spec's canonical JSON; identical specs hash identically."""
-    canonical = json.dumps(
-        spec.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    )
+    dump = spec.model_dump(mode="json")
+    if dump.get("packs") is None:
+        dump.pop("packs", None)  # specs without packs keep the hash they had before packs existed
+    canonical = json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()

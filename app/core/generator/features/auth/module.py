@@ -16,6 +16,7 @@ from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
 from app.core.generator.features.keycloak.module import docs_client_id
 from app.core.generator.features.tests.module import creatable
+from app.core.generator.features.money_ledger.module import ledger_enabled
 from app.core.generator.render import make_environment, pyrepr, read_verbatim, render_template
 from app.core.spec_models import SpecAuth, SpecAuthCustomField
 from app.core.suite_identity import hub_base_url
@@ -414,7 +415,7 @@ class AuthModule:
         for template in _RENDERED:
             files[template.rsplit(".", 1)[0]] = render_template(self._env, template, **context)
         files["tests/test_identity.py"] = render_template(
-            self._env, "tests/test_identity.py.j2", **context
+            self._env, "tests/test_identity.py.j2", ledger=ledger_enabled(project), **context
         )
         if context["invitations"] or context["self_assignable_names"]:
             files["tests/test_invitations.py"] = render_template(
@@ -442,7 +443,7 @@ class AuthModule:
             target = template.removeprefix(_KEYCLOAK_DIR).rsplit(".", 1)[0]
             files[target] = render_template(self._env, template, **context)
         files["tests/test_identity.py"] = render_template(
-            self._env, "keycloak/tests/test_identity.py.j2", **context
+            self._env, "keycloak/tests/test_identity.py.j2", ledger=ledger_enabled(project), **context
         )
         if context["gated"]:
             files["tests/test_access.py"] = render_template(

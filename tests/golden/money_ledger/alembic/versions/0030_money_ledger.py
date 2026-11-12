@@ -1,0 +1,244 @@
+"""money pack: double-entry ledger
+
+Revision ID: 0030
+Revises: 0002
+Create Date: rendered from the spec by Backend Builder
+
+Accounts, transactions and entries (integer minor units), plus the guards that live in the database:
+
+* every transaction sums to zero per currency, has at least two entries and stays inside one tenant: a
+  DEFERRABLE INITIALLY DEFERRED constraint trigger, so it is checked at COMMIT and no code path can skip it;
+* entries can only be added in the same database transaction that created their transaction row;
+* transactions and entries are append-only: UPDATE and DELETE raise (a mistake is a reversal transaction);
+  accounts cannot be deleted and their identity (id, code, currency, kind, tenant) cannot change.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0030"
+down_revision: str | None = "0002"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_BALANCE_FUNCTION = """
+CREATE FUNCTION ledger_check_balanced() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    tx uuid;
+    entry_count integer;
+    bad record;
+BEGIN
+    IF TG_TABLE_NAME = 'ledger_transactions' THEN
+        tx := NEW.id;
+    ELSE
+        tx := NEW.transaction_id;
+    END IF;
+    SELECT count(*) INTO entry_count FROM ledger_entries WHERE transaction_id = tx;
+    IF entry_count < 2 THEN
+        RAISE EXCEPTION 'ledger transaction % needs at least two entries (has %)', tx, entry_count
+            USING ERRCODE = '23514';
+    END IF;
+    FOR bad IN
+        SELECT currency, sum(amount) AS total FROM ledger_entries
+        WHERE transaction_id = tx GROUP BY currency HAVING sum(amount) <> 0
+    LOOP
+        RAISE EXCEPTION 'ledger transaction % does not sum to zero in %: %', tx, bad.currency, bad.total
+            USING ERRCODE = '23514';
+    END LOOP;
+    IF EXISTS (
+        SELECT 1 FROM ledger_entries e
+        JOIN ledger_transactions t ON t.id = e.transaction_id
+        JOIN ledger_accounts a ON a.id = e.account_id
+        WHERE e.transaction_id = tx AND (e.tenant_id <> t.tenant_id OR a.tenant_id <> t.tenant_id)
+    ) THEN
+        RAISE EXCEPTION 'ledger transaction % mixes tenants', tx USING ERRCODE = '23514';
+    END IF;
+    RETURN NULL;
+END
+$$
+"""
+
+_SAME_TRANSACTION_FUNCTION = """
+CREATE FUNCTION ledger_entry_same_transaction() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM ledger_transactions t
+        WHERE t.id = NEW.transaction_id AND t.xmin::text::bigint = (txid_current() % 4294967296)
+    ) THEN
+        RAISE EXCEPTION 'ledger entries can only be added in the transaction that created their ledger transaction'
+            USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$$
+"""
+
+_APPEND_ONLY_FUNCTION = """
+CREATE FUNCTION ledger_reject_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'ledger rows are append-only: % on % is refused (post a reversal transaction instead)',
+        TG_OP, TG_TABLE_NAME USING ERRCODE = '23514';
+END
+$$
+"""
+
+_TRUNCATE_FUNCTION = """
+CREATE FUNCTION ledger_reject_truncate() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF coalesce(current_setting('bb.allow_ledger_truncate', true), '') = 'on' THEN
+        RETURN NULL;  -- the generated test suite empties the tables between tests; production never sets this
+    END IF;
+    RAISE EXCEPTION 'ledger rows are append-only: TRUNCATE on % is refused', TG_TABLE_NAME USING ERRCODE = '23514';
+END
+$$
+"""
+
+_ACCOUNT_GUARD_FUNCTION = """
+CREATE FUNCTION ledger_guard_accounts() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'ledger accounts cannot be deleted' USING ERRCODE = '23514';
+    END IF;
+    IF NEW.id <> OLD.id OR NEW.code <> OLD.code OR NEW.currency <> OLD.currency OR NEW.kind <> OLD.kind OR NEW.tenant_id <> OLD.tenant_id THEN
+        RAISE EXCEPTION 'ledger account identity (id, code, currency, kind) cannot change' USING ERRCODE = '23514';
+    END IF;
+    RETURN NEW;
+END
+$$
+"""
+
+
+def upgrade() -> None:
+    op.create_table(
+        "ledger_accounts",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("code", sa.String(64), nullable=False),
+        sa.Column("name", sa.String(200), nullable=False),
+        sa.Column("kind", sa.String(16), nullable=False),
+        sa.Column("currency", sa.String(3), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_ledger_accounts"),
+        sa.UniqueConstraint("tenant_id", "code", name="uq_ledger_accounts_code"),
+        sa.UniqueConstraint("id", "currency", name="uq_ledger_accounts_id_currency"),
+        sa.CheckConstraint(
+            "kind IN ('asset', 'liability', 'equity', 'income', 'expense')", name="ck_ledger_accounts_kind"
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["auth_tenants.id"], name="fk_ledger_accounts_tenant_id_auth_tenants", ondelete="RESTRICT"
+        ),
+    )
+    op.create_index("ix_ledger_accounts_tenant_id", "ledger_accounts", ["tenant_id"])
+    op.create_table(
+        "ledger_transactions",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("idempotency_key", sa.String(128), nullable=False),
+        sa.Column("request_hash", sa.String(64), nullable=False),
+        sa.Column("description", sa.String(500), nullable=True),
+        sa.Column("reference", sa.String(128), nullable=True),
+        sa.Column("reverses_id", sa.Uuid(), nullable=True),
+        sa.Column("posted_by", sa.Uuid(), nullable=True),
+        sa.Column("posted_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_ledger_transactions"),
+        sa.UniqueConstraint(
+            "tenant_id", "idempotency_key", name="uq_ledger_transactions_idempotency_key"
+        ),
+        sa.UniqueConstraint("reverses_id", name="uq_ledger_transactions_reverses_id"),
+        sa.ForeignKeyConstraint(
+            ["reverses_id"],
+            ["ledger_transactions.id"],
+            name="fk_ledger_transactions_reverses_id_ledger_transactions",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"],
+            ["auth_tenants.id"],
+            name="fk_ledger_transactions_tenant_id_auth_tenants",
+            ondelete="RESTRICT",
+        ),
+    )
+    op.create_index("ix_ledger_transactions_tenant_id", "ledger_transactions", ["tenant_id"])
+    op.create_table(
+        "ledger_entries",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("transaction_id", sa.Uuid(), nullable=False),
+        sa.Column("account_id", sa.Uuid(), nullable=False),
+        sa.Column("currency", sa.String(3), nullable=False),
+        sa.Column("amount", sa.BigInteger(), nullable=False),
+        sa.Column("line_no", sa.Integer(), nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.PrimaryKeyConstraint("id", name="pk_ledger_entries"),
+        sa.ForeignKeyConstraint(
+            ["transaction_id"],
+            ["ledger_transactions.id"],
+            name="fk_ledger_entries_transaction_id_ledger_transactions",
+        ),
+        sa.ForeignKeyConstraint(
+            ["account_id", "currency"],
+            ["ledger_accounts.id", "ledger_accounts.currency"],
+            name="fk_ledger_entries_account_id_ledger_accounts",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["auth_tenants.id"], name="fk_ledger_entries_tenant_id_auth_tenants", ondelete="RESTRICT"
+        ),
+        sa.UniqueConstraint("transaction_id", "line_no", name="uq_ledger_entries_transaction_id"),
+        sa.CheckConstraint("amount <> 0", name="ck_ledger_entries_amount_nonzero"),
+    )
+    op.create_index("ix_ledger_entries_tenant_id", "ledger_entries", ["tenant_id"])
+    op.create_index("ix_ledger_entries_transaction_id", "ledger_entries", ["transaction_id"])
+    op.create_index("ix_ledger_entries_account_id", "ledger_entries", ["account_id"])
+
+    op.execute(_BALANCE_FUNCTION)
+    op.execute(_SAME_TRANSACTION_FUNCTION)
+    op.execute(_APPEND_ONLY_FUNCTION)
+    op.execute(_TRUNCATE_FUNCTION)
+    op.execute(_ACCOUNT_GUARD_FUNCTION)
+    # checked at COMMIT (deferred): an unbalanced or one-sided transaction can never become visible
+    op.execute(
+        "CREATE CONSTRAINT TRIGGER ledger_entries_balanced AFTER INSERT ON ledger_entries "
+        "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ledger_check_balanced()"
+    )
+    op.execute(
+        "CREATE CONSTRAINT TRIGGER ledger_transactions_balanced AFTER INSERT ON ledger_transactions "
+        "DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION ledger_check_balanced()"
+    )
+    op.execute(
+        "CREATE TRIGGER ledger_entries_same_transaction BEFORE INSERT ON ledger_entries "
+        "FOR EACH ROW EXECUTE FUNCTION ledger_entry_same_transaction()"
+    )
+    for table in ("ledger_transactions", "ledger_entries"):
+        op.execute(
+            f"CREATE TRIGGER {table}_append_only BEFORE UPDATE OR DELETE ON {table} "
+            "FOR EACH ROW EXECUTE FUNCTION ledger_reject_change()"
+        )
+    for table in ("ledger_transactions", "ledger_entries", "ledger_accounts"):
+        op.execute(
+            f"CREATE TRIGGER {table}_no_truncate BEFORE TRUNCATE ON {table} "
+            "FOR EACH STATEMENT EXECUTE FUNCTION ledger_reject_truncate()"
+        )
+    op.execute(
+        "CREATE TRIGGER ledger_accounts_guard BEFORE UPDATE OR DELETE ON ledger_accounts "
+        "FOR EACH ROW EXECUTE FUNCTION ledger_guard_accounts()"
+    )
+
+
+def downgrade() -> None:
+    for table in ("ledger_transactions", "ledger_entries", "ledger_accounts"):
+        op.execute(f"DROP TRIGGER {table}_no_truncate ON {table}")
+    op.execute("DROP FUNCTION ledger_reject_truncate()")
+    op.execute("DROP TRIGGER ledger_accounts_guard ON ledger_accounts")
+    op.execute("DROP TRIGGER ledger_entries_append_only ON ledger_entries")
+    op.execute("DROP TRIGGER ledger_transactions_append_only ON ledger_transactions")
+    op.execute("DROP TRIGGER ledger_entries_same_transaction ON ledger_entries")
+    op.execute("DROP TRIGGER ledger_transactions_balanced ON ledger_transactions")
+    op.execute("DROP TRIGGER ledger_entries_balanced ON ledger_entries")
+    op.execute("DROP FUNCTION ledger_guard_accounts()")
+    op.execute("DROP FUNCTION ledger_reject_change()")
+    op.execute("DROP FUNCTION ledger_entry_same_transaction()")
+    op.execute("DROP FUNCTION ledger_check_balanced()")
+    op.drop_table("ledger_entries")
+    op.drop_table("ledger_transactions")
+    op.drop_table("ledger_accounts")

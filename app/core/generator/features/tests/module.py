@@ -11,6 +11,8 @@ from app.core.generator.render import make_environment, read_verbatim, render_te
 from app.core.validation import auth_tables, uses_keycloak
 from app.core.validation_api_edge import api_edge_tables
 from app.core.validation_events import EV_TABLES, events_active
+from app.core.generator.features.money_ledger.module import ledger_enabled
+from app.core.validation_packs import LEDGER_TABLES
 from app.core.validation_realtime import RT_TABLES, realtime_active
 from app.core.validation_history import CH_TABLES, history_active
 from app.core.validation_jobs import JOB_TABLES, jobs_active
@@ -104,10 +106,13 @@ class TestsModule:
             tables |= set(NOTIFICATION_TABLES)
         if workflows_active(project.spec) and project.auth is not None:
             tables |= set(WORKFLOW_TABLES)
+        if ledger_enabled(project):
+            tables |= set(LEDGER_TABLES)
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",
             tables=sorted(tables),
+            ledger=ledger_enabled(project),
             auth=project.auth is not None,
             keycloak=uses_keycloak(project.auth),
             payments=payments,

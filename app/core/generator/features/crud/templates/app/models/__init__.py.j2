@@ -20,6 +20,9 @@ from app.models._base import Base
 {% for e in entities %}
 from app.models.{{ e.table }} import {{ e.name }}
 {% endfor %}
+{% if ledger %}
+from app.money.ledger import models as _ledger_models
+{% endif %}
 {% if notifications %}
 from app.notifications import models as _notification_models
 {% endif %}
@@ -101,5 +104,8 @@ __all__ = [
 {% endif %}
 {% if realtime %}
     "_realtime_models",
+{% endif %}
+{% if ledger %}
+    "_ledger_models",
 {% endif %}
 ]

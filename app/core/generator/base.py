@@ -28,6 +28,9 @@ class ModuleManifest:
     hook_points: tuple[str, ...] = ()
     zones: tuple[str, ...] = ()
     tools: tuple[str, ...] = ()
+    # Domain-pack blocks (Cycle 5): the dotted pack id, e.g. "money.ledger". Such a block renders only when
+    # the spec declares that pack under `packs`; packless specs never see it.
+    pack: str | None = None
 
 
 class FeatureModule(Protocol):

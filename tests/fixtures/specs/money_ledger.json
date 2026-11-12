@@ -1,0 +1,121 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Books",
+    "slug": "books",
+    "description": "A small multi-tenant app with the money pack: double-entry ledger, currency and tax",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Customer",
+      "table_name": "customers",
+      "plural_path": "customers",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://books.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@books.example.com",
+      "from_name": "Books"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Customer",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Customer",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "money": {
+      "currency": {
+        "currencies": [
+          "EUR",
+          "JPY",
+          "KWD",
+          "USD"
+        ],
+        "rounding": "half_even",
+        "tax": {
+          "rates_bp": {
+            "standard": 2000,
+            "reduced": 500,
+            "zero": 0
+          }
+        }
+      },
+      "ledger": {
+        "read_roles": [
+          "admin",
+          "member"
+        ],
+        "post_roles": [
+          "admin",
+          "member"
+        ]
+      }
+    }
+  }
+}

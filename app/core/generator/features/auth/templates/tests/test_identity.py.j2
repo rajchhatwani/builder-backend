@@ -96,6 +96,9 @@ def _body(records: list[dict[str, object]]) -> list[dict[str, object]]:
 
 async def _wipe() -> None:
     async with engine.begin() as connection:
+{% if ledger %}
+        await connection.execute(text("SET LOCAL bb.allow_ledger_truncate = 'on'"))
+{% endif %}
         await connection.execute(text("TRUNCATE TABLE auth_users, auth_tenants CASCADE"))
 
 

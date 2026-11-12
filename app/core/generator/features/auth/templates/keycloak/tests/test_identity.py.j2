@@ -247,6 +247,9 @@ async def test_relinking_an_issuer_keeps_the_user_and_the_rows_they_own(client: 
 
 async def _wipe() -> None:
     async with engine.begin() as connection:
+{% if ledger %}
+        await connection.execute(text("SET LOCAL bb.allow_ledger_truncate = 'on'"))
+{% endif %}
         await connection.execute(text("TRUNCATE TABLE auth_users, auth_tenants CASCADE"))
 
 

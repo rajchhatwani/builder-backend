@@ -77,6 +77,7 @@ NAMES = [
     "search",
     "realtime_metrics",
     "tenant_guard",
+    "money_ledger",
 ]
 
 

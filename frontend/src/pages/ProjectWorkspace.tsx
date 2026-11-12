@@ -73,6 +73,7 @@ const PlanReviewPage = lazy(() => import('../shell/ai/PlanReviewPage').then((m) 
 const ApprovalsPage = lazy(() => import('../shell/ai/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
 const SeeItWork = lazy(() => import('../shell/ai/SeeItWork').then((m) => ({ default: m.SeeItWork })))
 const DependenciesPage = lazy(() => import('../shell/ai/DependenciesPage').then((m) => ({ default: m.DependenciesPage })))
+const LedgerPage = lazy(() => import('../shell/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })))
 const SearchPage = lazy(() => import('../shell/search/SearchPage').then((m) => ({ default: m.SearchPage })))
 const BuildPage = lazy(() => import('../shell/ai/BuildPage').then((m) => ({ default: m.BuildPage })))
 const HistoryPage = lazy(() => import('../shell/behavior/HistoryPage').then((m) => ({ default: m.HistoryPage })))
@@ -589,10 +590,11 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies') && (
+      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
+          {section === 'ledger' && <LedgerPage projectId={project.id} />}
         </Suspense>
       )}
 

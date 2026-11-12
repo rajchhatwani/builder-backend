@@ -1,0 +1,9 @@
+"""Ledger settings (generated from the spec: change them in the builder). Plain data."""
+
+# who may read / post; an empty tuple means any signed-in user
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+POST_ROLES: tuple[str, ...] = {{ post_roles | roles_repr }}
+MAX_AMOUNT_MINOR = {{ max_amount }}  # largest |amount| of one entry line, in minor units
+MAX_ENTRIES = {{ max_entries }}  # lines per transaction
+MULTI_TENANT = {{ "True" if tenant else "False" }}
+BALANCE_ROW_CAP = 1000  # GET /ledger/balances returns at most this many accounts (ordered by code)

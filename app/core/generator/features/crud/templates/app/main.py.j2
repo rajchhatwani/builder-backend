@@ -46,6 +46,9 @@ from app.imports.router import router as _imports_router
 {% if metrics %}
 from app.metrics.router import router as _metrics_router
 {% endif %}
+{% if ledger %}
+from app.money.ledger.router import router as _ledger_router
+{% endif %}
 {% if notifications %}
 from app.notifications.dispatcher import start_dispatcher, stop_dispatcher
 from app.notifications.router import router as _notifications_router
@@ -203,6 +206,9 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if metrics %}
     app.include_router(_metrics_router)
+{% endif %}
+{% if ledger %}
+    app.include_router(_ledger_router)
 {% endif %}
 {% if search %}
     app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id

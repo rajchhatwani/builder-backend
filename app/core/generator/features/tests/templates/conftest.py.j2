@@ -41,6 +41,9 @@ def _require_test_database() -> None:
 async def _clean_database(_require_test_database: None) -> None:
 {% if tables %}
     async with engine.begin() as connection:
+{% if ledger %}
+        await connection.execute(text("SET LOCAL bb.allow_ledger_truncate = 'on'"))  # tests only; the guard refuses TRUNCATE otherwise
+{% endif %}
         await connection.execute(text("TRUNCATE TABLE {{ tables | join(', ') }} CASCADE"))
 {% else %}
     return None

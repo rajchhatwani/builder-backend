@@ -279,3 +279,5 @@ tests/api/test_admin_operations.py
 tests/api/test_import_hooks_cp5v.py
 tests/api/test_sentinel_cp5v_probe.py
 tests/unit/test_scheduler_deploy.py
+tests/unit/test_money_pack.py
+tests/e2e/test_ledger_stack.py

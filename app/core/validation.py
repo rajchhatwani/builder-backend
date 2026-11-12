@@ -69,6 +69,7 @@ from app.core.validation_notifications import (
 )
 from app.core.validation_numbering import check_numbered_fields
 from app.core.validation_observability import check_observability
+from app.core.validation_packs import LEDGER_TABLES, check_packs, ledger_active
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
 from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
@@ -185,6 +186,10 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         for table in WEBHOOK_TABLES:
             ctx.tables[table] = "webhooks"
 
+    if ledger_active(spec):
+        for table in LEDGER_TABLES:
+            ctx.tables[table] = "packs.money.ledger"
+
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
     entities_by_name = _check_entities(spec, ctx)
@@ -206,6 +211,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_events(spec, ctx.add)
     check_realtime(spec, ctx.add)
     check_metrics_layer(spec, entities_by_name, ctx.add)
+    check_packs(spec, ctx.add)
     check_api_edge(spec, ctx.add)
     check_jobs(spec, ctx.add)
     check_workflows(spec, ctx.add)
