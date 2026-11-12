@@ -13,6 +13,7 @@ import os
 from collections.abc import Awaitable, Callable
 
 from app.jobs import idle_sweep, report_scheduler
+from app.services.ops_service import record_heartbeat
 
 Job = Callable[[], Awaitable[int]]
 
@@ -30,8 +31,10 @@ async def _loop(name: str, job: Job, every: int, stop: asyncio.Event) -> None:
             code = await job()
             if code:
                 print(f"{name}: exit {code}")
+            await record_heartbeat(name, not code, f"exit {code}" if code else None, every)
         except Exception as exc:  # noqa: BLE001 - keep the other jobs alive
             print(f"{name}: crashed {type(exc).__name__}")
+            await record_heartbeat(name, False, type(exc).__name__, every)
         try:
             await asyncio.wait_for(stop.wait(), timeout=every)
         except TimeoutError:

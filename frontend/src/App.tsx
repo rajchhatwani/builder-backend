@@ -31,7 +31,7 @@ type Route =
   | { page: 'admin'; section: AdminSection }
   | { page: 'project'; projectId: string; section: AnySection }
 
-const ORG_TABS: OrgTab[] = ['people', 'invites', 'projects', 'plan', 'audit', 'sso', 'policies']
+const ORG_TABS: OrgTab[] = ['people', 'invites', 'projects', 'plan', 'audit', 'sso', 'policies', 'ai', 'usage']
 
 /** Routes live in the URL hash (#/p/<id>/<section>), so reloads and back/forward keep your place. */
 export function parseHash(hash: string): Route {

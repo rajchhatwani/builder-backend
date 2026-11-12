@@ -6,6 +6,9 @@ import { MfaStep } from '../../components/MfaStep'
 import { useUi } from '../../components/Ui'
 import { shellV2Enabled } from '../../shell/flag'
 import { PreviewLimitsPage, showPreviewLimits } from './PreviewLimitsPage'
+import { SsoDomainsPage } from './SsoDomainsPage'
+import { OperationsPage } from './OperationsPage'
+import { UsageLimitsPage } from './UsageLimitsPage'
 import {
   AdminAudit,
   AdminBilling,
@@ -30,6 +33,9 @@ export type AdminSection =
   | 'audit'
   | 'settings'
   | 'previews'
+  | 'sso'
+  | 'operations'
+  | 'usage'
 
 const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -42,6 +48,9 @@ const SECTIONS: { id: AdminSection; label: string }[] = [
   { id: 'audit', label: 'Audit log' },
   { id: 'settings', label: 'Settings' },
   { id: 'previews', label: 'Preview limits' },
+  { id: 'sso', label: 'SSO domains' },
+  { id: 'operations', label: 'Operations' },
+  { id: 'usage', label: 'Usage limits' },
 ]
 
 export function parseAdminSection(hash: string): AdminSection {
@@ -159,8 +168,8 @@ export function AdminApp({ section }: { section: AdminSection }) {
 
   // Preview limits: platform admins only, and only with ui.shell=v2.
   const previewsOn = showPreviewLimits(user.platform_role, shellV2Enabled())
-  const sections = SECTIONS.filter((s) => s.id !== 'previews' || previewsOn)
   const readOnly = user.platform_role !== 'platform_admin'
+  const sections = SECTIONS.filter((s) => (s.id !== 'previews' || previewsOn) && (s.id !== 'sso' || !readOnly))
   // #/admin/organizations/<id> opens one organization.
   const orgId = window.location.hash.match(/^#\/admin\/organizations\/([0-9a-f-]{36})/)?.[1]
 
@@ -218,6 +227,9 @@ export function AdminApp({ section }: { section: AdminSection }) {
           {section === 'projects' && <AdminProjects />}
           {section === 'audit' && <AdminAudit />}
           {section === 'settings' && <AdminSettings />}
+          {section === 'sso' && <SsoDomainsPage readOnly={readOnly} />}
+          {section === 'operations' && <OperationsPage readOnly={readOnly} />}
+          {section === 'usage' && <UsageLimitsPage readOnly={readOnly} />}
           {section === 'previews' && previewsOn && <PreviewLimitsPage readOnly={readOnly} />}
           {section === 'previews' && !previewsOn && <p className="empty-state" role="alert">This page is for platform admins, with the new interface turned on.</p>}
         </div>

@@ -65,6 +65,11 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 "app/core/doc_library.py" = ["E501"]
 "app/core/hook_gates.py" = ["E501", "SIM905"]
 "tests/unit/test_hook_gates.py" = ["E501"]
+# Fixtures imported from another test module and requested by argument name look like redefinitions.
+"tests/api/test_agent_fb2b.py" = ["F811"]
+"tests/api/test_agent_wpb.py" = ["F811"]
+"tests/api/test_fb3c_workspace_dependency.py" = ["F811"]
+"tests/e2e/test_hooks_stack.py" = ["F811"]
 # The examples are readable data and scripts, not library code: long literal lines are fine.
 "examples/**" = ["E501"]
 

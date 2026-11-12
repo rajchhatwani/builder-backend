@@ -5,8 +5,6 @@ fields, org override that only tightens, separation of duties), S1-008 (hook rev
 re-run), S1-011 (decide respects run state, bounded body), B-004 (promotion of covered custom files).
 Real tools, approvals, gates and workspaces; the model is a script (never a real provider)."""
 
-import asyncio
-import json
 import subprocess
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -18,7 +16,7 @@ from httpx import AsyncClient
 from sqlalchemy import select, update
 
 from app.config import Settings
-from app.models.agent import AiApproval, AiRun, AiStep
+from app.models.agent import AiApproval, AiRun
 from app.models.ai_ledger import AiOrgSettings
 from app.models.project import Project
 from app.services.agent import approved_effects

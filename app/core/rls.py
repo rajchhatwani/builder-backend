@@ -148,6 +148,7 @@ UNCONFINED_SESSION_MODULES: dict[str, str] = {
     "app/services/agent/run_service.py": "agent run worker: rows are addressed by run/project id",
     "app/jobs/report_scheduler.py": "operator job across all orgs; rows are addressed by report id, runs carry explicit project/org ids",
     "app/jobs/idle_sweep.py": "operator job across all orgs; discards by workspace id, recomputes gauges by org id",
+    "app/services/ops_service.py": "operator heartbeat rows (platform table, no org) and read-only admin overview",
     "app/jobs/scheduler.py": "operator process that only calls the other jobs; opens no session itself",
     "app/services/agent/sweeper.py": "agent sweeper re-drives expired leases across all orgs",
     "app/services/agent_eval/runner.py": "offline eval harness, test database only",

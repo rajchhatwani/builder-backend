@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
-import { ApiError, api } from '../../api/client'
+import { ApiError, api, saveBlob } from '../../api/client'
 import { useRealtimeRefresh } from '../../realtime/bus'
 import type { ImportCommitResult, ImportCounts, ImportPreview, ImportRecord, ImportRow } from '../../api/types'
 import { link } from '../../components/Sidebar'
@@ -440,7 +440,21 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
   const [records, setRecords] = useState<ImportRecord[] | null>(null)
   const [failed, setFailed] = useState(false)
   const [tick, setTick] = useState(0)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
   useRealtimeRefresh(['imports'], () => setTick((t) => t + 1))
+  const exportCsv = async () => {
+    setExporting(true)
+    setExportError(null)
+    try {
+      const { blob, filename } = await api.exportImportRecordsCsv(projectId, entity)
+      saveBlob(blob, filename)
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'The export failed')
+    } finally {
+      setExporting(false)
+    }
+  }
   useEffect(() => {
     let cancelled = false
     api
@@ -473,7 +487,11 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
           ))}
         </ul>
       )}
+      {exportError && <p role="alert" data-testid="import-export-error">{exportError}</p>}
       <p>
+        <button className="outline" onClick={() => void exportCsv()} disabled={exporting} data-testid="import-export-csv" aria-label={`Export ${entity} records as CSV`}>
+          {exporting ? 'Exporting…' : 'Export records (CSV)'}
+        </button>{' '}
         <button onClick={onAgain}>Import another file</button>
       </p>
     </section>

@@ -25,6 +25,7 @@ PLATFORM_OR_USER_LEVEL: dict[str, str] = {
     "plans": "global catalogue",
     "ai_platform_budget": "platform-wide spend cap",
     "preview_platform_settings": "platform-wide preview limits",
+    "job_heartbeats": "operator job last-run rows (CP-5V), platform infrastructure",
 }
 
 

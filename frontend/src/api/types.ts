@@ -1916,3 +1916,42 @@ export interface PresenceUserRead {
   where: string
   last_seen: string
 }
+
+// ── Cycle 5 (CP-5V) ─────────────────────────────────────────────────────────
+export interface MigrationPlanRequest { renames?: { kind?: string; entity?: string; from: string; to: string }[]; against_generation_id?: string | null }
+export interface MigrationPlanStep {
+  seq: number; phase: number; kind: string; entity: string; table: string; field: string | null; safety: string; reason: string
+  suggested_action: string | null; backfill_strategy: string | null; sql_hint: string | null; note: string | null
+}
+export interface MigrationPlanResponse {
+  plan: { steps: MigrationPlanStep[]; ignored_sections: string[]; requires_confirmation: boolean; requires_backfill: boolean; highest_safety: string | null }
+  text: string; old_spec_hash: string | null; new_spec_hash: string; against_generation_id: string | null
+  first_generation: boolean; old_snapshot_unusable?: boolean; allow_destructive_required: boolean
+}
+export interface WorkspaceCheckpoint { id: string; workspace_id: string; label: string; git_sha: string; spec_seq: number; spec_hash: string; has_data_snapshot: boolean; created_at: string }
+export interface WorkspaceInfo {
+  id: string; project_id: string; name: string; state: string; base_spec_seq: number; spec_seq: number; branch: string
+  created_at: string; updated_at: string; checkpoints: WorkspaceCheckpoint[]; cleanup_incomplete?: boolean
+}
+export interface DependencyRequest {
+  id: string; package: string; version: string; reason: string; hashes: string[]; status: string
+  requested_by: string | null; decided_by: string | null; decided_at: string | null; decision_note: string | null
+  expires_at: string | null; revoked_by: string | null; revoked_at: string | null; created_at: string
+}
+export interface DependencyPolicy {
+  curated_sets: Record<string, Record<string, string>>; allow_list: string[]
+  approved: { package: string; version: string; hashes: string[]; expires_at: string | null }[]; pending_requests: number
+}
+export interface RegistryBlock { id: string; created_at: string; [k: string]: unknown }
+export interface RegistryHook { id: string; hook_name: string; content_hash: string; author: string; approved_by: string | null; created_at: string }
+export interface RegistryDep { id: string; package: string; version: string; hash: string; created_at: string }
+export interface RegistryProject { project_id: string; name: string; slug: string; spec_version: number; block_versions: number; hooks: number; hooks_unapproved: number; dependencies: number }
+export interface OrgAiSettings { has_api_key: boolean; api_key_hint: string | null; monthly_budget_micro_usd: number | null; approval_policy?: Record<string, unknown> | null }
+export interface OrgAiSettingsWrite { api_key?: string; clear_api_key?: boolean; monthly_budget_micro_usd?: number; clear_budget?: boolean }
+export interface OrgAiCost {
+  month_start: string; month_cost_micro_usd: number; total_cost_micro_usd: number; monthly_budget_micro_usd: number | null
+  items: { id: string; project_id: string | null; model: string; task_class: string; input_tokens: number; output_tokens: number; cost_micro_usd: number; created_at: string }[]
+  total: number; limit: number; offset: number
+}
+export interface OrgUsageMetric { metric: string; unit: string; period: string; period_start: string | null; period_end: string | null; used: number; limit: number | null; refused: number }
+export interface OrgUsageSummary { metrics: OrgUsageMetric[] }

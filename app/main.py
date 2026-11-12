@@ -15,6 +15,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 from app.api import (
     account,
     admin,
+    admin_operations,
     admin_previews,
     advisor,
     agent_approvals,
@@ -327,6 +328,7 @@ def create_app() -> FastAPI:
     app.include_router(impersonation.router)  # "view as" banner, writes switch, end
     app.include_router(admin.router)
     app.include_router(admin_previews.router)  # preview limits: require_admin
+    app.include_router(admin_operations.router)  # operations + org usage limits: require_admin
     app.include_router(previews.public_router)  # preview proxy/logs: per-preview token
     app.include_router(orgs.router)  # organization routes authenticate via current_principal
     app.include_router(wellknown.router)  # RFC 9728 discovery, no auth

@@ -4,6 +4,7 @@ import type { SpecOp } from '../../api/types'
 import { useHashParam, withHashParam } from '../useHashParam'
 import { MARKS, changeText, clearBaseline, diffSpecs, loadBaseline, parseSpecText, saveBaseline } from './diffLogic'
 import type { Baseline, DiffModel } from './diffLogic'
+import { MigrationPlanSection } from './MigrationPlanView'
 
 type Spec = Record<string, unknown>
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; spec: Spec }
@@ -186,6 +187,7 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
             </div>
           )}
           {model !== null && model.total > 0 && <Result model={model} />}
+          <MigrationPlanSection projectId={projectId} />
         </>
       )}
     </>

@@ -7,6 +7,7 @@ import {
   setAccessToken,
   type Surface,
 } from './session'
+import type { OpsOverview, GoliveReport, AdminUsageSummary } from './adminOps'
 import type {
   BehaviorIssues,
   SpecOp,
@@ -95,6 +96,8 @@ import type {
   ReportRunRead,
   ReportValue,
   AccessDiffRequest,
+  MigrationPlanRequest, MigrationPlanResponse, WorkspaceInfo, WorkspaceCheckpoint, DependencyPolicy, DependencyRequest,
+  RegistryBlock, RegistryHook, RegistryDep, RegistryProject, OrgAiSettings, OrgAiSettingsWrite, OrgAiCost, OrgUsageSummary,
   AccessMatrix,
   CoverageResult,
   RecommendAnswers,
@@ -1179,9 +1182,105 @@ export const api = {
   adminClearPreviewOrgLimits: (orgId: string) =>
     request<PreviewOrgLimits>(`/admin/preview-limits/orgs/${orgId}`, { method: 'DELETE' }, admin),
 
+  // ── Admin: operations and per-organization usage limits (CP-5V) ──
+  adminOperations: () => request<OpsOverview>('/admin/operations', undefined, admin),
+  adminRunGolive: () => request<GoliveReport>('/admin/operations/golive', { method: 'POST' }, admin),
+  adminOrgUsage: (org: string) => request<AdminUsageSummary>(`/admin/organizations/${encodeURIComponent(org)}/usage`, undefined, admin),
+  adminSetOrgUsageLimit: (org: string, metric: string, limitValue: number | null) =>
+    request<AdminUsageSummary>(
+      `/admin/organizations/${encodeURIComponent(org)}/usage/limits/${encodeURIComponent(metric)}`,
+      { method: 'PUT', body: json({ limit_value: limitValue }) },
+      admin,
+    ),
+
   // ── Admin: tokens of any user ────────────────────────────────────────────
   adminListUserTokens: (userId: string) =>
     request<ApiTokenInfo[]>(`/admin/users/${userId}/tokens`, undefined, admin),
   adminRevokeUserToken: (userId: string, tokenId: string) =>
     request<void>(`/admin/users/${userId}/tokens/${tokenId}`, { method: 'DELETE' }, admin),
+
+  // ── Cycle 5 (CP-5V): human-facing controls for endpoints that already existed ──
+  /** CSV of imported records for one entity (viewer; the server caps it at 10000 rows). */
+  exportImportRecordsCsv: (projectId: string, entity: string) =>
+    downloadBlob(`/projects/${projectId}/imports/records/export.csv?entity=${encodeURIComponent(entity)}`, `${entity}.csv`),
+  /** Self-host kit zip (code + compose + guide). */
+  downloadSelfHostKit: (projectId: string, fallbackName: string) =>
+    downloadBlob(`/projects/${projectId}/generate/self-host-kit`, fallbackName),
+  migrationPlan: (projectId: string, body: MigrationPlanRequest = {}, acceptUnreadableBaseline = false) =>
+    request<MigrationPlanResponse>(
+      `/projects/${projectId}/migration-plan${acceptUnreadableBaseline ? '?accept_unreadable_baseline=true' : ''}`,
+      { method: 'POST', body: json(body) },
+    ),
+  listWorkspaces: (projectId: string) => request<WorkspaceInfo[]>(`/projects/${projectId}/workspaces`),
+  createWorkspace: (projectId: string, name: string) =>
+    request<WorkspaceInfo>(`/projects/${projectId}/workspaces`, { method: 'POST', body: json({ name }) }),
+  getWorkspace: (projectId: string, wsId: string) => request<WorkspaceInfo>(`/projects/${projectId}/workspaces/${wsId}`),
+  discardWorkspace: (projectId: string, wsId: string) =>
+    request<WorkspaceInfo>(`/projects/${projectId}/workspaces/${wsId}`, { method: 'DELETE' }),
+  createCheckpoint: (projectId: string, wsId: string, label: string) =>
+    request<WorkspaceCheckpoint>(`/projects/${projectId}/workspaces/${wsId}/checkpoints`, { method: 'POST', body: json({ label }) }),
+  rollbackWorkspace: (projectId: string, wsId: string, checkpointId: string) =>
+    request<WorkspaceInfo>(`/projects/${projectId}/workspaces/${wsId}/rollback`, { method: 'POST', body: json({ checkpoint_id: checkpointId }) }),
+  searchProject: (projectId: string, entity: string, q: string, limit = 20) =>
+    request<Record<string, unknown>>(`/projects/${projectId}/search?${queryString({ entity, q, limit })}`),
+  /** Rebuilds the search index. The backend route is added separately; the body of the answer is shown as-is. */
+  reindexSearch: (projectId: string) =>
+    request<Record<string, unknown>>(`/projects/${projectId}/search/reindex`, { method: 'POST' }),
+  dependencyPolicy: (projectId: string) => request<DependencyPolicy>(`/projects/${projectId}/dependencies`),
+  listDependencyRequests: (projectId: string) => request<DependencyRequest[]>(`/projects/${projectId}/dependencies/requests`),
+  requestDependency: (projectId: string, body: { package: string; version: string; reason: string; hashes?: string[] }) =>
+    request<DependencyRequest>(`/projects/${projectId}/dependencies/requests`, { method: 'POST', body: json(body) }),
+  /** Approve must echo what was reviewed (package, version, hashes); a changed request is refused with 409. */
+  approveDependency: (projectId: string, r: DependencyRequest, note?: string) =>
+    request<DependencyRequest>(`/projects/${projectId}/dependencies/requests/${r.id}/approve`, {
+      method: 'POST',
+      body: json({ package: r.package, version: r.version, hashes: r.hashes, note: note || undefined }),
+    }),
+  denyDependency: (projectId: string, id: string, note?: string) =>
+    request<DependencyRequest>(`/projects/${projectId}/dependencies/requests/${id}/deny`, { method: 'POST', body: json({ note: note || undefined }) }),
+  revokeDependency: (projectId: string, id: string, note?: string) =>
+    request<DependencyRequest>(`/projects/${projectId}/dependencies/requests/${id}/revoke`, { method: 'POST', body: json({ note: note || undefined }) }),
+  registryBlocks: (projectId: string) => request<RegistryBlock[]>(`/projects/${projectId}/registry/blocks`),
+  registryHooks: (projectId: string) => request<RegistryHook[]>(`/projects/${projectId}/registry/hooks`),
+  approveRegistryHook: (projectId: string, entryId: string) =>
+    request<RegistryHook>(`/projects/${projectId}/registry/hooks/${entryId}/approve`, { method: 'POST' }),
+  registryDeps: (projectId: string) => request<RegistryDep[]>(`/projects/${projectId}/registry/deps`),
+  orgRegistryProjects: (slug: string) => request<RegistryProject[]>(`/orgs/${encodeURIComponent(slug)}/registry/projects`),
+  orgAiSettings: (slug: string) => request<OrgAiSettings>(`/orgs/${encodeURIComponent(slug)}/ai/settings`),
+  updateOrgAiSettings: (slug: string, body: OrgAiSettingsWrite) =>
+    request<OrgAiSettings>(`/orgs/${encodeURIComponent(slug)}/ai/settings`, { method: 'PUT', body: json(body) }),
+  orgAiCost: (slug: string, limit = 20, offset = 0) =>
+    request<OrgAiCost>(`/orgs/${encodeURIComponent(slug)}/ai/cost?${queryString({ limit, offset })}`),
+  orgUsage: (slug: string) => request<OrgUsageSummary>(`/orgs/${encodeURIComponent(slug)}/usage`),
+  /** Owner only. `null` clears the override (unlimited). */
+  setOrgUsageLimit: (slug: string, metric: string, limitValue: number | null) =>
+    request<OrgUsageSummary>(`/orgs/${encodeURIComponent(slug)}/usage/limits/${encodeURIComponent(metric)}`, {
+      method: 'PUT',
+      body: json({ limit_value: limitValue }),
+    }),
+  /** Platform admins only; needs a reason. Returns the org that held the claim. */
+  adminReleaseSsoDomain: (domain: string, reason: string) =>
+    request<AdminOrg>(`/admin/sso/domains/${encodeURIComponent(domain)}/release`, { method: 'POST', body: json({ reason }) }, admin),
+}
+
+/** Authenticated binary download (refreshes the session once on 401), like downloadZip. */
+async function downloadBlob(path: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
+  const go = () => fetch(`${BASE_URL}${path}`, { credentials: 'include', headers: authHeader('app') })
+  let response = await go()
+  if (response.status === 401 && (await refreshSession('app'))) response = await go()
+  if (!response.ok) {
+    throw new ApiError(response.status, (await response.json().catch(() => null)) ?? { code: 'bad_response', message: 'Download failed', details: [] })
+  }
+  const match = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')
+  return { blob: await response.blob(), filename: match?.[1] ?? fallbackName }
+}
+
+/** Hands a downloaded blob to the browser as a file save. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
 }

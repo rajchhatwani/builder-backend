@@ -20,8 +20,10 @@ import { AskAdmin } from '../components/AskAdmin'
 import { OrgPlanPage } from './OrgPlanPage'
 import { OrgPoliciesTab } from './OrgPoliciesTab'
 import { OrgSsoTab } from './OrgSsoTab'
+import { OrgAiTab } from './OrgAiTab'
+import { OrgUsageTab } from './OrgUsageTab'
 
-export type OrgTab = 'people' | 'invites' | 'projects' | 'plan' | 'audit' | 'sso' | 'policies'
+export type OrgTab = 'people' | 'invites' | 'projects' | 'plan' | 'audit' | 'sso' | 'policies' | 'ai' | 'usage'
 
 const TABS: { id: OrgTab; label: string; path: string }[] = [
   { id: 'people', label: 'People', path: '' },
@@ -31,6 +33,8 @@ const TABS: { id: OrgTab; label: string; path: string }[] = [
   { id: 'audit', label: 'Audit log', path: '/audit' },
   { id: 'sso', label: 'SSO & SCIM', path: '/sso' },
   { id: 'policies', label: 'Security', path: '/policies' },
+  { id: 'ai', label: 'AI', path: '/ai' },
+  { id: 'usage', label: 'Usage', path: '/usage' },
 ]
 
 const ROLE_LABEL: Record<OrgRole, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' }
@@ -824,7 +828,7 @@ export function OrgConsole({ slug, tab }: { slug: string; tab: OrgTab }) {
 
   const status = plan?.subscription.status
   // SSO is for team orgs only (personal orgs answer 409 sso_not_for_personal_orgs).
-  const tabs = TABS.filter((t) => t.id !== 'sso' || org.kind === 'team')
+  const tabs = TABS.filter((t) => (t.id !== 'sso' || org.kind === 'team') && (t.id !== 'ai' || org.my_role !== 'member'))
 
   return (
     <>
@@ -924,6 +928,8 @@ export function OrgConsole({ slug, tab }: { slug: string; tab: OrgTab }) {
       {tab === 'audit' && <AuditTab org={org} members={members} />}
       {tab === 'sso' && org.kind === 'team' && <OrgSsoTab org={org} members={members} />}
       {tab === 'policies' && <OrgPoliciesTab org={org} members={members} onChanged={reload} />}
+      {tab === 'ai' && <OrgAiTab org={org} />}
+      {tab === 'usage' && <OrgUsageTab org={org} />}
     </>
   )
 }

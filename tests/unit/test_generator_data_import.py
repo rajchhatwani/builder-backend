@@ -117,3 +117,38 @@ def test_no_create_operation_means_no_module() -> None:
 
 def _spec_files() -> dict[str, str]:
     return generate(_spec())
+
+
+# -- CP-5V: imported rows fire the history / realtime / search hooks like a normal create ----------------
+
+
+def _repo(files: dict[str, str], entity: str) -> str:
+    """The generated source of `<Entity>Repository` (module names are plural / snake-cased)."""
+    return "\n".join(
+        text for path, text in files.items() if path.startswith("app/crud/") and f"class {entity}Repository" in text
+        or (path.startswith("app/crud/") and f"{entity}Repository.hooks" in text)
+    )
+
+
+def test_cp5v_history_hook_is_on_the_repository_the_import_runs() -> None:
+    files = generate(_spec("history_notes"))
+    repo = _repo(files, "Note")
+    assert "hooks_for(" in repo or "history_hooks_for(" in repo  # history hooks attached to the repository
+    assert "app/imports/service.py" in files
+    assert 'run_stage("after_save", repo.hooks, ctx)' in files["app/imports/service.py"]
+    assert "after_save" in files["app/change_history/hooks.py"]
+
+
+def test_cp5v_realtime_hook_is_on_the_repository_the_import_runs() -> None:
+    files = generate(_spec("realtime_metrics"))
+    repo = _repo(files, "Expense")
+    assert "_realtime_hooks.attach(" in repo
+    assert 'run_stage("after_commit", repo.hooks, ctx, fail_closed=False)' in files["app/imports/service.py"]
+
+
+def test_cp5v_search_index_hook_is_on_the_repository_the_import_runs() -> None:
+    files = generate(_spec("search"))
+    repo = _repo(files, "Ticket")
+    assert "_search_hooks.attach(" in repo
+    assert '"after_commit"' in files["app/search/hooks.py"]
+    assert 'run_stage("after_commit", repo.hooks, ctx, fail_closed=False)' in files["app/imports/service.py"]

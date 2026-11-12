@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, ApiError } from '../api/client'
+import { api, ApiError, saveBlob } from '../api/client'
 import { EmailNotVerifiedBanner, isEmailNotVerified } from './EmailNotVerifiedBanner'
 import type {
   AuthConfig,
@@ -62,7 +62,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
   const [valid, setValid] = useState<boolean | null>(null)
   const [preview, setPreview] = useState<Preview | null>(null)
   const [history, setHistory] = useState<GenerationSummary[]>([])
-  const [busy, setBusy] = useState<'validate' | 'preview' | 'download' | null>(null)
+  const [busy, setBusy] = useState<'validate' | 'preview' | 'download' | 'kit' | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [unverified, setUnverified] = useState(false)
   // Set after a download, so the user sees what to do with the zip.
@@ -87,7 +87,7 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
     loadHistory()
   }, [project.id, modelVersion])
 
-  async function run(kind: 'validate' | 'preview' | 'download') {
+  async function run(kind: 'validate' | 'preview' | 'download' | 'kit') {
     setBusy(kind)
     setError(null)
     setUnverified(false)
@@ -96,6 +96,9 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
         const report = await api.validateProject(project.id)
         setValid(report.valid)
         setIssues(report.issues)
+      } else if (kind === 'kit') {
+        const { blob, filename } = await api.downloadSelfHostKit(project.id, `${project.slug}-self-host-kit.zip`)
+        saveBlob(blob, filename)
       } else if (kind === 'preview') {
         setPreview(await api.previewGeneration(project.id))
         setValid(true)
@@ -152,6 +155,9 @@ export function GeneratePanel({ project, modelVersion }: GeneratePanelProps) {
           </button>
           <button className="small" disabled={busy !== null} onClick={() => run('download')}>
             {busy === 'download' ? 'Generating…' : 'Download'}
+          </button>
+          <button className="outline small" disabled={busy !== null} onClick={() => run('kit')} data-testid="self-host-kit" title="Code, a compose file and a guide for running the backend on your own server">
+            {busy === 'kit' ? 'Preparing…' : 'Self-host kit'}
           </button>
         </div>
       </div>

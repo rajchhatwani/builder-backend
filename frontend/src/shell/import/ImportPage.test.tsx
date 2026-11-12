@@ -5,13 +5,14 @@ import { ApiError } from '../../api/client'
 import type { ImportPreview, ImportRow } from '../../api/types'
 import { ImportPage } from './ImportPage'
 
-const m = vi.hoisted(() => ({ spec: vi.fn(), upload: vi.fn(), mapping: vi.fn(), rows: vi.fn(), fix: vi.fn(), commit: vi.fn(), cancel: vi.fn(), records: vi.fn() }))
+const m = vi.hoisted(() => ({ spec: vi.fn(), upload: vi.fn(), mapping: vi.fn(), rows: vi.fn(), fix: vi.fn(), commit: vi.fn(), cancel: vi.fn(), records: vi.fn(), csv: vi.fn(), save: vi.fn() }))
 vi.mock('../../api/client', async (orig) => ({
   ...(await orig<typeof import('../../api/client')>()),
   api: {
     getSpecJson: m.spec, uploadImport: m.upload, setImportMapping: m.mapping, listImportRows: m.rows,
-    fixImportRow: m.fix, commitImport: m.commit, cancelImport: m.cancel, listImportRecords: m.records,
+    fixImportRow: m.fix, commitImport: m.commit, cancelImport: m.cancel, listImportRecords: m.records, exportImportRecordsCsv: m.csv,
   },
+  saveBlob: m.save,
 }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -103,6 +104,23 @@ describe('ImportPage', () => {
     await click(/Commit 3 rows/)
     expect(q('[data-testid=import-result]')?.textContent).toContain('3 created, 0 already imported, 0 rejected')
     expect(q('[data-testid=import-records]')?.textContent).toContain('invoice_no: INV-1')
+  })
+
+  it('exports the imported records as CSV after the commit, and says so when that fails', async () => {
+    await toReview()
+    m.commit.mockResolvedValue({ batch_id: 'b1', status: 'committed', created: 2, duplicate: 0, rejected: 0 })
+    m.records.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
+    await click(/Commit 2 rows/)
+    const blob = new Blob(['a'])
+    m.csv.mockResolvedValueOnce({ blob, filename: 'Invoice.csv' })
+    await act(async () => { q('[data-testid=import-export-csv]')!.click() })
+    await flush()
+    expect(m.csv).toHaveBeenCalledWith('p', 'Invoice')
+    expect(m.save).toHaveBeenCalledWith(blob, 'Invoice.csv')
+    m.csv.mockRejectedValueOnce(new Error('too many rows'))
+    await act(async () => { q('[data-testid=import-export-csv]')!.click() })
+    await flush()
+    expect(q('[data-testid=import-export-error]')?.textContent).toBe('too many rows')
   })
 
   it('keeps a row in the queue when the fix is still invalid', async () => {

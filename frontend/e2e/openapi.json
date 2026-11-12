@@ -6181,6 +6181,76 @@
     "title": "GenerationSummary",
     "type": "object"
    },
+   "GoliveCheckRead": {
+    "properties": {
+     "check": {
+      "title": "Check",
+      "type": "string"
+     },
+     "detail": {
+      "title": "Detail",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "check",
+     "status",
+     "detail"
+    ],
+    "title": "GoliveCheckRead",
+    "type": "object"
+   },
+   "GoliveRead": {
+    "properties": {
+     "checks": {
+      "items": {
+       "$ref": "#/components/schemas/GoliveCheckRead"
+      },
+      "title": "Checks",
+      "type": "array"
+     },
+     "failed": {
+      "title": "Failed",
+      "type": "integer"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "passed": {
+      "title": "Passed",
+      "type": "integer"
+     },
+     "ran_at": {
+      "format": "date-time",
+      "title": "Ran At",
+      "type": "string"
+     },
+     "skipped": {
+      "title": "Skipped",
+      "type": "integer"
+     },
+     "warnings": {
+      "title": "Warnings",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ran_at",
+     "ok",
+     "passed",
+     "failed",
+     "warnings",
+     "skipped",
+     "checks"
+    ],
+    "title": "GoliveRead",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -6885,6 +6955,29 @@
      "client_id"
     ],
     "title": "IdentityProvider",
+    "type": "object"
+   },
+   "IdleWorkspacesRead": {
+    "properties": {
+     "idle_past_ttl": {
+      "title": "Idle Past Ttl",
+      "type": "integer"
+     },
+     "live_workspaces": {
+      "title": "Live Workspaces",
+      "type": "integer"
+     },
+     "ttl_days": {
+      "title": "Ttl Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ttl_days",
+     "live_workspaces",
+     "idle_past_ttl"
+    ],
+    "title": "IdleWorkspacesRead",
     "type": "object"
    },
    "IdpType": {
@@ -7595,6 +7688,91 @@
     "title": "ItemUpdate",
     "type": "object"
    },
+   "JobStatusRead": {
+    "properties": {
+     "interval_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Interval Seconds"
+     },
+     "job": {
+      "title": "Job",
+      "type": "string"
+     },
+     "last_error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Error"
+     },
+     "last_run_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Run At"
+     },
+     "last_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Status"
+     },
+     "next_expected_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Expected At"
+     },
+     "runs": {
+      "title": "Runs",
+      "type": "integer"
+     },
+     "stale": {
+      "title": "Stale",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "job",
+     "interval_seconds",
+     "last_run_at",
+     "last_status",
+     "last_error",
+     "runs",
+     "next_expected_at",
+     "stale"
+    ],
+    "title": "JobStatusRead",
+    "type": "object"
+   },
    "JobsRead": {
     "properties": {
      "jobs": {
@@ -7678,6 +7856,53 @@
     ],
     "title": "JwtAlgorithm",
     "type": "string"
+   },
+   "KeyProviderRead": {
+    "properties": {
+     "active_key_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Active Key Id"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "healthy": {
+      "title": "Healthy",
+      "type": "boolean"
+     },
+     "key_count": {
+      "title": "Key Count",
+      "type": "integer"
+     },
+     "kind": {
+      "title": "Kind",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "healthy",
+     "active_key_id",
+     "key_count",
+     "error"
+    ],
+    "title": "KeyProviderRead",
+    "type": "object"
    },
    "KeycloakConfigRead": {
     "properties": {
@@ -9414,6 +9639,48 @@
     ],
     "title": "OnDelete",
     "type": "string"
+   },
+   "OperationsRead": {
+    "properties": {
+     "generated_at": {
+      "format": "date-time",
+      "title": "Generated At",
+      "type": "string"
+     },
+     "golive": {
+      "$ref": "#/components/schemas/GoliveRead"
+     },
+     "idle_workspaces": {
+      "$ref": "#/components/schemas/IdleWorkspacesRead"
+     },
+     "key_provider": {
+      "$ref": "#/components/schemas/KeyProviderRead"
+     },
+     "reports": {
+      "$ref": "#/components/schemas/ReportsStatusRead"
+     },
+     "scheduler": {
+      "$ref": "#/components/schemas/SchedulerRead"
+     },
+     "usage_defaults": {
+      "items": {
+       "$ref": "#/components/schemas/UsageDefaultRead"
+      },
+      "title": "Usage Defaults",
+      "type": "array"
+     }
+    },
+    "required": [
+     "generated_at",
+     "scheduler",
+     "idle_workspaces",
+     "reports",
+     "usage_defaults",
+     "key_provider",
+     "golive"
+    ],
+    "title": "OperationsRead",
+    "type": "object"
    },
    "OrgAuditRead": {
     "description": "An org admin's view of the audit log (\u00a78). No `detail` and no client IP: \u00a77.1 keeps\nrequest details that can contain customer data out of shared views.",
@@ -14008,6 +14275,50 @@
     "title": "ReportValue",
     "type": "object"
    },
+   "ReportsStatusRead": {
+    "properties": {
+     "disabled_schedules": {
+      "title": "Disabled Schedules",
+      "type": "integer"
+     },
+     "enabled_schedules": {
+      "title": "Enabled Schedules",
+      "type": "integer"
+     },
+     "last_run_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Run At"
+     },
+     "next_run_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Run At"
+     }
+    },
+    "required": [
+     "enabled_schedules",
+     "disabled_schedules",
+     "last_run_at",
+     "next_run_at"
+    ],
+    "title": "ReportsStatusRead",
+    "type": "object"
+   },
    "RequirementsRead": {
     "properties": {
      "coverage": {
@@ -14678,6 +14989,22 @@
      "updated_at"
     ],
     "title": "RunRead",
+    "type": "object"
+   },
+   "SchedulerRead": {
+    "properties": {
+     "jobs": {
+      "items": {
+       "$ref": "#/components/schemas/JobStatusRead"
+      },
+      "title": "Jobs",
+      "type": "array"
+     }
+    },
+    "required": [
+     "jobs"
+    ],
+    "title": "SchedulerRead",
     "type": "object"
    },
    "ScimConfigRead": {
@@ -22134,6 +22461,41 @@
     "title": "TwilioSecretsWrite",
     "type": "object"
    },
+   "UsageDefaultRead": {
+    "properties": {
+     "default_limit": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Default Limit"
+     },
+     "metric": {
+      "title": "Metric",
+      "type": "string"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     },
+     "unit": {
+      "title": "Unit",
+      "type": "string"
+     }
+    },
+    "required": [
+     "metric",
+     "unit",
+     "period",
+     "default_limit"
+    ],
+    "title": "UsageDefaultRead",
+    "type": "object"
+   },
    "UsageEventPage": {
     "properties": {
      "items": {
@@ -22218,6 +22580,7 @@
      "limit_value": {
       "anyOf": [
        {
+        "maximum": 9.223372036854776e+18,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -24387,6 +24750,48 @@
     ]
    }
   },
+  "/admin/operations": {
+   "get": {
+    "operationId": "operations_admin_operations_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/OperationsRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Operations",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/operations/golive": {
+   "post": {
+    "operationId": "run_golive_admin_operations_golive_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/GoliveRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Run Golive",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
   "/admin/organizations": {
    "get": {
     "operationId": "list_organizations_admin_organizations_get",
@@ -24455,6 +24860,109 @@
      }
     },
     "summary": "List Organizations",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/organizations/{org_id_or_slug}/usage": {
+   "get": {
+    "operationId": "org_usage_admin_organizations__org_id_or_slug__usage_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "org_id_or_slug",
+      "required": true,
+      "schema": {
+       "title": "Org Id Or Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UsageSummaryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Org Usage",
+    "tags": [
+     "admin"
+    ]
+   }
+  },
+  "/admin/organizations/{org_id_or_slug}/usage/limits/{metric}": {
+   "put": {
+    "operationId": "set_org_usage_limit_admin_organizations__org_id_or_slug__usage_limits__metric__put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "org_id_or_slug",
+      "required": true,
+      "schema": {
+       "title": "Org Id Or Slug",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "metric",
+      "required": true,
+      "schema": {
+       "title": "Metric",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/UsageLimitWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UsageSummaryRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Set Org Usage Limit",
     "tags": [
      "admin"
     ]
@@ -37554,6 +38062,52 @@
      }
     },
     "summary": "Search Project",
+    "tags": [
+     "search"
+    ]
+   }
+  },
+  "/projects/{project_id}/search/reindex": {
+   "post": {
+    "description": "Editor-only (the project guard requires an editor for every non-GET method).",
+    "operationId": "reindex_projects__project_id__search_reindex_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Reindex Projects  Project Id  Search Reindex Post",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Reindex",
     "tags": [
      "search"
     ]

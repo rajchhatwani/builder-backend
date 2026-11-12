@@ -8,7 +8,7 @@ import pytest
 from httpx import AsyncClient
 
 from tests.api._auth_helpers import make_project
-from tests.api.conftest import ClientFor, add_to_project_org
+from tests.api.conftest import ClientFor
 from tests.unit.test_access_layers import base
 
 

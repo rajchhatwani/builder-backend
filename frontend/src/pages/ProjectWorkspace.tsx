@@ -72,6 +72,8 @@ const IntakePage = lazy(() => import('../shell/ai/IntakePage').then((m) => ({ de
 const PlanReviewPage = lazy(() => import('../shell/ai/PlanReviewPage').then((m) => ({ default: m.PlanReviewPage })))
 const ApprovalsPage = lazy(() => import('../shell/ai/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
 const SeeItWork = lazy(() => import('../shell/ai/SeeItWork').then((m) => ({ default: m.SeeItWork })))
+const DependenciesPage = lazy(() => import('../shell/ai/DependenciesPage').then((m) => ({ default: m.DependenciesPage })))
+const SearchPage = lazy(() => import('../shell/search/SearchPage').then((m) => ({ default: m.SearchPage })))
 const BuildPage = lazy(() => import('../shell/ai/BuildPage').then((m) => ({ default: m.BuildPage })))
 const HistoryPage = lazy(() => import('../shell/behavior/HistoryPage').then((m) => ({ default: m.HistoryPage })))
 
@@ -584,6 +586,13 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'build' && <BuildPage projectId={project.id} orgSlug={org?.slug} />}
           {section === 'see' && <SeeItWork projectId={project.id} />}
           {section === 'approvals' && <ApprovalsPage projectId={project.id} />}
+        </Suspense>
+      )}
+
+      {v2 && (section === 'search' || section === 'dependencies') && (
+        <Suspense fallback={<p className="empty-state">Loading…</p>}>
+          {section === 'search' && <SearchPage projectId={project.id} />}
+          {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
         </Suspense>
       )}
 

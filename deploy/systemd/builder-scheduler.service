@@ -1,0 +1,22 @@
+# Periodic operator jobs (scheduled reports every minute, idle-workspace sweep + gauge reconcile hourly).
+# Install: copy to /etc/systemd/system/, create /etc/builder/scheduler.env (BUILDER_DATABASE_URL, SECRET_KEY,
+# BUILDER_ENVIRONMENT), then: systemctl daemon-reload && systemctl enable --now builder-scheduler
+# Safe to run more than one copy; every job is idempotent.
+[Unit]
+Description=Builder periodic jobs (reports, idle sweep)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=builder
+WorkingDirectory=/opt/builder
+EnvironmentFile=/etc/builder/scheduler.env
+ExecStart=/usr/bin/env uv run python -m app.jobs.scheduler
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

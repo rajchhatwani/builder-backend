@@ -197,8 +197,13 @@ def ensure_realm(base: str, token: str, suite: dict[str, Any]) -> None:
     realm = urllib.parse.quote(suite["realm"], safe="")
     found, _ = call("GET", f"{base}/admin/realms/{realm}", token=token, allow_missing=True)
     if found is None:
-        call("POST", f"{base}/admin/realms", token=token, body=suite["realm_base"])
-        print(f"  created suite realm {suite['realm']}")
+        try:
+            call("POST", f"{base}/admin/realms", token=token, body=suite["realm_base"])
+            print(f"  created suite realm {suite['realm']}")
+        except RegisterError as exc:
+            if " -> 409" not in str(exc):  # another member created it between our GET and POST
+                raise
+            print(f"  suite realm {suite['realm']} was created by another member")
 
 
 def ensure_audience_scope(admin: str, token: str, suite: dict[str, Any]) -> str:

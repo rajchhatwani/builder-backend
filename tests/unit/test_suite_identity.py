@@ -187,3 +187,12 @@ def test_the_suite_realm_config_matches_the_golden_file(suite_files: dict[str, s
 def test_generation_is_deterministic() -> None:
     spec = Spec.model_validate(load("keycloak_suite"))
     assert generate(spec) == generate(spec)
+
+
+def test_register_tolerates_a_concurrent_realm_create_and_readme_says_roles_separate_apps(
+    suite_files: dict[str, str],
+) -> None:
+    """CO5-4: realm-create race (409 is fine) and the suite-audience caveat is documented."""
+    script = suite_files["scripts/keycloak_register.py"]
+    assert '" -> 409" not in str(exc)' in script
+    assert "Only client roles separate the apps" in suite_files["README.md"]

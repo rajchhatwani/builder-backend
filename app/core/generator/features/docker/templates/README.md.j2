@@ -303,6 +303,8 @@ for every app, while each app decides what they may do with its own roles.
 - Tokens carry the realm's `{{ "suite-audience" }}` scope, so `aud` lists every app in the suite. This API accepts a
   token only if its issuer is `KEYCLOAK_PUBLIC_URL/realms/{{ kc.realm }}` **and** its `aud` contains `{{ kc.api_client_id }}`.
   A token from another realm or suite is refused.
+- **Only client roles separate the apps.** Every realm user can hold a token whose `aud` names this API, so
+  authorization here must deny any user who has no role on the `{{ kc.api_client_id }}` client; never treat "signed in" as enough.
 {% if suite.hub_issuer %}- The suite issuer is `{{ suite.hub_issuer }}`; the API refuses to start with a different issuer.
 {% endif %}- Users are matched by `(issuer, subject)` in `auth_identity`; the local user id stays the key of your data.
 

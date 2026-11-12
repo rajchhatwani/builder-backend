@@ -22,3 +22,9 @@ export const typeInto = async (el: HTMLTextAreaElement, v: string) => {
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!.call(el, v); el.dispatchEvent(new Event('input', { bubbles: true })) })
 }
 export const unmount = () => { act(() => root?.unmount()); root = null }
+/** Types into an <input> (React-controlled) or changes a <select>. */
+export const setInput = async (el: HTMLInputElement | HTMLSelectElement, v: string) => {
+  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype
+  await act(async () => { Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, v); el.dispatchEvent(new Event(el instanceof HTMLSelectElement ? 'change' : 'input', { bubbles: true })) })
+}
+export const byText = (host: HTMLElement | null, sel: string, re: RegExp) => Array.from(host?.querySelectorAll(sel) ?? []).find((e) => re.test(e.textContent ?? '')) as HTMLElement | undefined

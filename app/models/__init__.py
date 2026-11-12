@@ -40,6 +40,7 @@ from app.models.scim import ScimDirectory, ScimGroup, ScimGroupMember, ScimUser
 from app.models.spec_op import SpecOp
 from app.models.sso import SsoConnection, SsoDomain, SsoLoginRequest
 from app.models.storage_config import ProjectStorageConfig
+from app.models.ops import JobHeartbeat  # noqa: F401
 from app.models.usage import UsageCounter, UsageEvent, UsageLimit  # noqa: F401
 from app.models.workspace import Workspace, WorkspaceCheckpoint
 

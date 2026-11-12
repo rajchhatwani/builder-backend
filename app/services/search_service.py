@@ -7,10 +7,10 @@ The caller (a builder member) picks the role to search AS; the filter itself liv
 import uuid
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.search import FtsAdapter, OpenSearchAdapter, search
+from app.core.search import _SEARCHABLE, FtsAdapter, OpenSearchAdapter, search
 from app.exceptions import AppError
 from app.models.data_import import ImportedRecord
 from app.services.spec_service import SpecService
@@ -56,3 +56,34 @@ async def search_records(
     }
     out = search(spec, ADAPTERS[adapter], records, entity, query, subject, limit=limit)
     return {"entity": entity, "as_role": as_role, "adapter": adapter, **out}
+
+
+async def reindex_project(session: AsyncSession, project_id: uuid.UUID) -> dict[str, Any]:
+    """Rebuild the searchable view of a project's imported records (CP-5V).
+
+    The platform keeps no external index: both adapters read `imported_records` at query time, so
+    there is nothing stale to repair and the operation is idempotent. It returns what is searchable
+    now (per entity: text-field count and records; field access is applied per query, not here), which is what the generated project's
+    `python -m app.search.reindex` reports for its own index.
+    """
+    spec = await SpecService(session).assemble(project_id)  # 404 for an unknown project
+    counts = dict(
+        (
+            await session.execute(
+                select(ImportedRecord.entity_name, func.count())
+                .where(ImportedRecord.project_id == project_id)
+                .group_by(ImportedRecord.entity_name)
+            )
+        ).all()
+    )
+    entities: list[dict[str, Any]] = [
+        {"entity": e.name, "searchable_fields": n, "records": int(counts.get(e.name, 0))}
+        for e in spec.entities
+        if (n := sum(f.type in _SEARCHABLE for f in e.fields))
+    ]
+    return {
+        "project_id": str(project_id),
+        "index": "database",
+        "entities": entities,
+        "indexed": sum(int(x["records"]) for x in entities),
+    }

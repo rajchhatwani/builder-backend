@@ -275,3 +275,7 @@ tests/unit/test_data_import_safe.py
 tests/unit/test_generator_data_import.py
 tests/e2e/test_search_opensearch_stack.py
 tests/unit/test_guard_field_access.py
+tests/api/test_admin_operations.py
+tests/api/test_import_hooks_cp5v.py
+tests/api/test_sentinel_cp5v_probe.py
+tests/unit/test_scheduler_deploy.py

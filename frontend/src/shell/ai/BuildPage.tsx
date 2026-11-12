@@ -9,6 +9,7 @@ import { PLAN_KEYS, PLAN_LABEL, phasesOf, planRows } from './planLogic'
 import { tokenFor } from './seeItLogic'
 import type { Approval, GateRunResult, PlatformBudget, Preview, RunDetail } from './types'
 import { useNow } from './useNow'
+import { WorkspacesPanel } from './WorkspacesPanel'
 import { errMsg, useRunParam, runLink } from './useRunParam'
 
 const StageTabs = lazy(() => import('./StageTabs').then((m) => ({ default: m.StageTabs })))
@@ -184,6 +185,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
         <h1>Build</h1>
         {error && <p className="bh-error" role="alert">{error}</p>}
         <p className="empty-state" data-testid="build-empty">No build has started yet. <a href={`#/p/${projectId}/intake`}>Describe what you want built</a>.</p>
+        <WorkspacesPanel projectId={projectId} />
       </section>
     )
   }
@@ -318,6 +320,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
           )
         )}
       </div>
+      <WorkspacesPanel projectId={projectId} />
     </section>
   )
 }

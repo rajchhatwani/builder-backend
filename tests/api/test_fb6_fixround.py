@@ -9,13 +9,13 @@ from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select, update
+from sqlalchemy import update
 
 from app.config import Settings, get_settings
 from app.exceptions import AppError
-from app.models.agent import AiApproval, AiRun
+from app.models.agent import AiApproval
 from app.models.behavior_config import ProjectBehavior
-from app.services.agent import approved_effects, sweeper
+from app.services.agent import approved_effects
 from app.services.agent.run_service import RunDriver
 from app.services.agent.sweeper import sweep_once
 from app.services.behavior_service import ACTOR_ROLE
@@ -24,7 +24,7 @@ from tests.api._auth_helpers import make_project
 from tests.api.conftest import ClientFor
 from tests.api.test_agent_approvals import YES, _ask, _run, _team, _url
 from tests.api.test_agent_e2e import _cleanup, _setup, ws_settings  # noqa: F401  (fixtures)
-from tests.api.test_agent_runs import Factory, _patch_run, _run as _run_row
+from tests.api.test_agent_runs import Factory, _run as _run_row
 from tests.api.test_agent_fb2a import PAST, _crashed_run, _deps
 from tests.api.test_agent_runs import FakeToolbox, ScriptedProvider, finish
 from tests.api.test_behavior_hooks import _editor, _seed_hook, example

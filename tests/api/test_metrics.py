@@ -4,6 +4,7 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -291,3 +292,27 @@ async def test_group_by_cardinality_cap_over_the_api(client: AsyncClient) -> Non
     r = await client.get(f"/projects/{pid}/metrics/by_status/value")
     assert r.status_code == 422 and r.json()["code"] == "metric_too_many_groups", r.text
     assert "100" in r.json()["message"]
+
+
+async def test_one_failing_report_does_not_starve_the_later_ones(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CO5-4 / SENTINEL-CP4E 12: the first report raising must not stop the second from firing."""
+    from app.services import metrics_service as ms
+
+    pid = await project_with_orders(client)
+    assert (await make_metric(client, pid)).status_code == 201
+    r1 = await make_report(client, pid, "First", "0 6 * * *")
+    r2 = await make_report(client, pid, "Second", "0 7 * * *")
+    real = ms.MetricsService._store_run
+
+    async def flaky(self: object, report: object, *a: object, **k: object) -> object:
+        if str(getattr(report, "id")) == r1:
+            raise RuntimeError("boom")
+        return await real(self, report, *a, **k)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(ms.MetricsService, "_store_run", flaky)
+    now = datetime.now(UTC) + timedelta(days=5, hours=8)
+    async with session_factory() as s:
+        assert await fire_due_reports(s, now) == 1
+    assert await n_runs(session_factory, r1) == 0 and await n_runs(session_factory, r2) == 1

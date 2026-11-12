@@ -333,6 +333,26 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'search',
+    label: 'Search',
+    icon: (
+      <>
+        <circle cx="11" cy="11" r="6" />
+        <path d="M20 20l-4.5-4.5" />
+      </>
+    ),
+  },
+  {
+    id: 'dependencies',
+    label: 'Dependencies',
+    icon: (
+      <>
+        <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z" />
+        <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

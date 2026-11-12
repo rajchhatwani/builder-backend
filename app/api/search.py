@@ -1,6 +1,7 @@
 """Permission-filtered search over imported records (B4-3, C21).
 
-GET /projects/{project_id}/search?entity=&q=&as_role=&adapter=fts|opensearch   (viewer)
+GET  /projects/{project_id}/search?entity=&q=&as_role=&adapter=fts|opensearch   (viewer)
+POST /projects/{project_id}/search/reindex                                    (editor)
 """
 
 import uuid
@@ -10,7 +11,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_session
-from app.services.search_service import search_records
+from app.services.search_service import reindex_project, search_records
 
 router = APIRouter(prefix="/projects/{project_id}", tags=["search"])
 
@@ -31,3 +32,9 @@ async def search_project(
         db, project_id, entity=entity, query=q, as_role=as_role, adapter=adapter,
         as_tenant=as_tenant, as_user=as_user, limit=limit,
     )  # fmt: skip
+
+
+@router.post("/search/reindex")
+async def reindex(project_id: uuid.UUID, db: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    """Editor-only (the project guard requires an editor for every non-GET method)."""
+    return await reindex_project(db, project_id)

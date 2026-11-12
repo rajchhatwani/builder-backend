@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 from app.db import get_session_factory
 from app.services.metrics_service import fire_due_reports
+from app.services.ops_service import record_heartbeat
 
 
 async def main() -> int:
@@ -25,5 +26,12 @@ async def main() -> int:
     return 0
 
 
+async def run_once() -> int:
+    """`main` plus a heartbeat row, for a cron / timer start (app.jobs.scheduler records its own)."""
+    code = await main()
+    await record_heartbeat("reports", code == 0, f"exit {code}" if code else None)
+    return code
+
+
 if __name__ == "__main__":
-    raise SystemExit(asyncio.run(main()))
+    raise SystemExit(asyncio.run(run_once()))

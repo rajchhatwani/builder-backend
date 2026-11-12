@@ -3,7 +3,6 @@ and the persisted promotion with its sweeper retry (FX-3 / B-004). The model is 
 
 import uuid
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from typing import Any
 
 import pytest

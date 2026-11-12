@@ -20,7 +20,7 @@ class UsageSummaryRead(BaseModel):
 
 
 class UsageLimitWrite(BaseModel):
-    limit_value: int | None = Field(default=None, ge=0)  # null = unlimited
+    limit_value: int | None = Field(default=None, ge=0, le=2**63 - 1)  # null = unlimited
 
 
 class UsageEventRead(BaseModel):

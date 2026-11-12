@@ -6,6 +6,7 @@ import { BuildPage } from './BuildPage'
 
 const m = vi.hoisted(() => ({ getRun: vi.fn(), listApprovals: vi.fn(), listRuns: vi.fn(), platformBudget: vi.fn(), listPreviews: vi.fn(), cancelRun: vi.fn(), resumeRun: vi.fn(), pauseRun: vi.fn(), runGates: vi.fn() }))
 vi.mock('./aiApi', () => ({ aiApi: m }))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: { listWorkspaces: () => Promise.resolve([]) } }))
 vi.mock('./StageTabs', () => ({ StageTabs: (p: { workspaceId: string; onDirtyChange?: (d: boolean) => void }) => createElement('div', { 'data-testid': 'stage-mock' }, p.workspaceId, createElement('button', { 'data-testid': 'make-dirty', onClick: () => p.onDirtyChange?.(true) })) }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 

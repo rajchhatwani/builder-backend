@@ -24,6 +24,9 @@ const CONTRACT: [string, unknown][] = [
   ['#/org/acme/sso', { page: 'org', slug: 'acme', tab: 'sso' }],
   ['#/org/acme/policies', { page: 'org', slug: 'acme', tab: 'policies' }],
   ['#/org/acme/nonsense', { page: 'org', slug: 'acme', tab: 'people' }],
+  // Added by CP-5V (additions): the org AI and Usage tabs.
+  ['#/org/acme/ai', { page: 'org', slug: 'acme', tab: 'ai' }],
+  ['#/org/acme/usage', { page: 'org', slug: 'acme', tab: 'usage' }],
   ['#/admin', { page: 'admin', section: 'overview' }],
   ['#/admin/', { page: 'admin', section: 'overview' }],
   ['#/admin/insights', { page: 'admin', section: 'insights' }],
@@ -35,6 +38,8 @@ const CONTRACT: [string, unknown][] = [
   ['#/admin/audit', { page: 'admin', section: 'audit' }],
   ['#/admin/settings', { page: 'admin', section: 'settings' }],
   ['#/admin/nonsense', { page: 'admin', section: 'overview' }],
+  // Added by CP-5V (addition): the platform-admin SSO domain release page.
+  ['#/admin/sso', { page: 'admin', section: 'sso' }],
   [`#/p/${PID}`, { page: 'project', projectId: PID, section: 'overview' }],
   // Added by F1-4 (an addition, no existing row changed): the v2-only State machines page.
   [`#/p/${PID}/machines`, { page: 'project', projectId: PID, section: 'machines' }],
@@ -55,6 +60,9 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/suite`, { page: 'project', projectId: PID, section: 'suite' }],
   // Added by F4-1 (addition): the v2-only Import wizard page.
   [`#/p/${PID}/import`, { page: 'project', projectId: PID, section: 'import' }],
+  // Added by CP-5V (additions): the v2-only Search and Dependencies pages.
+  [`#/p/${PID}/search`, { page: 'project', projectId: PID, section: 'search' }],
+  [`#/p/${PID}/dependencies`, { page: 'project', projectId: PID, section: 'dependencies' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
   // Added by F2-4 (addition): the v2-only History timeline page.
   [`#/p/${PID}/timeline`, { page: 'project', projectId: PID, section: 'timeline' }],
