@@ -218,3 +218,63 @@ def test_runtime_caps_keys_and_bytes(runtime: Any) -> None:
         check(runtime, {"s": "ok", "n": 1}, max_keys=1)
     with pytest.raises(ValueError):
         check(runtime, {"s": "ok", "n": 1}, max_bytes=5)
+
+
+# -- CP4F4 L6: pre-flight matches Postgres casts ----------------------------------------------------
+
+from app.core.custom_fields import MAX_SAMPLES, check_promotable, is_proven, preflight_cast  # noqa: E402
+from app.core.spec_models import SpecCustomFieldDef  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    ("type_", "bad"),
+    [
+        ("float", ["1_0", "nan", "inf", "-Infinity", "1e999", "\u0661\u0662"]),
+        ("int", ["1_0", "\u0661"]),
+        ("date", ["2024-W01-1", "20240101", "2024-1-1", "2024-02-30"]),
+        ("datetime", ["2024-W01-1T10:00", "nan", "2024-02-30 10:00"]),
+    ],
+)
+def test_l6_preflight_rejects_what_postgres_rejects(type_: str, bad: list[str]) -> None:
+    d = SpecCustomFieldDef(name="x", type=type_)
+    assert [p.sample_index for p in preflight_cast(d, bad)] == list(range(len(bad)))
+
+
+@pytest.mark.parametrize(
+    ("type_", "good"),
+    [
+        ("float", ["1.5", " 2 ", "-3e4", ".5", 7, 1.25]),
+        ("date", ["2024-01-31"]),
+        ("datetime", ["2024-01-31T10:00:00Z", "2024-01-31 10:00:00.123+02:00", "2024-01-31"]),
+    ],
+)
+def test_l6_preflight_accepts_valid(type_: str, good: list[Any]) -> None:
+    assert preflight_cast(SpecCustomFieldDef(name="x", type=type_), good) == []
+
+
+def test_l6_string_length_uses_json_text_for_containers() -> None:
+    d = SpecCustomFieldDef(name="x", type="string", max_length=10)
+    assert [p.code for p in preflight_cast(d, [{"a": 1}, {"a": "xxxxxxxxxxxx"}, ["a", "b", "c", "d"]])] == [
+        "custom_field_promote_too_long",
+        "custom_field_promote_too_long",
+    ]  # '{"a": 1}' is 8 chars (fits); the others are longer in json text
+
+
+def test_l6_not_proven_when_capped_or_required_without_samples() -> None:
+    s = spec()
+    ent = s.entities[0]
+    d = next(x for x in ent.custom_fields.defs if x.type == "int")  # type: ignore[union-attr]
+    good = [1] * (MAX_SAMPLES - 1)
+    assert is_proven(check_promotable(s, ent.name, d.name, good), good)
+    capped = [1] * MAX_SAMPLES
+    probs = check_promotable(s, ent.name, d.name, capped)
+    assert not is_proven(probs, capped) and "custom_field_promote_sample_capped" in {p.code for p in probs}
+    assert not is_proven(check_promotable(s, ent.name, d.name, None), None)
+    assert not is_proven(check_promotable(s, ent.name, d.name, []), [])
+    bad = ["x"]
+    assert not is_proven(check_promotable(s, ent.name, d.name, bad), bad)
+    req = s.model_copy(deep=True)
+    rd = next(x for x in req.entities[0].custom_fields.defs if x.name == d.name)  # type: ignore[union-attr]
+    rd.required = True
+    codes_ = {p.code for p in check_promotable(req, ent.name, d.name, [])}
+    assert "custom_field_promote_required_without_default" in codes_

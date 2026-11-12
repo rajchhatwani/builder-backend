@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ImportPreview, ImportRow } from '../../api/types'
-import { applyRowSave, changedValues, deriveStep, entitiesOf, fixableFields, groupErrors, initialMapping, mappingBody, quotaMessage, startValue, summarise } from './importLogic'
+import { leftRejected, nextRejectedOffset, applyRowSave, changedValues, deriveStep, entitiesOf, fixableFields, groupErrors, initialMapping, mappingBody, quotaMessage, startValue, summarise } from './importLogic'
 
 export const ROW: ImportRow = {
   id: 'r3', row_no: 3, raw: { No: 'INV-3', Total: 'abc' }, record: null, status: 'rejected',
@@ -62,6 +62,14 @@ describe('importLogic', () => {
     const c = { total: 3, accepted: 2, rejected: 1, duplicate: 0, fixed: 0 }
     expect(applyRowSave(c, { ...ROW, status: 'rejected' })).toBe(c)
     expect(applyRowSave(c, { ...ROW, status: 'fixed' })).toEqual({ ...c, rejected: 0, fixed: 1 })
+  })
+
+  it('counts a fix that becomes a duplicate and computes the next offset from still-rejected rows', () => {
+    const c = { total: 3, accepted: 0, rejected: 3, duplicate: 0, fixed: 0 }
+    expect(applyRowSave(c, { ...ROW, status: 'duplicate' })).toEqual({ ...c, rejected: 2, duplicate: 1 })
+    expect(leftRejected({ ...ROW, status: 'duplicate' })).toBe(true)
+    expect(leftRejected({ ...ROW, status: 'rejected' })).toBe(false)
+    expect(nextRejectedOffset([ROW, { ...ROW, status: 'rejected' }, { ...ROW, status: 'duplicate' }])).toBe(2)
   })
 
   it('words the quota refusal with the limit', () => {

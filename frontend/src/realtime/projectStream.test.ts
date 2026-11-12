@@ -89,4 +89,47 @@ describe('project stream', () => {
     await settle()
     expect(h.doFetch.mock.calls.length).toBeLessThanOrEqual(1)
   })
+
+  it('a hidden tab closes the stream and a visible tab resumes it with Last-Event-ID, without back-off', async () => {
+    let hidden = false
+    const subs: Array<() => void> = []
+    const visibility = { hidden: () => hidden, subscribe: (cb: () => void) => { subs.push(cb); return () => undefined } }
+    const calls: Array<Record<string, string>> = []
+    let aborted = 0
+    const doFetch = vi.fn(async (_u: RequestInfo | URL, init?: RequestInit) => {
+      calls.push(init?.headers as Record<string, string>)
+      const first = calls.length === 1
+      const body = new ReadableStream<Uint8Array>({
+        start(c) {
+          if (first) c.enqueue(enc.encode(frame(7, 'spec.changed')))
+          else c.enqueue(enc.encode(frame(8, 'spec.changed')))
+          init?.signal?.addEventListener('abort', () => { aborted++; c.error(new DOMException('x', 'AbortError')) })
+        },
+      })
+      return new Response(body, { status: 200 })
+    })
+    const waits: number[] = []
+    const events: number[] = []
+    const statuses: StreamStatus[] = []
+    const conn = connectProjectEvents({
+      projectId: 'p', doFetch: doFetch as unknown as typeof fetch, headers: () => ({}), refresh: async () => false,
+      wait: async (ms) => { waits.push(ms) }, rand: () => 0.5, visibility,
+      onEvent: (e) => { if (e.id !== null) events.push(e.id) }, onStatus: (s) => statuses.push(s),
+    })
+    await settle()
+    expect(events).toEqual([7])
+    hidden = true; subs.forEach((f) => f())
+    await settle()
+    expect(aborted).toBe(1)
+    expect(statuses[statuses.length - 1]).toBe('paused')
+    expect(doFetch).toHaveBeenCalledTimes(1)
+    expect(waits).toEqual([])
+    hidden = false; subs.forEach((f) => f())
+    await settle()
+    expect(doFetch).toHaveBeenCalledTimes(2)
+    expect(calls[1]['Last-Event-ID']).toBe('7')
+    expect(events).toEqual([7, 8])
+    expect(waits).toEqual([])
+    conn.close()
+  })
 })

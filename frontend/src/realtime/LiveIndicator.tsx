@@ -2,7 +2,7 @@ import { useProjectEvents } from './useProjectEvents'
 import type { PresenceUser, StreamStatus } from './projectStream'
 
 export const STATUS_TEXT: Record<StreamStatus, string> = {
-  connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', stopped: 'Updates paused',
+  connecting: 'Connecting…', live: 'Live', reconnecting: 'Reconnecting…', paused: 'Paused while this tab is hidden', stopped: 'Updates paused',
 }
 
 /** Names of the other people here, newest roster; empty when alone. Pure. */

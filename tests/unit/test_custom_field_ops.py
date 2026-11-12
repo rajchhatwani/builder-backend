@@ -85,9 +85,9 @@ def test_normal_spec_validation_catches_bad_defs(def_: dict[str, Any], code: str
 
 def test_update_and_remove_round_trip() -> None:
     after, inv = roundtrip(
-        spec(), "update_custom_field", {"entity": "Contact", "name": "nickname", "changes": {"max_length": 80, "name": "alias"}}
+        spec(), "update_custom_field", {"entity": "Contact", "name": "nickname", "changes": {"max_length": 80}}
     )
-    assert "alias" in defs(after) and "nickname" not in defs(after) and inv == "update_custom_field"
+    assert "nickname" in defs(after) and inv == "update_custom_field"
     after, inv = roundtrip(spec(), "remove_custom_field", {"entity": "Contact", "name": "tier"})
     assert "tier" not in defs(after) and inv == "define_custom_field"
     with pytest.raises(AppError):
@@ -166,3 +166,21 @@ def test_preflight_huge_numbers_do_not_raise() -> None:
     # SENTINEL M4: a >4300-digit integer string / a huge int float must be a problem, never a 500.
     assert [p.code for p in preflight_cast(d("int"), ["9" * 5000])] == ["custom_field_promote_int_out_of_range"]
     assert [p.code for p in preflight_cast(d("float"), [10**400])] == ["custom_field_promote_bad_value"]
+
+
+def test_l7_rename_is_refused_with_a_stable_code() -> None:
+    with pytest.raises(AppError) as e:
+        apply(spec(), "update_custom_field", {"entity": "Contact", "name": "nickname", "changes": {"name": "alias"}})
+    assert e.value.code == "custom_field_rename_unsupported" and e.value.status_code == 409
+    # a no-op "rename" to the same name and other changes stay allowed
+    after = apply(spec(), "update_custom_field", {"entity": "Contact", "name": "nickname", "changes": {"name": "nickname", "max_length": 9}})
+    assert "nickname" in defs(after)
+
+
+def test_l7_define_that_enables_restores_the_exact_spec_on_undo() -> None:
+    before = spec()
+    p = plan(before, "define_custom_field", {"entity": "Note", "def": {"name": "flag", "type": "bool"}})
+    back = REGISTRY[p.inverse_type].to_spec(p.after, parse(p.inverse_type, p.inverse_payload))
+    assert canonical_bytes(back) == canonical_bytes(before)
+    note = next(e for e in back.entities if e.name == "Note")
+    assert note.custom_fields is None or not note.custom_fields.enabled

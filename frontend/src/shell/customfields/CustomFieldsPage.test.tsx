@@ -58,11 +58,14 @@ describe('CustomFieldsPage', () => {
     await click(/Check score for promotion/)
     expect(q('[data-testid=cf-check]')?.textContent).toContain('value 3 is not a whole number')
     expect((btn(/Promote score to a column/) as HTMLButtonElement).disabled).toBe(true)
-    m.check.mockResolvedValueOnce({ ok: true, problems: [], plan_sql: ['ALTER TABLE contacts ADD COLUMN score integer'] })
+    m.check.mockResolvedValueOnce({ ok: true, proven: true, warnings: [], problems: [], plan_sql: ['ALTER TABLE contacts ADD COLUMN score integer'] })
     await click(/Check score for promotion/)
     expect(q('[data-testid=cf-check]')?.textContent).toContain('ALTER TABLE')
+    expect(q('[data-testid=cf-check]')?.textContent).toContain('Ready')
     m.promote.mockResolvedValue({ entity: 'Contact', name: 'score', op_seq: 7, plan_sql: [] })
     await click(/Promote score to a column/)
+    expect(m.promote).not.toHaveBeenCalled()
+    await click(/Yes, promote score/)
     expect(m.promote).toHaveBeenCalledWith('p', 'Contact', 'score')
     expect(q('[data-testid=cf-notice]')?.textContent).toContain('real column')
     expect(q('[data-testid=cf-check]')).toBeNull()
@@ -72,6 +75,8 @@ describe('CustomFieldsPage', () => {
     m.spec.mockResolvedValue(SPEC); m.list.mockResolvedValue(page([F])); m.remove.mockRejectedValueOnce(new Error('nope'))
     await mount()
     await click(/Remove score/)
+    expect(m.remove).not.toHaveBeenCalled()
+    await click(/Yes, remove score/)
     expect(q('[data-testid=cf-error]')?.textContent).toContain('nope')
   })
 
@@ -79,5 +84,62 @@ describe('CustomFieldsPage', () => {
     m.spec.mockResolvedValue({ entities: [] })
     await mount()
     expect(q('[data-testid=cf-empty]')).not.toBeNull()
+  })
+
+  it('asks before removing; Escape cancels, focus returns, Cancel keeps the field', async () => {
+    m.spec.mockResolvedValue(SPEC); m.list.mockResolvedValue(page([F])); m.remove.mockResolvedValue(undefined)
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    try {
+      await mount()
+      const trigger = btn(/Remove score/)
+      await click(/Remove score/)
+      const dlg = q('[role=alertdialog]')!
+      expect(dlg).not.toBeNull()
+      expect(document.activeElement?.textContent).toBe('Cancel')
+      await act(async () => { dlg.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+      await act(async () => { vi.runAllTimers() })
+      expect(q('[role=alertdialog]')).toBeNull()
+      expect(m.remove).not.toHaveBeenCalled()
+      expect(document.activeElement).toBe(trigger)
+    } finally { vi.useRealTimers() }
+  })
+
+  it('shows Not proven with warnings when proven is missing or false and needs explicit confirmation', async () => {
+    m.spec.mockResolvedValue(SPEC); m.list.mockResolvedValue(page([F]))
+    m.promote.mockResolvedValue({ entity: 'Contact', name: 'score', op_seq: 7, plan_sql: [] })
+    m.check.mockResolvedValueOnce({ ok: true, problems: [], plan_sql: [] })
+    await mount()
+    await click(/Check score for promotion/)
+    expect(q('[data-testid=cf-not-proven]')).not.toBeNull()
+    expect(q('[data-testid=cf-check]')?.textContent).not.toContain('Ready')
+    const promoteBtn = () => btn(/Promote score to a column/) as HTMLButtonElement
+    expect(promoteBtn().disabled).toBe(true)
+    m.check.mockResolvedValueOnce({ ok: true, proven: true, warnings: ['required field, no samples'], problems: [], plan_sql: [] })
+    await click(/Check score for promotion/)
+    expect(q('[data-testid=cf-check]')?.textContent).toContain('required field, no samples')
+    expect(q('[data-testid=cf-not-proven]')).not.toBeNull()
+    expect(promoteBtn().disabled).toBe(true)
+    await act(async () => { (q('[data-testid=cf-check] input[type=checkbox]') as HTMLInputElement).click() })
+    expect(promoteBtn().disabled).toBe(false)
+    await click(/Promote score to a column/)
+    await click(/Yes, promote score/)
+    expect(m.promote).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a stale list response after the entity switches', async () => {
+    m.spec.mockResolvedValue({ entities: [{ name: 'Contact', fields: [] }, { name: 'Deal', fields: [] }] })
+    let resolveA!: (v: unknown) => void
+    m.list.mockImplementationOnce(() => new Promise((r) => { resolveA = r }))
+    m.list.mockResolvedValueOnce({ ...page([]), entity: 'Deal' })
+    await mount()
+    const sel = q('[data-testid=cf-entity]') as HTMLSelectElement
+    const set = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!
+    await act(async () => { set.call(sel, 'Deal'); sel.dispatchEvent(new Event('change', { bubbles: true })) })
+    await flush()
+    expect(q('[data-testid=cf-none]')?.textContent).toContain('Deal')
+    await act(async () => { resolveA(page([F])) })
+    await flush()
+    expect(host.querySelectorAll('[data-testid=cf-row]').length).toBe(0)
+    expect(q('[data-testid=cf-none]')?.textContent).toContain('Deal')
   })
 })

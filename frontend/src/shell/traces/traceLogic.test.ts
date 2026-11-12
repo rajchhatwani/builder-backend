@@ -80,8 +80,8 @@ describe('links', () => {
     expect(linksOf(t.rows[2].span)).toEqual([{ kind: 'rule', name: 'invoice_within_limit' }])
     expect(linksOf(t.rows[3].span)).toEqual([{ kind: 'hook', name: 'check_po_match' }])
     expect(linksOf(t.rows[0].span)).toEqual([])
-    expect(linkPath('p1', { kind: 'rule', name: 'x' })).toBe('/p/p1/rules')
-    expect(linkPath('p1', { kind: 'hook', name: 'x' })).toBe('/p/p1/hooks')
+    expect(linkPath('p1', { kind: 'rule', name: 'x' })).toBe('/p/p1/rules?rule=x')
+    expect(linkPath('p1', { kind: 'hook', name: 'x' })).toBe('/p/p1/hooks?hook=x')
   })
   it('ignores non-text or blank link attributes', () => {
     expect(linksOf(span('a', null, 0, 1, { attributes: { 'bb.rule': 3, 'bb.hook': ' ' } }) as TraceSpan)).toEqual([])

@@ -91,7 +91,8 @@ def test_a_project_without_storage_has_none_of_it() -> None:
         files = generate(load(name))
         assert [p for p in files if "storage" in p] == [], name
         assert "boto3" not in files["requirements.txt"] or name == "shop_auth"
-        assert "python-multipart" not in files["requirements.txt"]
+        # the generated CSV import (every project with a create op) also needs python-multipart for its upload form
+        assert "python-multipart" not in files["requirements.txt"] or "app/imports/router.py" in files, name
         assert "clamav" not in files["docker-compose.yml"]
         assert "stor_" not in files["tests/conftest.py"]
 

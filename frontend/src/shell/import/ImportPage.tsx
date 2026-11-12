@@ -4,7 +4,7 @@ import { useRealtimeRefresh } from '../../realtime/bus'
 import type { ImportCommitResult, ImportCounts, ImportPreview, ImportRecord, ImportRow } from '../../api/types'
 import { link } from '../../components/Sidebar'
 import {
-  STEPS, applyRowSave, changedValues, deriveStep, entitiesOf, fixableFields, groupErrors, initialMapping, mappingBody,
+  STEPS, applyRowSave, changedValues, leftRejected, nextRejectedOffset, deriveStep, entitiesOf, fixableFields, groupErrors, initialMapping, mappingBody,
   quotaMessage, readyCount, startValue, summarise,
 } from './importLogic'
 import type { SpecEntity } from './importLogic'
@@ -145,7 +145,9 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
     setBusy(true)
     setError(null)
     try {
-      const page = await api.listImportRows(projectId, preview.batch_id, 'rejected', 100, rows.length)
+      const page = await api.listImportRows(projectId, preview.batch_id, 'rejected', 100, nextRejectedOffset(rows))
+      // the server's total is the truth for the counter
+      setCounts((c) => (c ? { ...c, rejected: page.total } : c))
       setRows((all) => {
         const seen = new Set(all.map((r) => r.id))
         return [...all, ...page.items.filter((r) => !seen.has(r.id))]
@@ -163,9 +165,9 @@ function Wizard({ projectId, entities }: { projectId: string; entities: SpecEnti
       const values = changedValues(edits, row, mapping)
       if (Object.keys(values).length === 0) return
       const saved = await api.fixImportRow(projectId, preview.batch_id, row.id, values)
-      if (saved.status === 'fixed') {
-        setCounts(applyRowSave(counts, saved))
-        setFixedCount((n) => n + 1)
+      if (leftRejected(saved)) {
+        setCounts((c) => (c ? applyRowSave(c, saved) : c))
+        if (saved.status === 'fixed') setFixedCount((n) => n + 1)
         setRows((all) => all.filter((r) => r.id !== row.id))
       } else {
         setRows((all) => all.map((r) => (r.id === row.id ? saved : r)))

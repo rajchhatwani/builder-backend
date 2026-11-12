@@ -93,11 +93,21 @@ export function summarise(c: ImportCounts): string {
 /** Rows that will be written when committing. */
 export const readyCount = (c: ImportCounts) => c.accepted + c.fixed
 
-/** After one row was saved: move it from "needs fixing" to "fixed" when it is valid now. */
+/** After one row was saved: a row leaves "needs fixing" when it became fixed OR a duplicate; counts follow. */
 export function applyRowSave(c: ImportCounts, saved: ImportRow): ImportCounts {
-  if (saved.status !== 'fixed') return c
-  return { ...c, rejected: Math.max(0, c.rejected - 1), fixed: c.fixed + 1 }
+  if (saved.status === 'fixed') return { ...c, rejected: Math.max(0, c.rejected - 1), fixed: c.fixed + 1 }
+  if (saved.status === 'duplicate') return { ...c, rejected: Math.max(0, c.rejected - 1), duplicate: c.duplicate + 1 }
+  return c
 }
+
+/** True when a saved row is no longer in the server's rejected list. */
+export const leftRejected = (saved: ImportRow) => saved.status !== 'rejected'
+
+/**
+ * Offset for the next GET .../rows?status=rejected page. The list only holds rows that are still
+ * rejected on the server (fixed/duplicate rows are dropped), so it is exactly the number of rejected rows already loaded.
+ */
+export const nextRejectedOffset = (loaded: ImportRow[]) => loaded.filter((r) => r.status === 'rejected').length
 
 type QuotaDetail = { metric?: unknown; limit?: unknown; used?: unknown; period_end?: unknown }
 

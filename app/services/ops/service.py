@@ -21,7 +21,8 @@ from app.models.spec_op import SpecOp
 from app.schemas.spec_ops import SpecOpActor, SpecOpInverse, SpecOpRead
 from app.services.ops import dbapply
 from app.services.ops.canon import canonical_bytes, canonical_hash
-from app.services.ops.registry import Planned, dump, parse, plan
+from app.core.spec_models import Spec
+from app.services.ops.registry import REGISTRY, Planned, dump, parse, plan
 from app.services.ops.scope import Actor, OpScope, scope_of
 
 
@@ -334,6 +335,33 @@ class OpsService:
         return applied
 
     # -- read ----------------------------------------------------------------------------
+
+    async def spec_at(self, project_id: uuid.UUID, seq: int) -> Spec:
+        """The spec as it was right after op `seq` (0 = before the first op), read-only: walk the
+        recorded inverses newest-first in memory (no lock, no write) and prove the recorded hash.
+        A spec edited outside the op-log, or a log that does not replay, is a 409, never a guess."""
+        from app.services.spec_service import SpecService
+
+        rows = await self._rows(project_id)
+        if not rows:
+            raise _err("nothing_to_restore", "the op-log is empty")
+        if seq < 0 or seq > rows[-1].seq:
+            raise AppError(code="not_found", message="no such operation", status_code=404)
+        spec = await SpecService(self.session).assemble(project_id)
+        if canonical_hash(spec) != rows[-1].spec_hash_after:
+            raise _err("spec_changed", "the spec changed outside the op-log; no earlier version can be proven")
+        at = next((r for r in rows if r.seq == seq), None)
+        if seq != 0 and at is None:
+            raise AppError(code="not_found", message="no such operation", status_code=404)
+        target = rows[0].spec_hash_before if at is None else at.spec_hash_after
+        for r in reversed([r for r in rows if r.seq > seq]):
+            inv = REGISTRY.get(r.inverse["op_type"])
+            if inv is None:
+                raise _err("restore_mismatch", "the op-log cannot be replayed")
+            spec = inv.to_spec(spec, parse(r.inverse["op_type"], r.inverse["payload"]))
+        if canonical_hash(spec) != target:
+            raise _err("restore_mismatch", "the earlier spec does not match the recorded state")
+        return spec
 
     async def list_ops(
         self, project_id: uuid.UUID, limit: int, offset: int

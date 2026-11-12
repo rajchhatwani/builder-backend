@@ -10,6 +10,7 @@ from app.core.custom_fields import (
     CustomFieldError,
     PromoteProblem,
     check_promotable,
+    is_proven,
     promote,
 )
 from app.core.spec_models import Spec, SpecCustomFieldDef, SpecEntity
@@ -108,8 +109,14 @@ class CustomFieldService:
             sql = plan.upgrade_sql()
         except CustomFieldError:
             sql = []
+        proven = is_proven(problems, samples)
+        warnings = [p.message for p in problems if p.severity == "warning"]
+        if not proven and not any(p.severity == "error" for p in problems):
+            warnings.append("not proven: the stored values were not (fully) checked against the new column type")
         return PromoteCheckResult(
             ok=not any(p.severity == "error" for p in problems),
+            proven=proven,
+            warnings=warnings,
             problems=[
                 PromoteProblemRead(
                     code=p.code, message=p.message, sample_index=p.sample_index, severity=p.severity

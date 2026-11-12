@@ -108,7 +108,9 @@ async def test_rollback_restores_code_spec_ref_and_data(
     assert gone.status_code == 200 and gone.json()["state"] == "discarded"
     assert not wt.exists()
     names = await _db_names(database_url)
-    assert db not in names and not any(n.startswith("bbcp_") for n in names)
+    # Only THIS workspace's snapshots must be gone: other tests in the same session may still hold their own bbcp_* databases.
+    own = {f"bbcp_{str(c['id']).replace('-', '')}" for c in [*ws["checkpoints"], first, cp2.json()]}
+    assert db not in names and not (own & set(names))
     after = await client.post(f"{base}/{ws['id']}/checkpoints", json={"label": "x"})
     assert after.status_code == 409
 

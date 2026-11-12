@@ -1248,3 +1248,6 @@ body.is-viewing {
 .live-indicator .live-status { min-width: 6.5rem; }
 .live-indicator .live-here { display: inline-block; width: 11rem; overflow: hidden; text-overflow: ellipsis; }
 @media (max-width: 900px) { .live-indicator .live-here { display: none; } }
+
+/* Deep-linked item (a trace span's rule or hook): outline, not colour alone. */
+.linked-item { outline: 3px solid var(--primary, #2563eb); outline-offset: 2px; }

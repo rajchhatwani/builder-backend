@@ -111,3 +111,35 @@ async def test_roles_and_unknown_entity(client: AsyncClient, client_for: ClientF
     assert (await client.post(url(pid, "score", "promote-check", entity="Nope"))).status_code == 404
     assert (await client.post(url(pid, "missing", "promote-check"))).status_code == 404
     assert (await client.post(url(pid, "missing", "promote"))).status_code == 404
+
+
+async def test_l6_promote_check_reports_proven_and_warnings(client: AsyncClient) -> None:
+    pid = await project(client)
+    r = await client.post(url(pid, "score", "promote-check"))
+    body = r.json()
+    assert body["ok"] is True and body["proven"] is False and body["warnings"]
+    r = await client.post(url(pid, "score", "promote-check"), json={"samples": [1, 2, None]})
+    assert r.json()["proven"] is True
+    r = await client.post(url(pid, "score", "promote-check"), json={"samples": ["1_0"]})
+    assert r.json()["ok"] is False and r.json()["proven"] is False
+    r = await client.post(url(pid, "score", "promote-check"), json={"samples": [1] * 1000})
+    assert r.json()["ok"] is True and r.json()["proven"] is False
+    assert any("first 1000" in w for w in r.json()["warnings"])
+
+
+async def test_l7_define_undo_restores_exact_spec_hash_and_rename_is_refused(client: AsyncClient) -> None:
+    pid = await project(client)
+    r = await client.post(url(pid, entity="Note"), json={"name": "flag", "type": "bool"})  # enables on Note
+    assert r.status_code == 201, r.text
+    ops = (await client.get(f"/projects/{pid}/spec/ops")).json()["items"]
+    last = max(ops, key=lambda o: o["seq"])
+    assert last["op_type"] == "define_custom_field"
+    u = await client.post(f"/projects/{pid}/spec/undo")
+    assert u.status_code == 200, u.text
+    assert u.json()["spec_hash_after"] == last["spec_hash_before"]
+    after = (await client.get(url(pid, entity="Note"))).json()
+    assert after["enabled"] is False and after["items"] == []
+    # rename through the endpoint: stable refusal, nothing changes
+    r = await client.patch(url(pid, "score"), json={"name": "points"})
+    assert r.status_code == 409 and r.json()["code"] == "custom_field_rename_unsupported"
+    assert "score" in [d["name"] for d in (await client.get(url(pid))).json()["items"]]

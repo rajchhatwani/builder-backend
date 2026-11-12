@@ -16,6 +16,7 @@ import typing as _t
 
 import fastapi as _fa
 import sqlalchemy as sa
+from fastapi.routing import APIRoute as _APIRoute
 
 from app import db as _db
 from app.auth import access as _access
@@ -30,8 +31,52 @@ from app.routers.leave_requests import _ACCESS as _ACCESS_leave_requests
 from app.schemas.employees import EmployeeCreate
 from app.schemas.leave_requests import LeaveRequestCreate
 
-router = _fa.APIRouter(tags=["import"])
+
+class _BodyLimitRoute(_APIRoute):
+    """Refuses an oversized upload BEFORE Starlette spools the multipart body to disk: a declared Content-Length
+    over the cap is answered at once, and a body that streams more than the cap (chunked, or a lying header)
+    is cut off while it is read. Answer: 413 import_too_large."""
+
+    def get_route_handler(self) -> _t.Callable[[_fa.Request], _t.Coroutine[_t.Any, _t.Any, _fa.Response]]:
+        original = super().get_route_handler()
+
+        async def handler(request: _fa.Request) -> _fa.Response:
+            declared = request.headers.get("content-length", "")
+            if declared.isdigit() and int(declared) > BODY_LIMIT:
+                raise _too_large()
+            seen = 0
+            exceeded = False
+
+            async def receive() -> _t.Any:
+                nonlocal seen, exceeded
+                message = await request.receive()
+                seen += len(message.get("body", b""))
+                if seen > BODY_LIMIT:
+                    exceeded = True
+                    raise _TooLarge
+                return message
+
+            try:
+                return await original(_fa.Request(request.scope, receive))
+            except Exception:
+                if exceeded:
+                    raise _too_large() from None
+                raise
+
+        return handler
+
+
+router = _fa.APIRouter(tags=["import"], route_class=_BodyLimitRoute)
 EXPORT_ROW_CAP = 10000
+BODY_LIMIT = _ci.MAX_BYTES + 256 * 1024  # the file cap plus multipart framing and the mapping field
+
+
+class _TooLarge(Exception):
+    pass
+
+
+def _too_large() -> AppError:
+    return AppError("import_too_large", f"the file is larger than {_ci.MAX_BYTES} bytes", 413)
 _EMPTY = frozenset[str]()
 
 

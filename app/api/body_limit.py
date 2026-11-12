@@ -9,6 +9,8 @@ import re
 
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from app.core.data_import import MAX_BYTES as IMPORT_FILE_MAX_BYTES
+
 _SPEC_WRITE = re.compile(
     r"^/projects/[^/]+/(spec|behavior/[^/]+|authorization|observability|deployment|documents)/?$"
 )
@@ -16,6 +18,14 @@ _SPEC_WRITE = re.compile(
 
 _INTAKE = re.compile(r"^/projects/[^/]+/requirements/intake/?$")
 INTAKE_MAX_BYTES = 13 * 1024 * 1024  # 5 files x 5 MB is capped to 12 MB of files, plus form overhead
+
+
+_IMPORT = re.compile(r"^/projects/[^/]+/imports/?$")
+IMPORT_MAX_BYTES = IMPORT_FILE_MAX_BYTES + 256 * 1024  # the CSV cap plus multipart overhead (L8)
+
+
+def is_import_upload(method: str, path: str) -> bool:
+    return method.upper() == "POST" and _IMPORT.match(path) is not None
 
 
 def is_intake(method: str, path: str) -> bool:
@@ -32,20 +42,25 @@ class SpecWriteLimit:
         self.max_bytes = max_bytes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] == "http" and is_intake(scope["method"], scope.get("path", "")):
+        code = "payload_too_large"
+        if scope["type"] == "http" and is_import_upload(scope["method"], scope.get("path", "")):
+            limit, code = IMPORT_MAX_BYTES, "import_too_large"
+        elif scope["type"] == "http" and is_intake(scope["method"], scope.get("path", "")):
             limit = INTAKE_MAX_BYTES
         elif scope["type"] == "http" and is_spec_write(scope["method"], scope.get("path", "")):
             limit = self.max_bytes
         else:
             await self.app(scope, receive, send)
             return
-        await self._limited(scope, receive, send, limit)
+        await self._limited(scope, receive, send, limit, code)
 
-    async def _limited(self, scope: Scope, receive: Receive, send: Send, limit: int) -> None:
+    async def _limited(
+        self, scope: Scope, receive: Receive, send: Send, limit: int, code: str = "payload_too_large"
+    ) -> None:
         headers = {k.lower(): v for k, v in scope["headers"]}
         declared = headers.get(b"content-length", b"")
         if declared.isdigit() and int(declared) > limit:
-            await self._too_large(send)
+            await self._too_large(send, code)
             return
         chunks: list[bytes] = []
         total = 0
@@ -56,7 +71,7 @@ class SpecWriteLimit:
             chunk = message.get("body", b"")
             total += len(chunk)
             if total > limit:
-                await self._too_large(send)
+                await self._too_large(send, code)
                 return
             chunks.append(chunk)
             if not message.get("more_body", False):
@@ -73,9 +88,9 @@ class SpecWriteLimit:
 
         await self.app(scope, replay, send)
 
-    async def _too_large(self, send: Send) -> None:
+    async def _too_large(self, send: Send, code: str = "payload_too_large") -> None:
         body = (
-            b'{"code":"payload_too_large","message":"request body is too large","details":[]}'
+            b'{"code":"' + code.encode() + b'","message":"request body is too large","details":[]}'
         )
         await send(
             {

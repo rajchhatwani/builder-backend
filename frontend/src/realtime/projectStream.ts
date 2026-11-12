@@ -3,7 +3,7 @@ import { parseEnvelope, type RealtimeEvent } from './eventRouting'
 import { STABLE_MS, parseRetryAfter, reconnectDelay } from './backoff'
 import { createSseParser } from './sseParser'
 
-export type StreamStatus = 'connecting' | 'live' | 'reconnecting' | 'stopped'
+export type StreamStatus = 'connecting' | 'live' | 'reconnecting' | 'paused' | 'stopped'
 export interface PresenceUser { user_id: string; display: string; where: string }
 
 export interface StreamOptions {
@@ -17,7 +17,19 @@ export interface StreamOptions {
   wait?: (ms: number, signal: AbortSignal) => Promise<void>
   rand?: () => number
   now?: () => number
+  /** Tab visibility (default: document.hidden + visibilitychange). A hidden tab closes the stream and resumes, with Last-Event-ID, when visible again. */
+  visibility?: Visibility
 }
+
+export interface Visibility { hidden: () => boolean; subscribe: (cb: () => void) => () => void }
+
+const documentVisibility = (): Visibility =>
+  typeof document === 'undefined'
+    ? { hidden: () => false, subscribe: () => () => undefined }
+    : {
+        hidden: () => document.visibilityState === 'hidden',
+        subscribe: (cb) => { document.addEventListener('visibilitychange', cb); return () => document.removeEventListener('visibilitychange', cb) },
+      }
 
 const defaultWait = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve) => {
@@ -34,13 +46,30 @@ export function connectProjectEvents(opts: StreamOptions): { close: () => void; 
   const wait = opts.wait ?? defaultWait
   const rand = opts.rand ?? Math.random
   const now = opts.now ?? Date.now
+  const vis = opts.visibility ?? documentVisibility()
   const ctl = new AbortController()
+  let connCtl: AbortController | null = null
+  const wake: Array<() => void> = []
+  const unsub = vis.subscribe(() => {
+    if (vis.hidden()) connCtl?.abort()
+    else wake.splice(0).forEach((f) => f())
+  })
+  const untilVisible = () => new Promise<void>((resolve) => {
+    if (!vis.hidden() || ctl.signal.aborted) { resolve(); return }
+    wake.push(resolve)
+  })
   let lastId: number | null = null
   let attempt = 0
   let refreshed = false
 
   const run = async () => {
     while (!ctl.signal.aborted) {
+      if (vis.hidden()) {
+        opts.onStatus?.('paused')
+        await untilVisible()
+        continue
+      }
+      connCtl = new AbortController()
       opts.onStatus?.(attempt === 0 && lastId === null ? 'connecting' : 'reconnecting')
       let retryAfter: number | null = null
       let openedAt = 0
@@ -48,7 +77,7 @@ export function connectProjectEvents(opts: StreamOptions): { close: () => void; 
         const h: Record<string, string> = { ...headers(), Accept: 'text/event-stream' }
         if (lastId !== null) h['Last-Event-ID'] = String(lastId)
         const res = await doFetch(`${BASE_URL}/projects/${encodeURIComponent(opts.projectId)}/events/stream`, {
-          headers: h, credentials: 'include', cache: 'no-store', signal: ctl.signal,
+          headers: h, credentials: 'include', cache: 'no-store', signal: connCtl.signal,
         })
         if (res.status === 401) {
           if (!refreshed && (await refresh())) { refreshed = true; continue }
@@ -88,13 +117,15 @@ export function connectProjectEvents(opts: StreamOptions): { close: () => void; 
         if (ctl.signal.aborted) break
       }
       if (ctl.signal.aborted) break
+      if (vis.hidden()) { attempt = 0; continue } // paused by a hidden tab, not a failure: no back-off
       if (openedAt && now() - openedAt >= STABLE_MS) attempt = 0
       opts.onStatus?.('reconnecting')
       await wait(reconnectDelay(attempt, retryAfter, rand), ctl.signal)
       attempt++
     }
+    unsub()
     opts.onStatus?.('stopped')
   }
   void run()
-  return { close: () => ctl.abort(), lastId: () => lastId }
+  return { close: () => { ctl.abort(); connCtl?.abort(); wake.splice(0).forEach((f) => f()) }, lastId: () => lastId }
 }

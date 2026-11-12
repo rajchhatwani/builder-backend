@@ -35,6 +35,12 @@ for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: '
     await expect(result).toContainText('+ Added')
     await expect(result).toContainText(removed)
 
+    // an older version straight from the op-log, by a shareable link: before the first change everything is "added"
+    await page.goto(`/#/p/${id}/specdiff?base=0`)
+    await expect(page.getByTestId('specdiff-source')).toContainText('before the first change')
+    await expect(page.getByTestId('specdiff-result')).toContainText(removed)
+    await expect(page.getByTestId('specdiff-version')).toHaveValue('0')
+
     const axeDiff = await new AxeBuilder({ page }).analyze()
     expect(axeDiff.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`), 'axe on the diff').toEqual([])
     watch.assertNone()

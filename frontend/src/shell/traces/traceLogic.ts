@@ -205,9 +205,9 @@ export function linksOf(span: TraceSpan): SpanLink[] {
   return out
 }
 
-/** Neither the Rules nor the Hooks page can select one item, so a link opens the section. */
+/** Deep link to the one rule (`?rule=`) or hook (`?hook=`) the span ran; the target page highlights it. */
 export function linkPath(projectId: string, l: SpanLink): string {
-  return `/p/${projectId}/${l.kind === 'rule' ? 'rules' : 'hooks'}`
+  return `/p/${projectId}/${l.kind === 'rule' ? 'rules' : 'hooks'}?${l.kind}=${encodeURIComponent(l.name)}`
 }
 
 export function formatMs(ms: number): string {

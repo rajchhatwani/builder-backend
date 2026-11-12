@@ -52,7 +52,7 @@ describe('TracesPage', () => {
     await click(rule)
     expect(rule.getAttribute('aria-pressed')).toBe('true')
     const a = q('[data-testid=span-detail] a') as HTMLAnchorElement
-    expect(a.getAttribute('href')).toBe('#/p/p1/rules')
+    expect(a.getAttribute('href')).toBe('#/p/p1/rules?rule=invoice_within_limit')
     expect(q('[data-testid=span-attrs]')!.textContent).toContain('bb.rule')
   })
 
@@ -60,7 +60,7 @@ describe('TracesPage', () => {
     await mount()
     await click(btn(/Load example/))
     await click([...host.querySelectorAll('[data-testid=trace-row]')].find((r) => /hook check_po_match/.test(r.textContent ?? ''))!)
-    expect((q('[data-testid=span-detail] a') as HTMLAnchorElement).getAttribute('href')).toBe('#/p/p1/hooks')
+    expect((q('[data-testid=span-detail] a') as HTMLAnchorElement).getAttribute('href')).toBe('#/p/p1/hooks?hook=check_po_match')
   })
 
   it('shows an error for bad JSON and clears it with a good trace', async () => {

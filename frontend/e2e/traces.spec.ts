@@ -31,7 +31,7 @@ for (const [label, size] of [['desktop', { width: 1280, height: 800 }], ['phone'
     expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`), 'axe on the traces page').toEqual([])
 
     await detail.getByRole('link', { name: /Open Rules for rule invoice_within_limit/ }).click()
-    await expect(page).toHaveURL(new RegExp(`#/p/${id}/rules$`))
+    await expect(page).toHaveURL(new RegExp(`#/p/${id}/rules\\?rule=invoice_within_limit$`))
     await expect(page.getByRole('heading', { level: 1, name: 'Rules' })).toBeVisible()
     watch.assertNone()
   })

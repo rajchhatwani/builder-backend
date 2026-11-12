@@ -47,6 +47,58 @@ def test_field_access_and_dedupe_are_enforced_in_the_service() -> None:
     assert "repo._alive()" in service  # existing rows are read through the access scope
 
 
+def test_m1_imported_rows_run_after_save_and_after_commit_hooks() -> None:
+    service = _spec_files()["app/imports/service.py"]
+    assert 'run_stage("after_save", repo.hooks, ctx)' in service
+    assert 'run_stage("after_commit", repo.hooks, ctx, fail_closed=False)' in service
+    assert "ctx.item = item" in service
+    # after_save runs between the flush and the commit; after_commit after it
+    assert service.index("repo._flush()") < service.index('"after_save"') < service.index("repo._commit()")
+    assert service.index("repo._commit()") < service.index('"after_commit"')
+    assert "rollback" in service[service.index('"after_save"') :]
+
+
+def test_m2_dedupe_uses_bounded_in_queries_and_never_a_silent_limit() -> None:
+    service = _spec_files()["app/imports/service.py"]
+    assert "MAX_EXISTING_ROWS" not in service and "_existing_keys" not in service
+    assert "PROBE_CHUNK" in service and ".in_(" in service and "import_dedupe_too_large" in service
+    assert "_scope(repo)" in service and "repo._alive()" in service and "tenant_id" in service
+
+
+def test_l4_dry_run_runs_the_same_prepare_checks() -> None:
+    service = _spec_files()["app/imports/service.py"]
+    assert "if not dry_run:\n            try:" not in service
+    assert "await _prepare(repo, values)" in service
+    assert "Writes nothing" in service
+
+
+def test_l3_a_key_over_an_unreadable_field_is_never_called_duplicate() -> None:
+    files = _spec_files()
+    assert "import_row_rejected" in files["app/imports/service.py"] and 'key[0] == "guarded"' in files["app/imports/service.py"]
+    ns: dict[str, object] = {"__name__": "csv_import_under_test"}
+    exec(compile(files["app/imports/csv_import.py"], "csv_import.py", "exec"), ns)  # noqa: S102
+    entity = ns["SpecEntity"]("T", (ns["SpecField"]("code", "string", unique=True), ns["SpecField"]("name", "string")))
+    keys = ns["DedupeKeys"](entity, frozenset({"code"}))  # the caller may not read `code`
+    with_hidden = keys.of({"code": "A1", "name": "x"})
+    assert with_hidden[0] == "guarded"
+    # a key over the readable fields only: two rows differing only in the hidden value are the same plain key
+    assert keys.of({"code": None, "name": "x"}) == keys.of({"code": None, "name": "x"})
+    assert keys.of({"code": None, "name": "x"})[0] == "plain"
+    assert keys.of({"code": "A1", "name": "x"}) != keys.of({"code": "A2", "name": "x"})  # guarded: full record
+    open_keys = ns["DedupeKeys"](entity, frozenset())
+    assert open_keys.of({"code": "A1", "name": "x"})[0] == "plain"
+    assert open_keys.probe_names({"code": "A1", "name": "x"}) == ("code",)
+    assert keys.probe_names({"code": None, "name": "x"}) == ("name",)  # never probes on a hidden column
+
+
+def test_l8_the_router_limits_the_body_before_it_is_spooled() -> None:
+    router = _spec_files()["app/imports/router.py"]
+    assert "route_class=_BodyLimitRoute" in router and "BODY_LIMIT = _ci.MAX_BYTES" in router
+    assert 'request.headers.get("content-length"' in router
+    assert router.index("class _BodyLimitRoute") < router.index("async def import_tickets")
+    assert "import_too_large" in router
+
+
 def test_the_generated_files_compile() -> None:
     for name, source in _spec_files().items():
         if name.startswith("app/imports/") and name.endswith(".py"):

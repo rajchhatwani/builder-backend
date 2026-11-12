@@ -809,6 +809,7 @@ export const api = {
     request<Record<string, unknown>>(`/projects/${projectId}/behavior/${name}`, { method: 'PUT', body: JSON.stringify(body) }),
   /** Queue and workflow advisor. The path lives in ONE place: ADVISOR_PATH (CO3-2; the backend route must match it). */
   getAdvisor: (projectId: string) => request<AdvisorResult>(ADVISOR_PATH(projectId)),
+  getSpecAt: (projectId: string, seq: number) => request<Record<string, unknown>>(`/projects/${projectId}/spec/at/${seq}`),
   getSpecJson: (projectId: string) => request<Record<string, unknown>>(`/projects/${projectId}/spec`),
   getSpecForPolicies: (projectId: string) =>
     request<SpecForPolicies>(`/projects/${projectId}/spec`),

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { CustomFieldDef, PromoteCheck } from '../../api/types'
 import { entitiesOf } from '../import/importLogic'
@@ -59,16 +59,24 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
   const [required, setRequired] = useState(false)
   const [check, setCheck] = useState<{ name: string; result: PromoteCheck } | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<{ kind: 'remove' | 'promote'; name: string } | null>(null)
+  const [ackUnproven, setAckUnproven] = useState(false)
+  const triggerRef = useRef<HTMLElement | null>(null)
+  const cancelRef = useRef<HTMLButtonElement | null>(null)
+  const reqId = useRef(0)
   const eid = useId()
   const nid = useId()
   const tid = useId()
   const rid = useId()
+  const ackId = useId()
 
   const reload = useCallback(async () => {
+    const mine = ++reqId.current
     try {
-      setItems((await api.listCustomFields(projectId, entity)).items)
+      const res = await api.listCustomFields(projectId, entity)
+      if (mine === reqId.current) setItems(res.items)
     } catch (err) {
-      setError(msg(err, 'Could not list the custom fields'))
+      if (mine === reqId.current) setError(msg(err, 'Could not list the custom fields'))
     }
   }, [projectId, entity])
 
@@ -77,8 +85,31 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
     setCheck(null)
     setNotice(null)
     setError(null)
+    setConfirm(null)
+    setAckUnproven(false)
     void reload()
+    return () => {
+      reqId.current++
+    }
   }, [reload])
+
+  useEffect(() => {
+    if (confirm) cancelRef.current?.focus()
+  }, [confirm])
+
+  const ask = (kind: 'remove' | 'promote', n: string, e: { currentTarget: HTMLElement }) => {
+    triggerRef.current = e.currentTarget
+    setConfirm({ kind, name: n })
+  }
+  const closeConfirm = () => {
+    setConfirm(null)
+    const t = triggerRef.current
+    // return focus to the control that opened the dialog (it may have been re-rendered away)
+    setTimeout(() => (t && t.isConnected ? t : document.querySelector<HTMLElement>('[data-testid=cf-entity]'))?.focus(), 0)
+  }
+
+  const warnings = Array.isArray(check?.result.warnings) ? (check!.result.warnings as string[]) : []
+  const proven = check?.result.proven === true && warnings.length === 0
 
   const run = async (fn: () => Promise<void>, fallback: string) => {
     setBusy(true)
@@ -105,16 +136,22 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
     run(async () => {
       await api.removeCustomField(projectId, entity, n)
       setCheck(null)
+      setConfirm(null)
       await reload()
     }, 'Could not remove the field')
 
   const runCheck = (n: string) =>
-    run(async () => setCheck({ name: n, result: await api.checkPromoteCustomField(projectId, entity, n) }), 'Could not check the field')
+    run(async () => {
+      const result = await api.checkPromoteCustomField(projectId, entity, n)
+      setAckUnproven(false)
+      setCheck({ name: n, result })
+    }, 'Could not check the field')
 
   const promote = (n: string) =>
     run(async () => {
       await api.promoteCustomField(projectId, entity, n)
       setCheck(null)
+      setConfirm(null)
       setNotice(`${n} is now a real column. The change is in the history and can be reviewed there.`)
       await reload()
     }, 'Could not promote the field')
@@ -123,7 +160,7 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
     <div className="card">
       <p>
         <label htmlFor={eid}>Entity</label>{' '}
-        <select id={eid} value={entity} onChange={(e) => setEntity(e.target.value)}>
+        <select id={eid} data-testid="cf-entity" value={entity} onChange={(e) => setEntity(e.target.value)}>
           {entities.map((e) => (
             <option key={e} value={e}>
               {e}
@@ -167,7 +204,7 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
                     <button className="secondary" disabled={busy} onClick={() => void runCheck(f.name)}>
                       Check {f.name} for promotion
                     </button>{' '}
-                    <button className="secondary" disabled={busy} onClick={() => void remove(f.name)}>
+                    <button className="secondary" disabled={busy} onClick={(e) => ask('remove', f.name, e)}>
                       Remove {f.name}
                     </button>
                   </td>
@@ -177,10 +214,55 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
           </table>
         </div>
       )}
+      {confirm && (
+        <div
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={`${eid}-ct`}
+          data-testid="cf-confirm"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              closeConfirm()
+            }
+          }}
+        >
+          <p id={`${eid}-ct`}>
+            {confirm.kind === 'remove'
+              ? `Remove the custom field ${confirm.name}? Values already stored on rows are left in place but the field is no longer defined.`
+              : `Promote ${confirm.name} to a real column? This is a schema change that runs a migration.`}
+          </p>
+          <button ref={cancelRef} className="secondary" onClick={closeConfirm} disabled={busy}>
+            Cancel
+          </button>{' '}
+          <button
+            disabled={busy}
+            onClick={() => {
+              const c = confirm
+              void (c.kind === 'remove' ? remove(c.name) : promote(c.name)).then(closeConfirm)
+            }}
+          >
+            {confirm.kind === 'remove' ? `Yes, remove ${confirm.name}` : `Yes, promote ${confirm.name}`}
+          </button>
+        </div>
+      )}
       {check && (
         <section aria-label="Promotion check" data-testid="cf-check">
           <h2>Promote {check.name}</h2>
-          {check.result.ok ? <p>Ready: the field can become a real column.</p> : <p>Not ready: fix these problems first.</p>}
+          {!check.result.ok ? (
+            <p>Not ready: fix these problems first.</p>
+          ) : proven ? (
+            <p>Ready: the field can become a real column.</p>
+          ) : (
+            <p data-testid="cf-not-proven">Not proven: the check could not show that every existing row will convert. Review the warnings below.</p>
+          )}
+          {warnings.length > 0 && (
+            <ul aria-label="Warnings">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          )}
           {check.result.problems.length > 0 && (
             <ul aria-label="Problems">
               {check.result.problems.map((p, i) => (
@@ -191,7 +273,13 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
           {check.result.plan_sql.length > 0 && (
             <pre aria-label="What will run">{check.result.plan_sql.join('\n')}</pre>
           )}
-          <button disabled={busy || !check.result.ok} onClick={() => void promote(check.name)}>
+          {check.result.ok && !proven && (
+            <p>
+              <input id={ackId} type="checkbox" checked={ackUnproven} onChange={(e) => setAckUnproven(e.target.checked)} />{' '}
+              <label htmlFor={ackId}>I understand this is not proven and the change may fail on existing data</label>
+            </p>
+          )}
+          <button disabled={busy || !check.result.ok || (!proven && !ackUnproven)} onClick={(e) => ask('promote', check.name, e)}>
             Promote {check.name} to a column
           </button>
         </section>

@@ -373,3 +373,34 @@ def dedupe_key(entity: SpecEntity, record: dict[str, Any], key_fields: list[str]
         {"entity": entity.name, "key": picked}, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     )
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
+
+
+class DedupeKeys:
+    """Dedupe keys for one caller. A key is `(kind, hash)`. `plain` keys use only fields the caller may read.
+    A record whose unique key includes a field the caller may not read gets a `guarded` key over the full
+    record: a match on it is reported as a generic rejection, never as a duplicate."""
+
+    def __init__(self, writable: SpecEntity, hidden_read: frozenset[str] | set[str]) -> None:
+        self.writable = writable
+        self.readable = SpecEntity(
+            writable.name, tuple(f for f in writable.fields if f.name not in hidden_read)
+        )
+        self.guarded_names = sorted(f.name for f in writable.fields if f.unique and f.name in hidden_read)
+        self.json_fields = {f.name for f in writable.fields if f.type == "json"}
+
+    def is_guarded(self, record: dict[str, Any]) -> bool:
+        return any(record.get(n) is not None for n in self.guarded_names)
+
+    def of(self, record: dict[str, Any]) -> tuple[str, str]:
+        if self.is_guarded(record):
+            return ("guarded", dedupe_key(self.writable, record))
+        return ("plain", dedupe_key(self.readable, record))
+
+    def probe_names(self, record: dict[str, Any]) -> tuple[str, ...]:
+        """The columns the key is built from for this record (a database lookup narrows on these)."""
+        entity = self.writable if self.is_guarded(record) else self.readable
+        unique = [f.name for f in entity.fields if f.unique]
+        names = [n for n in sorted(unique) if record.get(n) is not None]
+        if not names:
+            names = [f.name for f in sorted(entity.fields, key=lambda f: f.name) if record.get(f.name) is not None]
+        return tuple(n for n in names if n not in self.json_fields)

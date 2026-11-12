@@ -6,6 +6,7 @@ function (spec in, spec + plan out); the plan renders the Alembic migration that
 can be downgraded. Pure logic: no database, no clock, no randomness.
 """
 
+import json
 import math
 import re
 from collections.abc import Callable, Sequence
@@ -279,7 +280,13 @@ def promote(spec: Spec, entity_name: str, field_name: str) -> tuple[Spec, Promot
 # --- promotion pre-flight (pure: the caller supplies sample values, nothing touches a customer DB) ---
 
 MAX_SAMPLES = 1000
-_INT_RE = re.compile(r"\s*[+-]?\d+\s*")
+_INT_RE = re.compile(r"\s*[+-]?[0-9]+\s*")
+# What Postgres accepts for ::double precision, minus nan/inf (rejected here) and underscores (rejected by PG).
+_FLOAT_RE = re.compile(r"\s*[+-]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][+-]?[0-9]+)?\s*")
+_DATE_RE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
+_DATETIME_RE = re.compile(
+    r"[0-9]{4}-[0-9]{2}-[0-9]{2}([T ][0-9]{2}:[0-9]{2}(:[0-9]{2}(\.[0-9]{1,6})?)?)?(Z|[+-][0-9]{2}(:[0-9]{2})?)?"
+)
 _BOOL_WORDS = frozenset({"true", "false", "t", "f", "yes", "no", "y", "n", "on", "off", "1", "0"})
 
 
@@ -296,6 +303,8 @@ class PromoteProblem:
 def _text_of(v: Any) -> str:
     if isinstance(v, bool):
         return "true" if v else "false"
+    if isinstance(v, (dict, list)):  # jsonb ->> renders json text, not Python repr
+        return json.dumps(v, ensure_ascii=False)
     return v if isinstance(v, str) else str(v)
 
 
@@ -315,7 +324,11 @@ def _cast_problem(d: SpecCustomFieldDef, v: Any) -> tuple[str, str] | None:
             return "custom_field_promote_int_out_of_range", f"outside {INT_RANGE[0]}..{INT_RANGE[1]}"
     elif t == "float":
         try:
-            ok = not isinstance(v, bool) and isinstance(v, (int, float, str)) and math.isfinite(float(v))
+            ok = (
+                not isinstance(v, bool)
+                and (isinstance(v, (int, float)) or (isinstance(v, str) and _FLOAT_RE.fullmatch(v)))
+                and math.isfinite(float(v))
+            )
         except (ValueError, OverflowError):
             ok = False
         if not ok:
@@ -325,12 +338,16 @@ def _cast_problem(d: SpecCustomFieldDef, v: Any) -> tuple[str, str] | None:
             return "custom_field_promote_bad_value", "not a boolean"
     elif t == "date":
         try:
-            date.fromisoformat(v if isinstance(v, str) else "")
+            if not (isinstance(v, str) and _DATE_RE.fullmatch(v)):
+                raise ValueError
+            date.fromisoformat(v)
         except ValueError:
             return "custom_field_promote_bad_date", "not an ISO date (YYYY-MM-DD)"
     elif t == "datetime":
         try:
-            datetime.fromisoformat(v if isinstance(v, str) else "")
+            if not (isinstance(v, str) and _DATETIME_RE.fullmatch(v)):
+                raise ValueError
+            datetime.fromisoformat(v)
         except ValueError:
             return "custom_field_promote_bad_datetime", "not an ISO 8601 date-time"
     else:  # string
@@ -396,7 +413,7 @@ def check_promotable(
                 severity="warning",
             )
         )
-    if d.required and sample_values is None:
+    if d.required and not sample_values:
         out.append(
             PromoteProblem(
                 "custom_field_promote_required_without_default",
@@ -404,6 +421,25 @@ def check_promotable(
                 severity="warning",
             )
         )
+    if sample_values is not None and len(sample_values) >= MAX_SAMPLES:
+        out.append(
+            PromoteProblem(
+                "custom_field_promote_sample_capped",
+                f"only the first {MAX_SAMPLES} rows are checked; later rows may still fail the migration",
+                severity="warning",
+            )
+        )
     if sample_values is not None:
         out += preflight_cast(d, sample_values)
     return out
+
+
+def is_proven(problems: Sequence[PromoteProblem], sample_values: Sequence[Any] | None) -> bool:
+    """True only when samples were checked, covered every row we could be given (not capped at
+    MAX_SAMPLES), and nothing blocks. Never true for 'no samples': the migration is then unproven."""
+    return (
+        bool(sample_values)
+        and sample_values is not None
+        and len(sample_values) < MAX_SAMPLES
+        and not any(p.severity == "error" for p in problems)
+    )

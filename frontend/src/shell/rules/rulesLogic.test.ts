@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ExpressionField, StateMachineBody } from '../../api/types'
-import { applyCompletion, errorSegments, guardsOf, mapLimit, moveActive, prefixAt, suggest, typeLabel } from './rulesLogic'
+import { applyCompletion, errorSegments, guardMatches, guardsOf, mapLimit, moveActive, prefixAt, suggest, typeLabel } from './rulesLogic'
 
 const FIELDS: ExpressionField[] = [
   { name: 'status', type: 'string', nullable: false },
@@ -88,5 +88,15 @@ describe('labels and guards', () => {
     })
     expect(out).toEqual([2, 4, 6, 8, 10, 12])
     expect(peak).toBeLessThanOrEqual(2)
+  })
+})
+
+describe('guardMatches (trace deep link)', () => {
+  const g = { key: 'Invoice.approve', entity: 'Invoice', transition: 'approve', when: 'x' }
+  it('matches the transition, entity.transition and key, case-insensitively, and nothing else', () => {
+    expect(guardMatches(g, 'approve')).toBe(true)
+    expect(guardMatches(g, 'invoice.APPROVE')).toBe(true)
+    expect(guardMatches(g, 'Invoice: approve')).toBe(true)
+    expect(guardMatches(g, 'reject')).toBe(false)
   })
 })

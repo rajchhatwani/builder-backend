@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ProvenanceBadge } from '../ai/Provenance'
 import { api } from '../../api/client'
 import type { HookBody, HookFieldBody } from '../../api/types'
@@ -8,6 +8,7 @@ import {
   setOutputFromEntity, settableFields, signatureLine, stubPath, stubReady, stubText,
   type HookCatalog, type HookRow, type PointOption,
 } from './hooksLogic'
+import { useHashParam } from '../useHashParam'
 import { useSection, type SectionConfig } from './useSection'
 import { ConflictBanner, Field, IssueSummary, LoadFailed, SaveBar } from './ui'
 
@@ -135,6 +136,9 @@ export function HooksPage({ projectId }: { projectId: string }) {
   const { state: st, change, save, reload } = useSection(projectId, HOOKS)
   const [cat, setCat] = useState<CatalogLoad>({ status: 'loading' })
   const [editing, setEditing] = useState<Set<number>>(new Set())
+  const wantedHook = useHashParam('hook')
+  const linkedHook = useRef<HTMLFieldSetElement | null>(null)
+  useEffect(() => { linkedHook.current?.scrollIntoView?.({ block: 'center' }); linkedHook.current?.focus() }, [wantedHook, st.status])
 
   const loadCat = useCallback(() => {
     setCat({ status: 'loading' })
@@ -180,8 +184,12 @@ export function HooksPage({ projectId }: { projectId: string }) {
           <p>A hook is where your own code plugs into the generated backend, for example to refuse an approval when an invoice does not match its purchase order. Declare one below to see the file the generator will create for it.</p>
         </div>
       )}
+      {wantedHook !== null && !st.rows.some((r) => r.name === wantedHook) && (
+        <p role="status" data-testid="hook-not-found">No hook named &quot;{wantedHook}&quot; in this project (it may have been renamed or removed).</p>
+      )}
       {st.rows.map((r, i) => {
         const id = `hk-${r.k}`
+        const isLinked = wantedHook !== null && r.name === wantedHook
         const parsed = parsePoint(r.point)
         const entity = parsed ? catalog[parsed.entity] : undefined
         const open = editing.has(r.k)
@@ -195,7 +203,7 @@ export function HooksPage({ projectId }: { projectId: string }) {
           </Field>
         )
         return (
-          <fieldset key={r.k} className="card bh-row bh-hook" data-testid="hook-row">
+          <fieldset key={r.k} className={`card bh-row bh-hook${isLinked ? ' linked-item' : ''}`} data-testid="hook-row" {...(isLinked ? { 'aria-current': 'true' as const, 'data-linked': 'true', tabIndex: -1, ref: linkedHook } : {})}>
             <legend>{r.name || 'New hook'}{r.author && <> <ProvenanceBadge author={r.author === 'trusted' ? 'human' : r.author} /></>}</legend>
             {allMsgs(i).length > 0 && (
               <div role="alert" data-variant="danger" className="bh-alert" data-testid="hook-issues">

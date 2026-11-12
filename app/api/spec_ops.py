@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
+from app.core.spec_models import Spec
 from app.db import get_session
 from app.exceptions import AppError
 from app.schemas.common import Page
@@ -32,6 +33,13 @@ async def list_ops(
 ) -> Page[SpecOpRead]:
     items, total = await OpsService(session).list_ops(project_id, page.limit, page.offset)
     return Page[SpecOpRead](items=items, total=total, limit=page.limit, offset=page.offset)
+
+
+@router.get("/at/{seq}", response_model=Spec, summary="The spec as it was right after op `seq` (0 = before the first op); read-only")
+async def spec_at(
+    project_id: uuid.UUID, seq: int, session: AsyncSession = Depends(get_session)
+) -> Spec:
+    return await OpsService(session).spec_at(project_id, seq)
 
 
 @router.post("/ops", response_model=SpecOpRead, status_code=status.HTTP_201_CREATED)

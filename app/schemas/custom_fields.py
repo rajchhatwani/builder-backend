@@ -49,7 +49,9 @@ class PromoteProblemRead(BaseModel):
 
 
 class PromoteCheckResult(BaseModel):
-    ok: bool
+    ok: bool  # nothing blocks the promotion (errors only)
+    proven: bool = False  # samples checked, not capped, no error: "Ready" may only be shown when True
+    warnings: list[str] = []  # messages of the warning-severity problems
     problems: list[PromoteProblemRead]
     plan_sql: list[str]
 

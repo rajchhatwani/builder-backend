@@ -409,6 +409,16 @@ def _update_custom_field(spec: Spec, p: UpdateCustomField) -> Spec:
     entity = _find_entity(out, p.entity)
     i = _find_cf(entity, p.name)
     assert entity.custom_fields is not None
+    if "name" in p.changes and p.changes["name"] != p.name:
+        # Row values live in the generated app's own database under the old key; the platform has no
+        # row data to rename and the migration planner only sees the two specs, so a rename would
+        # orphan every stored value. Refuse; define the new field and remove the old one instead.
+        raise AppError(
+            code="custom_field_rename_unsupported",
+            message="a custom field cannot be renamed: its stored row values would be orphaned; "
+            "define a new field and remove this one",
+            status_code=409,
+        )
     merged = {**entity.custom_fields.defs[i].model_dump(), **p.changes}
     try:
         new = SpecCustomFieldDef.model_validate(merged)
@@ -425,6 +435,8 @@ def _remove_custom_field(spec: Spec, p: RemoveCustomField) -> Spec:
     entity = _find_entity(out, p.entity)
     i = _find_cf(entity, p.name)
     assert entity.custom_fields is not None
+    # Only the definition goes: values already stored under this key in rows are left untouched
+    # (they stay in the row JSON, ignored by validation until the key is defined again).
     del entity.custom_fields.defs[i]
     return normalize(out)
 
@@ -531,6 +543,8 @@ def _inv_remove_field(before: Spec, p: RemoveField) -> Call:
 
 
 def _inv_define_custom_field(before: Spec, p: DefineCustomField) -> Call:
+    # When the define switched custom fields on, remove_custom_field would leave `enabled=True` with
+    # no defs (a different spec); plan() detects that and falls back to the exact snapshot inverse.
     return "remove_custom_field", {"entity": p.entity, "name": p.field_def.name}
 
 

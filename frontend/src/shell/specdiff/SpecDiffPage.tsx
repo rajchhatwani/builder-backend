@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { api } from '../../api/client'
+import type { SpecOp } from '../../api/types'
+import { useHashParam, withHashParam } from '../useHashParam'
 import { MARKS, changeText, clearBaseline, diffSpecs, loadBaseline, parseSpecText, saveBaseline } from './diffLogic'
 import type { Baseline, DiffModel } from './diffLogic'
 
 type Spec = Record<string, unknown>
 type Load = { status: 'loading' } | { status: 'error'; message: string } | { status: 'ready'; spec: Spec }
 /** Where the baseline came from: a stored snapshot (survives reloads) or JSON pasted/uploaded now (this visit only). */
-type Source = { kind: 'snapshot'; savedAt: string } | { kind: 'pasted' }
+type Source = { kind: 'snapshot'; savedAt: string } | { kind: 'pasted' } | { kind: 'version'; seq: number }
 
 const store = (): Storage | null => {
   try {
@@ -26,8 +28,11 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
   })
   const [text, setText] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [ops, setOps] = useState<SpecOp[]>([])
+  const base = useHashParam('base')
   const textId = useId()
   const fileId = useId()
+  const versionId = useId()
 
   useEffect(() => {
     let cancelled = false
@@ -45,6 +50,28 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
     }
   }, [projectId, attempt])
 
+  useEffect(() => {
+    let cancelled = false
+    api.listSpecOps(projectId, 200, 0).then((p) => { if (!cancelled) setOps(p.items) }, () => undefined)
+    return () => { cancelled = true }
+  }, [projectId, attempt])
+
+  // `?base=<seq>` (set by the picker, shareable as a link): the spec as it was right after change <seq>.
+  useEffect(() => {
+    if (base === null || !/^\d{1,9}$/.test(base)) return
+    const seq = Number(base)
+    let cancelled = false
+    api.getSpecAt(projectId, seq).then(
+      (spec) => { if (!cancelled) { setBaseline({ spec, source: { kind: 'version', seq } }); setError(null) } },
+      (err: unknown) => { if (!cancelled) setError(err instanceof Error ? `Could not load that version: ${err.message}` : 'Could not load that version') },
+    )
+    return () => { cancelled = true }
+  }, [base, projectId])
+
+  const pickVersion = (value: string) => {
+    window.location.hash = withHashParam(window.location.hash, 'base', value === '' ? null : value)
+  }
+
   const current = load.status === 'ready' ? load.spec : null
   const model: DiffModel | null = useMemo(() => (current && baseline ? diffSpecs(baseline.spec, current) : null), [current, baseline])
 
@@ -52,6 +79,7 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
     if (!current) return
     const s = store()
     const saved = s ? saveBaseline(s, projectId, current) : null
+    if (base !== null) window.location.hash = withHashParam(window.location.hash, 'base', null)
     if (saved) {
       setBaseline({ spec: saved.spec, source: { kind: 'snapshot', savedAt: saved.savedAt } })
       setError(null)
@@ -59,7 +87,7 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
       setBaseline({ spec: current, source: { kind: 'pasted' } })
       setError('This browser would not store the snapshot, so it is kept only until you leave this page.')
     }
-  }, [current, projectId])
+  }, [current, projectId, base])
 
   const usePasted = (raw: string) => {
     const parsed = parseSpecText(raw)
@@ -68,6 +96,7 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
       return
     }
     setError(null)
+    if (base !== null) window.location.hash = withHashParam(window.location.hash, 'base', null)
     setBaseline({ spec: parsed.spec, source: { kind: 'pasted' } })
   }
 
@@ -81,6 +110,7 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
   const clear = () => {
     const s = store()
     if (s) clearBaseline(s, projectId)
+    if (base !== null) window.location.hash = withHashParam(window.location.hash, 'base', null)
     setBaseline(null)
     setError(null)
   }
@@ -110,12 +140,22 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
                 ? 'No baseline yet.'
                 : baseline.source.kind === 'snapshot'
                   ? `Baseline: snapshot saved ${baseline.source.savedAt}`
-                  : 'Baseline: pasted spec (kept until you leave this page)'}
+                  : baseline.source.kind === 'version'
+                    ? baseline.source.seq === 0 ? 'Baseline: the spec before the first change' : `Baseline: the spec after change #${baseline.source.seq}`
+                    : 'Baseline: pasted spec (kept until you leave this page)'}
             </p>
             <div className="row">
               <button onClick={snapshot}>Save current spec as baseline</button>
               <button onClick={() => setAttempt((n) => n + 1)}>Reload current spec</button>
               {baseline && <button onClick={clear}>Clear baseline</button>}
+            </div>
+            <div className="field">
+              <label htmlFor={versionId}>Or compare with an earlier version</label>
+              <select id={versionId} value={base ?? ''} onChange={(e) => pickVersion(e.target.value)} disabled={ops.length === 0} data-testid="specdiff-version">
+                <option value="">{ops.length === 0 ? 'No recorded changes yet' : 'Choose a version…'}</option>
+                {ops.length > 0 && <option value="0">Before the first change</option>}
+                {ops.map((o) => <option key={o.seq} value={String(o.seq)}>{`After change #${o.seq}: ${o.op_type} (${o.created_at.slice(0, 16).replace('T', ' ')})`}</option>)}
+              </select>
             </div>
             <div className="field">
               <label htmlFor={textId}>Baseline spec (JSON)</label>

@@ -113,3 +113,118 @@ async def test_bad_files_and_access(http, people) -> None:  # noqa: ANN001
     assert response.status_code == 422 and response.json()["code"] == "import_bad_csv"
     anonymous = await http.post("/tickets/import", files={"file": ("t.csv", b"title\nx\n")})
     assert anonymous.status_code in (401, 403)
+
+
+async def test_m1_imported_rows_run_the_create_hooks(http, people, monkeypatch) -> None:  # noqa: ANN001
+    """after_save (inside the transaction) and after_commit run once per created row, with the stored item."""
+    from app.crud.tickets import TicketRepository
+
+    calls: list[tuple[str, str, bool]] = []
+
+    async def after_save(ctx) -> None:  # noqa: ANN001
+        async with session_factory() as other:  # a second connection: the row is not visible before commit
+            visible = (await other.execute(sa.text("select count(*) from tickets"))).scalar_one()
+        calls.append(("after_save", ctx.item.title, visible == 0))
+
+    async def after_commit(ctx) -> None:  # noqa: ANN001
+        calls.append(("after_commit", ctx.item.title, True))
+
+    hooks = {
+        stage: (*TicketRepository.hooks.get(stage, ()), fn)
+        for stage, fn in (("after_save", after_save), ("after_commit", after_commit))
+    }
+    monkeypatch.setattr(TicketRepository, "hooks", {**TicketRepository.hooks, **hooks})
+    result = await upload(http, people["c1"], "title\nHooked one\nHooked two\n")
+    assert result["counts"]["created"] == 2
+    assert sorted(calls) == [
+        ("after_commit", "Hooked one", True),
+        ("after_commit", "Hooked two", True),
+        ("after_save", "Hooked one", True),
+        ("after_save", "Hooked two", True),
+    ]
+    dry = await upload(http, people["c1"], "title\nNever written\n", dry_run="true")
+    assert dry["would_create"] == 1 and len(calls) == 4  # a dry run runs no after_* hook
+
+
+async def test_m1_a_failing_after_save_hook_rolls_the_whole_import_back(http, people, monkeypatch) -> None:  # noqa: ANN001
+    from app.crud.tickets import TicketRepository
+
+    async def boom(ctx) -> None:  # noqa: ANN001
+        raise RuntimeError("no")
+
+    monkeypatch.setattr(
+        TicketRepository, "hooks", {**TicketRepository.hooks, "after_save": (*TicketRepository.hooks.get("after_save", ()), boom)}
+    )
+    response = await http.post(
+        "/tickets/import", files={"file": ("t.csv", b"title\nA\nB\n", "text/csv")}, headers=people["c1"]
+    )
+    assert response.status_code == 500 and response.json()["code"] == "hook_failed"
+    monkeypatch.undo()
+    assert await titles(http, people["c1"]) == []
+
+
+async def test_m2_dedupe_is_exact_beyond_any_scan_cap(http, people, monkeypatch) -> None:  # noqa: ANN001
+    """The existing-row check looks the file's keys up (IN queries per chunk): with a tiny chunk and many rows the
+    re-upload is still fully idempotent, and rows outside the file are never loaded."""
+    from app.imports import service
+
+    monkeypatch.setattr(service, "PROBE_CHUNK", 3)
+    body = "title\n" + "".join(f"Row {i}\n" for i in range(10))
+    first = await upload(http, people["c1"], body)
+    assert first["counts"]["created"] == 10
+    again = await upload(http, people["c1"], body + "Extra\n")
+    assert again["counts"] == {"total": 11, "created": 1, "duplicate": 10, "rejected": 0}
+    other = await upload(http, people["admin"], body)  # another owner's scope: not a duplicate
+    assert other["counts"]["created"] == 10
+    monkeypatch.setattr(service, "MAX_PROBE_ROWS", 2)  # a probe that would be cut off refuses, never truncates
+    response = await http.post(
+        "/tickets/import", files={"file": ("t.csv", body.encode(), "text/csv")}, headers=people["c1"]
+    )
+    assert response.status_code == 422 and response.json()["code"] == "import_dedupe_too_large"
+
+
+async def test_l4_dry_run_counts_only_rows_the_real_import_accepts(http, people, monkeypatch) -> None:  # noqa: ANN001
+    from app.core.errors import AppError
+    from app.crud.tickets import TicketRepository
+
+    async def refuse_blocked(ctx) -> None:  # noqa: ANN001
+        if ctx.values.get("title") == "Blocked":
+            raise AppError("blocked_title", "this title is not allowed", 422)
+
+    monkeypatch.setattr(
+        TicketRepository,
+        "hooks",
+        {**TicketRepository.hooks, "before_save": (*TicketRepository.hooks.get("before_save", ()), refuse_blocked)},
+    )
+    text = "title\nFine\nBlocked\n"
+    dry = await upload(http, people["c1"], text, dry_run="true")
+    real = await upload(http, people["c1"], text)
+    assert dry["would_create"] == 1 and dry["counts"]["rejected"] == 1
+    assert (real["counts"]["created"], real["counts"]["rejected"]) == (1, 1)
+    assert dry["rejected_rows"][0]["errors"][0]["code"] == "blocked_title"
+
+
+async def test_l8_an_oversized_body_is_refused_before_the_file_is_read(http, people) -> None:  # noqa: ANN001
+    big = b"title\n" + b"x" * (6 * 1024 * 1024)
+    declared = await http.post(
+        "/tickets/import", files={"file": ("t.csv", big, "text/csv")}, headers=people["c1"]
+    )
+    assert declared.status_code == 413 and declared.json()["code"] == "import_too_large"
+
+    boundary = "xxBOUNDARYxx"
+    chunk = b"y" * 65536
+
+    async def stream():  # chunked: no Content-Length, so only the streamed byte count can stop it
+        yield f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="t.csv"\r\n\r\ntitle\n'.encode()
+        for _ in range(100):
+            yield chunk
+        yield f"\r\n--{boundary}--\r\n".encode()
+
+    chunked = await http.post(
+        "/tickets/import",
+        content=stream(),
+        headers={**people["c1"], "content-type": f"multipart/form-data; boundary={boundary}"},
+    )
+    assert chunked.status_code == 413 and chunked.json()["code"] == "import_too_large"
+    assert await titles(http, people["c1"]) == []
+

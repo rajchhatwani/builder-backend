@@ -158,6 +158,26 @@ describe('ImportPage', () => {
     expect(q('[data-testid=import-load-more]')).toBeNull()
   })
 
+  it('Show more follows the server rejected list when a fix turns a row into a duplicate', async () => {
+    const err = [{ field: 'amount', code: 'x', message: 'bad' }]
+    const first = Array.from({ length: 100 }, (_, i) => row(i + 10, 'abc', 'rejected', err))
+    const more = Array.from({ length: 20 }, (_, i) => row(i + 110, 'abc', 'rejected', err))
+    m.spec.mockResolvedValue(SPEC)
+    m.upload.mockResolvedValue({ ...PREVIEW, counts: { total: 120, accepted: 0, rejected: 120, duplicate: 0, fixed: 0 }, rejected: first })
+    m.rows.mockResolvedValueOnce({ items: first, total: 120, limit: 100, offset: 0 }).mockResolvedValueOnce({ items: more, total: 119, limit: 100, offset: 99 })
+    await mount(); await chooseFile(); await click(/Continue/)
+    m.fix.mockResolvedValue({ ...first[0], status: 'duplicate', errors: [] })
+    const input = q('input[id]:not([type=file])') as HTMLInputElement
+    await type(input, '30')
+    await click(/Save row 10/)
+    expect(q('[data-testid=import-summary]')?.textContent).toContain('119 need fixing, 1 already imported')
+    expect(host.querySelectorAll('[data-testid=import-row]').length).toBe(99)
+    await click(/Show more rows \(99 of 119\)/)
+    expect(m.rows).toHaveBeenLastCalledWith('p', 'b1', 'rejected', 100, 99)
+    expect(host.querySelectorAll('[data-testid=import-row]').length).toBe(119)
+    expect(q('[data-testid=import-load-more]')).toBeNull()
+  })
+
   it('shows an empty state without entities', async () => {
     m.spec.mockResolvedValue({ entities: [] })
     await mount()

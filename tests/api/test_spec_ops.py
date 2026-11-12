@@ -275,6 +275,26 @@ async def test_restore_to_a_middle_state(client: AsyncClient) -> None:
     assert await _bytes(client, pid) == states[4]
 
 
+async def test_spec_at_returns_every_earlier_state_read_only(
+    client: AsyncClient, client_for: ClientFor
+) -> None:
+    pid = await make_project(client)
+    states = {0: await _bytes(client, pid)}
+    for i, name in enumerate(("Alpha", "Beta", "Gamma"), start=1):
+        await make_entity(client, pid, name)
+        states[i] = await _bytes(client, pid)
+    for seq, expected in states.items():
+        r = await client.get(f"/projects/{pid}/spec/at/{seq}")
+        assert r.status_code == 200, r.text
+        assert canonical_bytes(Spec.model_validate(r.json())) == expected, seq
+    assert await _bytes(client, pid) == states[3]  # nothing was written
+    assert len(await _ops(client, pid)) == 3
+    assert (await client.get(f"/projects/{pid}/spec/at/99")).status_code == 404
+    assert (await client.get(f"/projects/{pid}/spec/at/-1")).status_code == 404
+    intruder = await client_for("intruder@example.com")
+    assert (await intruder.get(f"/projects/{pid}/spec/at/1")).status_code == 404
+
+
 async def test_other_tenant_cannot_read_or_change_the_log(
     client: AsyncClient, client_for: ClientFor
 ) -> None:

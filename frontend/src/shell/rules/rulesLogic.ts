@@ -62,6 +62,12 @@ export interface Guard {
   when: string
 }
 
+/** Does `?rule=<name>` point at this guard? Accepts `Entity.transition`, `Entity: transition`, the transition alone or the key. */
+export function guardMatches(g: Guard, name: string): boolean {
+  const n = name.trim().toLowerCase()
+  return [g.key, g.transition, `${g.entity}.${g.transition}`, `${g.entity}: ${g.transition}`].some((x) => x.toLowerCase() === n)
+}
+
 /** Every transition with a guard, in machine order. */
 export function guardsOf(machines: StateMachineBody[]): Guard[] {
   const out: Guard[] = []

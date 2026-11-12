@@ -162,7 +162,8 @@ async def test_create_returns_token_once_and_stores_only_a_hash(
     pid = await _project_with_entity(client)
     created = await _create(client, pid)
     token = str(created["token"])
-    assert created["state"] == "starting" and created["is_preview"] is True
+    # the background start may already have finished by the time the response is read (busy loop): both are valid
+    assert created["state"] in ("starting", "running") and created["is_preview"] is True
     assert created["url_path"] == f"/previews/{created['id']}/"
     done = await _wait_state(client, pid, str(created["id"]), "running")
     assert "token" not in done

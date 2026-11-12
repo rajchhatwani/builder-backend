@@ -73,11 +73,19 @@ def _row_read(r: ImportRow, hidden: set[str], mapping: dict[str, str]) -> RowRea
     if not hidden:
         return out
     hidden_headers = {mapping[f] for f in hidden if f in mapping}
-    out.raw = {k: v for k, v in out.raw.items() if k not in hidden_headers}
+    hidden_norm = {di._norm(f) for f in hidden}  # L1: unmapped / remapped columns match by name too
+    out.raw = {
+        k: v for k, v in out.raw.items() if k not in hidden_headers and di._norm(k) not in hidden_norm
+    }
     if out.record is not None:
         out.record = {k: v for k, v in out.record.items() if k not in hidden}
     out.errors = [e for e in out.errors if e.get("field") not in hidden]
     return out
+
+
+def _hidden_header(header: str, hidden: set[str], mapping: dict[str, str]) -> bool:
+    n = di._norm(header)
+    return header in {mapping[f] for f in hidden if f in mapping} or any(n == di._norm(f) for f in hidden)
 
 
 def _safe(v: Any) -> Any:
@@ -229,13 +237,18 @@ class ImportService:
     ) -> ImportPreview:
         hidden = await self._hidden(batch.project_id, entity, role)
         mp = dict(batch.mapping)
+        headers = [h for h in batch.headers if not _hidden_header(h, hidden, mp)]
         return ImportPreview(
             batch_id=batch.id,
             entity=batch.entity_name,
             status=batch.status,
-            headers=list(batch.headers),
-            mapping=dict(batch.mapping),
-            suggested_mapping=di.suggest_mapping(list(batch.headers), entity),
+            headers=headers,
+            mapping={k: v for k, v in mp.items() if k not in hidden},
+            suggested_mapping={
+                k: v
+                for k, v in di.suggest_mapping(list(batch.headers), entity).items()
+                if k not in hidden
+            },
             counts=ImportCounts(**batch.counts),
             sample=[_row_read(r, hidden, mp) for r in await self._rows(batch.id, limit=20)],
             rejected=[_row_read(r, hidden, mp) for r in await self._rows(batch.id, "rejected", limit=PREVIEW_REJECTED_MAX)],
@@ -381,6 +394,9 @@ class ImportService:
         unknown = sorted(set(values) - names)
         if unknown:
             raise AppError("validation_error", f"unknown field {unknown[0][:60]!r}", 422)
+        hidden = await self._hidden(project_id, entity, role)
+        if hidden & set(values):  # L2: a value for a field the caller cannot read is refused
+            raise AppError("field_access_denied", "you may not set one of these fields", 403)
         row = (
             await self.s.execute(
                 select(ImportRow).where(ImportRow.id == row_id, ImportRow.batch_id == batch_id)
@@ -405,7 +421,17 @@ class ImportService:
             key = di.dedupe_key(entity, res.record)
             row.record = res.record
             row.dedupe_key = key
-            if await self._key_taken(batch, entity.name, key, row.id):
+            uniques = {f.name for f in entity.fields if f.unique}
+            taken = await self._key_taken(batch, entity.name, key, row.id)
+            if taken and hidden & (uniques or names):
+                # L2: the key involves a field the caller cannot read; do not confirm that it exists
+                row.status = "rejected"
+                row.record = None
+                row.dedupe_key = None
+                row.errors = [
+                    {"field": "", "code": "import_row_rejected", "message": "this row cannot be accepted"}
+                ]
+            elif taken:
                 row.status = "duplicate"
                 row.errors = [
                     {
@@ -428,7 +454,7 @@ class ImportService:
             counts[row.status] = int(counts.get(row.status, 0)) + 1
             batch.counts = counts
         await self.s.commit()
-        return _row_read(row, await self._hidden(project_id, entity, role), dict(batch.mapping))
+        return _row_read(row, hidden, dict(batch.mapping))
 
     async def commit(self, project_id: uuid.UUID, batch_id: uuid.UUID) -> tuple[CommitResult, bool]:
         """Returns (result, newly_committed). A second call returns the stored result."""

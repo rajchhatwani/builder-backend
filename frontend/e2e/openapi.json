@@ -13003,6 +13003,19 @@
       },
       "title": "Problems",
       "type": "array"
+     },
+     "proven": {
+      "default": false,
+      "title": "Proven",
+      "type": "boolean"
+     },
+     "warnings": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
      }
     },
     "required": [
@@ -37656,6 +37669,58 @@
     "summary": "Put Spec",
     "tags": [
      "spec"
+    ]
+   }
+  },
+  "/projects/{project_id}/spec/at/{seq}": {
+   "get": {
+    "operationId": "spec_at_projects__project_id__spec_at__seq__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "seq",
+      "required": true,
+      "schema": {
+       "title": "Seq",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Spec-Output"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "The spec as it was right after op `seq` (0 = before the first op); read-only",
+    "tags": [
+     "spec-ops"
     ]
    }
   },

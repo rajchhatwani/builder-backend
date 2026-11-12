@@ -2,7 +2,8 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { api } from '../../api/client'
 import type { ExpressionCheckRead, ExpressionField, StateMachineBody } from '../../api/types'
 import { link } from '../../components/Sidebar'
-import { applyCompletion, errorSegments, guardsOf, mapLimit, moveActive, prefixAt, suggest, typeLabel, type Guard } from './rulesLogic'
+import { useHashParam } from '../useHashParam'
+import { applyCompletion, errorSegments, guardMatches, guardsOf, mapLimit, moveActive, prefixAt, suggest, typeLabel, type Guard } from './rulesLogic'
 
 const DEBOUNCE_MS = 300
 
@@ -314,6 +315,10 @@ function Workbench({ projectId, entities, machines }: { projectId: string; entit
 
 function Guards({ projectId, machines, onTry }: { projectId: string; machines: StateMachineBody[]; onTry: (g: Guard) => void }) {
   const guards = useMemo(() => guardsOf(machines), [machines])
+  const wanted = useHashParam('rule')
+  const linked = wanted === null ? [] : guards.filter((g) => guardMatches(g, wanted))
+  const linkedRef = useRef<HTMLLIElement | null>(null)
+  useEffect(() => { linkedRef.current?.scrollIntoView?.({ block: 'center' }); linkedRef.current?.focus() }, [wanted, guards.length])
   const [results, setResults] = useState<Record<string, GuardResult>>({})
 
   useEffect(() => {
@@ -351,11 +356,12 @@ function Guards({ projectId, machines, onTry }: { projectId: string; machines: S
           <p role="status" data-testid="rules-guard-summary">
             {broken > 0 ? `${broken} of ${guards.length} ${guards.length === 1 ? 'guard is' : 'guards are'} broken.` : 'Every guard checked so far is accepted.'}
           </p>
+          {wanted !== null && linked.length === 0 && <p role="status" data-testid="rule-not-found">No guard named &quot;{wanted}&quot; in this project (it may have been renamed or removed).</p>}
           <ul className="rules-guard-list" data-testid="rules-guards">
             {guards.map((g) => {
               const r = results[g.key] ?? { status: 'checking' }
               return (
-                <li key={g.key} data-guard={g.key} data-state={r.status}>
+                <li key={g.key} data-guard={g.key} data-state={r.status} {...(linked.includes(g) ? { 'aria-current': 'true' as const, 'data-linked': 'true', tabIndex: -1, ref: linkedRef, className: 'linked-item' } : {})}>
                   <div className="rules-guard-text">
                     <strong>
                       {g.entity}: {g.transition}

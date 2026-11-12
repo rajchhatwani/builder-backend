@@ -28,7 +28,7 @@ export function useProjectEvents(projectId: string, section: string): { status: 
   }, [projectId, qc])
 
   useEffect(() => {
-    if (status === 'stopped') return
+    if (status === 'stopped' || status === 'paused') return
     let dead = false
     const beat = async () => {
       try {
@@ -40,7 +40,7 @@ export function useProjectEvents(projectId: string, section: string): { status: 
     void beat()
     const t = setInterval(() => void beat(), HEARTBEAT_MS)
     return () => { dead = true; clearInterval(t) }
-  }, [projectId, section, status === 'stopped'])
+  }, [projectId, section, status === 'stopped' || status === 'paused'])
 
   return { status, users }
 }

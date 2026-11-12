@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SpecDiffPage } from './SpecDiffPage'
 
-const m = vi.hoisted(() => ({ spec: vi.fn() }))
-vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: { getSpecJson: m.spec } }))
+const m = vi.hoisted(() => ({ spec: vi.fn(), ops: vi.fn(), at: vi.fn() }))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: { getSpecJson: m.spec, listSpecOps: m.ops, getSpecAt: m.at } }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const CURRENT = {
@@ -37,6 +37,9 @@ beforeEach(() => {
   window.localStorage.clear()
   m.spec.mockReset()
   m.spec.mockResolvedValue(CURRENT)
+  m.ops.mockReset(); m.ops.mockResolvedValue({ items: [] })
+  m.at.mockReset()
+  window.location.hash = ''
 })
 afterEach(() => {
   act(() => root?.unmount())
@@ -97,5 +100,19 @@ describe('SpecDiffPage', () => {
     expect(q('[role=alert]')?.textContent).toContain('boom')
     await click(/Try again/)
     expect(q('[data-testid=specdiff-nobaseline]')).not.toBeNull()
+  })
+
+  it('lists earlier versions and diffs against the one in ?base= (shareable link)', async () => {
+    m.ops.mockResolvedValue({ items: [{ seq: 2, op_type: 'add_entity', created_at: '2026-11-01T10:00:00Z' }, { seq: 1, op_type: 'add_entity', created_at: '2026-11-01T09:00:00Z' }] })
+    m.at.mockResolvedValue(BASELINE)
+    window.location.hash = '#/p/p/specdiff?base=1'
+    await mount()
+    await act(async () => { await Promise.resolve() })
+    expect(m.at).toHaveBeenCalledWith('p', 1)
+    expect(q('[data-testid=specdiff-source]')?.textContent).toBe('Baseline: the spec after change #1')
+    expect(q('[data-testid=specdiff-summary]')?.textContent).toContain('3 differences')
+    const opts = [...host.querySelectorAll('[data-testid=specdiff-version] option')].map((o) => o.textContent)
+    expect(opts).toContain('Before the first change')
+    expect(opts.some((t) => /After change #2: add_entity/.test(t ?? ''))).toBe(true)
   })
 })
