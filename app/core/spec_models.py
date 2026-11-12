@@ -607,9 +607,53 @@ class SpecCurrency(_SpecModel):
     tax: SpecTax | None = None
 
 
+class SpecReconciliation(_SpecModel):
+    """Money pack, D6 reconciliation (generated routes under /reconciliation): import an external statement
+    against ONE ledger account and match its lines to ledger entries. Needs the `ledger`. `tolerance_minor`
+    is the largest amount difference (minor units) the automatic matcher still pairs; `max_lines` caps the
+    statement lines of one run."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    run_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    tolerance_minor: StrictInt = 0
+    max_lines: StrictInt = 1000
+
+
+class SpecPayouts(_SpecModel):
+    """Optional payouts of the invoicing block (generated routes under /payouts): split a fully paid
+    receivable invoice between the platform (`commission_bp` basis points, largest-remainder rounding) and a
+    seller, then pay the seller out of the cash account. Account values are ledger account codes."""
+
+    commission_bp: StrictInt = 1000
+    seller_payable_account: str = "seller_payable"
+    commission_account: str = "commission"
+
+
+class SpecInvoicing(_SpecModel):
+    """Money pack, D7 invoicing and AR/AP aging (generated routes under /invoices). Needs the `ledger` and
+    `currency` blocks. Account values are ledger account codes (a multi-currency project names an account
+    `<code>.<CUR>` for every currency except the one that carries the plain code). `payouts` switches on
+    /payouts."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    write_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    number_prefix: str = "INV-"
+    payment_terms_days: StrictInt = 30
+    receivable_account: str = "receivables"
+    payable_account: str = "payables"
+    revenue_account: str = "revenue"
+    expense_account: str = "expenses"
+    tax_account: str = "tax"
+    cash_account: str = "bank"
+    aging_buckets_days: list[StrictInt] = Field(default_factory=lambda: [30, 60, 90])
+    payouts: SpecPayouts | None = None
+
+
 class SpecMoneyPack(_SpecModel):
     ledger: SpecLedger | None = None
     currency: SpecCurrency | None = None
+    reconciliation: SpecReconciliation | None = None
+    invoicing: SpecInvoicing | None = None
 
 
 class SpecPacks(_SpecModel):

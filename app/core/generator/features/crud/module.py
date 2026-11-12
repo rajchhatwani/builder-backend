@@ -10,7 +10,9 @@ from app.core.generator.features.change_history.module import (
 )
 from app.core.generator.features.data_import.module import import_entities
 from app.core.generator.features.metrics.module import metrics_definitions
+from app.core.generator.features.money_invoicing.module import invoicing_enabled, payouts_enabled
 from app.core.generator.features.money_ledger.module import ledger_enabled
+from app.core.generator.features.money_reconciliation.module import reconciliation_enabled
 from app.core.generator.features.realtime.module import realtime_entities
 from app.core.generator.features.search.module import search_entities
 from app.core.generator.render import make_environment, read_verbatim, render_template
@@ -106,6 +108,9 @@ class CrudModule:
             "realtime": bool(realtime_entities(project)),
             "metrics": bool(metrics_definitions(project)),
             "ledger": ledger_enabled(project),
+            "reconciliation": reconciliation_enabled(project),
+            "invoicing": invoicing_enabled(project),
+            "payouts": payouts_enabled(project),
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

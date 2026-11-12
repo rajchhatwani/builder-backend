@@ -30,6 +30,8 @@ from app.money.ledger import schemas as _s
 from app.money.ledger.models import LedgerAccount, LedgerEntry, LedgerTransaction
 
 Tenant = _uuid.UUID | None
+# ledger transactions posted by the invoicing block (keys invoice:/payment:/payout:) are corrected through it
+MANAGED_KEY_PREFIXES = ("invoice:", "payment:", "payout:")
 
 
 def tenant_of(user: _t.Any) -> Tenant:
@@ -368,6 +370,12 @@ async def reverse_transaction(
     ).scalar_one_or_none()
     if original is None:
         raise AppError("not_found", "transaction not found", 404)
+    if original.idempotency_key.startswith(MANAGED_KEY_PREFIXES):
+        raise AppError(
+            "managed_transaction",
+            "this transaction belongs to an invoice, payment or payout: void or correct it there, not in the ledger",
+            409,
+        )
     if original.reverses_id is not None:
         raise AppError("cannot_reverse_reversal", "a reversal cannot itself be reversed; post a new transaction", 422)
     already = (

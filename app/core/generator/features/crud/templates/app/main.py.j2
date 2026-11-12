@@ -46,8 +46,17 @@ from app.imports.router import router as _imports_router
 {% if metrics %}
 from app.metrics.router import router as _metrics_router
 {% endif %}
+{% if payouts %}
+from app.money.invoicing.payouts_router import router as _payouts_router
+{% endif %}
+{% if invoicing %}
+from app.money.invoicing.router import router as _invoicing_router
+{% endif %}
 {% if ledger %}
 from app.money.ledger.router import router as _ledger_router
+{% endif %}
+{% if reconciliation %}
+from app.money.reconciliation.router import router as _reconciliation_router
 {% endif %}
 {% if notifications %}
 from app.notifications.dispatcher import start_dispatcher, stop_dispatcher
@@ -209,6 +218,15 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if ledger %}
     app.include_router(_ledger_router)
+{% endif %}
+{% if reconciliation %}
+    app.include_router(_reconciliation_router)
+{% endif %}
+{% if invoicing %}
+    app.include_router(_invoicing_router)
+{% endif %}
+{% if payouts %}
+    app.include_router(_payouts_router)
 {% endif %}
 {% if search %}
     app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id

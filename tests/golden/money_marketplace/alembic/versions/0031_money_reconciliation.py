@@ -1,0 +1,168 @@
+"""money pack: reconciliation
+
+Revision ID: 0031
+Revises: 0030
+Create Date: rendered from the spec by Backend Builder
+
+Runs, statement lines, matches and an event log. Guards in the database: a ledger entry (and a statement line)
+can be matched at most once (UNIQUE), statement lines of a closed run cannot change, the event log is
+append-only. No TRUNCATE trigger (the generated tests empty these tables between tests).
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+revision: str = "0031"
+down_revision: str | None = "0030"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+_EVENTS_APPEND_ONLY = """
+CREATE FUNCTION reconciliation_events_reject_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'reconciliation events are append-only: % is refused', TG_OP USING ERRCODE = '23514';
+END
+$$
+"""
+
+_CLOSED_RUN_FUNCTION = """
+CREATE FUNCTION reconciliation_closed_run_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    run_status text;
+    run uuid;
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        run := OLD.run_id;
+    ELSE
+        run := NEW.run_id;
+    END IF;
+    SELECT status INTO run_status FROM reconciliation_runs WHERE id = run;
+    IF run_status = 'closed' THEN
+        RAISE EXCEPTION 'reconciliation run % is closed: its lines and matches cannot change', run USING ERRCODE = '23514';
+    END IF;
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    END IF;
+    RETURN NEW;
+END
+$$
+"""
+
+
+def upgrade() -> None:
+    op.create_table(
+        "reconciliation_runs",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("idempotency_key", sa.String(length=128), nullable=False),
+        sa.Column("request_hash", sa.String(length=64), nullable=False),
+        sa.Column("account_id", sa.Uuid(), nullable=False),
+        sa.Column("currency", sa.String(length=3), nullable=False),
+        sa.Column("name", sa.String(length=200), nullable=True),
+        sa.Column("period_start", sa.Date(), nullable=True),
+        sa.Column("period_end", sa.Date(), nullable=True),
+        sa.Column("status", sa.String(length=8), server_default="open", nullable=False),
+        sa.Column("summary", postgresql.JSONB(astext_type=sa.Text()), nullable=True),
+        sa.Column("created_by", sa.Uuid(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("closed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("closed_by", sa.Uuid(), nullable=True),
+        sa.CheckConstraint("status IN ('open', 'closed')", name="ck_reconciliation_runs_status"),
+        sa.ForeignKeyConstraint(["account_id"], ["ledger_accounts.id"], name="fk_reconciliation_runs_account_id_ledger_accounts"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_reconciliation_runs_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("tenant_id", "idempotency_key", name="uq_reconciliation_runs_idempotency_key"),
+    )
+    op.create_index(op.f("ix_reconciliation_runs_tenant_id"), "reconciliation_runs", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_reconciliation_runs_account_id"), "reconciliation_runs", ["account_id"], unique=False)
+
+    op.create_table(
+        "reconciliation_lines",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("run_id", sa.Uuid(), nullable=False),
+        sa.Column("line_no", sa.Integer(), nullable=False),
+        sa.Column("external_id", sa.String(length=128), nullable=False),
+        sa.Column("line_date", sa.Date(), nullable=False),
+        sa.Column("amount", sa.BigInteger(), nullable=False),
+        sa.Column("currency", sa.String(length=3), nullable=False),
+        sa.Column("reference", sa.String(length=128), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("amount <> 0", name="ck_reconciliation_lines_amount_nonzero"),
+        sa.ForeignKeyConstraint(["run_id"], ["reconciliation_runs.id"], name="fk_reconciliation_lines_run_id_reconciliation_runs"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_reconciliation_lines_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("run_id", "external_id", name="uq_reconciliation_lines_run_id_external_id"),
+        sa.UniqueConstraint("run_id", "line_no", name="uq_reconciliation_lines_run_id_line_no"),
+    )
+    op.create_index(op.f("ix_reconciliation_lines_tenant_id"), "reconciliation_lines", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_reconciliation_lines_run_id"), "reconciliation_lines", ["run_id"], unique=False)
+
+    op.create_table(
+        "reconciliation_matches",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("run_id", sa.Uuid(), nullable=False),
+        sa.Column("line_id", sa.Uuid(), nullable=False),
+        sa.Column("entry_id", sa.Uuid(), nullable=False),
+        sa.Column("method", sa.String(length=16), nullable=False),
+        sa.Column("diff_minor", sa.BigInteger(), nullable=False),
+        sa.Column("matched_by", sa.Uuid(), nullable=True),
+        sa.Column("matched_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("method IN ('exact_reference', 'exact', 'tolerance', 'manual')", name="ck_reconciliation_matches_method"),
+        sa.ForeignKeyConstraint(["entry_id"], ["ledger_entries.id"], name="fk_reconciliation_matches_entry_id_ledger_entries"),
+        sa.ForeignKeyConstraint(["line_id"], ["reconciliation_lines.id"], name="fk_reconciliation_matches_line_id_reconciliation_lines"),
+        sa.ForeignKeyConstraint(["run_id"], ["reconciliation_runs.id"], name="fk_reconciliation_matches_run_id_reconciliation_runs"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_reconciliation_matches_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("entry_id", name="uq_reconciliation_matches_entry_id"),
+        sa.UniqueConstraint("line_id", name="uq_reconciliation_matches_line_id"),
+    )
+    op.create_index(op.f("ix_reconciliation_matches_tenant_id"), "reconciliation_matches", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_reconciliation_matches_run_id"), "reconciliation_matches", ["run_id"], unique=False)
+
+    op.create_table(
+        "reconciliation_events",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("run_id", sa.Uuid(), nullable=False),
+        sa.Column("action", sa.String(length=16), nullable=False),
+        sa.Column("line_id", sa.Uuid(), nullable=True),
+        sa.Column("entry_id", sa.Uuid(), nullable=True),
+        sa.Column("method", sa.String(length=16), nullable=True),
+        sa.Column("actor", sa.Uuid(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("action IN ('import', 'match', 'unmatch', 'close')", name="ck_reconciliation_events_action"),
+        sa.ForeignKeyConstraint(["run_id"], ["reconciliation_runs.id"], name="fk_reconciliation_events_run_id_reconciliation_runs"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_reconciliation_events_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_reconciliation_events_tenant_id"), "reconciliation_events", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_reconciliation_events_run_id"), "reconciliation_events", ["run_id"], unique=False)
+
+    op.execute(_EVENTS_APPEND_ONLY)
+    op.execute(
+        "CREATE TRIGGER reconciliation_events_append_only BEFORE UPDATE OR DELETE ON reconciliation_events "
+        "FOR EACH ROW EXECUTE FUNCTION reconciliation_events_reject_change()"
+    )
+    op.execute(_CLOSED_RUN_FUNCTION)
+    for table in ("reconciliation_lines", "reconciliation_matches"):
+        op.execute(
+            f"CREATE TRIGGER {table}_closed_run BEFORE INSERT OR UPDATE OR DELETE ON {table} "
+            "FOR EACH ROW EXECUTE FUNCTION reconciliation_closed_run_guard()"
+        )
+
+
+def downgrade() -> None:
+    for table in ("reconciliation_lines", "reconciliation_matches"):
+        op.execute(f"DROP TRIGGER {table}_closed_run ON {table}")
+    op.execute("DROP FUNCTION reconciliation_closed_run_guard()")
+    op.execute("DROP TRIGGER reconciliation_events_append_only ON reconciliation_events")
+    op.execute("DROP FUNCTION reconciliation_events_reject_change()")
+    op.drop_table("reconciliation_events")
+    op.drop_table("reconciliation_matches")
+    op.drop_table("reconciliation_lines")
+    op.drop_table("reconciliation_runs")

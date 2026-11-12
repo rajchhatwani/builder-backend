@@ -1,0 +1,171 @@
+"""Invoicing tables (generated). Issued invoices are immutable (database trigger, see
+alembic/versions/0032_money_invoicing.py); numbers come from a counter row locked in the issuing transaction."""
+
+import datetime as _dt
+import uuid as _uuid
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+
+from app.models import _base as _models_base
+
+
+def _id() -> _orm.Mapped[_uuid.UUID]:
+    return _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+
+
+def _created() -> _orm.Mapped[_dt.datetime]:
+    return _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+
+
+class InvoiceCounter(_models_base.Base):
+    __tablename__ = "invoice_counters"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_invoice_counters_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    kind: _orm.Mapped[str] = _orm.mapped_column(_sa.String(10), nullable=False)
+    last_value: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+
+    __table_args__ = (_sa.UniqueConstraint("tenant_id", "kind", name="uq_invoice_counters_kind"),)
+
+
+class Invoice(_models_base.Base):
+    __tablename__ = "invoices"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_invoices_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    kind: _orm.Mapped[str] = _orm.mapped_column(_sa.String(10), nullable=False)
+    number: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(16), nullable=False, default="draft", server_default="draft")
+    counterparty: _orm.Mapped[str] = _orm.mapped_column(_sa.String(200), nullable=False)
+    counterparty_ref: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(64), nullable=True)
+    currency: _orm.Mapped[str] = _orm.mapped_column(_sa.String(3), nullable=False)
+    issue_date: _orm.Mapped[_dt.date | None] = _orm.mapped_column(_sa.Date(), nullable=True)
+    due_date: _orm.Mapped[_dt.date | None] = _orm.mapped_column(_sa.Date(), nullable=True)
+    notes: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(500), nullable=True)
+    subtotal_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    tax_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    total_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    paid_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+    issue_tx_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    void_tx_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+    issued_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+    voided_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        _sa.UniqueConstraint("tenant_id", "number", name="uq_invoices_number"),
+        _sa.CheckConstraint("kind IN ('receivable', 'payable')", name="ck_invoices_kind"),
+        _sa.CheckConstraint(
+            "status IN ('draft', 'issued', 'partially_paid', 'paid', 'void')", name="ck_invoices_status"
+        ),
+        _sa.CheckConstraint("paid_minor >= 0 AND paid_minor <= total_minor", name="ck_invoices_paid_range"),
+        _sa.CheckConstraint("total_minor = subtotal_minor + tax_minor", name="ck_invoices_total_sum"),
+    )
+
+
+class InvoiceLine(_models_base.Base):
+    __tablename__ = "invoice_lines"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_invoice_lines_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    invoice_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("invoices.id", name="fk_invoice_lines_invoice_id_invoices"), nullable=False, index=True
+    )
+    line_no: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False)
+    description: _orm.Mapped[str] = _orm.mapped_column(_sa.String(500), nullable=False)
+    quantity: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    unit_price_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    tax_rate: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(32), nullable=True)
+    net_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    tax_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+
+    __table_args__ = (
+        _sa.UniqueConstraint("invoice_id", "line_no", name="uq_invoice_lines_invoice_id_line_no"),
+        _sa.CheckConstraint("quantity >= 1 AND unit_price_minor >= 0", name="ck_invoice_lines_positive"),
+    )
+
+
+class InvoicePayment(_models_base.Base):
+    __tablename__ = "invoice_payments"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_invoice_payments_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    invoice_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("invoices.id", name="fk_invoice_payments_invoice_id_invoices"), nullable=False, index=True
+    )
+    idempotency_key: _orm.Mapped[str] = _orm.mapped_column(_sa.String(128), nullable=False)
+    request_hash: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False)
+    amount_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    paid_on: _orm.Mapped[_dt.date] = _orm.mapped_column(_sa.Date(), nullable=False)
+    reference: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(128), nullable=True)
+    ledger_tx_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), nullable=False)
+    created_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+
+    __table_args__ = (
+        _sa.UniqueConstraint("tenant_id", "idempotency_key", name="uq_invoice_payments_idempotency_key"),
+        _sa.CheckConstraint("amount_minor > 0", name="ck_invoice_payments_positive"),
+    )
+
+
+class MoneyPayout(_models_base.Base):
+    __tablename__ = "money_payouts"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_money_payouts_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    idempotency_key: _orm.Mapped[str] = _orm.mapped_column(_sa.String(128), nullable=False)
+    request_hash: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False)
+    invoice_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("invoices.id", name="fk_money_payouts_invoice_id_invoices"), nullable=False
+    )
+    seller: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False, index=True)
+    currency: _orm.Mapped[str] = _orm.mapped_column(_sa.String(3), nullable=False)
+    gross_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    commission_bp: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False)
+    commission_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    seller_minor: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    split_tx_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), nullable=False)
+    payout_tx_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+
+    __table_args__ = (
+        _sa.UniqueConstraint("tenant_id", "idempotency_key", name="uq_money_payouts_idempotency_key"),
+        # an invoice is paid out once
+        _sa.UniqueConstraint("invoice_id", name="uq_money_payouts_invoice_id"),
+        _sa.CheckConstraint(
+            "commission_minor >= 0 AND seller_minor >= 0 AND gross_minor = commission_minor + seller_minor",
+            name="ck_money_payouts_split",
+        ),
+    )

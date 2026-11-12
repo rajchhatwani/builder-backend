@@ -1,0 +1,157 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Marketplace",
+    "slug": "marketplace",
+    "description": "A neutral multi-tenant marketplace: buyers pay the platform, the platform keeps a commission, sellers are paid out (money pack: currency, ledger, reconciliation, invoicing, payouts)",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Seller",
+      "table_name": "sellers",
+      "plural_path": "sellers",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://market.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@market.example.com",
+      "from_name": "Marketplace"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Seller",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Seller",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Seller",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "member"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "money": {
+      "currency": {
+        "currencies": [
+          "EUR",
+          "USD"
+        ],
+        "rounding": "half_even",
+        "tax": {
+          "rates_bp": {
+            "standard": 2000,
+            "reduced": 500,
+            "zero": 0
+          }
+        }
+      },
+      "ledger": {
+        "read_roles": [
+          "admin",
+          "member"
+        ],
+        "post_roles": [
+          "admin",
+          "member"
+        ]
+      },
+      "reconciliation": {
+        "read_roles": [
+          "admin",
+          "member"
+        ],
+        "run_roles": [
+          "admin"
+        ],
+        "tolerance_minor": 5,
+        "max_lines": 500
+      },
+      "invoicing": {
+        "read_roles": [
+          "admin",
+          "member"
+        ],
+        "write_roles": [
+          "admin"
+        ],
+        "number_prefix": "MKT-",
+        "payment_terms_days": 14,
+        "receivable_account": "receivables",
+        "payable_account": "payables",
+        "revenue_account": "sales",
+        "expense_account": "expenses",
+        "tax_account": "tax",
+        "cash_account": "bank",
+        "aging_buckets_days": [
+          30,
+          60,
+          90
+        ],
+        "payouts": {
+          "commission_bp": 1250,
+          "seller_payable_account": "seller_payable",
+          "commission_account": "commission"
+        }
+      }
+    }
+  }
+}

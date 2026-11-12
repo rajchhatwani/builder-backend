@@ -1,0 +1,23 @@
+"""Invoicing settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+# who may read / write; an empty tuple means any signed-in user
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+WRITE_ROLES: tuple[str, ...] = {{ write_roles | roles_repr }}
+NUMBER_PREFIX = "{{ prefix }}"
+PAYMENT_TERMS_DAYS = {{ terms }}
+AGING_BUCKETS_DAYS: tuple[int, ...] = ({% for b in buckets %}{{ b }}, {% endfor %})
+# ledger account codes. For a currency other than the plain code's own, the account is `<code>.<CUR>`.
+RECEIVABLE_ACCOUNT = "{{ receivable }}"
+PAYABLE_ACCOUNT = "{{ payable }}"
+REVENUE_ACCOUNT = "{{ revenue }}"
+EXPENSE_ACCOUNT = "{{ expense }}"
+TAX_ACCOUNT = "{{ tax_account }}"
+CASH_ACCOUNT = "{{ cash }}"
+{% if payouts %}
+COMMISSION_BP = {{ commission_bp }}  # the platform's share of a payout, in basis points
+SELLER_PAYABLE_ACCOUNT = "{{ seller_payable }}"
+COMMISSION_ACCOUNT = "{{ commission_account }}"
+{% endif %}
+MAX_AMOUNT_MINOR = 2**53 - 1
+MAX_LINES = 200
+MULTI_TENANT = {{ "True" if tenant else "False" }}

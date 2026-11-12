@@ -20,8 +20,14 @@ from app.models._base import Base
 {% for e in entities %}
 from app.models.{{ e.table }} import {{ e.name }}
 {% endfor %}
+{% if invoicing %}
+from app.money.invoicing import models as _invoicing_models
+{% endif %}
 {% if ledger %}
 from app.money.ledger import models as _ledger_models
+{% endif %}
+{% if reconciliation %}
+from app.money.reconciliation import models as _reconciliation_models
 {% endif %}
 {% if notifications %}
 from app.notifications import models as _notification_models
@@ -107,5 +113,11 @@ __all__ = [
 {% endif %}
 {% if ledger %}
     "_ledger_models",
+{% endif %}
+{% if reconciliation %}
+    "_reconciliation_models",
+{% endif %}
+{% if invoicing %}
+    "_invoicing_models",
 {% endif %}
 ]

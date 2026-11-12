@@ -41,7 +41,7 @@ def _codes(raw: dict[str, Any]) -> set[str]:
 
 
 def _money_files(files: dict[str, str]) -> dict[str, str]:
-    return {p: c for p, c in files.items() if p.startswith("app/money/") or "money_ledger" in p}
+    return {p: c for p, c in files.items() if p.startswith("app/money/") or "money_" in p}
 
 
 # --- the spec: strict structure, validated values ----------------------------------------------------------
@@ -217,8 +217,13 @@ def test_the_ledger_scopes_every_query_to_the_callers_tenant() -> None:
     assert "StrictInt" in generate(_spec())["app/money/ledger/schemas.py"]
 
 
-def test_money_code_has_no_float() -> None:
-    for path, content in _money_files(generate(_spec())).items():
+@pytest.mark.parametrize("fixture", ["money_ledger", "money_marketplace"])
+def test_money_code_has_no_float(fixture: str) -> None:
+    """Every generated money file: the ledger, and (marketplace) also reconciliation, invoicing and payouts."""
+    money_files = _money_files(generate(_spec(_raw(fixture))))
+    if fixture == "money_marketplace":
+        assert {"app/money/invoicing/service.py", "app/money/reconciliation/matcher.py", "alembic/versions/0032_money_invoicing.py"} <= set(money_files)
+    for path, content in money_files.items():
         if not path.endswith(".py"):
             continue
         assert "float(" not in content, path
@@ -236,10 +241,15 @@ def test_money_code_has_no_float() -> None:
 def test_pack_blocks_are_registered_with_their_dependencies() -> None:
     registry = module_registry()
     packs = pack_registry()
-    assert sorted(packs) == ["money.currency", "money.ledger"]
+    assert sorted(packs) == ["money.currency", "money.invoicing", "money.ledger", "money.reconciliation"]
     assert packs["money.ledger"].id == "money_ledger" and "money_currency" in packs["money.ledger"].depends_on
     assert all(registry[m.id].pack == p for p, m in packs.items())
-    assert [m.name for m in default_modules() if m.manifest.pack is not None] == ["money_currency", "money_ledger"]
+    assert [m.name for m in default_modules() if m.manifest.pack is not None] == [
+        "money_currency",
+        "money_ledger",
+        "money_reconciliation",
+        "money_invoicing",
+    ]
 
 
 # --- the rounding goldens, run against the generated code ----------------------------------------------------------
@@ -340,3 +350,9 @@ def test_the_tax_adapter_reads_only_the_spec_rates(money: types.SimpleNamespace)
     assert money.settings.TAX_RATES_BP == {"reduced": 500, "standard": 2000, "zero": 0}
     assert money.settings.CURRENCIES == ("EUR", "JPY", "KWD", "USD")
     assert "import" not in "".join(line for line in generate(_spec())["app/money/tax.py"].splitlines() if "requests" in line or "httpx" in line)
+
+
+def test_the_ledger_refuses_to_reverse_transactions_owned_by_invoicing() -> None:
+    service = generate(_spec())["app/money/ledger/service.py"]
+    assert 'MANAGED_KEY_PREFIXES = ("invoice:", "payment:", "payout:")' in service
+    assert 'startswith(MANAGED_KEY_PREFIXES)' in service and '"managed_transaction"' in service

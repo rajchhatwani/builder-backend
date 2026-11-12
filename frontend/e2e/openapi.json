@@ -16475,6 +16475,16 @@
        }
       ]
      },
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "payments": {
       "anyOf": [
        {
@@ -16727,6 +16737,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecObservability"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
        },
        {
         "type": "null"
@@ -17507,6 +17527,36 @@
      }
     },
     "title": "SpecAuthorization",
+    "type": "object"
+   },
+   "SpecCurrency": {
+    "additionalProperties": false,
+    "description": "Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode\n(`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only.",
+    "properties": {
+     "currencies": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Currencies",
+      "type": "array"
+     },
+     "rounding": {
+      "default": "half_even",
+      "title": "Rounding",
+      "type": "string"
+     },
+     "tax": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecTax"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecCurrency",
     "type": "object"
    },
    "SpecCustomFieldDef": {
@@ -18442,6 +18492,85 @@
     "title": "SpecIdentityProvider",
     "type": "object"
    },
+   "SpecInvoicing": {
+    "additionalProperties": false,
+    "description": "Money pack, D7 invoicing and AR/AP aging (generated routes under /invoices). Needs the `ledger` and\n`currency` blocks. Account values are ledger account codes (a multi-currency project names an account\n`<code>.<CUR>` for every currency except the one that carries the plain code). `payouts` switches on\n/payouts.",
+    "properties": {
+     "aging_buckets_days": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Aging Buckets Days",
+      "type": "array"
+     },
+     "cash_account": {
+      "default": "bank",
+      "title": "Cash Account",
+      "type": "string"
+     },
+     "expense_account": {
+      "default": "expenses",
+      "title": "Expense Account",
+      "type": "string"
+     },
+     "number_prefix": {
+      "default": "INV-",
+      "title": "Number Prefix",
+      "type": "string"
+     },
+     "payable_account": {
+      "default": "payables",
+      "title": "Payable Account",
+      "type": "string"
+     },
+     "payment_terms_days": {
+      "default": 30,
+      "title": "Payment Terms Days",
+      "type": "integer"
+     },
+     "payouts": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPayouts"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "receivable_account": {
+      "default": "receivables",
+      "title": "Receivable Account",
+      "type": "string"
+     },
+     "revenue_account": {
+      "default": "revenue",
+      "title": "Revenue Account",
+      "type": "string"
+     },
+     "tax_account": {
+      "default": "tax",
+      "title": "Tax Account",
+      "type": "string"
+     },
+     "write_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecInvoicing",
+    "type": "object"
+   },
    "SpecJob": {
     "additionalProperties": false,
     "description": "A kind of background job. `handler` is the name of a function you write in the custom file\napp/hooks/jobs.py (the platform generates only the registry and the stub).",
@@ -18656,6 +18785,38 @@
     "title": "SpecKeycloak",
     "type": "object"
    },
+   "SpecLedger": {
+    "additionalProperties": false,
+    "description": "Money pack, D1 double-entry ledger (generated routes under /ledger). Amounts are integer minor units;\nevery transaction sums to zero per currency, enforced by the database. Needs `auth` and the `currency`\nblock. `read_roles` / `post_roles` name auth roles (empty list = any signed-in user).",
+    "properties": {
+     "max_amount_minor": {
+      "default": 9007199254740991,
+      "title": "Max Amount Minor",
+      "type": "integer"
+     },
+     "max_entries": {
+      "default": 100,
+      "title": "Max Entries",
+      "type": "integer"
+     },
+     "post_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Post Roles",
+      "type": "array"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecLedger",
+    "type": "object"
+   },
    "SpecList": {
     "additionalProperties": false,
     "description": "A named list of values (statuses, categories ...). `items` is the system default set; a\ntenant (or the whole project when single-tenant) may add values, relabel, recolour, reorder and\nswitch off the unlocked ones, if it holds one of `edit_roles`.",
@@ -18750,6 +18911,53 @@
      }
     },
     "title": "SpecMetricsLayer",
+    "type": "object"
+   },
+   "SpecMoneyPack": {
+    "additionalProperties": false,
+    "properties": {
+     "currency": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCurrency"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "invoicing": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecInvoicing"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "ledger": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecLedger"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "reconciliation": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecReconciliation"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecMoneyPack",
     "type": "object"
    },
    "SpecNotificationTemplate": {
@@ -19123,6 +19331,24 @@
      "created_at"
     ],
     "title": "SpecOpRead",
+    "type": "object"
+   },
+   "SpecPacks": {
+    "additionalProperties": false,
+    "description": "Domain packs (Cycle 5). A pack is generated only when it is declared here; unknown packs and options\nare refused (extra=forbid).",
+    "properties": {
+     "money": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecMoneyPack"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecPacks",
     "type": "object"
    },
    "SpecPasswordReset": {
@@ -19510,6 +19736,29 @@
      }
     },
     "title": "SpecPaymentsSecurity",
+    "type": "object"
+   },
+   "SpecPayouts": {
+    "additionalProperties": false,
+    "description": "Optional payouts of the invoicing block (generated routes under /payouts): split a fully paid\nreceivable invoice between the platform (`commission_bp` basis points, largest-remainder rounding) and a\nseller, then pay the seller out of the cash account. Account values are ledger account codes.",
+    "properties": {
+     "commission_account": {
+      "default": "commission",
+      "title": "Commission Account",
+      "type": "string"
+     },
+     "commission_bp": {
+      "default": 1000,
+      "title": "Commission Bp",
+      "type": "integer"
+     },
+     "seller_payable_account": {
+      "default": "seller_payable",
+      "title": "Seller Payable Account",
+      "type": "string"
+     }
+    },
+    "title": "SpecPayouts",
     "type": "object"
    },
    "SpecPermission": {
@@ -19902,6 +20151,38 @@
      }
     },
     "title": "SpecRealtime",
+    "type": "object"
+   },
+   "SpecReconciliation": {
+    "additionalProperties": false,
+    "description": "Money pack, D6 reconciliation (generated routes under /reconciliation): import an external statement\nagainst ONE ledger account and match its lines to ledger entries. Needs the `ledger`. `tolerance_minor`\nis the largest amount difference (minor units) the automatic matcher still pairs; `max_lines` caps the\nstatement lines of one run.",
+    "properties": {
+     "max_lines": {
+      "default": 1000,
+      "title": "Max Lines",
+      "type": "integer"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "run_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Run Roles",
+      "type": "array"
+     },
+     "tolerance_minor": {
+      "default": 0,
+      "title": "Tolerance Minor",
+      "type": "integer"
+     }
+    },
+    "title": "SpecReconciliation",
     "type": "object"
    },
    "SpecRegistration": {
@@ -20778,6 +21059,21 @@
      "suite_id"
     ],
     "title": "SpecSuiteRef",
+    "type": "object"
+   },
+   "SpecTax": {
+    "additionalProperties": false,
+    "description": "Static tax rates (no network): name -> rate in basis points (1 bp = 0.01%), integers only.",
+    "properties": {
+     "rates_bp": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Rates Bp",
+      "type": "object"
+     }
+    },
+    "title": "SpecTax",
     "type": "object"
    },
    "SpecTransition": {

@@ -281,3 +281,8 @@ tests/api/test_sentinel_cp5v_probe.py
 tests/unit/test_scheduler_deploy.py
 tests/unit/test_money_pack.py
 tests/e2e/test_ledger_stack.py
+tests/unit/test_money_reconciliation.py
+tests/unit/test_money_invoicing.py
+tests/e2e/test_reconciliation_stack.py
+tests/e2e/test_invoicing_stack.py
+tests/e2e/test_marketplace_payout_stack.py

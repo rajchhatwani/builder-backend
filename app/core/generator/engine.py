@@ -21,7 +21,9 @@ from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.metrics.module import MetricsModule
 from app.core.generator.features.money_currency.module import MoneyCurrencyModule
+from app.core.generator.features.money_invoicing.module import MoneyInvoicingModule
 from app.core.generator.features.money_ledger.module import MoneyLedgerModule
+from app.core.generator.features.money_reconciliation.module import MoneyReconciliationModule
 from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.providers.module import ProvidersModule
@@ -76,6 +78,8 @@ def default_modules() -> list[FeatureModule]:
         MetricsModule(),
         MoneyCurrencyModule(),
         MoneyLedgerModule(),
+        MoneyReconciliationModule(),
+        MoneyInvoicingModule(),
     ]
 
 
