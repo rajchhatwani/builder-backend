@@ -21,7 +21,9 @@ from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.metrics.module import MetricsModule
 from app.core.generator.features.money_currency.module import MoneyCurrencyModule
+from app.core.generator.features.ai_agents.module import AiAgentsModule
 from app.core.generator.features.ai_documents.module import AiDocumentsModule
+from app.core.generator.features.ai_evals.module import AiEvalsModule
 from app.core.generator.features.ai_gateway.module import AiGatewayModule
 from app.core.generator.features.ai_knowledge.module import AiKnowledgeModule
 from app.core.generator.features.booking.module import BookingModule
@@ -93,6 +95,8 @@ def default_modules() -> list[FeatureModule]:
         AiGatewayModule(),
         AiDocumentsModule(),
         AiKnowledgeModule(),
+        AiAgentsModule(),
+        AiEvalsModule(),
         OperationsCommonModule(),
         OperationsGeoModule(),
         OperationsLocationModule(),

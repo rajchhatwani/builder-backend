@@ -1,0 +1,334 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Support Agents",
+    "slug": "support-agents",
+    "description": "A neutral multi-tenant support desk with AI agents (D37: autonomy dial, approvals) and an eval harness (D38) on the LLM gateway",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "priority",
+          "type": "integer",
+          "required": false,
+          "min_value": 1,
+          "max_value": 5
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://agents.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@agents.example.com",
+      "from_name": "Support Agents"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "agent"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "ai": {
+      "gateway": {
+        "providers": [
+          {
+            "name": "main",
+            "kind": "fake",
+            "byo_key_env": null
+          }
+        ],
+        "region": "eu",
+        "zero_retention": false,
+        "stages": [
+          {
+            "name": "answer",
+            "provider": "main",
+            "model": "fake-small",
+            "max_output_tokens": 512
+          }
+        ],
+        "budget": {
+          "period": "day",
+          "limit_micro_usd": 5000000,
+          "per_call_cap_micro_usd": 1000000
+        },
+        "roles": {
+          "call_roles": [
+            "admin"
+          ],
+          "read_roles": [
+            "admin",
+            "agent"
+          ],
+          "manage_roles": [
+            "admin"
+          ]
+        }
+      },
+      "agents": {
+        "actions": [
+          {
+            "name": "add_note",
+            "kind": "note",
+            "description": "Add an internal note",
+            "risk": "low",
+            "max_autonomy": "auto"
+          },
+          {
+            "name": "escalate",
+            "kind": "note",
+            "description": "Escalate to a manager",
+            "risk": "high",
+            "max_autonomy": "auto"
+          },
+          {
+            "name": "note_draft",
+            "kind": "note",
+            "description": "Add a note that needs approval",
+            "risk": "medium",
+            "max_autonomy": "draft"
+          },
+          {
+            "name": "note_suggest",
+            "kind": "note",
+            "description": "Suggest a note",
+            "risk": "low",
+            "max_autonomy": "suggest"
+          },
+          {
+            "name": "open_ticket",
+            "kind": "entity_create",
+            "description": "Open a ticket",
+            "risk": "medium",
+            "max_autonomy": "auto",
+            "entity": "tickets",
+            "fields": [
+              "title",
+              "priority"
+            ]
+          }
+        ],
+        "agents": [
+          {
+            "name": "autopilot",
+            "stage": "answer",
+            "actions": [
+              "add_note",
+              "escalate",
+              "note_draft",
+              "note_suggest",
+              "open_ticket"
+            ],
+            "autonomy": "auto",
+            "max_actions_per_run": 3,
+            "require_eval": null
+          },
+          {
+            "name": "drafter",
+            "stage": "answer",
+            "actions": [
+              "add_note",
+              "escalate",
+              "note_draft",
+              "note_suggest",
+              "open_ticket"
+            ],
+            "autonomy": "draft",
+            "max_actions_per_run": 5,
+            "require_eval": null
+          },
+          {
+            "name": "guarded",
+            "stage": "answer",
+            "actions": [
+              "add_note",
+              "open_ticket"
+            ],
+            "autonomy": "auto",
+            "max_actions_per_run": 5,
+            "require_eval": "guarded_basic"
+          },
+          {
+            "name": "watcher",
+            "stage": "answer",
+            "actions": [
+              "add_note",
+              "note_draft",
+              "open_ticket"
+            ],
+            "autonomy": "suggest",
+            "max_actions_per_run": 5,
+            "require_eval": null
+          }
+        ],
+        "roles": {
+          "run_roles": [
+            "admin",
+            "agent"
+          ],
+          "approve_roles": [
+            "admin"
+          ],
+          "read_roles": [
+            "admin"
+          ]
+        },
+        "allow_self_approval": false
+      },
+      "evals": {
+        "suites": [
+          {
+            "name": "guarded_basic",
+            "agent": "guarded",
+            "pass_bp": 10000,
+            "cases": [
+              {
+                "name": "adds note",
+                "goal": "customer is angry [[fake:json={\"actions\":[{\"name\":\"add_note\",\"args\":{\"text\":\"hi\"}}]}]]",
+                "expect_actions": [
+                  "add_note"
+                ],
+                "forbid_actions": [
+                  "open_ticket"
+                ]
+              },
+              {
+                "name": "opens ticket",
+                "goal": "customer reports a bug [[fake:json={\"actions\":[{\"name\":\"open_ticket\",\"args\":{\"title\":\"Bug\"}}]}]]",
+                "expect_actions": [
+                  "open_ticket"
+                ],
+                "forbid_actions": []
+              }
+            ]
+          },
+          {
+            "name": "drafter_mixed",
+            "agent": "drafter",
+            "pass_bp": 5000,
+            "cases": [
+              {
+                "name": "proposes a note",
+                "goal": "note it [[fake:json={\"actions\":[{\"name\":\"add_note\",\"args\":{\"text\":\"n\"}}]}]]",
+                "expect_actions": [
+                  "add_note"
+                ],
+                "forbid_actions": [
+                  "escalate"
+                ]
+              },
+              {
+                "name": "expects a ticket nobody proposes",
+                "goal": "note only [[fake:json={\"actions\":[{\"name\":\"add_note\",\"args\":{\"text\":\"n\"}}]}]]",
+                "expect_actions": [
+                  "open_ticket"
+                ],
+                "forbid_actions": []
+              }
+            ]
+          },
+          {
+            "name": "autopilot_strict",
+            "agent": "autopilot",
+            "pass_bp": 10000,
+            "cases": [
+              {
+                "name": "adds note",
+                "goal": "x [[fake:json={\"actions\":[{\"name\":\"add_note\",\"args\":{\"text\":\"n\"}}]}]]",
+                "expect_actions": [
+                  "add_note"
+                ],
+                "forbid_actions": []
+              },
+              {
+                "name": "forbidden escalate",
+                "goal": "y [[fake:json={\"actions\":[{\"name\":\"escalate\",\"args\":{\"text\":\"boss\"}}]}]]",
+                "expect_actions": [],
+                "forbid_actions": [
+                  "escalate"
+                ]
+              }
+            ]
+          }
+        ],
+        "run_roles": [
+          "admin"
+        ]
+      }
+    }
+  }
+}

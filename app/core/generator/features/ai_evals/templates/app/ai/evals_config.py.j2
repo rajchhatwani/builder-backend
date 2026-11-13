@@ -1,0 +1,6 @@
+"""Eval harness settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+RUN_ROLES: tuple[str, ...] = {{ run_roles | roles_repr }}  # may run a suite (agents' approve_roles may always)
+
+# suite -> agent, pass threshold (basis points), cases (name, goal, expect_actions, forbid_actions)
+SUITES: dict[str, dict[str, object]] = {{ suites }}

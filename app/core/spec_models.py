@@ -851,10 +851,77 @@ class SpecAiKnowledge(_SpecModel):
     max_text_chars: StrictInt = 500_000
 
 
+class SpecAiAction(_SpecModel):
+    """One entry of the ACTION REGISTRY: the only things an agent can ever do. kind: note (text stored in the proposal
+    result only) | entity_create (insert one row of a spec entity, allow-listed fields). risk: low | medium | high
+    (a high-risk action never runs without a human, whatever the autonomy). max_autonomy: suggest | draft | auto."""
+
+    name: str
+    kind: str = "note"
+    description: str = ""
+    risk: str = "low"
+    max_autonomy: str = "draft"
+    entity: str | None = None  # the entity's table_name (kind entity_create)
+    fields: list[str] = Field(default_factory=list)
+
+
+class SpecAiAgent(_SpecModel):
+    """An agent: a gateway stage plus a list of registry actions. `autonomy` is its ceiling (suggest | draft | auto);
+    `require_eval` names an eval suite of this agent that must have passed before `auto` runs."""
+
+    name: str
+    stage: str = "answer"
+    actions: list[str] = Field(default_factory=list)
+    autonomy: str = "suggest"
+    max_actions_per_run: StrictInt = 5
+    require_eval: str | None = None
+
+
+class SpecAiAgentRoles(_SpecModel):
+    """Empty list = any signed-in user (same convention as the other ai blocks); managing = approve_roles."""
+
+    run_roles: list[str] = Field(default_factory=list)
+    approve_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    read_roles: list[str] = Field(default_factory=list)
+
+
+class SpecAiAgents(_SpecModel):
+    """AI pack, D37 agent runtime (generated under /ai/agents). Agents call the model only through the gateway;
+    every proposal is capped by the autonomy dial: min(agent autonomy, action max_autonomy, run mode)."""
+
+    actions: list[SpecAiAction] = Field(default_factory=list)
+    agents: list[SpecAiAgent] = Field(default_factory=list)
+    roles: SpecAiAgentRoles = Field(default_factory=SpecAiAgentRoles)
+    allow_self_approval: StrictBool = False  # False: whoever started a run cannot approve its proposals
+
+
+class SpecAiEvalCase(_SpecModel):
+    name: str
+    goal: str
+    expect_actions: list[str] = Field(default_factory=list)
+    forbid_actions: list[str] = Field(default_factory=list)
+
+
+class SpecAiEvalSuite(_SpecModel):
+    name: str
+    agent: str
+    pass_bp: StrictInt = 8000
+    cases: list[SpecAiEvalCase] = Field(default_factory=list)
+
+
+class SpecAiEvals(_SpecModel):
+    """AI pack, D38 eval harness (generated under /ai/evals). Every case runs its agent in dry mode (suggest)."""
+
+    suites: list[SpecAiEvalSuite] = Field(default_factory=list)
+    run_roles: list[str] = Field(default_factory=lambda: ["admin"])
+
+
 class SpecAiPack(_SpecModel):
     gateway: SpecAiGateway | None = None
     documents: SpecAiDocuments | None = None
     knowledge: SpecAiKnowledge | None = None
+    agents: SpecAiAgents | None = None
+    evals: SpecAiEvals | None = None
 
 
 class SpecPacks(_SpecModel):

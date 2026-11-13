@@ -6,6 +6,12 @@ from app.ai import documents_models as _ai_documents_models
 {% if ai_knowledge %}
 from app.ai import knowledge_models as _ai_knowledge_models
 {% endif %}
+{% if ai_agents %}
+from app.ai import agents_models as _ai_agents_models
+{% endif %}
+{% if ai_evals %}
+from app.ai import evals_models as _ai_evals_models
+{% endif %}
 {% if ai %}
 from app.ai import models as _ai_models
 {% endif %}
@@ -152,6 +158,12 @@ __all__ = [
 {% endif %}
 {% if ai_knowledge %}
     "_ai_knowledge_models",
+{% endif %}
+{% if ai_agents %}
+    "_ai_agents_models",
+{% endif %}
+{% if ai_evals %}
+    "_ai_evals_models",
 {% endif %}
 {% if op_geo %}
     "_geo_models",

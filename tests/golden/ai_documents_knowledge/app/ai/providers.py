@@ -11,7 +11,8 @@ which is False in generated code; the text of a message is untrusted):
   [[fake:fail_primary]]    the primary model fails, the fallback model works
   [[fake:delay=300]]       the call takes 300 ms (0..5000)
   [[fake:out=40]]          the output is exactly 40 tokens (capped by max_output_tokens)
-  [[fake:json={"a": 1}]]   with response_format json the output is exactly this JSON text
+  [[fake:json={"a": 1}]]   with response_format json the output is exactly this JSON text (it may contain a single "]";
+                           the value ends at the first "]]" and is at most 1000 characters)
 
 Document extraction (D34, fake only): with response_format json and no [[fake:json=...]] directive, a first message that
 starts with "EXTRACT FIELDS: a,b" and messages "SEGMENT <offset>\\n<text>" make the fake find `name: value` / `name = value`
@@ -26,7 +27,9 @@ import json
 import re
 from dataclasses import dataclass
 
-_DIRECTIVE = re.compile(r"\[\[fake:([a-z_]{1,20})(?:=([^\]]{0,200}))?\]\]")  # bounded: linear time on hostile text
+_OPEN = "[[fake:"
+_MAX_DIRECTIVE = 1000  # characters between "[[fake:" and the closing "]]": bounded, so a hostile text costs linear time
+_BODY = re.compile(r"([a-z_]{1,20})(?:=(.*))?", re.S)
 _SEGMENT = re.compile(r"SEGMENT (\d+)\n")
 _CONF = re.compile(r"\[\[conf=(\d{1,5})\]\]$")
 EXTRACT_PREFIX = "EXTRACT FIELDS: "
@@ -52,10 +55,23 @@ def estimate_input_tokens(contents: list[str]) -> int:
 
 
 def _directives(contents: list[str]) -> dict[str, str]:
+    """`[[fake:name]]` or `[[fake:name=value]]`; the value ends at the first "]]" (a single "]" may appear in it, so a JSON
+    value such as {"actions": [{...}]} works). Scanned with str.find, never with a backtracking pattern."""
     found: dict[str, str] = {}
     for content in contents:
-        for name, value in _DIRECTIVE.findall(content):
-            found[name] = value
+        pos = 0
+        while True:
+            start = content.find(_OPEN, pos)
+            if start < 0:
+                break
+            body_start = start + len(_OPEN)
+            end = content.find("]]", body_start, body_start + _MAX_DIRECTIVE + 2)
+            match = _BODY.fullmatch(content, body_start, end) if end >= 0 else None
+            if match is None:
+                pos = body_start
+                continue
+            found[match.group(1)] = match.group(2) or ""
+            pos = end + 2
     return found
 
 

@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 
 from app.core.spec_models import Spec
-from app.core.validation_ai import documents_active, gateway_active, knowledge_active
+from app.core.validation_ai import agents_active, documents_active, evals_active, gateway_active, knowledge_active
 from app.core.validation_operations import check_operations, operations_pack_ids
 
 Add = Callable[[str, str, str], None]
@@ -81,6 +81,10 @@ def declared_packs(spec: Spec) -> tuple[str, ...]:
         out.append("ai.documents")
     if knowledge_active(spec):
         out.append("ai.knowledge")
+    if agents_active(spec):
+        out.append("ai.agents")
+    if evals_active(spec):
+        out.append("ai.evals")
     out.extend(operations_pack_ids(spec))
     return tuple(sorted(out))
 

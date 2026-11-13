@@ -1,0 +1,28 @@
+"""Agent runtime settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+RUN_ROLES: tuple[str, ...] = {{ run_roles | roles_repr }}  # an empty tuple means any signed-in user
+APPROVE_ROLES: tuple[str, ...] = {{ approve_roles | roles_repr }}  # approve / reject / acknowledge / hand off / record outcomes
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+KNOWN_ROLES: tuple[str, ...] = {{ known_roles | roles_repr }}  # the roles a proposal may be handed off to
+ALLOW_SELF_APPROVAL = {{ "True" if allow_self_approval else "False" }}  # may whoever started a run approve its proposals
+EVALS = {{ "True" if evals else "False" }}  # packs.ai.evals is declared (the require_eval gate reads ai_eval_runs)
+
+# the autonomy dial: allowed = min(agent autonomy, action max_autonomy, run mode)
+RANK: dict[str, int] = {"suggest": 0, "draft": 1, "auto": 2}
+
+# the action registry: the only things an agent can ever do
+ACTIONS: dict[str, dict[str, object]] = {{ actions }}
+
+# agent -> gateway stage, allowed actions, autonomy ceiling, cap per run, optional eval suite that gates `auto`
+AGENTS: dict[str, dict[str, object]] = {{ agents }}
+
+# table -> field -> rule, only for the entities an entity_create action writes (the allow-listed fields)
+ENTITIES: dict[str, dict[str, dict[str, object]]] = {{ entities }}
+
+# table -> the roles that may create a row of that entity through its own CRUD permissions (empty tuple: nobody).
+# An agent action writes a row only for an actor who holds one of them (the entity's own create check is not bypassed).
+CREATE_ROLES: dict[str, tuple[str, ...]] = {{ create_roles }}
+
+MAX_ARGS_BYTES = 4096
+MAX_CONTEXT_BYTES = 8192
+MAX_NOTE_CHARS = 2000

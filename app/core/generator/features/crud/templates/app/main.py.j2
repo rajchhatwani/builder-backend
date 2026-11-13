@@ -15,6 +15,12 @@ from app.ai.documents_router import router as _ai_documents_router
 {% if ai_knowledge %}
 from app.ai.knowledge_router import router as _ai_knowledge_router
 {% endif %}
+{% if ai_agents %}
+from app.ai.agents_router import router as _ai_agents_router
+{% endif %}
+{% if ai_evals %}
+from app.ai.evals_router import router as _ai_evals_router
+{% endif %}
 {% if ai %}
 from app.ai.router import router as _ai_router
 {% endif %}
@@ -257,6 +263,12 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if ai_knowledge %}
     app.include_router(_ai_knowledge_router)
+{% endif %}
+{% if ai_agents %}
+    app.include_router(_ai_agents_router)
+{% endif %}
+{% if ai_evals %}
+    app.include_router(_ai_evals_router)
 {% endif %}
 {% if op_geo %}
     app.include_router(_geo_router)

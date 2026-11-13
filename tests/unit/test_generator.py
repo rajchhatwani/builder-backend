@@ -82,6 +82,7 @@ NAMES = [
     "booking_clinic",
     "ai_gateway_support",
     "ai_documents_knowledge",
+    "ai_agents_evals",
     "operations_fleet",
 ]
 

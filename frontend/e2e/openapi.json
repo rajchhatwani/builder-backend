@@ -16863,6 +16863,166 @@
     "title": "Spec",
     "type": "object"
    },
+   "SpecAiAction": {
+    "additionalProperties": false,
+    "description": "One entry of the ACTION REGISTRY: the only things an agent can ever do. kind: note (text stored in the proposal\nresult only) | entity_create (insert one row of a spec entity, allow-listed fields). risk: low | medium | high\n(a high-risk action never runs without a human, whatever the autonomy). max_autonomy: suggest | draft | auto.",
+    "properties": {
+     "description": {
+      "default": "",
+      "title": "Description",
+      "type": "string"
+     },
+     "entity": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Entity"
+     },
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "kind": {
+      "default": "note",
+      "title": "Kind",
+      "type": "string"
+     },
+     "max_autonomy": {
+      "default": "draft",
+      "title": "Max Autonomy",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "risk": {
+      "default": "low",
+      "title": "Risk",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecAiAction",
+    "type": "object"
+   },
+   "SpecAiAgent": {
+    "additionalProperties": false,
+    "description": "An agent: a gateway stage plus a list of registry actions. `autonomy` is its ceiling (suggest | draft | auto);\n`require_eval` names an eval suite of this agent that must have passed before `auto` runs.",
+    "properties": {
+     "actions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Actions",
+      "type": "array"
+     },
+     "autonomy": {
+      "default": "suggest",
+      "title": "Autonomy",
+      "type": "string"
+     },
+     "max_actions_per_run": {
+      "default": 5,
+      "title": "Max Actions Per Run",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "require_eval": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Require Eval"
+     },
+     "stage": {
+      "default": "answer",
+      "title": "Stage",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecAiAgent",
+    "type": "object"
+   },
+   "SpecAiAgentRoles": {
+    "additionalProperties": false,
+    "description": "Empty list = any signed-in user (same convention as the other ai blocks); managing = approve_roles.",
+    "properties": {
+     "approve_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Approve Roles",
+      "type": "array"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "run_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Run Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecAiAgentRoles",
+    "type": "object"
+   },
+   "SpecAiAgents": {
+    "additionalProperties": false,
+    "description": "AI pack, D37 agent runtime (generated under /ai/agents). Agents call the model only through the gateway;\nevery proposal is capped by the autonomy dial: min(agent autonomy, action max_autonomy, run mode).",
+    "properties": {
+     "actions": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiAction"
+      },
+      "title": "Actions",
+      "type": "array"
+     },
+     "agents": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiAgent"
+      },
+      "title": "Agents",
+      "type": "array"
+     },
+     "allow_self_approval": {
+      "default": false,
+      "title": "Allow Self Approval",
+      "type": "boolean"
+     },
+     "roles": {
+      "$ref": "#/components/schemas/SpecAiAgentRoles"
+     }
+    },
+    "title": "SpecAiAgents",
+    "type": "object"
+   },
    "SpecAiBudget": {
     "additionalProperties": false,
     "description": "Integer micro-USD (1 USD = 1_000_000) per `period` (day | month), and a cap for one call's worst case.",
@@ -16982,6 +17142,92 @@
     "title": "SpecAiDocuments",
     "type": "object"
    },
+   "SpecAiEvalCase": {
+    "additionalProperties": false,
+    "properties": {
+     "expect_actions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Expect Actions",
+      "type": "array"
+     },
+     "forbid_actions": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Forbid Actions",
+      "type": "array"
+     },
+     "goal": {
+      "title": "Goal",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "goal"
+    ],
+    "title": "SpecAiEvalCase",
+    "type": "object"
+   },
+   "SpecAiEvalSuite": {
+    "additionalProperties": false,
+    "properties": {
+     "agent": {
+      "title": "Agent",
+      "type": "string"
+     },
+     "cases": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiEvalCase"
+      },
+      "title": "Cases",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "pass_bp": {
+      "default": 8000,
+      "title": "Pass Bp",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "agent"
+    ],
+    "title": "SpecAiEvalSuite",
+    "type": "object"
+   },
+   "SpecAiEvals": {
+    "additionalProperties": false,
+    "description": "AI pack, D38 eval harness (generated under /ai/evals). Every case runs its agent in dry mode (suggest).",
+    "properties": {
+     "run_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Run Roles",
+      "type": "array"
+     },
+     "suites": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiEvalSuite"
+      },
+      "title": "Suites",
+      "type": "array"
+     }
+    },
+    "title": "SpecAiEvals",
+    "type": "object"
+   },
    "SpecAiGateway": {
     "additionalProperties": false,
     "description": "AI pack, D33 LLM gateway (generated routes under /ai, tables under app/ai). Needs `auth` with rbac. A call is\nrouted by stage, its worst-case cost is reserved against the budget before the provider runs, then settled.\n`zero_retention`: prompts and outputs are never stored (hash and token counts only).",
@@ -17065,10 +17311,30 @@
    "SpecAiPack": {
     "additionalProperties": false,
     "properties": {
+     "agents": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiAgents"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "documents": {
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecAiDocuments"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "evals": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiEvals"
        },
        {
         "type": "null"

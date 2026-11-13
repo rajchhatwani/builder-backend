@@ -242,7 +242,7 @@ def test_pack_blocks_are_registered_with_their_dependencies() -> None:
     registry = module_registry()
     packs = pack_registry()
     assert sorted(packs) == [
-        "ai.documents", "ai.gateway", "ai.knowledge", "booking", "money.currency", "money.invoicing", "money.ledger", "money.reconciliation",
+        "ai.agents", "ai.documents", "ai.evals", "ai.gateway", "ai.knowledge", "booking", "money.currency", "money.invoicing", "money.ledger", "money.reconciliation",
         "operations.geo", "operations.location", "operations.matching", "operations.prediction",
     ]
     assert packs["money.ledger"].id == "money_ledger" and "money_currency" in packs["money.ledger"].depends_on
@@ -256,6 +256,8 @@ def test_pack_blocks_are_registered_with_their_dependencies() -> None:
         "ai_gateway",
         "ai_documents",
         "ai_knowledge",
+        "ai_agents",
+        "ai_evals",
         "operations_geo",
         "operations_location",
         "operations_matching",

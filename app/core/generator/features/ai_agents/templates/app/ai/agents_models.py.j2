@@ -1,0 +1,112 @@
+"""Agent runtime tables (generated). `ai_agent_runs` is one run of an agent (goal, mode, outcome of the model call),
+`ai_agent_proposals` one action the model proposed, with the status the autonomy dial gave it."""
+
+import datetime as _dt
+import uuid as _uuid
+from typing import Any as _Any
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+from sqlalchemy.dialects import postgresql as _pg
+
+from app.models import _base as _models_base
+
+
+def _id() -> _orm.Mapped[_uuid.UUID]:
+    return _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+
+
+def _created() -> _orm.Mapped[_dt.datetime]:
+    return _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+
+{% macro tenant_column(table) %}
+{% if tenant %}
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_{{ table }}_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+{% endif %}
+{% endmacro %}
+
+class AiAgentRun(_models_base.Base):
+    __tablename__ = "ai_agent_runs"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_agent_runs") }}
+    agent: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    goal: _orm.Mapped[str] = _orm.mapped_column(_sa.Text(), nullable=False)
+    mode: _orm.Mapped[str] = _orm.mapped_column(_sa.String(8), nullable=False)
+    effective_autonomy: _orm.Mapped[str] = _orm.mapped_column(_sa.String(8), nullable=False)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(10), nullable=False, default="completed", server_default="completed")
+    error_code: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    call_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(
+        _sa.ForeignKey("ai_calls.id", name="fk_ai_agent_runs_call_id_ai_calls", ondelete="SET NULL"), nullable=True
+    )
+    started_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    eval: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+    idempotency_key: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(128), nullable=True)
+    request_hash: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(64), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+
+    __table_args__ = (
+        _sa.CheckConstraint("status IN ('completed', 'failed', 'refused')", name="ck_ai_agent_runs_status"),
+        _sa.CheckConstraint("mode IN ('suggest', 'draft', 'auto')", name="ck_ai_agent_runs_mode"),
+        _sa.CheckConstraint("effective_autonomy IN ('suggest', 'draft', 'auto')", name="ck_ai_agent_runs_effective_autonomy"),
+        _sa.Index(
+            "uq_ai_agent_runs_idempotency_key",
+            {{ '"tenant_id", ' if tenant else '' }}"started_by",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=_sa.text("idempotency_key IS NOT NULL"),
+        ),
+        _sa.Index("ix_ai_agent_runs_agent_created_at", "agent", "created_at"),
+    )
+
+
+class AiAgentProposal(_models_base.Base):
+    __tablename__ = "ai_agent_proposals"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_agent_proposals") }}
+    run_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("ai_agent_runs.id", name="fk_ai_agent_proposals_run_id_ai_agent_runs", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    agent: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    position: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    action: _orm.Mapped[str] = _orm.mapped_column(_sa.String(60), nullable=False)
+    kind: _orm.Mapped[str] = _orm.mapped_column(_sa.String(20), nullable=False)
+    risk: _orm.Mapped[str] = _orm.mapped_column(_sa.String(8), nullable=False)
+    args: _orm.Mapped[dict[str, _Any]] = _orm.mapped_column(_pg.JSONB(), nullable=False, default=dict, server_default=_sa.text("'{}'::jsonb"))
+    allowed_autonomy: _orm.Mapped[str] = _orm.mapped_column(_sa.String(8), nullable=False)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(20), nullable=False)
+    reason: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(200), nullable=True)
+    result: _orm.Mapped[dict[str, _Any] | None] = _orm.mapped_column(_pg.JSONB(), nullable=True)
+    error_code: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    executed_by: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    started_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    decided_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    decided_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+    note: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(500), nullable=True)
+    handoff_role: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    outcome: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(8), nullable=True)
+    outcome_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    outcome_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+    eval: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+
+    __table_args__ = (
+        _sa.CheckConstraint(
+            "status IN ('suggested', 'acknowledged', 'pending_approval', 'executed', 'failed', 'rejected', 'rejected_by_policy', 'handed_off')",
+            name="ck_ai_agent_proposals_status",
+        ),
+        _sa.CheckConstraint("allowed_autonomy IN ('suggest', 'draft', 'auto')", name="ck_ai_agent_proposals_allowed_autonomy"),
+        _sa.CheckConstraint("outcome IS NULL OR outcome IN ('success', 'failure', 'neutral')", name="ck_ai_agent_proposals_outcome"),
+        _sa.Index("ix_ai_agent_proposals_status_created_at", "status", "created_at"),
+    )

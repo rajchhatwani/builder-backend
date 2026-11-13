@@ -68,6 +68,7 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/map`, { page: 'project', projectId: PID, section: 'map' }],
   [`#/p/${PID}/bookings`, { page: 'project', projectId: PID, section: 'bookings' }],
   [`#/p/${PID}/documents`, { page: 'project', projectId: PID, section: 'documents' }],
+  [`#/p/${PID}/agentactions`, { page: 'project', projectId: PID, section: 'agentactions' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
   // Added by F2-4 (addition): the v2-only History timeline page.
   [`#/p/${PID}/timeline`, { page: 'project', projectId: PID, section: 'timeline' }],

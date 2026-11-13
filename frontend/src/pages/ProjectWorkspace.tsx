@@ -75,6 +75,7 @@ const SeeItWork = lazy(() => import('../shell/ai/SeeItWork').then((m) => ({ defa
 const DependenciesPage = lazy(() => import('../shell/ai/DependenciesPage').then((m) => ({ default: m.DependenciesPage })))
 const MapPage = lazy(() => import('../shell/map/MapPage').then((m) => ({ default: m.MapPage })))
 const DocumentsPage = lazy(() => import('../shell/documents/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
+const AgentApprovalsPage = lazy(() => import('../shell/approvals/AgentApprovalsPage').then((m) => ({ default: m.AgentApprovalsPage })))
 const BookingsPage = lazy(() => import('../shell/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })))
 const LedgerPage = lazy(() => import('../shell/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })))
 const SearchPage = lazy(() => import('../shell/search/SearchPage').then((m) => ({ default: m.SearchPage })))
@@ -593,7 +594,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents') && (
+      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
@@ -601,6 +602,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'map' && <MapPage projectId={project.id} />}
           {section === 'bookings' && <BookingsPage projectId={project.id} />}
           {section === 'documents' && <DocumentsPage projectId={project.id} />}
+          {section === 'agentactions' && <AgentApprovalsPage projectId={project.id} />}
         </Suspense>
       )}
 
