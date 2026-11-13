@@ -65,6 +65,8 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/dependencies`, { page: 'project', projectId: PID, section: 'dependencies' }],
   // Added by F5-1 (addition): the v2-only Ledger explorer page.
   [`#/p/${PID}/ledger`, { page: 'project', projectId: PID, section: 'ledger' }],
+  [`#/p/${PID}/map`, { page: 'project', projectId: PID, section: 'map' }],
+  [`#/p/${PID}/bookings`, { page: 'project', projectId: PID, section: 'bookings' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
   // Added by F2-4 (addition): the v2-only History timeline page.
   [`#/p/${PID}/timeline`, { page: 'project', projectId: PID, section: 'timeline' }],

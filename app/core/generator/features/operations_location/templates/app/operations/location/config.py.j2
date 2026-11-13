@@ -1,0 +1,11 @@
+"""Location settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+# who may read / write; an empty tuple means any signed-in user
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+WRITE_ROLES: tuple[str, ...] = {{ write_roles | roles_repr }}
+HISTORY_CAP = {{ history_cap }}  # history rows kept per subject (older ones are deleted when a newer one arrives)
+MAX_SUBJECTS = {{ max_subjects }}
+MAX_FUTURE_SECONDS = 300  # a recorded_at further ahead than this is refused
+BOX_CAP = 500  # rows one bounding-box query returns
+GEO = {{ "True" if geo else "False" }}  # the geo block is declared: positions are evaluated against geofences
+MULTI_TENANT = {{ "True" if tenant else "False" }}

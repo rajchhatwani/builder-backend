@@ -10,6 +10,11 @@ from app.core.generator.features.change_history.module import (
 )
 from app.core.generator.features.data_import.module import import_entities
 from app.core.generator.features.metrics.module import metrics_definitions
+from app.core.generator.features.booking.module import booking_enabled
+from app.core.generator.features.operations_geo.module import geo_enabled
+from app.core.generator.features.operations_location.module import location_enabled
+from app.core.generator.features.operations_matching.module import matching_enabled
+from app.core.generator.features.operations_prediction.module import prediction_enabled
 from app.core.generator.features.money_invoicing.module import invoicing_enabled, payouts_enabled
 from app.core.generator.features.money_ledger.module import ledger_enabled
 from app.core.generator.features.money_reconciliation.module import reconciliation_enabled
@@ -111,6 +116,11 @@ class CrudModule:
             "reconciliation": reconciliation_enabled(project),
             "invoicing": invoicing_enabled(project),
             "payouts": payouts_enabled(project),
+            "booking": booking_enabled(project),
+            "op_geo": geo_enabled(project),
+            "op_location": location_enabled(project),
+            "op_matching": matching_enabled(project),
+            "op_prediction": prediction_enabled(project),
         }
         files["app/main.py"] = render_template(self._env, "app/main.py.j2", **common)
         files["app/models/__init__.py"] = render_template(

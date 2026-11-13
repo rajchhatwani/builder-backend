@@ -1,0 +1,196 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Clinic",
+    "slug": "clinic",
+    "description": "A neutral multi-tenant clinic booking system: practitioners with weekly slots, rooms by the hour, a pool of loaner units (booking pack)",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Service",
+      "table_name": "services",
+      "plural_path": "services",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://clinic.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@clinic.example.com",
+      "from_name": "Clinic"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "staff",
+        "label": "Staff"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Service",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "staff",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Service",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "staff",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Service",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "staff"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "booking": {
+      "kinds": [
+        {
+          "name": "practitioner",
+          "mode": "slot",
+          "timezone": "Europe/Berlin",
+          "slot_minutes": 30,
+          "schedule": {
+            "mon": [
+              {
+                "start": "09:00",
+                "end": "12:00"
+              },
+              {
+                "start": "13:00",
+                "end": "17:00"
+              }
+            ],
+            "tue": [
+              {
+                "start": "09:00",
+                "end": "12:00"
+              },
+              {
+                "start": "13:00",
+                "end": "17:00"
+              }
+            ],
+            "wed": [
+              {
+                "start": "09:00",
+                "end": "12:00"
+              },
+              {
+                "start": "13:00",
+                "end": "17:00"
+              }
+            ],
+            "thu": [
+              {
+                "start": "09:00",
+                "end": "12:00"
+              },
+              {
+                "start": "13:00",
+                "end": "17:00"
+              }
+            ],
+            "fri": [
+              {
+                "start": "09:00",
+                "end": "12:00"
+              },
+              {
+                "start": "13:00",
+                "end": "17:00"
+              }
+            ]
+          }
+        },
+        {
+          "name": "room",
+          "mode": "range",
+          "timezone": "Europe/Berlin",
+          "min_minutes": 30,
+          "max_minutes": 480
+        },
+        {
+          "name": "loaner",
+          "mode": "pool",
+          "capacity": 3,
+          "min_minutes": 60,
+          "max_minutes": 10080
+        }
+      ],
+      "hold_ttl_seconds": 120,
+      "max_horizon_days": 365,
+      "cancellation": {
+        "free_until_hours": 24,
+        "fee_minor": 2500,
+        "currency": "EUR"
+      },
+      "read_roles": [
+        "admin",
+        "staff",
+        "customer"
+      ],
+      "book_roles": [
+        "admin",
+        "customer"
+      ],
+      "manage_roles": [
+        "admin",
+        "staff"
+      ],
+      "own_only": true
+    }
+  }
+}

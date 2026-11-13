@@ -12,9 +12,9 @@ so the same model always serializes to the same spec.
 
 import hashlib
 import json
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
 
 SPEC_VERSION = 1
 ALLOWED_OPERATIONS = frozenset({"list", "get", "create", "replace", "update", "delete", "head"})
@@ -656,11 +656,124 @@ class SpecMoneyPack(_SpecModel):
     invoicing: SpecInvoicing | None = None
 
 
+class SpecGeo(_SpecModel):
+    """Operations pack, D13 geo (generated routes under /geo): places and geofences (circle, polygon) with a grid
+    cell index, haversine distance in integer metres, nearest-N / within-radius queries, enter / exit evaluation and
+    deterministic FAKE geocoder / routing / ETA adapters (`provider` is always `fake`: no outbound calls).
+    Coordinates are integer micro-degrees. `grid_cell_micro` is the index cell size (10000 = 0.01 degree)."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    write_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    provider: str = "fake"
+    grid_cell_micro: StrictInt = 10_000
+    max_places: StrictInt = 100_000
+    max_geofences: StrictInt = 1000
+    max_polygon_vertices: StrictInt = 200
+    max_radius_m: StrictInt = 20_000_000
+
+
+class SpecLocation(_SpecModel):
+    """Operations pack, D14 live location store (generated routes under /location): the latest position per
+    subject, with a monotonic `seq` (older updates are ignored), a bounded history (`history_cap` rows per subject)
+    and a latest-in-bounding-box query. Evaluates geofences when the `geo` block is declared too."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    write_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    history_cap: StrictInt = 100
+    max_subjects: StrictInt = 100_000
+
+
+class SpecMatchWeights(_SpecModel):
+    distance: StrictInt = 1000
+    load: StrictInt = 0
+    rating: StrictInt = 0
+
+
+class SpecMatching(_SpecModel):
+    """Operations pack, D15 matching / assignment (generated routes under /matching): rank candidates for a
+    request by rules (max distance, max load) and an integer score from the declared weights, assign with a
+    database guarantee of one active assignment per request, and solve a batch (exact for small inputs)."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    assign_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    weights: SpecMatchWeights = Field(default_factory=SpecMatchWeights)
+    max_distance_m: StrictInt = 20_000
+    max_load: StrictInt = 10
+    offer_ttl_seconds: StrictInt = 300
+
+
+class SpecPrediction(_SpecModel):
+    """Operations pack, D16 prediction adapter (generated routes under /prediction): record predictions (value,
+    interval low / high, model id from the deterministic FAKE predictor), record actuals later and read
+    logged-vs-actual error stats (count, MAE, interval coverage). Integers only."""
+
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    write_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    model_id: str = "fake-linear-v1"
+    unit: str = "unit"
+    interval_bp: StrictInt = 2000
+
+
+class SpecOperationsPack(_SpecModel):
+    geo: SpecGeo | None = None
+    location: SpecLocation | None = None
+    matching: SpecMatching | None = None
+    prediction: SpecPrediction | None = None
+
+
+class SpecBookingWindow(_SpecModel):
+    """One opening window of a weekday, local wall-clock `HH:MM` (end is exclusive)."""
+
+    start: str
+    end: str
+
+
+class SpecBookingKind(_SpecModel):
+    """A kind of bookable resource. `slot`: fixed `slot_minutes` slots on a weekly `schedule` (keys mon..sun) in
+    `timezone`; `range`: any time range of `min_minutes..max_minutes` (one booking at a time); `pool`: a quantity
+    from `capacity` units over a time range. Resources of the kind are created at run time and inherit these."""
+
+    name: str
+    mode: Literal["slot", "range", "pool"]
+    timezone: str = "UTC"
+    slot_minutes: StrictInt = 30
+    schedule: dict[str, list[SpecBookingWindow]] = Field(default_factory=dict)
+    capacity: StrictInt = 1
+    min_minutes: StrictInt = 15
+    max_minutes: StrictInt = 43_200
+
+
+class SpecBookingCancellation(_SpecModel):
+    """Free cancellation until `free_until_hours` before the start; later a flat `fee_minor` (integer minor units
+    of `currency`, recorded only)."""
+
+    free_until_hours: StrictInt = 24
+    fee_minor: StrictInt = 0
+    currency: str = "USD"
+
+
+class SpecBookingPack(_SpecModel):
+    """Booking pack, D12 reservation engine (generated routes under /booking, tables under app/booking). Needs
+    `auth` with rbac. A booking starts as a hold of `hold_ttl_seconds`; `own_only` limits callers who are not
+    in `manage_roles` to their own bookings. Empty role list = any signed-in user."""
+
+    kinds: list[SpecBookingKind] = Field(default_factory=list)
+    hold_ttl_seconds: StrictInt = 600
+    max_horizon_days: StrictInt = 365
+    cancellation: SpecBookingCancellation = Field(default_factory=SpecBookingCancellation)
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    book_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    manage_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    own_only: StrictBool = False
+
+
 class SpecPacks(_SpecModel):
     """Domain packs (Cycle 5). A pack is generated only when it is declared here; unknown packs and options
     are refused (extra=forbid)."""
 
     money: SpecMoneyPack | None = None
+    operations: SpecOperationsPack | None = None
+    booking: SpecBookingPack | None = None
 
 
 class SpecRateBucket(_SpecModel):

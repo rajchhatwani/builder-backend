@@ -1,0 +1,244 @@
+"""Matching service (generated). Ranking and the batch solver are pure (app/operations/matching/scoring.py); this module
+adds the database rules.
+
+* A request has at most one ACTIVE assignment (offered / accepted): a partial UNIQUE index decides, a loser gets 409
+  `already_assigned`. Rejected and expired assignments free the request; that candidate is skipped for it next time.
+* An offer expires OFFER_TTL_SECONDS after it is made. Every decision is a conditional UPDATE (`WHERE status = 'offered'`),
+  so parallel accept / reject / expire calls cannot both win."""
+
+import typing as _t
+import uuid as _uuid
+from datetime import UTC, datetime, timedelta
+
+import sqlalchemy as _sa
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.errors import AppError
+from app.operations.common import Tenant, scoped, tenant_of, tenant_values
+from app.operations.location.models import LocationPosition
+from app.operations.matching import config as _config
+from app.operations.matching import schemas as _s
+from app.operations.matching import scoring as _sc
+from app.operations.matching.models import MatchAssignment
+
+WEIGHTS = _sc.Weights(_config.WEIGHT_DISTANCE, _config.WEIGHT_LOAD, _config.WEIGHT_RATING)
+
+
+def tenant(user: _t.Any) -> Tenant:
+    return tenant_of(user, _config.MULTI_TENANT)
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def assignment_out(row: MatchAssignment) -> _s.AssignmentOut:
+    return _s.AssignmentOut(
+        id=row.id, request_ref=row.request_ref, candidate_id=row.candidate_id, status=_t.cast(_s.Status, row.status),
+        score=row.score, distance_m=row.distance_m, offered_at=row.offered_at, expires_at=row.expires_at,
+        decided_at=row.decided_at, decided_by=row.decided_by,
+    )
+
+
+async def _candidates(session: AsyncSession, tn: Tenant, given: _t.Sequence[_s.CandidateIn]) -> list[_sc.Candidate]:
+    """Candidates with coordinates; one without takes its latest /location position (when that block exists)."""
+    found: dict[str, tuple[int, int]] = {}
+    missing = [c.id for c in given if c.micro is None]
+    if missing:
+        stmt = scoped(_sa.select(LocationPosition).where(LocationPosition.subject_id.in_(missing)), LocationPosition, tn)
+        found = {r.subject_id: (r.lat_micro, r.lng_micro) for r in (await session.execute(stmt)).scalars()}
+    out = []
+    for c in given:
+        micro = c.micro or found.get(c.id)
+        if micro is None:
+            raise AppError("candidate_without_location", f"candidate {c.id!r} has no coordinates and no known position", 422, [{"candidate_id": c.id}])
+        out.append(_sc.Candidate(c.id, micro[0], micro[1], c.load, c.rating_milli))
+    return out
+
+
+async def _expire_due(session: AsyncSession, tn: Tenant, request_ref: str | None = None) -> int:
+    stmt = (
+        _sa.update(MatchAssignment)
+        .where(MatchAssignment.status == "offered", MatchAssignment.expires_at <= _now())
+        .values(status="expired", decided_at=_now())
+    )
+    if request_ref is not None:
+        stmt = stmt.where(MatchAssignment.request_ref == request_ref)
+    result = await session.execute(scoped(stmt, MatchAssignment, tn))
+    return int(result.rowcount)  # type: ignore[attr-defined]
+
+
+async def _declined(session: AsyncSession, tn: Tenant, refs: _t.Collection[str]) -> dict[str, set[str]]:
+    stmt = scoped(
+        _sa.select(MatchAssignment.request_ref, MatchAssignment.candidate_id).where(
+            MatchAssignment.request_ref.in_(list(refs)), MatchAssignment.status.in_(("rejected", "expired"))
+        ),
+        MatchAssignment, tn,
+    )
+    out: dict[str, set[str]] = {}
+    for ref, cand in (await session.execute(stmt)).all():
+        out.setdefault(ref, set()).add(cand)
+    return out
+
+
+def _ranked_out(items: list[_sc.Ranked]) -> list[_s.RankedOut]:
+    return [
+        _s.RankedOut(
+            candidate_id=r.candidate_id, score=r.score, distance_m=r.distance_m,
+            parts=_s.Parts(distance=r.parts[0], load=r.parts[1], rating=r.parts[2]),
+        )
+        for r in items
+    ]
+
+
+async def rank(session: AsyncSession, user: _t.Any, body: _s.RankIn) -> _s.RankOut:
+    cands = await _candidates(session, tenant(user), body.candidates)
+    ranked, excluded = _sc.rank(body.point.micro, cands, WEIGHTS, _config.MAX_DISTANCE_M, _config.MAX_LOAD)
+    return _s.RankOut(items=_ranked_out(ranked), excluded=[_s.ExcludedOut(candidate_id=c, reason=r) for c, r in excluded])
+
+
+def _new_row(tn: Tenant, user: _t.Any, ref: str, pick: _sc.Ranked) -> MatchAssignment:
+    now = _now()
+    return MatchAssignment(
+        request_ref=ref, candidate_id=pick.candidate_id, status="offered", score=pick.score, distance_m=pick.distance_m,
+        offered_at=now, expires_at=now + timedelta(seconds=_config.OFFER_TTL_SECONDS),
+        created_by=getattr(user, "id", None), **tenant_values(tn),
+    )
+
+
+async def assign(session: AsyncSession, user: _t.Any, body: _s.AssignIn) -> _s.AssignmentOut:
+    tn = tenant(user)
+    cands = await _candidates(session, tn, body.candidates)
+    await _expire_due(session, tn, body.request_ref)
+    skip = (await _declined(session, tn, [body.request_ref])).get(body.request_ref, set())
+    ranked, _excluded = _sc.rank(body.point.micro, cands, WEIGHTS, _config.MAX_DISTANCE_M, _config.MAX_LOAD, skip)
+    if not ranked:
+        await session.commit()
+        raise AppError("no_candidates", "no eligible candidate for this request", 422, [{"excluded": [{"candidate_id": c, "reason": r} for c, r in _excluded]}])
+    row = _new_row(tn, user, body.request_ref, ranked[0])
+    session.add(row)
+    try:
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        if "uq_match_assignments_active" in str(exc.orig):
+            raise AppError("already_assigned", "this request already has an active assignment", 409) from exc
+        raise
+    return assignment_out(row)
+
+
+async def batch(session: AsyncSession, user: _t.Any, body: _s.BatchIn) -> _s.BatchOut:
+    tn = tenant(user)
+    cands = await _candidates(session, tn, body.candidates)
+    refs = [r.request_ref for r in body.requests]
+    await _expire_due(session, tn)
+    active = {
+        r
+        for (r,) in (
+            await session.execute(
+                scoped(
+                    _sa.select(MatchAssignment.request_ref).where(
+                        MatchAssignment.request_ref.in_(refs), MatchAssignment.status.in_(("offered", "accepted"))
+                    ),
+                    MatchAssignment, tn,
+                )
+            )
+        ).all()
+    }
+    skip = await _declined(session, tn, refs)
+    todo = [(r.request_ref, r.point.micro) for r in body.requests if r.request_ref not in active]
+    pairs, unassigned, solver = _sc.solve_batch(
+        todo, cands, WEIGHTS, _config.MAX_DISTANCE_M, _config.MAX_LOAD, skip,
+        _config.EXACT_MAX_REQUESTS, _config.EXACT_MAX_CANDIDATES,
+    ) if todo else ([], [], "optimal")
+    skipped = sorted(active)
+    rows: list[MatchAssignment] = []
+    kept = []
+    for pair in pairs:
+        if body.commit:
+            row = _new_row(tn, user, pair.request_ref, _sc.Ranked(pair.candidate_id, pair.score, pair.distance_m, (0, 0, 0)))
+            try:
+                async with session.begin_nested():
+                    session.add(row)
+            except IntegrityError:  # lost a race for this request: another assign made it active first
+                skipped.append(pair.request_ref)
+                continue
+            rows.append(row)
+        kept.append(pair)
+    await session.commit()
+    return _s.BatchOut(
+        pairs=[_s.PairOut(request_ref=p.request_ref, candidate_id=p.candidate_id, score=p.score, distance_m=p.distance_m) for p in kept],
+        unassigned=unassigned, skipped=sorted(skipped), total_score=sum(p.score for p in kept), solver=_t.cast(_t.Literal["optimal", "greedy"], solver),
+        assignments=[assignment_out(r) for r in rows],
+    )
+
+
+async def list_assignments(
+    session: AsyncSession, user: _t.Any, limit: int, offset: int, status: str | None, request_ref: str | None, candidate_id: str | None
+) -> tuple[list[_s.AssignmentOut], int]:
+    base = scoped(_sa.select(MatchAssignment), MatchAssignment, tenant(user))
+    if status is not None:
+        base = base.where(MatchAssignment.status == status)
+    if request_ref is not None:
+        base = base.where(MatchAssignment.request_ref == request_ref)
+    if candidate_id is not None:
+        base = base.where(MatchAssignment.candidate_id == candidate_id)
+    total = (await session.execute(_sa.select(_sa.func.count()).select_from(base.subquery()))).scalar_one()
+    rows = (await session.execute(base.order_by(MatchAssignment.offered_at.desc(), MatchAssignment.id).limit(limit).offset(offset))).scalars()
+    return [assignment_out(r) for r in rows], int(total)
+
+
+async def _load(session: AsyncSession, tn: Tenant, assignment_id: _uuid.UUID) -> MatchAssignment:
+    stmt = scoped(_sa.select(MatchAssignment).where(MatchAssignment.id == assignment_id), MatchAssignment, tn)
+    row = (await session.execute(stmt.execution_options(populate_existing=True))).scalar_one_or_none()
+    if row is None:
+        raise AppError("not_found", "assignment not found", 404)
+    return row
+
+
+async def get_assignment(session: AsyncSession, user: _t.Any, assignment_id: _uuid.UUID) -> _s.AssignmentOut:
+    return assignment_out(await _load(session, tenant(user), assignment_id))
+
+
+async def _decide(session: AsyncSession, user: _t.Any, assignment_id: _uuid.UUID, new_status: str) -> _s.AssignmentOut:
+    tn = tenant(user)
+    await _load(session, tn, assignment_id)  # 404 for another tenant's id
+    stmt = (
+        _sa.update(MatchAssignment)
+        .where(MatchAssignment.id == assignment_id, MatchAssignment.status == "offered")
+        .values(status=new_status, decided_at=_now(), decided_by=getattr(user, "id", None))
+    )
+    if new_status == "accepted":
+        stmt = stmt.where(MatchAssignment.expires_at > _now())
+    result = await session.execute(scoped(stmt, MatchAssignment, tn))
+    changed = result.rowcount  # type: ignore[attr-defined]
+    if not changed:
+        row = await _load(session, tn, assignment_id)
+        if row.status == "offered" and new_status == "accepted":  # offered but past its expiry
+            await _expire_due(session, tn, row.request_ref)
+            await session.commit()
+            raise AppError("expired", "the offer has expired", 409)
+        current = row.status  # read before the rollback expires the row
+        await session.rollback()
+        raise AppError("invalid_state", f"an assignment that is {current} cannot become {new_status}", 409)
+    await session.commit()
+    return assignment_out(await _load(session, tn, assignment_id))
+
+
+async def accept(session: AsyncSession, user: _t.Any, assignment_id: _uuid.UUID) -> _s.AssignmentOut:
+    return await _decide(session, user, assignment_id, "accepted")
+
+
+async def reject(session: AsyncSession, user: _t.Any, assignment_id: _uuid.UUID) -> _s.AssignmentOut:
+    return await _decide(session, user, assignment_id, "rejected")
+
+
+async def expire(session: AsyncSession, user: _t.Any, assignment_id: _uuid.UUID) -> _s.AssignmentOut:
+    return await _decide(session, user, assignment_id, "expired")
+
+
+async def expire_due(session: AsyncSession, user: _t.Any) -> _s.ExpireOut:
+    count = await _expire_due(session, tenant(user))
+    await session.commit()
+    return _s.ExpireOut(expired=count)

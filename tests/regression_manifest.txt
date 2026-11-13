@@ -286,3 +286,7 @@ tests/unit/test_money_invoicing.py
 tests/e2e/test_reconciliation_stack.py
 tests/e2e/test_invoicing_stack.py
 tests/e2e/test_marketplace_payout_stack.py
+tests/unit/test_booking_pack.py
+tests/e2e/test_booking_stack.py
+tests/unit/test_operations_pack.py
+tests/e2e/test_operations_stack.py

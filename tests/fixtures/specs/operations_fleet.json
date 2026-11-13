@@ -1,0 +1,162 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Fleet",
+    "slug": "fleet",
+    "description": "A neutral multi-tenant delivery fleet: places, geofences, live driver positions, job matching and ETA prediction (operations pack)",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Vehicle",
+      "table_name": "vehicles",
+      "plural_path": "vehicles",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "plate",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://fleet.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@fleet.example.com",
+      "from_name": "Fleet"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "dispatcher",
+        "label": "Dispatcher"
+      },
+      {
+        "name": "driver",
+        "label": "Driver",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Vehicle",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "dispatcher",
+          "driver"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Vehicle",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "dispatcher",
+          "driver"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Vehicle",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "operations": {
+      "geo": {
+        "read_roles": [
+          "admin",
+          "dispatcher",
+          "driver"
+        ],
+        "write_roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "grid_cell_micro": 10000,
+        "max_places": 1000,
+        "max_geofences": 20,
+        "max_polygon_vertices": 12,
+        "max_radius_m": 5000000
+      },
+      "location": {
+        "read_roles": [
+          "admin",
+          "dispatcher",
+          "driver"
+        ],
+        "write_roles": [
+          "admin",
+          "dispatcher",
+          "driver"
+        ],
+        "history_cap": 5,
+        "max_subjects": 1000
+      },
+      "matching": {
+        "read_roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "assign_roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "weights": {
+          "distance": 600,
+          "load": 300,
+          "rating": 100
+        },
+        "max_distance_m": 20000,
+        "max_load": 5,
+        "offer_ttl_seconds": 300
+      },
+      "prediction": {
+        "read_roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "write_roles": [
+          "admin",
+          "dispatcher"
+        ],
+        "model_id": "fake-linear-v1",
+        "unit": "minutes",
+        "interval_bp": 2000
+      }
+    }
+  }
+}

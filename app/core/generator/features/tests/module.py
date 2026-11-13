@@ -11,9 +11,12 @@ from app.core.generator.render import make_environment, read_verbatim, render_te
 from app.core.validation import auth_tables, uses_keycloak
 from app.core.validation_api_edge import api_edge_tables
 from app.core.validation_events import EV_TABLES, events_active
+from app.core.generator.features.booking.module import booking_enabled
 from app.core.generator.features.money_invoicing.module import invoicing_enabled, payouts_enabled
 from app.core.generator.features.money_ledger.module import ledger_enabled
 from app.core.generator.features.money_reconciliation.module import reconciliation_enabled
+from app.core.validation_booking import BOOKING_TABLES
+from app.core.validation_operations import operations_tables
 from app.core.validation_packs import INVOICING_TABLES, LEDGER_TABLES, PAYOUT_TABLES, RECON_TABLES
 from app.core.validation_realtime import RT_TABLES, realtime_active
 from app.core.validation_history import CH_TABLES, history_active
@@ -116,6 +119,9 @@ class TestsModule:
             tables |= set(INVOICING_TABLES)
         if payouts_enabled(project):
             tables |= set(PAYOUT_TABLES)
+        if booking_enabled(project):
+            tables |= set(BOOKING_TABLES)
+        tables |= set(operations_tables(project.spec)) if project.auth is not None else set()
         files["tests/conftest.py"] = render_template(
             self._env,
             "conftest.py.j2",

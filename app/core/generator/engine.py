@@ -21,6 +21,12 @@ from app.core.generator.features.keycloak.module import KeycloakModule
 from app.core.generator.features.notifications.module import NotificationsModule
 from app.core.generator.features.metrics.module import MetricsModule
 from app.core.generator.features.money_currency.module import MoneyCurrencyModule
+from app.core.generator.features.booking.module import BookingModule
+from app.core.generator.features.operations_common.module import OperationsCommonModule
+from app.core.generator.features.operations_geo.module import OperationsGeoModule
+from app.core.generator.features.operations_location.module import OperationsLocationModule
+from app.core.generator.features.operations_matching.module import OperationsMatchingModule
+from app.core.generator.features.operations_prediction.module import OperationsPredictionModule
 from app.core.generator.features.money_invoicing.module import MoneyInvoicingModule
 from app.core.generator.features.money_ledger.module import MoneyLedgerModule
 from app.core.generator.features.money_reconciliation.module import MoneyReconciliationModule
@@ -80,6 +86,12 @@ def default_modules() -> list[FeatureModule]:
         MoneyLedgerModule(),
         MoneyReconciliationModule(),
         MoneyInvoicingModule(),
+        BookingModule(),
+        OperationsCommonModule(),
+        OperationsGeoModule(),
+        OperationsLocationModule(),
+        OperationsMatchingModule(),
+        OperationsPredictionModule(),
     ]
 
 

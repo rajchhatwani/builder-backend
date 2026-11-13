@@ -241,7 +241,10 @@ def test_money_code_has_no_float(fixture: str) -> None:
 def test_pack_blocks_are_registered_with_their_dependencies() -> None:
     registry = module_registry()
     packs = pack_registry()
-    assert sorted(packs) == ["money.currency", "money.invoicing", "money.ledger", "money.reconciliation"]
+    assert sorted(packs) == [
+        "booking", "money.currency", "money.invoicing", "money.ledger", "money.reconciliation",
+        "operations.geo", "operations.location", "operations.matching", "operations.prediction",
+    ]
     assert packs["money.ledger"].id == "money_ledger" and "money_currency" in packs["money.ledger"].depends_on
     assert all(registry[m.id].pack == p for p, m in packs.items())
     assert [m.name for m in default_modules() if m.manifest.pack is not None] == [
@@ -249,6 +252,11 @@ def test_pack_blocks_are_registered_with_their_dependencies() -> None:
         "money_ledger",
         "money_reconciliation",
         "money_invoicing",
+        "booking",
+        "operations_geo",
+        "operations_location",
+        "operations_matching",
+        "operations_prediction",
     ]
 
 

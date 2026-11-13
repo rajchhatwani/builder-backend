@@ -1,0 +1,46 @@
+"""Matching table (generated). A request has at most ONE active (offered / accepted) assignment: a partial UNIQUE
+index decides it, so parallel assigns cannot both win."""
+
+import datetime as _dt
+import uuid as _uuid
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+
+from app.models import _base as _models_base
+
+
+class MatchAssignment(_models_base.Base):
+    __tablename__ = "match_assignments"
+
+    id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_match_assignments_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    request_ref: _orm.Mapped[str] = _orm.mapped_column(_sa.String(128), nullable=False)
+    candidate_id: _orm.Mapped[str] = _orm.mapped_column(_sa.String(128), nullable=False)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(10), nullable=False, default="offered", server_default="offered")
+    score: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False)
+    distance_m: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False)
+    offered_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+    expires_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=False)
+    decided_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+    decided_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    created_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+
+    __table_args__ = (
+        _sa.Index(
+            "uq_match_assignments_active",
+            "tenant_id", "request_ref",
+            unique=True,
+            postgresql_where=_sa.text("status IN ('offered', 'accepted')"),
+        ),
+        _sa.Index("ix_match_assignments_request", "tenant_id", "request_ref"),
+        _sa.CheckConstraint("status IN ('offered', 'accepted', 'rejected', 'expired')", name="ck_match_assignments_status"),
+    )

@@ -7,6 +7,7 @@ import re
 from collections.abc import Callable
 
 from app.core.spec_models import Spec
+from app.core.validation_operations import check_operations, operations_pack_ids
 
 Add = Callable[[str, str, str], None]
 
@@ -73,10 +74,12 @@ def declared_packs(spec: Spec) -> tuple[str, ...]:
         out.append("money.reconciliation")
     if invoicing_active(spec):
         out.append("money.invoicing")
+    out.extend(operations_pack_ids(spec))
     return tuple(sorted(out))
 
 
 def check_packs(spec: Spec, add: Add) -> None:
+    check_operations(spec, add)
     if not money_active(spec):
         return
     money = spec.packs.money  # type: ignore[union-attr]

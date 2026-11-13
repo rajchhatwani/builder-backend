@@ -1,0 +1,10 @@
+"""Prediction settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+# who may read / write; an empty tuple means any signed-in user
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+WRITE_ROLES: tuple[str, ...] = {{ write_roles | roles_repr }}
+MODEL_ID = "{{ model_id }}"  # recorded on every prediction (the deterministic fake predictor)
+UNIT = "{{ unit }}"  # what the integer value / low / high / actual are counted in
+INTERVAL_BP = {{ interval_bp }}  # the fake predictor's interval: value +- value * INTERVAL_BP / 10000 (at least 1)
+MAX_FEATURES = 50
+MULTI_TENANT = {{ "True" if tenant else "False" }}

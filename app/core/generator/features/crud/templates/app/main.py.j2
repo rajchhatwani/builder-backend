@@ -24,6 +24,9 @@ from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 {% endif %}
+{% if booking %}
+from app.booking.router import router as _booking_router
+{% endif %}
 {% if history_router %}
 from app.change_history.router import router as _change_history_router
 {% endif %}
@@ -48,6 +51,18 @@ from app.metrics.router import router as _metrics_router
 {% endif %}
 {% if payouts %}
 from app.money.invoicing.payouts_router import router as _payouts_router
+{% endif %}
+{% if op_geo %}
+from app.operations.geo.router import router as _geo_router
+{% endif %}
+{% if op_location %}
+from app.operations.location.router import router as _location_router
+{% endif %}
+{% if op_matching %}
+from app.operations.matching.router import router as _matching_router
+{% endif %}
+{% if op_prediction %}
+from app.operations.prediction.router import router as _prediction_router
 {% endif %}
 {% if invoicing %}
 from app.money.invoicing.router import router as _invoicing_router
@@ -221,6 +236,21 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if reconciliation %}
     app.include_router(_reconciliation_router)
+{% endif %}
+{% if booking %}
+    app.include_router(_booking_router)
+{% endif %}
+{% if op_geo %}
+    app.include_router(_geo_router)
+{% endif %}
+{% if op_location %}
+    app.include_router(_location_router)
+{% endif %}
+{% if op_matching %}
+    app.include_router(_matching_router)
+{% endif %}
+{% if op_prediction %}
+    app.include_router(_prediction_router)
 {% endif %}
 {% if invoicing %}
     app.include_router(_invoicing_router)

@@ -363,6 +363,26 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'map',
+    label: 'Map',
+    icon: (
+      <>
+        <path d="M9 4l-5 2v14l5-2 6 2 5-2V4l-5 2z" />
+        <path d="M9 4v14M15 6v14" />
+      </>
+    ),
+  },
+  {
+    id: 'bookings',
+    label: 'Bookings',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" />
+        <path d="M4 10h16M8 3v4M16 3v4" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

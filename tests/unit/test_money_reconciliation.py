@@ -172,7 +172,10 @@ def test_tenant_treatment_matches_the_ledger_and_single_tenant_has_none() -> Non
 
 def test_the_blocks_are_registered_with_their_dependencies() -> None:
     packs = pack_registry()
-    assert sorted(packs) == ["money.currency", "money.invoicing", "money.ledger", "money.reconciliation"]
+    assert sorted(packs) == [
+        "booking", "money.currency", "money.invoicing", "money.ledger", "money.reconciliation",
+        "operations.geo", "operations.location", "operations.matching", "operations.prediction",
+    ]
     assert packs["money.reconciliation"].id == "money_reconciliation"
     assert {"money_currency", "money_ledger"} <= set(packs["money.reconciliation"].depends_on)
     assert module_registry()["money_reconciliation"].pack == "money.reconciliation"

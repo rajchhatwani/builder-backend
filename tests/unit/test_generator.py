@@ -79,6 +79,8 @@ NAMES = [
     "tenant_guard",
     "money_ledger",
     "money_marketplace",
+    "booking_clinic",
+    "operations_fleet",
 ]
 
 

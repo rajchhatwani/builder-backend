@@ -36,4 +36,7 @@ redis>=5.0.0
 {% endif %}
 sqlalchemy[asyncio]>=2.1.5
 structlog>=26.1.0
+{% if booking %}
+tzdata>=2024.1
+{% endif %}
 uvicorn[standard]>=0.54.0

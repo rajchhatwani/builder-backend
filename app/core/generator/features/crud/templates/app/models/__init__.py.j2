@@ -6,6 +6,9 @@ from app.api_edge import models as _api_edge_models
 {% if auth %}
 from app.auth import models as _auth_models
 {% endif %}
+{% if booking %}
+from app.booking import models as _booking_models
+{% endif %}
 {% if change_history %}
 from app.change_history import models as _change_history_models
 {% endif %}
@@ -25,6 +28,18 @@ from app.money.invoicing import models as _invoicing_models
 {% endif %}
 {% if ledger %}
 from app.money.ledger import models as _ledger_models
+{% endif %}
+{% if op_geo %}
+from app.operations.geo import models as _geo_models
+{% endif %}
+{% if op_location %}
+from app.operations.location import models as _location_models
+{% endif %}
+{% if op_matching %}
+from app.operations.matching import models as _matching_models
+{% endif %}
+{% if op_prediction %}
+from app.operations.prediction import models as _prediction_models
 {% endif %}
 {% if reconciliation %}
 from app.money.reconciliation import models as _reconciliation_models
@@ -116,6 +131,21 @@ __all__ = [
 {% endif %}
 {% if reconciliation %}
     "_reconciliation_models",
+{% endif %}
+{% if booking %}
+    "_booking_models",
+{% endif %}
+{% if op_geo %}
+    "_geo_models",
+{% endif %}
+{% if op_location %}
+    "_location_models",
+{% endif %}
+{% if op_matching %}
+    "_matching_models",
+{% endif %}
+{% if op_prediction %}
+    "_prediction_models",
 {% endif %}
 {% if invoicing %}
     "_invoicing_models",

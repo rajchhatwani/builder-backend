@@ -1,0 +1,18 @@
+"""Booking settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+# who may read / book / manage; an empty tuple means any signed-in user
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+BOOK_ROLES: tuple[str, ...] = {{ book_roles | roles_repr }}
+MANAGE_ROLES: tuple[str, ...] = {{ manage_roles | roles_repr }}
+OWN_ONLY = {{ "True" if own_only else "False" }}  # callers outside MANAGE_ROLES see only their own bookings
+HOLD_TTL_SECONDS = {{ hold_ttl }}
+MAX_HORIZON_DAYS = {{ horizon }}
+FREE_CANCEL_HOURS = {{ free_hours }}
+CANCEL_FEE_MINOR = {{ fee_minor }}
+FEE_CURRENCY = "{{ fee_currency }}"
+MAX_AVAILABILITY_DAYS = 31
+MAX_ACTIVE_HOLDS = 20
+MULTI_TENANT = {{ "True" if tenant else "False" }}
+
+# resource kinds: name -> mode and the defaults a new resource of the kind inherits
+KINDS: dict[str, dict[str, object]] = {{ kinds }}
