@@ -767,6 +767,96 @@ class SpecBookingPack(_SpecModel):
     own_only: StrictBool = False
 
 
+class SpecAiProvider(_SpecModel):
+    """A model provider of the AI gateway. `kind` is only `fake` for now (deterministic, no network). `byo_key_env` is
+    the NAME of the environment variable that would hold a bring-your-own key: data only, nothing reads it yet."""
+
+    name: str
+    kind: str = "fake"
+    byo_key_env: str | None = None
+
+
+class SpecAiStage(_SpecModel):
+    """One stage of the per-stage router: stage name -> provider + model + output cap (+ optional fallback model)."""
+
+    name: str
+    provider: str
+    model: str
+    max_output_tokens: StrictInt = 512
+    fallback_model: str | None = None
+
+
+class SpecAiBudget(_SpecModel):
+    """Integer micro-USD (1 USD = 1_000_000) per `period` (day | month), and a cap for one call's worst case."""
+
+    period: str = "day"
+    limit_micro_usd: StrictInt = 1_000_000
+    per_call_cap_micro_usd: StrictInt = 100_000
+
+
+class SpecAiRoles(_SpecModel):
+    """Empty list = any signed-in user (same convention as the booking pack)."""
+
+    call_roles: list[str] = Field(default_factory=list)
+    read_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    manage_roles: list[str] = Field(default_factory=lambda: ["admin"])
+
+
+class SpecAiGateway(_SpecModel):
+    """AI pack, D33 LLM gateway (generated routes under /ai, tables under app/ai). Needs `auth` with rbac. A call is
+    routed by stage, its worst-case cost is reserved against the budget before the provider runs, then settled.
+    `zero_retention`: prompts and outputs are never stored (hash and token counts only)."""
+
+    providers: list[SpecAiProvider] = Field(default_factory=list)
+    region: str = "eu"
+    zero_retention: StrictBool = False
+    stages: list[SpecAiStage] = Field(default_factory=list)
+    budget: SpecAiBudget = Field(default_factory=SpecAiBudget)
+    roles: SpecAiRoles = Field(default_factory=SpecAiRoles)
+
+
+class SpecAiDocField(_SpecModel):
+    name: str
+    required: StrictBool = False
+
+
+class SpecAiDocKind(_SpecModel):
+    name: str
+    fields: list[SpecAiDocField] = Field(default_factory=list)
+
+
+class SpecAiDocuments(_SpecModel):
+    """AI pack, D34 document AI (generated under /ai/documents). Extraction goes through
+    the gateway stage `stage`; a field below `review_below_bp` confidence (basis points) goes to the review queue."""
+
+    kinds: list[SpecAiDocKind] = Field(default_factory=list)
+    stage: str = "extract"
+    upload_roles: list[str] = Field(default_factory=list)
+    review_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    read_roles: list[str] = Field(default_factory=list)
+    review_below_bp: StrictInt = 8000
+    max_text_chars: StrictInt = 200_000
+    allow_self_review: StrictBool = False  # False: the uploader of a document cannot correct / approve / reject it
+
+
+class SpecAiKnowledge(_SpecModel):
+    """AI pack, D35 knowledge library + RAG (generated under /ai/knowledge). Answers go
+    through the gateway stage `stage`; retrieval is filtered by the caller's permissions."""
+
+    stage: str = "answer"
+    manage_roles: list[str] = Field(default_factory=lambda: ["admin"])
+    read_roles: list[str] = Field(default_factory=list)
+    chunk_chars: StrictInt = 800
+    max_sources: StrictInt = 1000
+    max_text_chars: StrictInt = 500_000
+
+
+class SpecAiPack(_SpecModel):
+    gateway: SpecAiGateway | None = None
+    documents: SpecAiDocuments | None = None
+    knowledge: SpecAiKnowledge | None = None
+
+
 class SpecPacks(_SpecModel):
     """Domain packs (Cycle 5). A pack is generated only when it is declared here; unknown packs and options
     are refused (extra=forbid)."""
@@ -774,6 +864,7 @@ class SpecPacks(_SpecModel):
     money: SpecMoneyPack | None = None
     operations: SpecOperationsPack | None = None
     booking: SpecBookingPack | None = None
+    ai: SpecAiPack | None = None
 
 
 class SpecRateBucket(_SpecModel):

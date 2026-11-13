@@ -1,0 +1,201 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Claims Desk",
+    "slug": "claims-desk",
+    "description": "A neutral multi-tenant claims desk with document AI (D34) and a permission-filtered knowledge library (D35) on the LLM gateway",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://claims.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@claims.example.com",
+      "from_name": "Claims Desk"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "agent"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "ai": {
+      "gateway": {
+        "providers": [
+          {
+            "name": "main",
+            "kind": "fake",
+            "byo_key_env": null
+          }
+        ],
+        "region": "eu",
+        "zero_retention": false,
+        "stages": [
+          {
+            "name": "extract",
+            "provider": "main",
+            "model": "fake-small",
+            "max_output_tokens": 512
+          },
+          {
+            "name": "answer",
+            "provider": "main",
+            "model": "fake-small",
+            "max_output_tokens": 200,
+            "fallback_model": "fake-embed"
+          }
+        ],
+        "budget": {
+          "period": "day",
+          "limit_micro_usd": 5000000,
+          "per_call_cap_micro_usd": 1000000
+        },
+        "roles": {
+          "call_roles": [
+            "admin"
+          ],
+          "read_roles": [
+            "admin",
+            "agent"
+          ],
+          "manage_roles": [
+            "admin"
+          ]
+        }
+      },
+      "documents": {
+        "kinds": [
+          {
+            "name": "invoice",
+            "fields": [
+              {
+                "name": "vendor",
+                "required": false
+              },
+              {
+                "name": "total",
+                "required": true
+              },
+              {
+                "name": "due_date",
+                "required": false
+              }
+            ]
+          },
+          {
+            "name": "receipt",
+            "fields": [
+              {
+                "name": "merchant",
+                "required": true
+              },
+              {
+                "name": "amount",
+                "required": true
+              }
+            ]
+          }
+        ],
+        "stage": "extract",
+        "upload_roles": [
+          "agent",
+          "customer"
+        ],
+        "review_roles": [
+          "admin"
+        ],
+        "read_roles": [
+          "agent"
+        ],
+        "review_below_bp": 8000,
+        "max_text_chars": 200000
+      },
+      "knowledge": {
+        "stage": "answer",
+        "manage_roles": [
+          "admin"
+        ],
+        "read_roles": [],
+        "chunk_chars": 200,
+        "max_sources": 1000,
+        "max_text_chars": 500000
+      }
+    }
+  }
+}

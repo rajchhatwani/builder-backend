@@ -1,0 +1,101 @@
+"""Document AI tables (generated). `ai_documents` holds the text and the review status, `ai_document_fields` one row per
+extracted field with its confidence (integer basis points) and the anchor into the text."""
+
+import datetime as _dt
+import uuid as _uuid
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+
+from app.models import _base as _models_base
+
+
+def _id() -> _orm.Mapped[_uuid.UUID]:
+    return _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+
+
+def _created() -> _orm.Mapped[_dt.datetime]:
+    return _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+
+
+class AiDocument(_models_base.Base):
+    __tablename__ = "ai_documents"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_ai_documents_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    kind: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    title: _orm.Mapped[str] = _orm.mapped_column(_sa.String(200), nullable=False)
+    content: _orm.Mapped[str] = _orm.mapped_column(_sa.Text(), nullable=False)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(12), nullable=False, default="extracted", server_default="extracted")
+    call_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(
+        _sa.ForeignKey("ai_calls.id", name="fk_ai_documents_call_id_ai_calls", ondelete="SET NULL"), nullable=True
+    )
+    created_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    reject_reason: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(500), nullable=True)
+    reviewed_by: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    reviewed_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+    idempotency_key: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(128), nullable=True)
+    request_hash: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(64), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+    updated_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()"), onupdate=_models_base.utcnow
+    )
+
+    __table_args__ = (
+        _sa.CheckConstraint("status IN ('extracted', 'needs_review', 'approved', 'rejected')", name="ck_ai_documents_status"),
+        _sa.Index(
+            "uq_ai_documents_idempotency_key",
+            "tenant_id", "created_by",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=_sa.text("idempotency_key IS NOT NULL"),
+        ),
+        _sa.Index("ix_ai_documents_status_created_at", "status", "created_at"),
+    )
+
+
+class AiDocumentField(_models_base.Base):
+    __tablename__ = "ai_document_fields"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_ai_document_fields_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    document_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("ai_documents.id", name="fk_ai_document_fields_document_id_ai_documents", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    position: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    value: _orm.Mapped[str | None] = _orm.mapped_column(_sa.Text(), nullable=True)
+    confidence_bp: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    anchor_page: _orm.Mapped[int | None] = _orm.mapped_column(_sa.Integer(), nullable=True)
+    anchor_start: _orm.Mapped[int | None] = _orm.mapped_column(_sa.Integer(), nullable=True)
+    anchor_end: _orm.Mapped[int | None] = _orm.mapped_column(_sa.Integer(), nullable=True)
+    anchor_quote: _orm.Mapped[str | None] = _orm.mapped_column(_sa.Text(), nullable=True)
+    corrected: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+    original_value: _orm.Mapped[str | None] = _orm.mapped_column(_sa.Text(), nullable=True)
+    review_required: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+
+    __table_args__ = (
+        _sa.UniqueConstraint("document_id", "name", name="uq_ai_document_fields_document_name"),
+        _sa.CheckConstraint("confidence_bp >= 0 AND confidence_bp <= 10000", name="ck_ai_document_fields_confidence"),
+        _sa.CheckConstraint(
+            "(anchor_start IS NULL AND anchor_end IS NULL AND anchor_page IS NULL AND anchor_quote IS NULL)"
+            " OR (anchor_start >= 0 AND anchor_end > anchor_start AND anchor_page >= 1 AND anchor_quote IS NOT NULL)",
+            name="ck_ai_document_fields_anchor",
+        ),
+    )

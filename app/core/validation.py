@@ -70,6 +70,7 @@ from app.core.validation_notifications import (
 from app.core.validation_numbering import check_numbered_fields
 from app.core.validation_observability import check_observability
 from app.core.validation_operations import operations_tables
+from app.core.validation_ai import ai_tables, check_ai
 from app.core.validation_booking import booking_tables, check_booking
 from app.core.validation_packs import LEDGER_TABLES, check_packs, ledger_active
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
@@ -195,6 +196,8 @@ def validate(spec: Spec) -> list[ValidationIssue]:
         ctx.tables[table] = "packs.operations"
     for table in booking_tables(spec):
         ctx.tables[table] = "packs.booking"
+    for table in ai_tables(spec):
+        ctx.tables[table] = "packs.ai"
 
     _check_project(spec.project, ctx)
     _check_sizes(spec, ctx)
@@ -219,6 +222,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_metrics_layer(spec, entities_by_name, ctx.add)
     check_packs(spec, ctx.add)
     check_booking(spec, ctx.add)
+    check_ai(spec, ctx.add)
     check_api_edge(spec, ctx.add)
     check_jobs(spec, ctx.add)
     check_workflows(spec, ctx.add)

@@ -80,6 +80,8 @@ NAMES = [
     "money_ledger",
     "money_marketplace",
     "booking_clinic",
+    "ai_gateway_support",
+    "ai_documents_knowledge",
     "operations_fleet",
 ]
 

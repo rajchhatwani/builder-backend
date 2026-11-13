@@ -1,0 +1,66 @@
+"""ai pack: knowledge library tables
+
+Revision ID: 0040
+Revises: 0039
+Create Date: rendered from the spec by Backend Builder
+
+ai_knowledge_sources carry their own visibility (allowed_roles, or owner_only: exactly one); ai_knowledge_chunks hold the
+text, a generated tsvector (GIN index) and the deterministic fake embedding.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+revision: str = "0040"
+down_revision: str | None = "0039"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "ai_knowledge_sources",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("owner_id", sa.Uuid(), nullable=False),
+        sa.Column("owner_only", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("allowed_roles", postgresql.ARRAY(sa.Text()), server_default=sa.text("'{}'::text[]"), nullable=False),
+        sa.Column("chunk_count", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint(
+            "(owner_only AND cardinality(allowed_roles) = 0) OR (NOT owner_only AND cardinality(allowed_roles) > 0)",
+            name="ck_ai_knowledge_sources_visibility",
+        ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_ai_knowledge_sources_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index(op.f("ix_ai_knowledge_sources_tenant_id"), "ai_knowledge_sources", ["tenant_id"], unique=False)
+    op.create_index("ix_ai_knowledge_sources_owner_id", "ai_knowledge_sources", ["owner_id"], unique=False)
+
+    op.create_table(
+        "ai_knowledge_chunks",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+        sa.Column("source_id", sa.Uuid(), nullable=False),
+        sa.Column("position", sa.Integer(), nullable=False),
+        sa.Column("text", sa.Text(), nullable=False),
+        sa.Column("tsv", postgresql.TSVECTOR(), sa.Computed("to_tsvector('simple', text)", persisted=True), nullable=True),
+        sa.Column("embedding", postgresql.ARRAY(sa.Integer()), nullable=False),
+        sa.Column("emb_norm2", sa.BigInteger(), server_default="0", nullable=False),
+        sa.ForeignKeyConstraint(["source_id"], ["ai_knowledge_sources.id"], name="fk_ai_knowledge_chunks_source_id_ai_knowledge_sources", ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_ai_knowledge_chunks_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("source_id", "position", name="uq_ai_knowledge_chunks_source_position"),
+    )
+    op.create_index(op.f("ix_ai_knowledge_chunks_tenant_id"), "ai_knowledge_chunks", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_ai_knowledge_chunks_source_id"), "ai_knowledge_chunks", ["source_id"], unique=False)
+    op.create_index("ix_ai_knowledge_chunks_tsv", "ai_knowledge_chunks", ["tsv"], unique=False, postgresql_using="gin")
+
+
+def downgrade() -> None:
+    op.drop_table("ai_knowledge_chunks")
+    op.drop_table("ai_knowledge_sources")

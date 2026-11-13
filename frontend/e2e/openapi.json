@@ -16863,6 +16863,343 @@
     "title": "Spec",
     "type": "object"
    },
+   "SpecAiBudget": {
+    "additionalProperties": false,
+    "description": "Integer micro-USD (1 USD = 1_000_000) per `period` (day | month), and a cap for one call's worst case.",
+    "properties": {
+     "limit_micro_usd": {
+      "default": 1000000,
+      "title": "Limit Micro Usd",
+      "type": "integer"
+     },
+     "per_call_cap_micro_usd": {
+      "default": 100000,
+      "title": "Per Call Cap Micro Usd",
+      "type": "integer"
+     },
+     "period": {
+      "default": "day",
+      "title": "Period",
+      "type": "string"
+     }
+    },
+    "title": "SpecAiBudget",
+    "type": "object"
+   },
+   "SpecAiDocField": {
+    "additionalProperties": false,
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "default": false,
+      "title": "Required",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecAiDocField",
+    "type": "object"
+   },
+   "SpecAiDocKind": {
+    "additionalProperties": false,
+    "properties": {
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiDocField"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecAiDocKind",
+    "type": "object"
+   },
+   "SpecAiDocuments": {
+    "additionalProperties": false,
+    "description": "AI pack, D34 document AI (generated under /ai/documents). Extraction goes through\nthe gateway stage `stage`; a field below `review_below_bp` confidence (basis points) goes to the review queue.",
+    "properties": {
+     "allow_self_review": {
+      "default": false,
+      "title": "Allow Self Review",
+      "type": "boolean"
+     },
+     "kinds": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiDocKind"
+      },
+      "title": "Kinds",
+      "type": "array"
+     },
+     "max_text_chars": {
+      "default": 200000,
+      "title": "Max Text Chars",
+      "type": "integer"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "review_below_bp": {
+      "default": 8000,
+      "title": "Review Below Bp",
+      "type": "integer"
+     },
+     "review_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Review Roles",
+      "type": "array"
+     },
+     "stage": {
+      "default": "extract",
+      "title": "Stage",
+      "type": "string"
+     },
+     "upload_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Upload Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecAiDocuments",
+    "type": "object"
+   },
+   "SpecAiGateway": {
+    "additionalProperties": false,
+    "description": "AI pack, D33 LLM gateway (generated routes under /ai, tables under app/ai). Needs `auth` with rbac. A call is\nrouted by stage, its worst-case cost is reserved against the budget before the provider runs, then settled.\n`zero_retention`: prompts and outputs are never stored (hash and token counts only).",
+    "properties": {
+     "budget": {
+      "$ref": "#/components/schemas/SpecAiBudget"
+     },
+     "providers": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiProvider"
+      },
+      "title": "Providers",
+      "type": "array"
+     },
+     "region": {
+      "default": "eu",
+      "title": "Region",
+      "type": "string"
+     },
+     "roles": {
+      "$ref": "#/components/schemas/SpecAiRoles"
+     },
+     "stages": {
+      "items": {
+       "$ref": "#/components/schemas/SpecAiStage"
+      },
+      "title": "Stages",
+      "type": "array"
+     },
+     "zero_retention": {
+      "default": false,
+      "title": "Zero Retention",
+      "type": "boolean"
+     }
+    },
+    "title": "SpecAiGateway",
+    "type": "object"
+   },
+   "SpecAiKnowledge": {
+    "additionalProperties": false,
+    "description": "AI pack, D35 knowledge library + RAG (generated under /ai/knowledge). Answers go\nthrough the gateway stage `stage`; retrieval is filtered by the caller's permissions.",
+    "properties": {
+     "chunk_chars": {
+      "default": 800,
+      "title": "Chunk Chars",
+      "type": "integer"
+     },
+     "manage_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Manage Roles",
+      "type": "array"
+     },
+     "max_sources": {
+      "default": 1000,
+      "title": "Max Sources",
+      "type": "integer"
+     },
+     "max_text_chars": {
+      "default": 500000,
+      "title": "Max Text Chars",
+      "type": "integer"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "stage": {
+      "default": "answer",
+      "title": "Stage",
+      "type": "string"
+     }
+    },
+    "title": "SpecAiKnowledge",
+    "type": "object"
+   },
+   "SpecAiPack": {
+    "additionalProperties": false,
+    "properties": {
+     "documents": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiDocuments"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gateway": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiGateway"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "knowledge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiKnowledge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecAiPack",
+    "type": "object"
+   },
+   "SpecAiProvider": {
+    "additionalProperties": false,
+    "description": "A model provider of the AI gateway. `kind` is only `fake` for now (deterministic, no network). `byo_key_env` is\nthe NAME of the environment variable that would hold a bring-your-own key: data only, nothing reads it yet.",
+    "properties": {
+     "byo_key_env": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Byo Key Env"
+     },
+     "kind": {
+      "default": "fake",
+      "title": "Kind",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecAiProvider",
+    "type": "object"
+   },
+   "SpecAiRoles": {
+    "additionalProperties": false,
+    "description": "Empty list = any signed-in user (same convention as the booking pack).",
+    "properties": {
+     "call_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Call Roles",
+      "type": "array"
+     },
+     "manage_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Manage Roles",
+      "type": "array"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecAiRoles",
+    "type": "object"
+   },
+   "SpecAiStage": {
+    "additionalProperties": false,
+    "description": "One stage of the per-stage router: stage name -> provider + model + output cap (+ optional fallback model).",
+    "properties": {
+     "fallback_model": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Fallback Model"
+     },
+     "max_output_tokens": {
+      "default": 512,
+      "title": "Max Output Tokens",
+      "type": "integer"
+     },
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "provider": {
+      "title": "Provider",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "provider",
+     "model"
+    ],
+    "title": "SpecAiStage",
+    "type": "object"
+   },
    "SpecApiEdge": {
     "additionalProperties": false,
     "description": "The API edge (C14), off unless `enabled`: idempotency keys, rate limits and quotas, dated API\nversions. Each part is on when its section is present.",
@@ -17529,6 +17866,163 @@
     "title": "SpecAuthorization",
     "type": "object"
    },
+   "SpecBookingCancellation": {
+    "additionalProperties": false,
+    "description": "Free cancellation until `free_until_hours` before the start; later a flat `fee_minor` (integer minor units\nof `currency`, recorded only).",
+    "properties": {
+     "currency": {
+      "default": "USD",
+      "title": "Currency",
+      "type": "string"
+     },
+     "fee_minor": {
+      "default": 0,
+      "title": "Fee Minor",
+      "type": "integer"
+     },
+     "free_until_hours": {
+      "default": 24,
+      "title": "Free Until Hours",
+      "type": "integer"
+     }
+    },
+    "title": "SpecBookingCancellation",
+    "type": "object"
+   },
+   "SpecBookingKind": {
+    "additionalProperties": false,
+    "description": "A kind of bookable resource. `slot`: fixed `slot_minutes` slots on a weekly `schedule` (keys mon..sun) in\n`timezone`; `range`: any time range of `min_minutes..max_minutes` (one booking at a time); `pool`: a quantity\nfrom `capacity` units over a time range. Resources of the kind are created at run time and inherit these.",
+    "properties": {
+     "capacity": {
+      "default": 1,
+      "title": "Capacity",
+      "type": "integer"
+     },
+     "max_minutes": {
+      "default": 43200,
+      "title": "Max Minutes",
+      "type": "integer"
+     },
+     "min_minutes": {
+      "default": 15,
+      "title": "Min Minutes",
+      "type": "integer"
+     },
+     "mode": {
+      "enum": [
+       "slot",
+       "range",
+       "pool"
+      ],
+      "title": "Mode",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "schedule": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/SpecBookingWindow"
+       },
+       "type": "array"
+      },
+      "title": "Schedule",
+      "type": "object"
+     },
+     "slot_minutes": {
+      "default": 30,
+      "title": "Slot Minutes",
+      "type": "integer"
+     },
+     "timezone": {
+      "default": "UTC",
+      "title": "Timezone",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "mode"
+    ],
+    "title": "SpecBookingKind",
+    "type": "object"
+   },
+   "SpecBookingPack": {
+    "additionalProperties": false,
+    "description": "Booking pack, D12 reservation engine (generated routes under /booking, tables under app/booking). Needs\n`auth` with rbac. A booking starts as a hold of `hold_ttl_seconds`; `own_only` limits callers who are not\nin `manage_roles` to their own bookings. Empty role list = any signed-in user.",
+    "properties": {
+     "book_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Book Roles",
+      "type": "array"
+     },
+     "cancellation": {
+      "$ref": "#/components/schemas/SpecBookingCancellation"
+     },
+     "hold_ttl_seconds": {
+      "default": 600,
+      "title": "Hold Ttl Seconds",
+      "type": "integer"
+     },
+     "kinds": {
+      "items": {
+       "$ref": "#/components/schemas/SpecBookingKind"
+      },
+      "title": "Kinds",
+      "type": "array"
+     },
+     "manage_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Manage Roles",
+      "type": "array"
+     },
+     "max_horizon_days": {
+      "default": 365,
+      "title": "Max Horizon Days",
+      "type": "integer"
+     },
+     "own_only": {
+      "default": false,
+      "title": "Own Only",
+      "type": "boolean"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecBookingPack",
+    "type": "object"
+   },
+   "SpecBookingWindow": {
+    "additionalProperties": false,
+    "description": "One opening window of a weekday, local wall-clock `HH:MM` (end is exclusive).",
+    "properties": {
+     "end": {
+      "title": "End",
+      "type": "string"
+     },
+     "start": {
+      "title": "Start",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start",
+     "end"
+    ],
+    "title": "SpecBookingWindow",
+    "type": "object"
+   },
    "SpecCurrency": {
     "additionalProperties": false,
     "description": "Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode\n(`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only.",
@@ -18107,6 +18601,58 @@
      "field"
     ],
     "title": "SpecFieldAccess",
+    "type": "object"
+   },
+   "SpecGeo": {
+    "additionalProperties": false,
+    "description": "Operations pack, D13 geo (generated routes under /geo): places and geofences (circle, polygon) with a grid\ncell index, haversine distance in integer metres, nearest-N / within-radius queries, enter / exit evaluation and\ndeterministic FAKE geocoder / routing / ETA adapters (`provider` is always `fake`: no outbound calls).\nCoordinates are integer micro-degrees. `grid_cell_micro` is the index cell size (10000 = 0.01 degree).",
+    "properties": {
+     "grid_cell_micro": {
+      "default": 10000,
+      "title": "Grid Cell Micro",
+      "type": "integer"
+     },
+     "max_geofences": {
+      "default": 1000,
+      "title": "Max Geofences",
+      "type": "integer"
+     },
+     "max_places": {
+      "default": 100000,
+      "title": "Max Places",
+      "type": "integer"
+     },
+     "max_polygon_vertices": {
+      "default": 200,
+      "title": "Max Polygon Vertices",
+      "type": "integer"
+     },
+     "max_radius_m": {
+      "default": 20000000,
+      "title": "Max Radius M",
+      "type": "integer"
+     },
+     "provider": {
+      "default": "fake",
+      "title": "Provider",
+      "type": "string"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "write_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecGeo",
     "type": "object"
    },
    "SpecHistory": {
@@ -18897,6 +19443,100 @@
     "title": "SpecListItem",
     "type": "object"
    },
+   "SpecLocation": {
+    "additionalProperties": false,
+    "description": "Operations pack, D14 live location store (generated routes under /location): the latest position per\nsubject, with a monotonic `seq` (older updates are ignored), a bounded history (`history_cap` rows per subject)\nand a latest-in-bounding-box query. Evaluates geofences when the `geo` block is declared too.",
+    "properties": {
+     "history_cap": {
+      "default": 100,
+      "title": "History Cap",
+      "type": "integer"
+     },
+     "max_subjects": {
+      "default": 100000,
+      "title": "Max Subjects",
+      "type": "integer"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "write_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecLocation",
+    "type": "object"
+   },
+   "SpecMatchWeights": {
+    "additionalProperties": false,
+    "properties": {
+     "distance": {
+      "default": 1000,
+      "title": "Distance",
+      "type": "integer"
+     },
+     "load": {
+      "default": 0,
+      "title": "Load",
+      "type": "integer"
+     },
+     "rating": {
+      "default": 0,
+      "title": "Rating",
+      "type": "integer"
+     }
+    },
+    "title": "SpecMatchWeights",
+    "type": "object"
+   },
+   "SpecMatching": {
+    "additionalProperties": false,
+    "description": "Operations pack, D15 matching / assignment (generated routes under /matching): rank candidates for a\nrequest by rules (max distance, max load) and an integer score from the declared weights, assign with a\ndatabase guarantee of one active assignment per request, and solve a batch (exact for small inputs).",
+    "properties": {
+     "assign_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Assign Roles",
+      "type": "array"
+     },
+     "max_distance_m": {
+      "default": 20000,
+      "title": "Max Distance M",
+      "type": "integer"
+     },
+     "max_load": {
+      "default": 10,
+      "title": "Max Load",
+      "type": "integer"
+     },
+     "offer_ttl_seconds": {
+      "default": 300,
+      "title": "Offer Ttl Seconds",
+      "type": "integer"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "weights": {
+      "$ref": "#/components/schemas/SpecMatchWeights"
+     }
+    },
+    "title": "SpecMatching",
+    "type": "object"
+   },
    "SpecMetricsLayer": {
     "additionalProperties": false,
     "description": "Named metrics served by the generated app (GET /metrics, GET /metrics/{key}). Each definition has\nthe shape of app/core/metrics.MetricDef (key, label, entity, agg, field, filter, group_by, unit): DATA\nonly, validated against the entities; the app computes it in SQL through the caller's own row scope.",
@@ -19333,14 +19973,91 @@
     "title": "SpecOpRead",
     "type": "object"
    },
+   "SpecOperationsPack": {
+    "additionalProperties": false,
+    "properties": {
+     "geo": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecGeo"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "location": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecLocation"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "matching": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecMatching"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "prediction": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPrediction"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "SpecOperationsPack",
+    "type": "object"
+   },
    "SpecPacks": {
     "additionalProperties": false,
     "description": "Domain packs (Cycle 5). A pack is generated only when it is declared here; unknown packs and options\nare refused (extra=forbid).",
     "properties": {
+     "ai": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecAiPack"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "booking": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecBookingPack"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "money": {
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecMoneyPack"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "operations": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecOperationsPack"
        },
        {
         "type": "null"
@@ -19863,6 +20580,43 @@
      "actions"
     ],
     "title": "SpecPolicy",
+    "type": "object"
+   },
+   "SpecPrediction": {
+    "additionalProperties": false,
+    "description": "Operations pack, D16 prediction adapter (generated routes under /prediction): record predictions (value,\ninterval low / high, model id from the deterministic FAKE predictor), record actuals later and read\nlogged-vs-actual error stats (count, MAE, interval coverage). Integers only.",
+    "properties": {
+     "interval_bp": {
+      "default": 2000,
+      "title": "Interval Bp",
+      "type": "integer"
+     },
+     "model_id": {
+      "default": "fake-linear-v1",
+      "title": "Model Id",
+      "type": "string"
+     },
+     "read_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array"
+     },
+     "unit": {
+      "default": "unit",
+      "title": "Unit",
+      "type": "string"
+     },
+     "write_roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecPrediction",
     "type": "object"
    },
    "SpecProject": {

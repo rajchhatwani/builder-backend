@@ -1,0 +1,100 @@
+"""ai pack: document AI tables
+
+Revision ID: 0039
+Revises: 0038
+Create Date: rendered from the spec by Backend Builder
+
+ai_documents holds the text, the review status and the link to the gateway ledger call; ai_document_fields one row per
+extracted field (confidence in basis points, anchor into the text). An idempotency key is unique per creator.
+"""
+
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from alembic import op
+
+revision: str = "0039"
+down_revision: str | None = "0038"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
+
+
+def upgrade() -> None:
+    op.create_table(
+        "ai_documents",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+{% if tenant %}
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+{% endif %}
+        sa.Column("kind", sa.String(length=40), nullable=False),
+        sa.Column("title", sa.String(length=200), nullable=False),
+        sa.Column("content", sa.Text(), nullable=False),
+        sa.Column("status", sa.String(length=12), server_default="extracted", nullable=False),
+        sa.Column("call_id", sa.Uuid(), nullable=True),
+        sa.Column("created_by", sa.Uuid(), nullable=True),
+        sa.Column("reject_reason", sa.String(length=500), nullable=True),
+        sa.Column("reviewed_by", sa.Uuid(), nullable=True),
+        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("idempotency_key", sa.String(length=128), nullable=True),
+        sa.Column("request_hash", sa.String(length=64), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.CheckConstraint("status IN ('extracted', 'needs_review', 'approved', 'rejected')", name="ck_ai_documents_status"),
+        sa.ForeignKeyConstraint(["call_id"], ["ai_calls.id"], name="fk_ai_documents_call_id_ai_calls", ondelete="SET NULL"),
+{% if tenant %}
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_ai_documents_tenant_id_auth_tenants", ondelete="RESTRICT"),
+{% endif %}
+        sa.PrimaryKeyConstraint("id"),
+    )
+{% if tenant %}
+    op.create_index(op.f("ix_ai_documents_tenant_id"), "ai_documents", ["tenant_id"], unique=False)
+{% endif %}
+    op.create_index("ix_ai_documents_status_created_at", "ai_documents", ["status", "created_at"], unique=False)
+    op.create_index(
+        "uq_ai_documents_idempotency_key",
+        "ai_documents",
+        [{{ '"tenant_id", ' if tenant else '' }}"created_by", "idempotency_key"],
+        unique=True,
+        postgresql_where=sa.text("idempotency_key IS NOT NULL"),
+    )
+
+    op.create_table(
+        "ai_document_fields",
+        sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+{% if tenant %}
+        sa.Column("tenant_id", sa.Uuid(), nullable=False),
+{% endif %}
+        sa.Column("document_id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(length=40), nullable=False),
+        sa.Column("position", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("value", sa.Text(), nullable=True),
+        sa.Column("confidence_bp", sa.Integer(), server_default="0", nullable=False),
+        sa.Column("anchor_page", sa.Integer(), nullable=True),
+        sa.Column("anchor_start", sa.Integer(), nullable=True),
+        sa.Column("anchor_end", sa.Integer(), nullable=True),
+        sa.Column("anchor_quote", sa.Text(), nullable=True),
+        sa.Column("corrected", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.Column("original_value", sa.Text(), nullable=True),
+        sa.Column("review_required", sa.Boolean(), server_default=sa.false(), nullable=False),
+        sa.CheckConstraint("confidence_bp >= 0 AND confidence_bp <= 10000", name="ck_ai_document_fields_confidence"),
+        sa.CheckConstraint(
+            "(anchor_start IS NULL AND anchor_end IS NULL AND anchor_page IS NULL AND anchor_quote IS NULL)"
+            " OR (anchor_start >= 0 AND anchor_end > anchor_start AND anchor_page >= 1 AND anchor_quote IS NOT NULL)",
+            name="ck_ai_document_fields_anchor",
+        ),
+        sa.ForeignKeyConstraint(["document_id"], ["ai_documents.id"], name="fk_ai_document_fields_document_id_ai_documents", ondelete="CASCADE"),
+{% if tenant %}
+        sa.ForeignKeyConstraint(["tenant_id"], ["auth_tenants.id"], name="fk_ai_document_fields_tenant_id_auth_tenants", ondelete="RESTRICT"),
+{% endif %}
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("document_id", "name", name="uq_ai_document_fields_document_name"),
+    )
+    op.create_index(op.f("ix_ai_document_fields_document_id"), "ai_document_fields", ["document_id"], unique=False)
+{% if tenant %}
+    op.create_index(op.f("ix_ai_document_fields_tenant_id"), "ai_document_fields", ["tenant_id"], unique=False)
+{% endif %}
+
+
+def downgrade() -> None:
+    op.drop_table("ai_document_fields")
+    op.drop_table("ai_documents")

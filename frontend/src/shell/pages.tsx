@@ -383,6 +383,16 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'documents',
+    label: 'Documents',
+    icon: (
+      <>
+        <path d="M7 3h7l4 4v14H7z" />
+        <path d="M14 3v4h4M10 12h5M10 16h5" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

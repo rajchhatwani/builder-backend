@@ -1,0 +1,12 @@
+"""Document AI settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+UPLOAD_ROLES: tuple[str, ...] = {{ upload_roles | roles_repr }}  # an empty tuple means any signed-in user
+REVIEW_ROLES: tuple[str, ...] = {{ review_roles | roles_repr }}
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+STAGE = {{ stage | pyrepr }}  # the gateway stage extraction runs on
+REVIEW_BELOW_BP = {{ review_below_bp }}  # a field below this confidence (basis points) goes to review
+MAX_TEXT_CHARS = {{ max_text_chars }}
+ALLOW_SELF_REVIEW = {{ "True" if allow_self_review else "False" }}  # may the uploader review their own document
+
+# document kind -> ordered fields: (name, required)
+KINDS: dict[str, list[tuple[str, bool]]] = {{ kinds }}

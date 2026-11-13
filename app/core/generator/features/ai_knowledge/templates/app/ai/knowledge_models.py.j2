@@ -1,0 +1,80 @@
+"""Knowledge library tables (generated). A source carries its OWN visibility (`allowed_roles`, or `owner_only`); its chunks
+are searched with that visibility applied in SQL. `tsv` is a generated full-text column; `embedding` is the deterministic
+fake embedding (see app/ai/knowledge_service.py, adapter interface)."""
+
+import datetime as _dt
+import uuid as _uuid
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+from sqlalchemy.dialects import postgresql as _pg
+
+from app.models import _base as _models_base
+
+
+def _id() -> _orm.Mapped[_uuid.UUID]:
+    return _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+
+
+def _created() -> _orm.Mapped[_dt.datetime]:
+    return _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+
+{% macro tenant_column(table) %}
+{% if tenant %}
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_{{ table }}_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+{% endif %}
+{% endmacro %}
+
+class AiKnowledgeSource(_models_base.Base):
+    __tablename__ = "ai_knowledge_sources"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_knowledge_sources") }}
+    title: _orm.Mapped[str] = _orm.mapped_column(_sa.String(200), nullable=False)
+    owner_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), nullable=False)
+    owner_only: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+    allowed_roles: _orm.Mapped[list[str]] = _orm.mapped_column(
+        _pg.ARRAY(_sa.Text()), nullable=False, default=list, server_default=_sa.text("'{}'::text[]")
+    )
+    chunk_count: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+
+    __table_args__ = (
+        _sa.CheckConstraint(
+            "(owner_only AND cardinality(allowed_roles) = 0) OR (NOT owner_only AND cardinality(allowed_roles) > 0)",
+            name="ck_ai_knowledge_sources_visibility",
+        ),
+        _sa.Index("ix_ai_knowledge_sources_owner_id", "owner_id"),
+    )
+
+
+class AiKnowledgeChunk(_models_base.Base):
+    __tablename__ = "ai_knowledge_chunks"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_knowledge_chunks") }}
+    source_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("ai_knowledge_sources.id", name="fk_ai_knowledge_chunks_source_id_ai_knowledge_sources", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    position: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False)
+    text: _orm.Mapped[str] = _orm.mapped_column(_sa.Text(), nullable=False)
+    tsv: _orm.Mapped[str | None] = _orm.mapped_column(
+        _pg.TSVECTOR(), _sa.Computed("to_tsvector('simple', text)", persisted=True), nullable=True
+    )
+    embedding: _orm.Mapped[list[int]] = _orm.mapped_column(_pg.ARRAY(_sa.Integer()), nullable=False)
+    emb_norm2: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        _sa.UniqueConstraint("source_id", "position", name="uq_ai_knowledge_chunks_source_position"),
+        _sa.Index("ix_ai_knowledge_chunks_tsv", "tsv", postgresql_using="gin"),
+    )

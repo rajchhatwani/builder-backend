@@ -1,5 +1,14 @@
 """Importing this package registers every table on `Base.metadata` (used by Alembic)."""
 
+{% if ai_documents %}
+from app.ai import documents_models as _ai_documents_models
+{% endif %}
+{% if ai_knowledge %}
+from app.ai import knowledge_models as _ai_knowledge_models
+{% endif %}
+{% if ai %}
+from app.ai import models as _ai_models
+{% endif %}
 {% if api_edge_tables %}
 from app.api_edge import models as _api_edge_models
 {% endif %}
@@ -134,6 +143,15 @@ __all__ = [
 {% endif %}
 {% if booking %}
     "_booking_models",
+{% endif %}
+{% if ai %}
+    "_ai_models",
+{% endif %}
+{% if ai_documents %}
+    "_ai_documents_models",
+{% endif %}
+{% if ai_knowledge %}
+    "_ai_knowledge_models",
 {% endif %}
 {% if op_geo %}
     "_geo_models",

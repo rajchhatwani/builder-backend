@@ -1,0 +1,9 @@
+"""Knowledge library settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+MANAGE_ROLES: tuple[str, ...] = {{ manage_roles | roles_repr }}  # may create sources
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}  # may search / ask / list; an empty tuple means any signed-in user
+KNOWN_ROLES: tuple[str, ...] = {{ known_roles | roles_repr }}  # the roles a source may be shared with
+STAGE = {{ stage | pyrepr }}  # the gateway stage /ai/knowledge/ask runs on
+CHUNK_CHARS = {{ chunk_chars }}
+MAX_SOURCES = {{ max_sources }}
+MAX_TEXT_CHARS = {{ max_text_chars }}

@@ -1,0 +1,87 @@
+"""AI gateway tables (generated). `ai_calls` is the cost ledger; `ai_budget_periods` holds spent and reserved
+micro-USD per period and is the row that is locked while a call reserves or settles its cost."""
+
+import datetime as _dt
+import uuid as _uuid
+
+import sqlalchemy as _sa
+from sqlalchemy import orm as _orm
+
+from app.models import _base as _models_base
+
+
+def _id() -> _orm.Mapped[_uuid.UUID]:
+    return _orm.mapped_column(
+        _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
+    )
+
+
+def _created() -> _orm.Mapped[_dt.datetime]:
+    return _orm.mapped_column(
+        _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow, server_default=_sa.text("now()")
+    )
+
+{% macro tenant_column(table) %}
+{% if tenant %}
+    tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
+        _sa.ForeignKey("auth_tenants.id", name="fk_{{ table }}_tenant_id_auth_tenants", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+{% endif %}
+{% endmacro %}
+
+class AiCall(_models_base.Base):
+    __tablename__ = "ai_calls"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_calls") }}
+    caller_id: _orm.Mapped[_uuid.UUID | None] = _orm.mapped_column(_sa.Uuid(), nullable=True)
+    stage: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    provider: _orm.Mapped[str] = _orm.mapped_column(_sa.String(40), nullable=False)
+    model: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False)
+    status: _orm.Mapped[str] = _orm.mapped_column(_sa.String(10), nullable=False, default="reserved", server_default="reserved")
+    period_start: _orm.Mapped[_dt.date] = _orm.mapped_column(_sa.Date(), nullable=False)
+    input_tokens: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    output_tokens: _orm.Mapped[int] = _orm.mapped_column(_sa.Integer(), nullable=False, default=0, server_default="0")
+    cost_micro_usd: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+    reserved_micro_usd: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+    prompt_hash: _orm.Mapped[str] = _orm.mapped_column(_sa.String(64), nullable=False)
+    prompt_text: _orm.Mapped[str | None] = _orm.mapped_column(_sa.Text(), nullable=True)
+    output_text: _orm.Mapped[str | None] = _orm.mapped_column(_sa.Text(), nullable=True)
+    error_code: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(40), nullable=True)
+    fallback_used: _orm.Mapped[bool] = _orm.mapped_column(_sa.Boolean(), nullable=False, default=False, server_default=_sa.false())
+    idempotency_key: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(128), nullable=True)
+    request_hash: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(64), nullable=True)
+    created_at: _orm.Mapped[_dt.datetime] = _created()
+    finished_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(_sa.DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        _sa.CheckConstraint("status IN ('reserved', 'ok', 'error')", name="ck_ai_calls_status"),
+        _sa.CheckConstraint("cost_micro_usd >= 0 AND reserved_micro_usd >= 0", name="ck_ai_calls_amounts"),
+        _sa.CheckConstraint("input_tokens >= 0 AND output_tokens >= 0", name="ck_ai_calls_tokens"),
+        _sa.Index(
+            "uq_ai_calls_idempotency_key",
+            {{ '"tenant_id", ' if tenant else '' }}"caller_id",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=_sa.text("idempotency_key IS NOT NULL AND status <> 'error'"),
+        ),
+        _sa.Index("ix_ai_calls_period_start_status", "period_start", "status"),
+        _sa.Index("ix_ai_calls_created_at", "created_at"),
+    )
+
+
+class AiBudgetPeriod(_models_base.Base):
+    __tablename__ = "ai_budget_periods"
+
+    id: _orm.Mapped[_uuid.UUID] = _id()
+{{ tenant_column("ai_budget_periods") }}
+    period_start: _orm.Mapped[_dt.date] = _orm.mapped_column(_sa.Date(), nullable=False)
+    spent_micro_usd: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+    reserved_micro_usd: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), nullable=False, default=0, server_default="0")
+
+    __table_args__ = (
+        _sa.UniqueConstraint({{ '"tenant_id", ' if tenant else '' }}"period_start", name="uq_ai_budget_periods_period"),
+        _sa.CheckConstraint("spent_micro_usd >= 0 AND reserved_micro_usd >= 0", name="ck_ai_budget_periods_amounts"),
+    )

@@ -1,0 +1,32 @@
+"""AI gateway settings (generated from the spec: change them in the builder). Plain data, integers only."""
+
+# who may call / read / manage; an empty tuple means any signed-in user
+CALL_ROLES: tuple[str, ...] = {{ call_roles | roles_repr }}
+READ_ROLES: tuple[str, ...] = {{ read_roles | roles_repr }}
+MANAGE_ROLES: tuple[str, ...] = {{ manage_roles | roles_repr }}
+MULTI_TENANT = {{ "True" if tenant else "False" }}
+REGION = {{ region | pyrepr }}  # data: where the provider endpoint would run
+ZERO_RETENTION = {{ "True" if zero_retention else "False" }}  # True: prompt and output text are never stored, only hashes and counts
+
+# budget: integer micro-USD (1 USD = 1_000_000) per period; the worst case of a call is reserved before it runs
+BUDGET_PERIOD = {{ period | pyrepr }}  # "day" | "month" (UTC)
+BUDGET_LIMIT_MICRO_USD = {{ limit }}
+PER_CALL_CAP_MICRO_USD = {{ cap }}
+
+# UNVERIFIED (owner): micro-USD per 1,000,000 tokens as (input, output). Fake models only; check before any real provider.
+PRICES: dict[str, tuple[int, int]] = {{ prices }}
+
+# providers: name -> kind (only "fake") and the NAME of the env var that would hold a BYO key (data only, never read)
+PROVIDERS: dict[str, dict[str, str | None]] = {{ providers }}
+
+# per-stage router: stage -> provider, model, output cap, optional fallback model
+STAGES: dict[str, dict[str, str | int | None]] = {{ stages }}
+
+MAX_MESSAGES = 50
+MAX_CONTENT_CHARS = 20_000
+STALE_RESERVATION_SECONDS = 300  # a reservation older than this (crashed worker) is released as `abandoned`
+WAIT_FOR_DUPLICATE_SECONDS = 30
+MAX_TOTAL_CHARS = 400_000  # all message texts of one call together (a hostile body cannot make the gateway chew on megabytes)
+# Test switch of the FAKE provider: [[fake:...]] and [[conf=...]] markers in message text are honoured only when this is True.
+# Off by default: document text, knowledge chunks and user messages are untrusted and must never steer the provider.
+FAKE_DIRECTIVES = False

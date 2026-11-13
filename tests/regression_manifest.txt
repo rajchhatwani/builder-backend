@@ -288,5 +288,11 @@ tests/e2e/test_invoicing_stack.py
 tests/e2e/test_marketplace_payout_stack.py
 tests/unit/test_booking_pack.py
 tests/e2e/test_booking_stack.py
+tests/unit/test_ai_pack.py
+tests/e2e/test_ai_gateway_stack.py
+tests/unit/test_ai_documents.py
+tests/e2e/test_ai_documents_stack.py
+tests/unit/test_ai_knowledge.py
+tests/e2e/test_ai_knowledge_stack.py
 tests/unit/test_operations_pack.py
 tests/e2e/test_operations_stack.py

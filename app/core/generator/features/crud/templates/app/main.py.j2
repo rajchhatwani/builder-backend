@@ -9,6 +9,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
+{% if ai_documents %}
+from app.ai.documents_router import router as _ai_documents_router
+{% endif %}
+{% if ai_knowledge %}
+from app.ai.knowledge_router import router as _ai_knowledge_router
+{% endif %}
+{% if ai %}
+from app.ai.router import router as _ai_router
+{% endif %}
 {% if api_edge %}
 from app.api_edge.install import install as install_api_edge
 {% endif %}
@@ -239,6 +248,15 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if booking %}
     app.include_router(_booking_router)
+{% endif %}
+{% if ai %}
+    app.include_router(_ai_router)
+{% endif %}
+{% if ai_documents %}
+    app.include_router(_ai_documents_router)
+{% endif %}
+{% if ai_knowledge %}
+    app.include_router(_ai_knowledge_router)
 {% endif %}
 {% if op_geo %}
     app.include_router(_geo_router)

@@ -10,6 +10,9 @@ from app.core.generator.features.change_history.module import (
 )
 from app.core.generator.features.data_import.module import import_entities
 from app.core.generator.features.metrics.module import metrics_definitions
+from app.core.generator.features.ai_documents.module import ai_documents_enabled
+from app.core.generator.features.ai_gateway.module import ai_gateway_enabled
+from app.core.generator.features.ai_knowledge.module import ai_knowledge_enabled
 from app.core.generator.features.booking.module import booking_enabled
 from app.core.generator.features.operations_geo.module import geo_enabled
 from app.core.generator.features.operations_location.module import location_enabled
@@ -117,6 +120,9 @@ class CrudModule:
             "invoicing": invoicing_enabled(project),
             "payouts": payouts_enabled(project),
             "booking": booking_enabled(project),
+            "ai": ai_gateway_enabled(project),
+            "ai_documents": ai_documents_enabled(project),
+            "ai_knowledge": ai_knowledge_enabled(project),
             "op_geo": geo_enabled(project),
             "op_location": location_enabled(project),
             "op_matching": matching_enabled(project),

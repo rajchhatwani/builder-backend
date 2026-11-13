@@ -1,0 +1,145 @@
+{
+  "spec_version": 1,
+  "project": {
+    "name": "Support Desk",
+    "slug": "support-desk",
+    "description": "A neutral multi-tenant support desk that routes AI work through the LLM gateway (ai pack, D33)",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Ticket",
+      "table_name": "tickets",
+      "plural_path": "tickets",
+      "options": {
+        "operations": [
+          "list",
+          "get",
+          "create"
+        ]
+      },
+      "fields": [
+        {
+          "name": "subject",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://support.example.com",
+    "password_reset": {
+      "email_magic_link": true,
+      "sms_otp": false
+    },
+    "registration": {
+      "email_verification_required": true
+    },
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@support.example.com",
+      "from_name": "Support Desk"
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "agent",
+        "label": "Agent"
+      },
+      {
+        "name": "customer",
+        "label": "Customer",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Ticket",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "agent",
+          "customer"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Ticket",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "agent"
+        ],
+        "row_rule": "tenant"
+      }
+    ]
+  },
+  "packs": {
+    "ai": {
+      "gateway": {
+        "providers": [
+          {
+            "name": "main",
+            "kind": "fake",
+            "byo_key_env": "SUPPORT_AI_KEY"
+          }
+        ],
+        "region": "eu",
+        "zero_retention": false,
+        "stages": [
+          {
+            "name": "classify",
+            "provider": "main",
+            "model": "fake-small",
+            "max_output_tokens": 100
+          },
+          {
+            "name": "summarize",
+            "provider": "main",
+            "model": "fake-small",
+            "max_output_tokens": 120,
+            "fallback_model": "fake-embed"
+          }
+        ],
+        "budget": {
+          "period": "day",
+          "limit_micro_usd": 200,
+          "per_call_cap_micro_usd": 100
+        },
+        "roles": {
+          "call_roles": [
+            "admin",
+            "agent"
+          ],
+          "read_roles": [
+            "admin",
+            "agent"
+          ],
+          "manage_roles": [
+            "admin"
+          ]
+        }
+      }
+    }
+  }
+}
