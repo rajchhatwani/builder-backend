@@ -142,7 +142,7 @@ describe('MapPage', () => {
     const count = () => calls.filter((c) => c.url.includes('/location/positions')).length
     const base = count()
     await click(q('map-auto'))
-    await wait(120)
+    for (let i = 0; i < 40 && count() <= base + 1; i++) await wait(50)
     expect(count()).toBeGreaterThan(base + 1)
     setHidden(true)
     await flush()
@@ -150,7 +150,7 @@ describe('MapPage', () => {
     await wait(120)
     expect(count()).toBe(paused)
     setHidden(false)
-    await wait(80)
+    for (let i = 0; i < 40 && count() <= paused; i++) await wait(50)
     expect(count()).toBeGreaterThan(paused)
     await click(q('map-auto'))
     await flush()
