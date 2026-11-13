@@ -140,7 +140,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   if (!origin) {
     return (
       <section aria-labelledby="bk-h" data-testid="bookings-page">
-        <h2 id="bk-h">Bookings</h2>
+        <h1 id="bk-h">Bookings</h1>
         <p className="muted" data-testid="bookings-no-origin">No preview API is configured for this dashboard, so there is no calendar to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the booking pack on).</p>
       </section>
     )
@@ -148,7 +148,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
 
   return (
     <section aria-labelledby="bk-h" data-testid="bookings-page" className="stack">
-      <h2 id="bk-h">Bookings</h2>
+      <h1 id="bk-h">Bookings</h1>
       <p className="muted">Week calendar of the running project&apos;s bookable resources. Create a hold, confirm it before it expires, or cancel. The token stays in this page only.</p>
       <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="bookings-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
@@ -229,7 +229,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
             {!selected && resource.mode === 'slot' && !notice && !error && <p className="muted" data-testid="bookings-select-hint">Select a cell to hold, confirm or cancel a slot.</p>}
             {selected && (
               <div data-testid="bookings-selected" data-state={selected.state} className="stack">
-                <h3>{formatDay(selected.day)} {selected.time} ({selected.label})</h3>
+                <h2>{formatDay(selected.day)} {selected.time} ({selected.label})</h2>
                 {selected.booking && (
                   <p className="small-text" data-testid="bookings-booking-info">
                     Booking {selected.booking.status}{selected.booking.customer_ref ? ` for ${selected.booking.customer_ref}` : ''}, {formatInstant(selected.booking.starts_at, tz)} to {formatInstant(selected.booking.ends_at, tz)}
@@ -308,7 +308,7 @@ function RangeForm({ resource, call, busy, onHold, tz }: {
 
   return (
     <form className="stack" onSubmit={(ev) => { ev.preventDefault(); if (valid && s && e) void onHold(s, e, resource.mode === 'pool' ? { quantity: q } : {}) }} data-testid="bookings-range-form" aria-label={`Book ${resource.mode} resource`}>
-      <h3>New {resource.mode === 'pool' ? 'pool' : 'range'} booking (times in {tz})</h3>
+      <h2>New {resource.mode === 'pool' ? 'pool' : 'range'} booking (times in {tz})</h2>
       <label htmlFor={`${id}-s`}>Starts</label>
       <input id={`${id}-s`} type="datetime-local" value={start} onChange={(ev) => setStart(ev.target.value)} data-testid="bookings-start" />
       <label htmlFor={`${id}-e`}>Ends</label>

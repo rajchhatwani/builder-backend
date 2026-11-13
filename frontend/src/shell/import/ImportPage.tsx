@@ -489,7 +489,7 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
       )}
       {exportError && <p role="alert" data-testid="import-export-error">{exportError}</p>}
       <p>
-        <button className="outline" onClick={() => void exportCsv()} disabled={exporting} data-testid="import-export-csv" aria-label={`Export ${entity} records as CSV`}>
+        <button className="outline" onClick={() => void exportCsv()} disabled={exporting} data-testid="import-export-csv" aria-label={`Export records (CSV) for ${entity}`}>
           {exporting ? 'Exporting…' : 'Export records (CSV)'}
         </button>{' '}
         <button onClick={onAgain}>Import another file</button>

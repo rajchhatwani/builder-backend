@@ -107,7 +107,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
   if (!origin) {
     return (
       <section aria-labelledby="aa-h" data-testid="agentapprovals-page">
-        <h2 id="aa-h">AI action approvals</h2>
+        <h1 id="aa-h">AI action approvals</h1>
         <p className="muted" data-testid="agentapprovals-no-origin">No preview API is configured for this dashboard, so there is no approval inbox to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the AI agents pack on).</p>
       </section>
     )
@@ -115,7 +115,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
 
   return (
     <section aria-labelledby="aa-h" data-testid="agentapprovals-page" className="stack">
-      <h2 id="aa-h">AI action approvals</h2>
+      <h1 id="aa-h">AI action approvals</h1>
       <p className="muted">Actions your AI agents propose. Nothing runs until you approve it, and the autonomy dial may still refuse. The token stays in this page only.</p>
       <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="agentapprovals-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
@@ -162,7 +162,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
               return (
                 <li key={p.id} data-testid={`proposal-${p.id}`}>
                   <article aria-label={`${p.agent}: ${p.action}`} className="stack">
-                    <h3 style={{ margin: 0 }}>
+                    <h2 style={{ margin: 0 }}>
                       <button
                         type="button" ref={(el) => { if (el) rowRefs.current.set(i, el); else rowRefs.current.delete(i) }}
                         tabIndex={i === Math.min(rowFocus, items.length - 1) ? 0 : -1}
@@ -170,7 +170,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
                       >{p.agent} proposes {p.action}</button>{' '}
                       <span className="small-text" data-testid={`proposal-risk-${p.id}`} style={{ ...riskColors(p.risk), padding: '0 6px', borderRadius: 4 }}>{riskLabel(p.risk)}</span>{' '}
                       <span className="small-text muted" data-testid={`proposal-status-${p.id}`}>{STATUS_LABEL[p.status] ?? p.status}</span>
-                    </h3>
+                    </h2>
                     <p className="small-text muted" data-testid={`proposal-meta-${p.id}`}>
                       Allowed autonomy: {p.allowed_autonomy}{p.handoff_role ? ` · handed to ${p.handoff_role}` : ''}{p.error_code ? ` · failed: ${p.error_code}` : ''}{p.reason ? ` · ${p.reason}` : ''}
                     </p>

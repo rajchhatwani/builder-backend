@@ -96,7 +96,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   if (!origin) {
     return (
       <section aria-labelledby="ledger-h" data-testid="ledger-page">
-        <h2 id="ledger-h">Ledger</h2>
+        <h1 id="ledger-h">Ledger</h1>
         <p className="muted" data-testid="ledger-no-origin">No preview API is configured for this dashboard, so there is no ledger to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the money ledger on).</p>
       </section>
     )
@@ -104,7 +104,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
 
   return (
     <section aria-labelledby="ledger-h" data-testid="ledger-page" className="stack">
-      <h2 id="ledger-h">Ledger</h2>
+      <h1 id="ledger-h">Ledger</h1>
       <p className="muted">Double-entry books of the running project. Posted transactions are never edited or deleted; a mistake is fixed by reversing it. The token stays in this page only.</p>
       <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="ledger-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
@@ -117,7 +117,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
       {active && (
         <>
           <div data-testid="ledger-accounts-wrap">
-            <h3>Accounts</h3>
+            <h2>Accounts</h2>
             <State l={accounts} id="ledger-accounts" empty={(v) => v.length === 0} emptyText="No accounts yet. Create one with POST /ledger/accounts.">
               {(v) => (
                 <div className="stage-table-wrap" tabIndex={0} role="region" aria-label="Accounts">
@@ -138,7 +138,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
 
           {hist && (
             <div data-testid="ledger-history">
-              <h3>Entries of {hist.account.code} {hist.account.name}</h3>
+              <h2>Entries of {hist.account.code} {hist.account.name}</h2>
               <State l={hist.load} id="ledger-history-state" empty={(v) => v.items.length === 0} emptyText="This account has no entries yet.">
                 {(v) => (
                   <div className="stage-table-wrap" tabIndex={0} role="region" aria-label={`Entries of ${hist.account.code}`}>
@@ -160,7 +160,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
           )}
 
           <div data-testid="ledger-balances-wrap">
-            <h3>Balances</h3>
+            <h2>Balances</h2>
             <State l={balances} id="ledger-balances-state" empty={(v) => v.items.length === 0} emptyText="No balances yet.">
               {(v) => (
                 <>
@@ -194,7 +194,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
           </div>
 
           <div data-testid="ledger-transactions-wrap">
-            <h3>Transactions</h3>
+            <h2>Transactions</h2>
             {revDone && <p role="status" data-testid="ledger-reversed-ok">Transaction reversed; the reversal is the newest entry below.</p>}
             <State l={txs} id="ledger-transactions-state" empty={(v) => v.items.length === 0 && page === 0} emptyText="No transactions yet.">
               {(v) => (
@@ -317,7 +317,7 @@ function PostForm({ accounts, exponents, call, onPosted }: { accounts: Account[]
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void submit() }} data-testid="ledger-post-form" aria-labelledby={`${id}-h`} className="stack">
-      <h3 id={`${id}-h`}>Post a transaction</h3>
+      <h2 id={`${id}-h`}>Post a transaction</h2>
       <div className="hstack">
         <label htmlFor={`${id}-key`}>Idempotency key</label>
         <input id={`${id}-key`} value={key} onChange={(e) => setKey(e.target.value)} maxLength={128} data-testid="ledger-key" />

@@ -100,7 +100,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
   if (!origin) {
     return (
       <section aria-labelledby="map-h" data-testid="map-page">
-        <h2 id="map-h">Map</h2>
+        <h1 id="map-h">Map</h1>
         <p className="muted" data-testid="map-no-origin">No preview API is configured for this dashboard, so there is nothing to show on the map yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the operations pack on).</p>
       </section>
     )
@@ -108,7 +108,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
 
   return (
     <section aria-labelledby="map-h" data-testid="map-page" className="stack">
-      <h2 id="map-h">Map</h2>
+      <h1 id="map-h">Map</h1>
       <p className="muted">Live positions, places and geofences of the running project, drawn on a plain canvas (no map tiles are loaded). The token stays in this page only.</p>
       <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="map-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
@@ -199,7 +199,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
             </div>
 
             <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-              <h3>Subjects ({posItems.length})</h3>
+              <h2>Subjects ({posItems.length})</h2>
               <ul className="stack" style={{ listStyle: 'none', padding: 0, margin: 0 }} aria-label="Live locations" data-testid="map-list">
                 {posItems.map((p) => {
                   const age = ageSeconds(p.recorded_at, nowMs)
@@ -216,7 +216,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
               </ul>
               {sel && (
                 <div role="region" aria-label={`Details of ${sel.subject_id}`} data-testid="map-details" className="stack">
-                  <h3>{sel.subject_id}</h3>
+                  <h2>{sel.subject_id}</h2>
                   <p className="small-text">Position {formatPoint(sel)}, sequence {sel.seq}, recorded {sel.recorded_at}.</p>
                   <p className="small-text" data-testid="map-details-fences">
                     {fences.s !== 'ok' ? 'Geofences unavailable.' : selFences.length ? `Inside: ${selFences.map((g) => g.name).join(', ')}` : 'Inside no geofence.'}

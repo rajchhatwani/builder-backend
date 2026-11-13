@@ -110,7 +110,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
   if (!origin) {
     return (
       <section aria-labelledby="doc-h" data-testid="documents-page">
-        <h2 id="doc-h">Documents</h2>
+        <h1 id="doc-h">Documents</h1>
         <p className="muted" data-testid="documents-no-origin">No preview API is configured for this dashboard, so there is no review queue to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the AI documents pack on).</p>
       </section>
     )
@@ -118,7 +118,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
 
   return (
     <section aria-labelledby="doc-h" data-testid="documents-page" className="stack">
-      <h2 id="doc-h">Documents</h2>
+      <h1 id="doc-h">Documents</h1>
       <p className="muted">Review queue for AI-extracted documents. Check each field against the source text, correct what is wrong, then approve or reject. The token stays in this page only.</p>
       <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="documents-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
@@ -175,7 +175,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
           {detail.s === 'error' && <p role="alert" className="error-text" data-testid="document-detail-error">{detail.m}</p>}
           {doc && (
             <>
-              <h3>{doc.title} <span className="muted small-text" data-testid="document-status">{STATUS_LABEL[String(doc.status)] ?? doc.status}</span></h3>
+              <h2>{doc.title} <span className="muted small-text" data-testid="document-status">{STATUS_LABEL[String(doc.status)] ?? doc.status}</span></h2>
               {doc.reject_reason && <p className="small-text muted" data-testid="document-reject-reason">Rejected: {doc.reject_reason}</p>}
               {hl ? (
                 <pre data-testid="document-text" tabIndex={0} aria-label="Document text" style={{ whiteSpace: 'pre-wrap', maxHeight: 280, overflow: 'auto' }}>
