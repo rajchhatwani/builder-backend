@@ -14,7 +14,7 @@ export function useSpecBlocks(projectId: string): { load: SpecLoad; reload: (qui
   const [n, setN] = useState(0)
   /** `quiet`: re-read without flipping to 'loading' (keeps sibling panels, and what they hold in memory, mounted). */
   const reload = useCallback((quiet?: boolean) => {
-    if (!quiet) setLoad({ status: 'loading' })
+    if (quiet !== true) setLoad({ status: 'loading' })
     setN((v) => v + 1)
   }, [])
   useEffect(() => {
