@@ -107,7 +107,7 @@ def _content_hash_sync(root: Path) -> str:
 async def content_hash(path: str | None) -> str | None:
     """First 40 hex of sha256 over the sorted (path, sha256) of every non-.git file of the draft.
     Unlike git HEAD it moves with ANY edit, committed or not."""
-    if not path or not Path(path).is_dir():
+    if not path or not Path(path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
         return None
     return (await asyncio.to_thread(_content_hash_sync, Path(path)))[:40]
 
@@ -123,7 +123,7 @@ async def _git(path: str, *args: str) -> list[str]:
 
 async def _changed_files(session: AsyncSession, ws: Workspace | None, cap: int = 100) -> list[str]:
     """Paths that differ from the draft's first checkpoint (committed or not, plus untracked)."""
-    if ws is None or not ws.worktree_path or not Path(ws.worktree_path).is_dir():
+    if ws is None or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
         return []
     first = (
         await session.execute(
@@ -222,7 +222,7 @@ class Approvals:
             payload["hooks"] = hooks[:100]
         ws = await _workspace(run)
         payload["files"] = await _changed_files(session, ws)
-        if ws is not None and ws.worktree_path and Path(ws.worktree_path).is_dir():
+        if ws is not None and ws.worktree_path and Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             # B-004: the custom-zone files this approval covers, with their hashes (bound by the payload hash)
             payload["file_hashes"] = await asyncio.to_thread(
                 promote_lib.custom_file_hashes, Path(ws.worktree_path), payload["files"]
@@ -277,7 +277,7 @@ class Gates:
 
     async def check_report(self, run: AiRun) -> tuple[list[RuleFailure], str]:
         path = await self.worktree(run)
-        if not path or not Path(path).is_dir():
+        if not path or not Path(path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             return [
                 RuleFailure(
                     "gates.no_workspace", "run", "a draft workspace to check", "none attached",

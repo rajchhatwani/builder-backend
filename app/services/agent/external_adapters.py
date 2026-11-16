@@ -69,7 +69,7 @@ class DevEnvironmentPlan:
 class LocalPullRequests:
     async def create(self, session: AsyncSession, run: AiRun, title: str) -> dict[str, Any]:
         ws = await session.get(Workspace, run.workspace_id) if run.workspace_id else None
-        if ws is None or not ws.worktree_path or not Path(ws.worktree_path).is_dir():
+        if ws is None or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             raise AppError("approval_not_applicable", "the run has no draft branch to open a pull request for", 422)
         proc = await asyncio.create_subprocess_exec(
             "git", "-C", ws.worktree_path, "rev-parse", "HEAD",

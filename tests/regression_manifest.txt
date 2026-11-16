@@ -308,3 +308,4 @@ tests/api/test_migrations.py::test_one_live_run_migration_keeps_newest_and_super
 tests/unit/test_behavior_block_routes_lint.py
 tests/unit/test_validation_seed_lint.py
 tests/unit/test_async_lint_services.py
+tests/unit/test_async_lint_agent.py
