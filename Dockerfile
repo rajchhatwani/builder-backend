@@ -5,7 +5,11 @@ ENV PYTHONUNBUFFERED=1 \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
     UV_CACHE_DIR=/tmp/uv-cache
 
-RUN pip install --no-cache-dir uv
+# git: the agent external adapters run `git rev-parse`. The docker CLI is NOT installed: previews/sandbox
+# need a Docker host and are unsupported in this image (see docker/manual/Dockerfile.api for that setup).
+RUN apt-get update && apt-get install -y --no-install-recommends git \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install --no-cache-dir uv
 
 WORKDIR /app
 
@@ -15,6 +19,7 @@ RUN uv sync --frozen --no-dev
 COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
+COPY scripts ./scripts
 
 # S2-003: never run as root. The app owns /app so `uv run` (compose) can still touch the venv.
 RUN useradd --system --uid 10001 --home-dir /app --shell /usr/sbin/nologin app \
@@ -26,4 +31,6 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD ["/app/.venv/bin/python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status == 200 else 1)"]
 
-CMD ["uv", "run", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Run from the built venv: `uv run` would re-resolve the lock and install the dev group at start.
+# Migrate first with: alembic upgrade head (compose does this in its command override).
+CMD ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

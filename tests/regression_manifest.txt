@@ -301,3 +301,4 @@ tests/e2e/test_ai_evals_stack.py
 tests/unit/test_operations_pack.py
 tests/e2e/test_operations_stack.py
 tests/unit/test_precommit_config.py
+tests/unit/test_dockerfile_runtime.py
