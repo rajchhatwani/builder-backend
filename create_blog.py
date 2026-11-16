@@ -5,7 +5,11 @@ BUILDER_URL (default http://localhost:8000).
 Not idempotent: slug "blog-app" must be free. If a later step fails, the
 half-built project is deleted so the script can simply be re-run.
 """
-import httpx, json, os, sys
+import json
+import os
+import sys
+
+import httpx
 
 BASE = os.environ.get("BUILDER_URL", "http://localhost:8000")
 TOKEN = os.environ.get("BUILDER_TOKEN")
@@ -133,7 +137,7 @@ auth = j(c.post(f"/projects/{pid}/auth", json={
     "app_name": "Blog App",
     "app_url": "https://blog.example.com",
 }))
-print(f"✓ Auth config created")
+print("✓ Auth config created")
 
 # ── 7. Roles ────────────────────────────────────────────────────────────────
 for role_data in [
@@ -181,9 +185,9 @@ print(f"✓ Permissions set ({len(perms)} entries)")
 # ── 10. Validate ────────────────────────────────────────────────────────────
 report = j(c.post(f"/projects/{pid}/validate"))
 if report["valid"]:
-    print(f"\n🎉 Blog App project is VALID and ready to generate!")
+    print("\n🎉 Blog App project is VALID and ready to generate!")
 else:
     print(f"\n⚠ Validation issues: {json.dumps(report['issues'], indent=2)}")
 
 print(f"\n📋 Project ID: {pid}")
-print(f"🌐 Open: http://localhost:5173")
+print("🌐 Open: http://localhost:5173")
