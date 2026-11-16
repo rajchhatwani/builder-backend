@@ -113,6 +113,8 @@ def test_f0313_nul_characters_are_refused_by_the_schemas() -> None:
     with pytest.raises(pydantic.ValidationError):
         docs.CorrectIn(value="a\x00b")
     with pytest.raises(pydantic.ValidationError):
+        docs.RejectIn(reason="a\x00b")
+    with pytest.raises(pydantic.ValidationError):
         kn.SourceIn(title="t", text="a\x00b")
     with pytest.raises(pydantic.ValidationError):
         kn.AskIn(question="a\x00b")

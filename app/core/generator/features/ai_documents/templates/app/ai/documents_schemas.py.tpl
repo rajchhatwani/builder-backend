@@ -46,6 +46,8 @@ class RejectIn(BaseModel):
 
     reason: str | None = Field(default=None, max_length=500)
 
+    _nul = field_validator("reason")(_no_nul)
+
 
 class AnchorOut(BaseModel):
     page: int
