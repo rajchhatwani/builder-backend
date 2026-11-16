@@ -204,7 +204,7 @@ class ScimService:
         if detail:
             await self._audit_admin(org, actor, info, "scim.directory_updated", detail=detail)
             if group_roles is not None:
-                await self._sync_roles(org, None)
+                await self._sync_roles(org, None, spare_owners=actor_role is not OrgRole.owner)
             await self.db.commit()
         return directory
 
@@ -753,7 +753,13 @@ class ScimService:
         roles = [OrgRole(mapping[n.lower()]) for n in names if n.lower() in mapping]
         return max(roles, key=lambda r: ORG_ROLE_LEVEL[r]) if roles else OrgRole.member
 
-    async def _sync_roles(self, org: Organization, scim_user_ids: list[uuid.UUID] | None) -> None:
+    async def _sync_roles(
+        self,
+        org: Organization,
+        scim_user_ids: list[uuid.UUID] | None,
+        *,
+        spare_owners: bool = False,
+    ) -> None:
         directory = await self.directory(org.id)
         if directory is None or not directory.group_roles:
             return
@@ -768,6 +774,8 @@ class ScimService:
             if member is None or role is None or member.role is role:
                 continue
             if member.role is OrgRole.owner:
+                if spare_owners:
+                    continue  # a non-owner actor may not demote owners (§2.2)
                 others = [u for u in await self.orgs.lock_owners(org.id) if u != su.user_id]
                 if not others:
                     continue  # never leave the org without an owner

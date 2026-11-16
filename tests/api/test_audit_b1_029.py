@@ -232,3 +232,44 @@ async def test_org_deletion_tears_down_previews(
         await OrganizationService(db).execute_deletion(uuid.UUID(org))
     assert len(stack["teardowns"]) == before + 1  # type: ignore[arg-type]
     _ = (select, TEST_PASSWORD, TOKEN)
+
+
+# -- F-0252 (b): admin group_roles PATCH must not demote SCIM-linked owners ----------------
+
+
+async def test_admin_group_roles_patch_spares_scim_owners(
+    client: AsyncClient,
+    anon_client: AsyncClient,
+    client_for: ClientFor,
+    session_factory: Factory,
+    dns: dict[str, list[str]],
+) -> None:
+    from tests.api.test_scim import SCIM, member_role, provision
+
+    org = await enterprise_org(client, session_factory, dns)
+    h = await scim_token(client)
+    uid = (await provision(anon_client, h))["id"]
+    gid = (
+        await anon_client.post(
+            f"{SCIM}/Groups", json={"displayName": "Admins", "members": [{"value": uid}]}, headers=h
+        )
+    ).json()["id"]
+    assert gid
+    async with session_factory() as s:  # alice is a SCIM-linked owner; mapping is empty
+        row = (
+            await s.execute(
+                select(OrganizationMember)
+                .join(PlatformUser, PlatformUser.id == OrganizationMember.user_id)
+                .where(
+                    OrganizationMember.organization_id == uuid.UUID(org),
+                    PlatformUser.email == "alice@acme.test",
+                )
+            )
+        ).scalar_one()
+        row.role = OrgRole.owner
+        await s.commit()
+    admin = await client_for("admin@example.com")
+    await _add_member(session_factory, org, admin, OrgRole.admin)
+    r = await admin.patch("/orgs/acme/scim", json={"group_roles": {"Admins": "admin"}})
+    assert r.status_code == 200, r.text
+    assert await member_role(session_factory, org, "alice@acme.test") is OrgRole.owner
