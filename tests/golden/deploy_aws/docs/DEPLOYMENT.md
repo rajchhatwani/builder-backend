@@ -28,7 +28,10 @@ outbound access: it is billed by the hour and is the largest fixed cost of a sma
    Keep the `terraform.tfstate` it leaves in that folder somewhere safe: it is the only record of these.
 2. **Create the GitHub environments** (Settings > Environments): `dev`, `staging`, `prod`.
    On the production environment add **required reviewers** (and restrict it to the `main` branch). The trust
-   in step 1 is per environment, so nobody can deploy to production without passing through it.
+   in step 1 is per environment, so nobody can deploy to production without passing through it **only if each
+   environment lives in its own account / project / subscription**. If environments share the same account,
+   the deploy identity of a non-production environment holds account-wide rights (it can manage identities and
+   resources of production too), so the production gate can be bypassed: use separate accounts for production.
 3. **Set the variables** of each GitHub environment (not secrets: none of these is secret) from the
    bootstrap's outputs:
 
