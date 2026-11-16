@@ -629,6 +629,12 @@ def _check_names(
                 add("G2.format_call", line, "format and format_map are not allowed: use an f-string")
         elif isinstance(node, ast.JoinedStr):
             _check_fstring(node, add)
+        elif isinstance(node, ast.MatchClass):
+            # `case Callable(__globals__=g)` reads attributes by name: same rules as `x.attr`.
+            for attr in node.kwd_attrs:
+                fake = ast.Attribute(value=ast.Constant(value=0), attr=attr, ctx=ast.Load())
+                fake.lineno = line
+                _check_attribute(fake, hook, aliases, sdk_aliases, add)
         elif isinstance(node, ast.arg):
             if node.arg.startswith("__"):
                 add("G2.dunder", line, "dunder names are not allowed")

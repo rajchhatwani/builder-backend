@@ -210,7 +210,10 @@ def _coerce_value(value: Any, f: SpecField) -> Any:
         if isinstance(value, int):
             n = value
         elif isinstance(value, str) and _INT_RE.match(value.strip()):
-            n = int(value.strip())
+            try:
+                n = int(value.strip())
+            except ValueError as exc:  # more digits than Python converts: far out of range
+                raise _Bad("out_of_range", "number is out of range") from exc
         else:
             raise _Bad("invalid_integer", "not a whole number")
         lo, hi = _INT32 if t == "integer" else _INT64
@@ -259,7 +262,10 @@ def _coerce_value(value: Any, f: SpecField) -> Any:
             dt = datetime.fromisoformat(s)
         except ValueError as exc:
             raise _Bad("invalid_datetime", "expected an ISO 8601 date and time") from exc
-        return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).astimezone(UTC).isoformat()
+        try:
+            return (dt if dt.tzinfo else dt.replace(tzinfo=UTC)).astimezone(UTC).isoformat()
+        except (OverflowError, ValueError) as exc:  # e.g. 0001-01-01 with an offset east of UTC
+            raise _Bad("invalid_datetime", "date and time are out of range") from exc
     if t == "uuid":
         try:
             return str(uuid.UUID(str(value).strip()))

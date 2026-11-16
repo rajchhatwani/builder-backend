@@ -243,6 +243,8 @@ def compute_totals(data: Mapping[str, Any], items_path: str = "items") -> dict[s
             raise DocumentError(
                 "quantities, prices and discounts cannot be negative; tax rate is 0 to 100"
             )
+        if quantity * price > MAX_AMOUNT:
+            raise DocumentError("a line total is too large")
         net = (quantity * price - discount).quantize(quantum, rounding=ROUND_HALF_UP)
         subtotal += net
         net_by_rate[rate] = net_by_rate.get(rate, Decimal(0)) + net
@@ -292,7 +294,16 @@ def _image_problem(b64: Any) -> str | None:
         return "is not valid base64"
     if not (raw.startswith(b"\x89PNG\r\n\x1a\n") or raw.startswith(b"\xff\xd8\xff")):
         return "must be a PNG or JPEG"
+    try:
+        with PILImage.open(io.BytesIO(raw)) as probe:
+            probe.verify()
+    except Exception:  # noqa: BLE001  PIL raises many types for damaged or hostile files
+        return "is not a readable image"
     return None
+
+
+def _number_between(value: Any, low: float, high: float) -> bool:
+    return not isinstance(value, bool) and isinstance(value, int | float) and low <= value <= high
 
 
 def validate_template(template: Mapping[str, Any]) -> list[str]:
@@ -353,6 +364,8 @@ def validate_template(template: Mapping[str, Any]) -> list[str]:
                     _check_text(col.get("value", ""), f"{where}.columns[{j}].value", problems)
                     if col.get("align", "left") not in ALIGNS:
                         problems.append(f"{where}.columns[{j}].align: left, right or center")
+                    if "width" in col and not _number_between(col["width"], 0.1, 100):
+                        problems.append(f"{where}.columns[{j}].width: a number between 0.1 and 100")
         if kind == "spacer":
             height = block.get("height_mm", 6)
             if (
@@ -372,8 +385,12 @@ def validate_template(template: Mapping[str, Any]) -> list[str]:
                 or not 5 <= width <= 180
             ):
                 problems.append(f"{where}.width_mm: between 5 and 180")
+            if block.get("align", "left") not in ALIGNS:
+                problems.append(f"{where}.align: left, right or center")
         if kind == "qr":
             _check_text(block.get("value", ""), f"{where}.value", problems)
+            if not _number_between(block.get("size_mm", 28), 5, 100):
+                problems.append(f"{where}.size_mm: between 5 and 100")
     return problems
 
 
@@ -543,8 +560,11 @@ def _build(template: Mapping[str, Any], data: Mapping[str, Any]) -> bytes:
             flow.append(PageBreak())
         elif kind == "image":
             raw = base64.b64decode(block["data_base64"])
-            with PILImage.open(io.BytesIO(raw)) as probe:
-                px_w, px_h = probe.size
+            try:
+                with PILImage.open(io.BytesIO(raw)) as probe:
+                    px_w, px_h = probe.size
+            except Exception as exc:  # noqa: BLE001
+                raise DocumentError("an image cannot be read") from exc
             if max(px_w, px_h) > MAX_IMAGE_PIXELS:
                 raise DocumentError(f"an image is larger than {MAX_IMAGE_PIXELS} pixels")
             target = float(block.get("width_mm", 40)) * mm

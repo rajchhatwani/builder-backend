@@ -75,7 +75,7 @@ def row_scope(spec: Spec, entity: str, subject: Mapping[str, Any]) -> RowScope:
     for r in roles:
         held |= _held(r, matrix._parents)
     access, label = matrix._object(entity, "list", held)
-    if access == "no" or (access == "conditional" and label == "policy"):
+    if access == "no" or (access == "conditional" and label.startswith("policy")):
         return RowScope("none")  # fail closed: row conditions of policies are not pushed down
     auth = spec.auth
     tenant = bool(

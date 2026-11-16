@@ -15,6 +15,8 @@ that are new or gone are listed ("added" / "removed") but never counted as a wea
 entity starts with whatever its own permissions say, reviewed when they are written.
 """
 
+import hashlib
+import json
 from collections.abc import Iterable, Mapping
 from typing import Any
 
@@ -72,6 +74,15 @@ def _row_effect(before: str, after: str) -> str:
     return "gain"  # opaque -> other scope: unknown reach, so assume it can be wider
 
 
+def _policy_fingerprint(rules: Any) -> str:
+    """Short digest of the applicable policies (ids, effects, conditions): any edit changes the
+    row label, and a move between two opaque labels counts as a gain (fail closed)."""
+    blob = json.dumps(
+        [[pid, p["effect"], p["when"]] for pid, p in rules], sort_keys=True, default=str
+    )
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
 class AccessMatrix:
     """Cells keyed (layer, entity, target, role) -> value."""
 
@@ -109,7 +120,7 @@ class AccessMatrix:
                 return "no", "all"
             if any(p["when"] is None for p in allows) and not denies:
                 return "yes", "all"
-            return "conditional", "policy"
+            return "conditional", "policy:" + _policy_fingerprint(rules)
         auth = self._spec.auth
         if auth is None or not auth.enabled:
             return "yes", "all"  # no sign-in: every route is public
@@ -138,7 +149,10 @@ class AccessMatrix:
             for role, held in principals:
                 allowed: dict[str, str] = {}
                 for op in ops:
-                    access, row = self._object(entity.name, op, held)
+                    if role == PUBLIC and self._pset is not None:
+                        access, row = "no", "all"  # generated routes need a signed-in user
+                    else:
+                        access, row = self._object(entity.name, op, held)
                     allowed[op] = access
                     self.cells[("object", entity.name, op, role)] = access
                     if access != "no":

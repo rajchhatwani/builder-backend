@@ -79,6 +79,8 @@ async def test_put_replaces_and_bumps_the_version(client: AsyncClient) -> None:
     body = (await client.get(f"/projects/{project_id}/authorization")).json()
     body["policies"] = body["policies"][:2]
     body["attachments"] = {"*": [p["id"] for p in body["policies"]]}
+    # a changed policy set is an opaque row scope: reviewed like any weakening
+    body["confirm_weakening"] = True
     response = await client.put(f"/projects/{project_id}/authorization", json=body)
     assert response.status_code == 200, response.text
     assert response.json()["version"] == 2
@@ -329,7 +331,7 @@ async def test_coverage_marks_unreachable_operations_closed(client: AsyncClient)
     only = [p for p in body["policies"] if p["id"] == "read_published"]
     await client.put(
         f"/projects/{project_id}/authorization",
-        json={"model": "abac", "policies": only, "attachments": {}},
+        json={"model": "abac", "policies": only, "attachments": {}, "confirm_weakening": True},
     )
     rows = {
         (r["entity"], r["op"]): r["state"]
