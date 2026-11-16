@@ -108,9 +108,12 @@ async def check_outbound_url(url: str, *, allow_private: bool, require_https: bo
         raise OidcError("unresolvable_host") from exc
     if not addresses:
         raise OidcError("unresolvable_host")
+    from app.services.agent.approved_effects import _public_ip  # lazy: avoids an import cycle
+
     for address in addresses:
         ip = ipaddress.ip_address(address.split("%", 1)[0])
-        if not ip.is_global or ip.is_multicast:
+        # _public_ip also unwraps IPv4 embedded in IPv6 (mapped, NAT64, 6to4, Teredo).
+        if not _public_ip(address) or ip.is_multicast:
             raise OidcError("private_address")
     return addresses
 
@@ -142,10 +145,23 @@ async def _request(
     async with httpx.AsyncClient(
         transport=TRANSPORT, timeout=_TIMEOUT, follow_redirects=False
     ) as client:
-        response = await client.request(method, url, **kwargs)
-    if len(response.content) > _MAX_BYTES:
-        raise OidcError("response_too_large")
-    return response
+        # Stream: refuse on Content-Length and stop reading once the cap is passed, so a hostile
+        # IdP cannot make the worker buffer gigabytes (F-0239).
+        async with client.stream(method, url, **kwargs) as response:
+            declared = response.headers.get("content-length", "")
+            if declared.isdigit() and int(declared) > _MAX_BYTES:
+                raise OidcError("response_too_large")
+            body = bytearray()
+            async for chunk in response.aiter_bytes():
+                body.extend(chunk)
+                if len(body) > _MAX_BYTES:
+                    raise OidcError("response_too_large")
+    return httpx.Response(
+        response.status_code,
+        headers={k: v for k, v in response.headers.items() if k.lower() != "content-encoding"},
+        content=bytes(body),
+        request=response.request,
+    )
 
 
 def _json(response: httpx.Response, reason: str) -> Any:

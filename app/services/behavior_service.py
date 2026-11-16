@@ -109,9 +109,15 @@ def system_actor() -> Iterator[None]:
         ACTOR_ROLE.reset(token)
 
 
-def _effects_of(raw: Any) -> list[tuple[str, tuple[str, ...], str]]:
+def _effects_of(raw: Any) -> list[tuple[str, str]]:
+    """Fingerprint of every effectful hook: the WHOLE declaration (reads, input, output, point,
+    kind, budget, ...) except `author`, which the server owns. An approved hook must not be
+    widened by an editor (F-0235)."""
     return sorted(
-        (h.get("name", ""), tuple(h["effects"]), json.dumps(h.get("effect_budget"), sort_keys=True))
+        (
+            str(h.get("name", "")),
+            json.dumps({k: v for k, v in h.items() if k != "author"}, sort_keys=True, default=str),
+        )
         for h in (raw or [])
         if isinstance(h, dict) and h.get("effects")
     )

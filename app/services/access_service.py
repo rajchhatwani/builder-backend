@@ -136,6 +136,7 @@ async def _impersonation_info(
         operator is None
         or operator.status is not AccountStatus.active
         or operator.platform_role is not PlatformRole.platform_admin
+        or claims.get("imp_tv") != operator.token_version
     ):
         return None
     org = await db.get(Organization, row.organization_id)

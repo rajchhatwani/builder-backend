@@ -163,11 +163,13 @@ async def test_editor_save_omitting_the_fields_keeps_them(
     hook = await _seed_hook(session_factory, pid)
     ed = await _editor(client, client_for, pid)
     body = {k: v for k, v in hook.items() if k not in ("effects", "effect_budget", "author")}
-    res = await ed.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [{**body, "reads": ["Invoice"]}]})
+    res = await ed.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [body]})
     assert res.status_code == 200, res.text
     got = res.json()["hooks"][0]
     assert got["author"] == "ai" and got["effects"] == ["email"] and got["effect_budget"]["payload_bytes"] == 500
-    assert got["reads"] == ["Invoice"]
+    # F-0235: an editor may not change the reads of an owner-approved effectful hook.
+    changed = await ed.put(f"/projects/{pid}/behavior/hooks", json={"hooks": [{**body, "reads": ["Invoice"]}]})
+    assert changed.status_code == 403, changed.text
 
 
 async def test_a_client_cannot_launder_the_author(

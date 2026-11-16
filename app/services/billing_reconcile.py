@@ -95,7 +95,7 @@ async def reconcile(session: AsyncSession) -> ReconcileReport:
             await session.rollback()  # replaced while we were fetching; next run sees it
             continue
         before = _snapshot(sub)
-        await webhook._apply_subscription(  # noqa: SLF001 — same rules as the webhook
+        renewed = await webhook._apply_subscription(  # noqa: SLF001 — same rules as the webhook
             sub, remote, deleted=remote.get("status") == "canceled"
         )
         if _snapshot(sub) == before:
@@ -117,6 +117,12 @@ async def reconcile(session: AsyncSession) -> ReconcileReport:
             },
         )
         await session.commit()
+        if renewed:
+            # A renewal the webhook missed: restart the seat high-water mark (§6.4), exactly
+            # as the webhook path does. The late webhook will then see no renewal (F-0237).
+            from app.services.billing_service import BillingService
+
+            await BillingService(session).sync_seats(org_id, new_period=True)
     return report
 
 

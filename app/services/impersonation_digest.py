@@ -40,6 +40,12 @@ class RunResult:
     digest: Digest | None = None
 
 
+def _clean(value: object) -> str:
+    """Free text (an operator's reason) in one digest line: no newlines, no chat mentions/markup."""
+    text = " ".join(str(value).split())
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "'")
+
+
 def _hm(value: datetime | None) -> str:
     return value.astimezone(UTC).strftime("%H:%M") if value else "-"
 
@@ -121,7 +127,7 @@ async def build(db: AsyncSession, since: datetime, until: datetime) -> Digest:
         until_hm = _hm(ends[str(item["id"])])
         lines.append(
             f"- {started} {item['operator']} viewed as {item['viewed_as']} in {item['organization']}. "
-            f'Reason: "{item["reason"]}". Until {until_hm}; {writes}.'
+            f'Reason: "{_clean(item["reason"])}". Until {until_hm}; {writes}.'
         )
     lines.append(
         f"{len(sessions)} session(s), {refused} refused "

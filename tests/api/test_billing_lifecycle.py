@@ -240,3 +240,37 @@ async def test_live_events_are_ignored_by_a_test_mode_platform(
             await session.execute(select(AuditLog).where(AuditLog.target_id == evt["id"]))
         ).scalar_one()
         assert row.detail["outcome"] == "livemode_mismatch"
+
+
+async def test_reconcile_renewal_restarts_the_seat_high_water_mark(  # F-0237
+    client: AsyncClient,
+    session_factory: Factory,
+    stripe_key: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.billing_service import BillingService
+
+    org = await _team_org(client)
+    await _set(
+        session_factory,
+        org,
+        stripe_customer_id="cus_123",
+        stripe_subscription_id="sub_123",
+        current_period_end=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+
+    async def fake_fetch(**kwargs: Any) -> dict[str, Any]:
+        return subscription_obj(org, price="price_team", period_end=1_900_000_000)
+
+    calls: list[tuple[uuid.UUID, bool]] = []
+
+    async def fake_sync(self: BillingService, organization_id: uuid.UUID, *, new_period: bool = False) -> None:
+        calls.append((organization_id, new_period))
+
+    monkeypatch.setattr(stripe_client, "fetch_subscription", fake_fetch)
+    monkeypatch.setattr(BillingService, "sync_seats", fake_sync)
+    # Stripe's period end is later than the stored one -> a renewal the webhook missed.
+    await _set(session_factory, org, current_period_end=datetime(2020, 1, 1, tzinfo=UTC))
+    async with session_factory() as session:
+        await billing_reconcile.reconcile(session)
+    assert calls == [(org, True)]

@@ -169,6 +169,30 @@ async def test_recovery_codes_work_once(
     ] == 9
 
 
+async def test_the_mfa_code_check_reads_the_user_row_under_a_lock(  # F-0242
+    client: AsyncClient, anon_client: AsyncClient, totp_clock: TotpClock
+) -> None:
+    """Counter and last_step are read-modify-write: concurrent guesses must serialise on the row."""
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    secret, _ = await enroll(client, totp_clock)
+    token = (await _login(anon_client, "primary@example.com"))["mfa_token"]
+    seen: list[str] = []
+
+    def spy(conn, cursor, statement, *a):  # type: ignore[no-untyped-def]
+        if "FROM platform_users" in statement and "FOR UPDATE" in statement:
+            seen.append(statement)
+
+    event.listen(Engine, "before_cursor_execute", spy)
+    try:
+        r = await anon_client.post("/account/login/mfa", json={"mfa_token": token, "code": "000000"})
+    finally:
+        event.remove(Engine, "before_cursor_execute", spy)
+    assert r.status_code == 401
+    assert seen, "the user row was not locked FOR UPDATE before the code was checked"
+
+
 async def test_wrong_codes_lock_the_account_like_wrong_passwords(
     client: AsyncClient, anon_client: AsyncClient, totp_clock: TotpClock
 ) -> None:

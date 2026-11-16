@@ -323,3 +323,4 @@ tests/unit/test_audit_b1_023.py
 tests/api/test_audit_b1_023_agent.py
 tests/unit/test_migration_planner_audit_b1_024.py
 tests/unit/test_requirements_office_b1_024.py
+tests/unit/test_audit_b1_026.py

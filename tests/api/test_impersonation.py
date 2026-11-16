@@ -401,6 +401,19 @@ async def test_a_suspended_or_demoted_operator_loses_the_session(
     assert (await viewer.get("/orgs/acme")).status_code == 401
 
 
+async def test_revoking_the_operators_sessions_ends_their_viewing_tokens(  # F-0240
+    world: World, session_factory: Factory
+) -> None:
+    viewer, _ = await world.view_as()
+    assert (await viewer.get("/orgs/acme")).status_code == 200
+    async with session_factory() as s:
+        ops = await s.get(PlatformUser, world.ops.user.id)  # type: ignore[attr-defined]
+        assert ops is not None
+        ops.token_version += 1
+        await s.commit()
+    assert (await viewer.get("/orgs/acme")).status_code == 401
+
+
 async def test_the_target_losing_membership_ends_the_view(
     world: World, session_factory: Factory
 ) -> None:

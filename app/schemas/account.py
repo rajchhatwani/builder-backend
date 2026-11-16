@@ -445,6 +445,8 @@ class ImpersonationRequest(BaseModel):
         value = value.strip()
         if len(value) < 5:
             raise ValueError("give a reason of at least 5 characters")
+        if any(ord(c) < 32 or ord(c) == 127 for c in value):
+            raise ValueError("the reason must be a single line of plain text")
         return value
 
 

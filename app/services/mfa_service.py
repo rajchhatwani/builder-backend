@@ -175,6 +175,7 @@ class MfaService:
     ) -> None:
         """A code typed in a signed-in session is limited like one typed at sign-in, so a stolen
         session can't guess its way past the second factor."""
+        await self.db.refresh(user, with_for_update=True)  # serialise counter/last_step (F-0242)
         if user.locked_until is not None and user.locked_until > _now():
             raise AppError(
                 code="too_many_attempts",
@@ -238,7 +239,11 @@ class MfaService:
             raise invalid_mfa_token() from None
         if claims.get("for") != audience.value or claims.get("pur") != purpose:
             raise invalid_mfa_token()
-        user = await self.db.get(PlatformUser, user_id)
+        # Row lock: the lockout counter and TOTP last_step are read-modify-write; concurrent
+        # guesses must serialise or they undercount failures / replay one code (F-0242).
+        user = await self.db.get(
+            PlatformUser, user_id, with_for_update=True, populate_existing=True
+        )
         if (
             user is None
             or user.status is not AccountStatus.active

@@ -123,7 +123,12 @@ class ImpersonationService:
                 token_version=target.token_version,
                 ttl_seconds=ttl,
                 amr=sorted(operator.auth_methods) or None,
-                extra={"imp_sid": str(row.id), "imp_by": str(operator.user.id)},
+                extra={
+                    "imp_sid": str(row.id),
+                    "imp_by": str(operator.user.id),
+                    # Revoking the operator's sessions must end their viewing tokens too (F-0240).
+                    "imp_tv": operator.user.token_version,
+                },
             )
         )
         return Started(row, token, ttl, target, org)
