@@ -129,7 +129,7 @@
     "alembic/versions/0006_runtime_config.py": "1de59a72b556e66ec2d48b245ea3f655081547e7f2cf7a1b2374c7c0426715da",
     "alembic/versions/0007_change_history.py": "329a37fdb95ffad2ec9f99dac4b8f6e96995bce7ff5b6074d330d7a5b4db5dcd",
     "alembic/versions/0008_seed.py": "0c9df79c2d364116213202268a8fd5c6aa207c1a6b00765a46c981195a55c9ab",
-    "docker-compose.yml": "39fd8708c3ad18cecfeb04fa92ad701047cd5fe783c37bf84267c3c24a5c00d8",
+    "docker-compose.yml": "097db52a90553607a4bd401aaccb7f06cf8553c4f2dd168118dd2f3dddef07c7",
     "requirements-dev.txt": "19f18546389f41f7571e67802b7fde4a09e1cef00039792142cf6d6944a46780",
     "requirements.txt": "bb5570e17370947e0686b3c89162b0ef7bae95c66a8802a57399f6610a6defdd",
     "tests/conftest.py": "2009649e5936fc3feb1e3330a11d6110f5b9d64ec83bbdd8548f19f387aacc66"

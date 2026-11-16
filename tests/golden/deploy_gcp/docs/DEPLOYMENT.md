@@ -45,6 +45,9 @@ needs a load balancer in front).
    (never in the repository, never in a tfvars file):
 
    * `AUTH_JWT_SECRET`
+   * `AWS_ACCESS_KEY_ID`
+   * `AWS_REGION`
+   * `AWS_SECRET_ACCESS_KEY`
    ```bash
    printf '%s' '<value>' | gcloud secrets versions add deploy-gcp-<env>-<NAME> --data-file=-
    ```
@@ -106,8 +109,11 @@ Each instance opens a few database connections (`DB_POOL_SIZE` plus `DB_MAX_OVER
 
 ## Limits (known)
 
-* Not included: the payments worker, file storage with malware scanning, Redis, or a Keycloak server of its
-  own. A spec that uses them cannot enable deployment yet.
+* Not included: the payments worker, file storage with malware scanning, Redis, a Keycloak server of its
+  own, the providers credential vault, job workers or workflow workers. A spec that uses them cannot enable
+  deployment yet.
+* AWS and GCP resource names are cut at cloud limits, so the project slug is limited in length when deployment
+  is on. All environments share one account unless you split them: use separate accounts for production.
 * Custom domains and DNS are yours to add.
 * `terraform apply` has been validated (`terraform validate`) but **not run against a real account** by the
   builder: do the first deployment in a throwaway account or the dev environment.

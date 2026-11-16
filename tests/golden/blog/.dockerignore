@@ -5,3 +5,8 @@ __pycache__/
 .git/
 .pytest_cache/
 .ruff_cache/
+*.tfstate
+*.tfstate.*
+.terraform/
+deploy/
+.github/

@@ -63,9 +63,19 @@ jobs:
 
       - uses: @@pin:docker/setup-buildx-action@@
 
+      - name: Look for an image already pushed for this commit (a re-run must not push the tag again)
+        id: exists
+        if: ${{ inputs.image_tag == '' }}
+        run: |
+          if gcloud artifacts docker images describe "${REGISTRY}/@@SLUG@@:${IMAGE_TAG}" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push the image (skipped when promoting an existing tag)
         id: build
-        if: ${{ inputs.image_tag == '' }}
+        if: ${{ inputs.image_tag == '' && steps.exists.outputs.found != 'true' }}
         uses: @@pin:docker/build-push-action@@
         with:
           context: .
@@ -80,9 +90,9 @@ jobs:
         run: gcloud artifacts docker images describe "${REGISTRY}/@@SLUG@@:${IMAGE_TAG}" --format='value(image_summary.digest)'
 
       - name: Sign the image (keyless, recorded in the public transparency log)
-        if: ${{ inputs.image_tag == '' }}
+        if: ${{ steps.build.outcome == 'success' }}
         uses: @@pin:sigstore/cosign-installer@@
-      - if: ${{ inputs.image_tag == '' }}
+      - if: ${{ steps.build.outcome == 'success' }}
         run: cosign sign --yes "${REGISTRY}/@@SLUG@@@${{ steps.build.outputs.digest }}"
 
       - uses: @@pin:hashicorp/setup-terraform@@

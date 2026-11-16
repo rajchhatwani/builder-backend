@@ -35,9 +35,19 @@ resource "aws_iam_role_policy" "read_secrets" {
   policy = data.aws_iam_policy_document.read_secrets.json
 }
 
-# The identity of the running application. It has no permissions: the service only talks to its
-# database and to the outside world. Add policies here when it needs an AWS service.
+# The identity of the running application. It has no permissions beyond what the project needs: the service
+# talks to its database and to the outside world. Add policies here when it needs another AWS service.
 resource "aws_iam_role" "task" {
   name               = "${local.name}-task"
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
+}
+
+# Text-message codes (auth.sms_provider = aws_sns) are sent with sns:Publish to phone numbers.
+resource "aws_iam_role_policy" "task_sns" {
+  name = "sms"
+  role = aws_iam_role.task.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{ Effect = "Allow", Action = ["sns:Publish"], Resource = "*" }]
+  })
 }

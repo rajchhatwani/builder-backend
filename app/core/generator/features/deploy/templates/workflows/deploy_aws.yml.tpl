@@ -60,9 +60,19 @@ jobs:
 
       - uses: @@pin:docker/setup-buildx-action@@
 
+      - name: Look for an image already pushed for this commit (a re-run must not push the tag again)
+        id: exists
+        if: ${{ inputs.image_tag == '' }}
+        run: |
+          if aws ecr describe-images --repository-name "${REGISTRY_REPO##*/}" --image-ids imageTag="$IMAGE_TAG" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "found=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Build and push the image (skipped when promoting an existing tag)
         id: build
-        if: ${{ inputs.image_tag == '' }}
+        if: ${{ inputs.image_tag == '' && steps.exists.outputs.found != 'true' }}
         uses: @@pin:docker/build-push-action@@
         with:
           context: .
@@ -79,9 +89,9 @@ jobs:
             --image-ids imageTag="$IMAGE_TAG" --query 'imageDetails[0].imageDigest' --output text
 
       - name: Sign the image (keyless, recorded in the public transparency log)
-        if: ${{ inputs.image_tag == '' }}
+        if: ${{ steps.build.outcome == 'success' }}
         uses: @@pin:sigstore/cosign-installer@@
-      - if: ${{ inputs.image_tag == '' }}
+      - if: ${{ steps.build.outcome == 'success' }}
         run: cosign sign --yes "${REGISTRY_REPO}@${{ steps.build.outputs.digest }}"
 
       - uses: @@pin:hashicorp/setup-terraform@@
@@ -144,6 +154,14 @@ jobs:
         run: |
           aws ecs wait services-stable --cluster "$(terraform output -raw cluster_name)" \
             --services "$(terraform output -raw service_name)"
+          # The circuit breaker may have rolled back to the old version, which is "stable" too: fail then.
+          FAILED=$(aws ecs describe-services --cluster "$(terraform output -raw cluster_name)" \
+            --services "$(terraform output -raw service_name)" \
+            --query "length(services[0].deployments[?rolloutState=='FAILED'])" --output text)
+          if [ "$FAILED" != "0" ]; then
+            echo "The new version failed to start and ECS rolled back; see the service events." >&2
+            exit 1
+          fi
 
       - name: Smoke test
         working-directory: deploy/aws

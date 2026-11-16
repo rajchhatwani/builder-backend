@@ -4,14 +4,15 @@ locals {
   #   az keyvault secret set --vault-name <vault> --name <NAME-with-dashes> --value '...'
   # (Key Vault names use dashes: AUTH_JWT_SECRET is stored as AUTH-JWT-SECRET.) The pipeline refuses to
   # deploy while a placeholder is still in place.
-  app_secret_names = ["AUTH_JWT_SECRET"]
+  app_secret_names = ["AUTH_JWT_SECRET", "AWS_ACCESS_KEY_ID", "AWS_REGION", "AWS_SECRET_ACCESS_KEY"]
   placeholder      = "__SET_ME_BEFORE_THE_FIRST_DEPLOYMENT__"
 }
 
 data "azurerm_client_config" "current" {}
 
 resource "azurerm_key_vault" "main" {
-  name                       = "${substr(local.short, 0, 15)}-kv"
+  # Globally unique, and different per environment even for long names: a short prefix plus a hash.
+  name                       = "${substr(local.short, 0, 10)}${substr(md5("${var.project}-${var.environment}"), 0, 8)}-kv"
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id

@@ -16,10 +16,10 @@ services:
   api:
     build: .
     environment:
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       # The master key of the per-tenant credential vault (app/providers). Required: a deployment without
       # one cannot start. Rotation: raise PROVIDER_VAULT_KEY_VERSION and list old keys in ..._PREVIOUS.
-      APP_ENV: ${APP_ENV:-production}
       PROVIDER_VAULT_KEY: ${PROVIDER_VAULT_KEY:?set PROVIDER_VAULT_KEY in .env (see .env.example)}
       PROVIDER_VAULT_KEY_VERSION: ${PROVIDER_VAULT_KEY_VERSION:-1}
       PROVIDER_VAULT_KEY_PREVIOUS: ${PROVIDER_VAULT_KEY_PREVIOUS:-}

@@ -121,7 +121,7 @@ data "aws_iam_policy_document" "trust" {
 
 resource "aws_iam_role" "deploy" {
   for_each             = toset(var.environments)
-  name                 = "${var.project}-deploy-${each.value}"
+  name                 = "deploy-${var.project}-${each.value}"  # outside the "<project>-*" pattern the policies manage
   assume_role_policy   = data.aws_iam_policy_document.trust[each.value].json
   max_session_duration = 3600
 }
@@ -130,6 +130,8 @@ resource "aws_iam_role" "deploy" {
 # a name prefix, so this role is powerful inside its account: use a separate AWS account per
 # environment for production, and review this policy before the first apply.
 data "aws_iam_policy_document" "deploy" {
+  for_each = toset(var.environments)
+
   statement {
     sid = "ManageTheStack"
     actions = [
@@ -148,15 +150,29 @@ data "aws_iam_policy_document" "deploy" {
     resources = ["*"]
   }
 
+  # Only the roles of THIS environment ("<project>-<env>-*"): the deploy roles ("deploy-<project>-<env>")
+  # are outside the pattern, so no pipeline can rewrite another environment's role or its own.
   statement {
-    sid = "RolesOfThisProjectOnly"
+    sid = "RolesOfThisEnvironmentOnly"
     actions = [
       "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole", "iam:TagRole", "iam:UntagRole",
-      "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy", "iam:AttachRolePolicy",
+      "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
       "iam:DetachRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
       "iam:PassRole", "iam:CreateServiceLinkedRole",
     ]
-    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-*", "arn:aws:iam::${local.account_id}:role/aws-service-role/*"]
+    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-${each.value}-*", "arn:aws:iam::${local.account_id}:role/aws-service-role/*"]
+  }
+
+  # Attaching a managed policy is limited to the one ECS needs: no AdministratorAccess through this role.
+  statement {
+    sid       = "AttachTheEcsExecutionPolicyOnly"
+    actions   = ["iam:AttachRolePolicy"]
+    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-${each.value}-*"]
+    condition {
+      test     = "ArnEquals"
+      variable = "iam:PolicyARN"
+      values   = ["arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"]
+    }
   }
 
   statement {
@@ -176,5 +192,5 @@ resource "aws_iam_role_policy" "deploy" {
   for_each = toset(var.environments)
   name     = "deploy"
   role     = aws_iam_role.deploy[each.value].id
-  policy   = data.aws_iam_policy_document.deploy.json
+  policy   = data.aws_iam_policy_document.deploy[each.value].json
 }

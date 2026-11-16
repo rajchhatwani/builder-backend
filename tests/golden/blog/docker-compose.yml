@@ -16,6 +16,7 @@ services:
   api:
     build: .
     environment:
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
     depends_on:
       db:

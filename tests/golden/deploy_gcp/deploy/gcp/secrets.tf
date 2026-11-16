@@ -2,7 +2,7 @@ locals {
   # Secrets the application reads from its environment. Terraform creates the empty containers; YOU
   # set their values (never in this repository or in a .tfvars file):
   #   printf '%s' 'value' | gcloud secrets versions add deploy-gcp-<environment>-<NAME> --data-file=-
-  app_secret_names = ["AUTH_JWT_SECRET"]
+  app_secret_names = ["AUTH_JWT_SECRET", "AWS_ACCESS_KEY_ID", "AWS_REGION", "AWS_SECRET_ACCESS_KEY"]
 }
 
 resource "google_secret_manager_secret" "database_url" {

@@ -134,7 +134,7 @@
     "alembic/versions/0009_events.py": "122c3bc73e5f8dec82669804776ecd24b584a95550be3e7872d17e989b60ac2a",
     "alembic/versions/0016_providers.py": "f46b948fa94c9cc0a936efe8690d343fb6e1fd37b8d956aed100be133c09a7b6",
     "alembic/versions/0021_notifications.py": "4d17e54943c00365a56a3ac329da399bf8aa2dce7ce674c98ab5f988ee22fc51",
-    "docker-compose.yml": "07e85823381aa66239feafd3c3fd641ad1aacccb04e06e52537ca432ec88f4e6",
+    "docker-compose.yml": "e595dbadeb0f40acf915082482fbf526f4bd601253bd71eefdd8fed74622de60",
     "requirements-dev.txt": "19f18546389f41f7571e67802b7fde4a09e1cef00039792142cf6d6944a46780",
     "requirements.txt": "bb5570e17370947e0686b3c89162b0ef7bae95c66a8802a57399f6610a6defdd",
     "tests/conftest.py": "f3920f3ea83a971427855f27100611f8a3a7f061c5b73293183d343493820a74"

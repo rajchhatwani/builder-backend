@@ -10,8 +10,11 @@ from collections.abc import Callable
 
 from app.core import deploy_sizing as sizing
 from app.core.spec_models import Spec, SpecDeployEnvironment, SpecDeployment
+from app.core.validation_jobs import jobs_active
 from app.core.validation_payments import payments_active
+from app.core.validation_providers import providers_active
 from app.core.validation_storage import storage_active
+from app.core.validation_workflows import workflows_active
 
 Add = Callable[[str, str, str], None]
 
@@ -41,8 +44,24 @@ def check_deployment(spec: Spec, add: Add) -> None:
             "invalid_value",
             "use the GitHub repository as owner/name; the cloud trusts only this repository",
         )
+    _check_slug(spec, block, add)
     _check_environments(block, add)
     _check_supported(spec, add)
+
+
+def _check_slug(spec: Spec, block: SpecDeployment, add: Add) -> None:
+    """Resource names are `<slug>-<env>` cut to a cloud limit (32 for the AWS load balancer, 30 for GCP
+    service accounts such as `<slug>-deploy-<env>`): a longer slug makes environments collide."""
+    longest_env = max((len(e.name) for e in block.environments), default=0)
+    slug = spec.project.slug
+    limit = {"aws": 32 - 1 - longest_env, "gcp": 30 - len("-deploy-") - longest_env}.get(block.cloud)
+    if limit is not None and len(slug) > limit:
+        add(
+            "project.slug",
+            "invalid_value",
+            f"at most {limit} characters when deploying to {block.cloud.upper()} (cloud resource "
+            "names are cut at a limit and environments would collide)",
+        )
 
 
 def _check_environments(block: SpecDeployment, add: Add) -> None:
@@ -104,6 +123,12 @@ def _check_supported(spec: Spec, add: Add) -> None:
         unsupported.append(("payments", "the payments worker process"))
     if storage_active(spec):
         unsupported.append(("storage", "the malware scanner and the object store"))
+    if providers_active(spec):
+        unsupported.append(("providers", "the credential vault key (PROVIDER_VAULT_KEY)"))
+    if jobs_active(spec):
+        unsupported.append(("jobs", "the job worker processes"))
+    if workflows_active(spec):
+        unsupported.append(("workflows", "the workflow worker process"))
     auth = spec.auth
     if auth is not None and auth.enabled:
         if (

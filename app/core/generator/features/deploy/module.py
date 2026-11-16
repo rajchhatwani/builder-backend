@@ -66,7 +66,7 @@ _STACK_FILES = {
 _BOOTSTRAP_FILES = ("versions.tf", "main.tf", "variables.tf", "outputs.tf")
 
 
-def secret_env_names(project: ProjectCtx) -> list[str]:
+def secret_env_names(project: ProjectCtx, cloud: str = "aws") -> list[str]:
     """Environment variables the service needs that are secret. Their values are set by a person in
     the cloud's secret manager; DATABASE_URL is created by Terraform and is not in this list."""
     auth = project.auth
@@ -79,6 +79,9 @@ def secret_env_names(project: ProjectCtx) -> list[str]:
         names += ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN"]
     elif auth.sms and auth.sms_provider == "vonage":
         names += ["VONAGE_API_KEY", "VONAGE_API_SECRET"]
+    elif auth.sms and auth.sms_provider == "aws_sns" and cloud != "aws":
+        # On AWS the task role may publish; elsewhere the service needs AWS credentials of its own.
+        names += ["AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"]
     return sorted(names)
 
 
@@ -152,7 +155,7 @@ class DeployModule:
         if block is None:
             return {}
         cloud = block.cloud
-        secrets = secret_env_names(project)
+        secrets = secret_env_names(project, cloud)
         otel = observability_active(project.spec)
         rows = _env_rows(block)
         context: dict[str, object] = {
@@ -165,6 +168,12 @@ class DeployModule:
             "env_rows": rows,
             "secret_names": secrets,
             "secret_names_hcl": json.dumps(secrets),
+            "sns": bool(
+                project.auth is not None
+                and project.auth.enabled
+                and project.auth.sms
+                and project.auth.sms_provider == "aws_sns"
+            ),
             "keycloak": uses_keycloak(project.auth),
             "has_auth": project.auth is not None and project.auth.enabled,
             "otel": otel is not None,

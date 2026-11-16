@@ -16,6 +16,7 @@ services:
   api:
     build: .
     environment:
+      APP_ENV: ${APP_ENV:-production}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       # OpenTelemetry (see docs/OBSERVABILITY.md). Empty endpoint: nothing leaves the container.
       APP_OTEL_ENABLED: ${APP_OTEL_ENABLED:-true}

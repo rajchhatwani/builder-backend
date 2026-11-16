@@ -68,6 +68,8 @@ services:
       UVICORN_WORKERS: ${UVICORN_WORKERS:-{{ single_host_workers }}}
       DB_POOL_SIZE: ${DB_POOL_SIZE:-{{ sizing.pool_size }}}
       DB_MAX_OVERFLOW: ${DB_MAX_OVERFLOW:-{{ sizing.max_overflow }}}
+{% else %}
+      APP_ENV: ${APP_ENV:-production}
 {% endif %}
 {% if pay and pay.scale.pgbouncer %}
       DATABASE_URL: postgresql+asyncpg://app:app@pgbouncer:6432/app
@@ -83,7 +85,6 @@ services:
 {% endif %}
 {% if storage %}
       # File storage: the bucket, the malware scanner (see deploy/storage/STORAGE.md).
-      APP_ENV: ${APP_ENV:-production}
       STORAGE_ENDPOINT_URL: ${STORAGE_ENDPOINT_URL:-{{ 'http://objectstore:8333' if minio else '' }}}
       STORAGE_PUBLIC_ENDPOINT_URL: ${STORAGE_PUBLIC_ENDPOINT_URL:-{{ 'http://localhost:8333' if minio else '' }}}
       STORAGE_REGION: ${STORAGE_REGION:-}
@@ -103,9 +104,6 @@ services:
 {% if provider_vault %}
       # The master key of the per-tenant credential vault (app/providers). Required: a deployment without
       # one cannot start. Rotation: raise PROVIDER_VAULT_KEY_VERSION and list old keys in ..._PREVIOUS.
-{% if not storage and not pay %}
-      APP_ENV: ${APP_ENV:-production}
-{% endif %}
       PROVIDER_VAULT_KEY: ${PROVIDER_VAULT_KEY:?set PROVIDER_VAULT_KEY in .env (see .env.example)}
       PROVIDER_VAULT_KEY_VERSION: ${PROVIDER_VAULT_KEY_VERSION:-1}
       PROVIDER_VAULT_KEY_PREVIOUS: ${PROVIDER_VAULT_KEY_PREVIOUS:-}
@@ -144,7 +142,6 @@ services:
       KEYCLOAK_PUBLIC_URL: ${KEYCLOAK_PUBLIC_URL:?set KEYCLOAK_PUBLIC_URL in .env (see .env.example)}
       KEYCLOAK_INTERNAL_URL: ${KEYCLOAK_INTERNAL_URL:-}
 {% endif %}
-      APP_ENV: ${APP_ENV:-production}
       AUTH_ALLOW_PROVIDER_SWITCH: ${AUTH_ALLOW_PROVIDER_SWITCH:-false}
 {% endif %}
     depends_on:
