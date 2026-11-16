@@ -199,6 +199,11 @@ async def test_delete_account(client: AsyncClient, outbox: Outbox) -> None:
     refresh = await client.post("/auth/refresh", json={"refresh_token": tokens["refresh_token"]})
     assert refresh.status_code == 401
 
+    # The email (and any unique custom value) is free again once the account is deleted.
+    again_payload = await registration_payload(EMAIL)
+    again = await client.post("/auth/register", json=again_payload)
+    assert again.status_code == 201, again.text
+
 
 async def test_validation_errors_use_the_standard_error_body(client: AsyncClient) -> None:
     weak = await client.post("/auth/register", json={"email": "not-an-email", "password": "short"})
