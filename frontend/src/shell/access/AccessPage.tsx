@@ -109,7 +109,9 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
     setApplying(true)
     setApplyError(null)
     try {
-      await api.applySpecOp(projectId, 'replace_spec', { spec: withEdits(spec, draft) }, review.diff.weakens)
+      // Re-read the spec right before the whole-spec replace so a change made since page load is not reverted.
+      const fresh = await api.getSpecJson(projectId)
+      await api.applySpecOp(projectId, 'replace_spec', { spec: withEdits(fresh, draft) }, review.diff.weakens)
       setDraft(null)
       onApplied()
     } catch (err) {
@@ -117,7 +119,7 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
     } finally {
       setApplying(false)
     }
-  }, [draft, review, projectId, spec, onApplied])
+  }, [draft, review, projectId, onApplied])
 
   const table = groupTable(matrix, layer, entity)
   const label = LAYERS.find((l) => l.id === layer)!.label

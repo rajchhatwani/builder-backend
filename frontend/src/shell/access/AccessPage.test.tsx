@@ -109,4 +109,53 @@ describe('AccessPage', () => {
     expect(m.diff.mock.calls[0][1].field_access).toEqual([{ entity: 'Invoice', field: 'amount', read_roles: ['admin', 'clerk'], write_roles: null }])
     expect(m.diff.mock.calls[0][1].permissions).toBeNull()
   })
+
+  it('applies on top of the freshly read spec, not the one loaded at page open (F-0597)', async () => {
+    const newer = { ...SPEC, marker: 'newer' }
+    m.matrix.mockResolvedValue(MATRIX); m.spec.mockResolvedValueOnce(SPEC); m.spec.mockResolvedValue(newer)
+    m.diff.mockResolvedValue(DIFF); m.apply.mockResolvedValue({})
+    await mount()
+    await tick(() => box(/clerk/).click())
+    await act(async () => { await Promise.resolve() })
+    await tick(() => btn(/Apply change/).click())
+    await act(async () => { await Promise.resolve() })
+    expect((m.apply.mock.calls[0][2] as { spec: { marker?: string } }).spec.marker).toBe('newer')
+  })
+
+  it('keeps the draft and shows the error when apply fails', async () => {
+    m.matrix.mockResolvedValue(MATRIX); m.spec.mockResolvedValue(SPEC); m.diff.mockResolvedValue(DIFF); m.apply.mockRejectedValue(new Error('nope'))
+    await mount()
+    await tick(() => box(/clerk/).click())
+    await act(async () => { await Promise.resolve() })
+    await tick(() => btn(/Apply change/).click())
+    await act(async () => { await Promise.resolve() })
+    expect(host.textContent).toContain('nope')
+    expect(btn(/Apply change/)).toBeTruthy()
+    expect(box(/clerk/).checked).toBe(true)
+  })
+
+  it('discard drops the draft and the review', async () => {
+    m.matrix.mockResolvedValue(MATRIX); m.spec.mockResolvedValue(SPEC); m.diff.mockResolvedValue(DIFF)
+    await mount()
+    await tick(() => box(/clerk/).click())
+    await act(async () => { await Promise.resolve() })
+    expect(q('[data-testid=access-diff-lines]')).not.toBeNull()
+    await tick(() => btn(/Discard/).click())
+    expect(q('[data-testid=access-diff-lines]')).toBeNull()
+    expect(box(/clerk/).checked).toBe(false)
+  })
+
+  it('ignores a stale diff that resolves after a newer edit', async () => {
+    let first!: (d: AccessDiff) => void
+    m.matrix.mockResolvedValue(MATRIX); m.spec.mockResolvedValue(SPEC)
+    m.diff.mockImplementationOnce(() => new Promise<AccessDiff>((r) => { first = r }))
+    m.diff.mockResolvedValueOnce({ ...DIFF, roles_gaining: { second: ['Invoice.list'] }, changes: [{ ...DIFF.changes[0], role: 'second' }] })
+    await mount()
+    await tick(() => box(/clerk/).click())
+    await tick(() => box(/clerk/).click())
+    await act(async () => { await Promise.resolve() })
+    expect(q('[data-testid=access-diff-lines]')?.textContent).toContain('second')
+    await act(async () => { first(DIFF); await Promise.resolve() })
+    expect(q('[data-testid=access-diff-lines]')?.textContent).toContain('second')
+  })
 })

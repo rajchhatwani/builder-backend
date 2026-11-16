@@ -27,6 +27,8 @@ const CONTRACT: [string, unknown][] = [
   // Added by CP-5V (additions): the org AI and Usage tabs.
   ['#/org/acme/ai', { page: 'org', slug: 'acme', tab: 'ai' }],
   ['#/org/acme/usage', { page: 'org', slug: 'acme', tab: 'usage' }],
+  ['#/verify-email', { page: 'verify-email' }],
+  ['#/__spike', { page: 'spike' }],
   ['#/admin', { page: 'admin', section: 'overview' }],
   ['#/admin/', { page: 'admin', section: 'overview' }],
   ['#/admin/insights', { page: 'admin', section: 'insights' }],
@@ -95,8 +97,10 @@ describe('hash routes', () => {
 
   it('every project section resolves to itself', async () => {
     const { SECTIONS } = await import('./components/Sidebar')
+    const { V2_SECTIONS } = await import('./shell/pages')
     expect(SECTIONS.length).toBeGreaterThan(10)
-    for (const s of SECTIONS) {
+    expect(V2_SECTIONS.length).toBeGreaterThan(10)
+    for (const s of [...SECTIONS, ...V2_SECTIONS]) {
       expect(parseHash(`#/p/${PID}/${s.id}`)).toEqual({ page: 'project', projectId: PID, section: s.id })
     }
   })

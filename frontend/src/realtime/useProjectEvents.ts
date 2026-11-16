@@ -21,10 +21,14 @@ export function useProjectEvents(projectId: string, section: string): { status: 
 
   useEffect(() => {
     setStatus('connecting'); setUsers([])
+    let closed = false // a closed connection may still report 'stopped' after its replacement started
     const conn = connectProjectEvents({
-      projectId, onStatus: setStatus, onPresence: setUsers, onEvent: (ev) => applyEvent(qc, projectId, ev),
+      projectId,
+      onStatus: (st) => { if (!closed) setStatus(st) },
+      onPresence: (u) => { if (!closed) setUsers(u) },
+      onEvent: (ev) => { if (!closed) applyEvent(qc, projectId, ev) },
     })
-    return () => conn.close()
+    return () => { closed = true; conn.close() }
   }, [projectId, qc])
 
   useEffect(() => {

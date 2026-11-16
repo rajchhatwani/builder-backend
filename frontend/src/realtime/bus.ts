@@ -5,7 +5,9 @@ type Listener = () => void
 const listeners = new Map<string, Set<Listener>>()
 
 export function publishTopics(topics: string[]): void {
-  for (const t of new Set(topics)) for (const l of [...(listeners.get(t) ?? [])]) l()
+  for (const t of new Set(topics)) for (const l of [...(listeners.get(t) ?? [])]) {
+      try { l() } catch (e) { console.error('realtime listener failed', e) }
+    }
 }
 
 export function subscribeTopic(topic: string, fn: Listener): () => void {

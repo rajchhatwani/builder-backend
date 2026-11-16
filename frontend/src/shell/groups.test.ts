@@ -6,10 +6,13 @@ import { RAIL_GROUPS, filterCommands } from './groups'
 describe('v2 rail groups', () => {
   it('lists every existing section and every v2-only page exactly once', () => {
     const grouped = RAIL_GROUPS.flatMap((g) => g.sections).sort()
+    expect(new Set(grouped).size).toBe(grouped.length)
+    const classic = new Set<string>(SECTIONS.map((s) => s.id))
+    expect(V2_SECTIONS.filter((s) => classic.has(s.id)).map((s) => s.id)).toEqual([])
     expect(grouped).toEqual([...SECTIONS.map((s) => s.id), ...V2_SECTIONS.map((s) => s.id)].sort())
   })
-  it('has the eight agreed groups in order', () => {
-    expect(RAIL_GROUPS.map((g) => g.label)).toEqual(['Home', 'Map', 'Build with AI', 'Build', 'Secure', 'Connect', 'Operate', 'Ship'])
+  it('has the seven groups in order', () => {
+    expect(RAIL_GROUPS.map((g) => g.label)).toEqual(['Home', 'Build with AI', 'Build', 'Secure', 'Connect', 'Operate', 'Ship'])
   })
 })
 

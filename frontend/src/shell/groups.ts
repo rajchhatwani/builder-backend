@@ -1,7 +1,7 @@
 import type { AnySection } from './pages'
 
 /** Rail groups of the new shell. Every existing section id appears exactly once, so old deep links
- *  (#/p/<id>/<section>) keep selecting the same panel. "Map" has no page yet and is shown disabled. */
+ *  (#/p/<id>/<section>) keep selecting the same panel. */
 export interface RailGroup {
   id: string
   label: string
@@ -12,9 +12,8 @@ export interface RailGroup {
 
 export const RAIL_GROUPS: RailGroup[] = [
   { id: 'home', label: 'Home', sections: ['overview'] },
-  { id: 'map', label: 'Map', sections: [], soon: true },
   { id: 'ai', label: 'Build with AI', sections: ['intake', 'plan', 'build', 'approvals', 'see'] },
-  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'customfields', 'events', 'hookeffects', 'documents'] },
+  { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'customfields', 'events', 'hookeffects'] },
   { id: 'secure', label: 'Secure', sections: ['auth', 'keycloak', 'suite', 'access', 'dependencies'] },
   { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import'] },
   { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics', 'search', 'ledger', 'map', 'bookings', 'documents', 'agentactions'] },
