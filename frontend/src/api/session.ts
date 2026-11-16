@@ -8,10 +8,13 @@
 
 export type Surface = 'app' | 'admin'
 
+/** 'lost' = the refresh cookie was refused (sign in again); 'unavailable' = 5xx/429/offline (try later). */
+export type RefreshOutcome = 'ok' | 'lost' | 'unavailable'
+
 interface SurfaceState {
   token: string | null
   refreshPath: string
-  inflight: Promise<boolean> | null
+  inflight: Promise<RefreshOutcome> | null
 }
 
 const surfaces: Record<Surface, SurfaceState> = {
@@ -54,34 +57,40 @@ export function setViewingOnly(value: boolean): void {
 }
 
 /** Exchange the refresh cookie for a new access token. One call at a time per surface. */
-export function refreshSession(surface: Surface): Promise<boolean> {
+export function refreshOutcome(surface: Surface): Promise<RefreshOutcome> {
   const state = surfaces[surface]
   if (viewingOnly && surface === 'app') {
     state.token = null
-    return Promise.resolve(false)
+    return Promise.resolve('lost')
   }
   if (state.inflight) return state.inflight
-  state.inflight = (async () => {
+  state.inflight = (async (): Promise<RefreshOutcome> => {
     try {
       const response = await fetch(`${BASE_URL}${state.refreshPath}`, {
         method: 'POST',
         credentials: 'include',
         headers: CSRF_HEADERS,
       })
-      if (!response.ok) {
+      if (response.status === 401 || response.status === 403) {
         state.token = null
-        return false
+        return 'lost'
       }
+      if (!response.ok) return 'unavailable'
       const body = (await response.json()) as { access_token: string }
       state.token = body.access_token
-      return true
+      return 'ok'
     } catch {
-      return false
+      return 'unavailable'
     } finally {
       state.inflight = null
     }
   })()
   return state.inflight
+}
+
+/** True when a fresh access token was obtained. */
+export async function refreshSession(surface: Surface): Promise<boolean> {
+  return (await refreshOutcome(surface)) === 'ok'
 }
 
 export function notifySessionLost(surface: Surface): void {

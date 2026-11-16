@@ -15,15 +15,28 @@ const openapi = JSON.parse(readFileSync(resolve(root, 'e2e/openapi.json'), 'utf8
 const baselinePath = resolve(root, 'e2e/drift-baseline.json')
 
 /** Interfaces whose OpenAPI schema has a different name. */
-const ALIASES: Record<string, string> = { PaymentsSizingResult: 'PaymentsSizingRead' }
+const ALIASES: Record<string, string> = {
+  PaymentsSizingResult: 'PaymentsSizingRead',
+  OpsOverview: 'OperationsRead',
+  OpsJob: 'JobStatusRead',
+  GoliveReport: 'GoliveRead',
+}
+/** Files that declare API shapes; adminOps.ts holds the operator-console ones. */
+const SOURCES = ['src/api/types.ts', 'src/api/adminOps.ts']
+
+type Schema = { properties?: Record<string, unknown>; required?: string[] }
+function schemaFor(name: string, schemas: Record<string, Schema>): Schema | undefined {
+  return schemas[ALIASES[name] ?? name]
+}
 
 interface Prop {
   optional: boolean
 }
 
 function clientInterfaces(): Map<string, Map<string, Prop>> {
-  const file = ts.createSourceFile('types.ts', readFileSync(resolve(root, 'src/api/types.ts'), 'utf8'), ts.ScriptTarget.Latest, true)
   const out = new Map<string, Map<string, Prop>>()
+  for (const source of SOURCES) {
+  const file = ts.createSourceFile(source, readFileSync(resolve(root, source), 'utf8'), ts.ScriptTarget.Latest, true)
   for (const node of file.statements) {
     if (!ts.isInterfaceDeclaration(node) || node.heritageClauses) continue // `extends` is resolved by TS itself
     const props = new Map<string, Prop>()
@@ -32,14 +45,15 @@ function clientInterfaces(): Map<string, Map<string, Prop>> {
     }
     out.set(node.name.text, props)
   }
+  }
   return out
 }
 
 function drift(): string[] {
-  const schemas: Record<string, { properties?: Record<string, unknown>; required?: string[] }> = openapi.components.schemas
+  const schemas: Record<string, Schema> = openapi.components.schemas
   const found: string[] = []
   for (const [name, props] of clientInterfaces()) {
-    const schema = schemas[ALIASES[name] ?? name]
+    const schema = schemaFor(name, schemas)
     if (!schema?.properties) continue
     const required = new Set(schema.required ?? [])
     for (const [prop, info] of props) {
@@ -61,7 +75,8 @@ describe('api/types.ts vs OpenAPI', () => {
 
   it('compares a meaningful number of interfaces', () => {
     const schemas = openapi.components.schemas
-    const compared = [...clientInterfaces().keys()].filter((n) => schemas[ALIASES[n] ?? n]?.properties)
-    expect(compared.length).toBeGreaterThan(30)
+    const compared = [...clientInterfaces().keys()].filter((n) => schemaFor(n, schemas)?.properties)
+    expect(compared.length).toBeGreaterThanOrEqual(84)
+    for (const name of ['OpsOverview', 'OpsJob', 'GoliveReport']) expect(compared, name).toContain(name)
   })
 })

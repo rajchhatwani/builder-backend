@@ -3,7 +3,7 @@
  *  The kill switch is turned on and off again, and the edited default is restored, so later specs see the platform defaults. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
-import { ADMIN, watchProblems } from './helpers'
+import { ADMIN, adminApi, watchProblems } from './helpers'
 
 const WEB = process.env.E2E_WEB_PORT ?? '5199'
 const flags = [{ name: 'ui.shell', value: 'v2' }]
@@ -18,6 +18,20 @@ async function adminSignIn(page: Page) {
 }
 
 test.describe('admin preview limits', () => {
+  // Whatever a test does (or fails half-way through), put the platform back: kill switch off, original defaults.
+  let original: { kill_switch: boolean; defaults: Record<string, number> } | null = null
+  test.beforeEach(async ({ request }) => {
+    const admin = await adminApi(request)
+    const r = await admin.get('/admin/preview-limits')
+    const body = await r.json()
+    original = { kill_switch: body.kill_switch, defaults: body.defaults }
+  })
+  test.afterEach(async ({ request }) => {
+    if (!original) return
+    const admin = await adminApi(request)
+    await admin.put('/admin/preview-limits', original)
+  })
+
   test('nav entry, defaults with bounds, save, and restore', async ({ page }) => {
     const watch = watchProblems(page)
     await adminSignIn(page)

@@ -3,6 +3,7 @@ import {
   CSRF_HEADERS,
   authHeader,
   notifySessionLost,
+  refreshOutcome,
   refreshSession,
   setAccessToken,
   type Surface,
@@ -171,6 +172,16 @@ interface RequestOptions {
   anonymous?: boolean
 }
 
+/** Binary/multipart call: refresh once on 401 and retry; tell the app when the session is really gone. */
+async function fetchWithRefresh(send: () => Promise<Response>, surface: Surface = 'app'): Promise<Response> {
+  const response = await send()
+  if (response.status !== 401) return response
+  const outcome = await refreshOutcome(surface)
+  if (outcome === 'ok') return send()
+  if (outcome === 'lost') notifySessionLost(surface)
+  return response
+}
+
 async function request<T>(
   path: string,
   init?: RequestInit,
@@ -189,8 +200,9 @@ async function request<T>(
   })
 
   if (response.status === 401 && !options.anonymous && !retried) {
-    if (await refreshSession(surface)) return request<T>(path, init, options, true)
-    notifySessionLost(surface)
+    const outcome = await refreshOutcome(surface)
+    if (outcome === 'ok') return request<T>(path, init, options, true)
+    if (outcome === 'lost') notifySessionLost(surface)
   }
 
   if (response.status === 204) {
@@ -392,8 +404,7 @@ export const api = {
     if (mapping) form.append('mapping', JSON.stringify(mapping))
     const send = () =>
       fetch(`${BASE_URL}/projects/${projectId}/imports`, { method: 'POST', credentials: 'include', headers: authHeader('app'), body: form })
-    let response = await send()
-    if (response.status === 401 && (await refreshSession('app'))) response = await send()
+    const response = await fetchWithRefresh(send)
     if (!response.ok) {
       const raw = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null
       throw new ApiError(response.status, {
@@ -553,10 +564,12 @@ export const api = {
 
   // ── Org data export (§9): the file the owner downloads ────────────────────
   async exportOrg(slug: string): Promise<{ blob: Blob; filename: string }> {
-    const response = await fetch(`${BASE_URL}/orgs/${encodeURIComponent(slug)}/export`, {
-      credentials: 'include',
-      headers: authHeader('app'),
-    })
+    const response = await fetchWithRefresh(() =>
+      fetch(`${BASE_URL}/orgs/${encodeURIComponent(slug)}/export`, {
+        credentials: 'include',
+        headers: authHeader('app'),
+      }),
+    )
     if (!response.ok) {
       const body = (await response.json().catch(() => null)) as ApiErrorBody | null
       throw new ApiError(response.status, body ?? { code: 'http_error', message: 'Export failed', details: [] })
@@ -672,8 +685,7 @@ export const api = {
         credentials: 'include',
         headers: authHeader('app'),
       })
-    let response = await download()
-    if (response.status === 401 && (await refreshSession('app'))) response = await download()
+    const response = await fetchWithRefresh(download)
     if (!response.ok) {
       throw new ApiError(response.status, (await response.json().catch(() => null)) ?? { code: 'bad_response', message: 'Download failed', details: [] })
     }
@@ -744,12 +756,14 @@ export const api = {
     projectId: string,
     data: { template: Record<string, unknown>; data: Record<string, unknown>; compute: string | null },
   ): Promise<Blob> => {
-    const response = await fetch(`${BASE_URL}/projects/${projectId}/documents/preview`, {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json', ...authHeader('app') },
-      body: JSON.stringify(data),
-    })
+    const response = await fetchWithRefresh(() =>
+      fetch(`${BASE_URL}/projects/${projectId}/documents/preview`, {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json', ...authHeader('app') },
+        body: JSON.stringify(data),
+      }),
+    )
     if (!response.ok) {
       const body = (await response.json().catch(() => ({ message: 'Preview failed' }))) as ApiErrorBody
       throw new ApiError(response.status, body)
@@ -1266,8 +1280,7 @@ export const api = {
 /** Authenticated binary download (refreshes the session once on 401), like downloadZip. */
 async function downloadBlob(path: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
   const go = () => fetch(`${BASE_URL}${path}`, { credentials: 'include', headers: authHeader('app') })
-  let response = await go()
-  if (response.status === 401 && (await refreshSession('app'))) response = await go()
+  const response = await fetchWithRefresh(go)
   if (!response.ok) {
     throw new ApiError(response.status, (await response.json().catch(() => null)) ?? { code: 'bad_response', message: 'Download failed', details: [] })
   }

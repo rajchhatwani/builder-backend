@@ -48,20 +48,23 @@ test.describe('admin operations', () => {
     await expect(row).toBeVisible()
     const box = row.getByRole('textbox')
     const before = await box.inputValue()
-    // negative is refused in the form
-    await box.fill('-1')
-    await row.getByTestId('metric-save').click()
-    await expect(page.getByText(/cannot be negative/)).toBeVisible()
-    // real edit with confirmation
-    const next = String((Number(before) || 0) + 7)
-    await box.fill(next)
-    await row.getByTestId('metric-save').click()
-    await page.getByRole('button', { name: 'Change limit' }).click()
-    await expect(box).toHaveValue(next)
-    // restore
-    await box.fill(before)
-    await row.getByTestId('metric-save').click()
-    await page.getByRole('button', { name: 'Change limit' }).click()
+    try {
+      // negative is refused in the form
+      await box.fill('-1')
+      await row.getByTestId('metric-save').click()
+      await expect(page.getByText(/cannot be negative/)).toBeVisible()
+      // real edit with confirmation
+      const next = String((Number(before) || 0) + 7)
+      await box.fill(next)
+      await row.getByTestId('metric-save').click()
+      await page.getByRole('button', { name: 'Change limit' }).click()
+      await expect(box).toHaveValue(next)
+    } finally {
+      // runs even if an assertion above failed: the limit must not stay changed for later specs
+      await box.fill(before)
+      await row.getByTestId('metric-save').click()
+      await page.getByRole('button', { name: 'Change limit' }).click({ timeout: 5000 }).catch(() => undefined)
+    }
     await expect(box).toHaveValue(before)
     watch.assertNone()
   })

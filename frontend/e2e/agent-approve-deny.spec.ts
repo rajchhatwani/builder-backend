@@ -22,6 +22,10 @@ const state = async (api: Awaited<ReturnType<typeof signedInUser>>, projectId: s
 
 test('approve: inbox, review, Approve records the decision', async ({ page, request }) => {
   const { api, projectId, approvalId } = await waitingRun(page, request, 'B', 'Keep the new Invoice entity', { summary: 'Added invoices', files: ['spec.json'] })
+  // the seeded row carries a real payload hash, so the server insists on it being echoed back
+  const bare = await api.post(`/projects/${projectId}/agent/approvals/${approvalId}/decision`, { approve: true })
+  expect(bare.status(), 'approve without expected_payload_hash is refused').toBe(422)
+  expect(await state(api, projectId, approvalId)).toBe('pending')
   const watch = watchProblems(page)
   await page.goto(`/#/p/${projectId}/approvals`)
   await expect(page.getByTestId('approval-row')).toHaveCount(1)

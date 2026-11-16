@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
@@ -19,6 +20,19 @@ export function markEmailVerified(email: string): void {
   execFileSync('docker', ['exec', 'bb-e2e-pg', 'psql', '-U', 'builder', '-d', 'builder', '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'pipe' })
 }
 
+/** Mirror of approval_service.payload_digest: sha256 of json.dumps(payload, sort_keys=True) (Python's default separators). */
+function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(', ')}]`
+  if (v && typeof v === 'object') {
+    const o = v as Record<string, unknown>
+    return `{${Object.keys(o).sort().map((k) => `${JSON.stringify(k)}: ${canonicalJson(o[k])}`).join(', ')}}`
+  }
+  return JSON.stringify(v)
+}
+export function payloadDigest(payload: Record<string, unknown>): string {
+  return createHash('sha256').update(canonicalJson(payload).replace(/[\u007f-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)).digest('hex')
+}
+
 /** Test setup only: the e2e stack has no scripted model, so a run that is waiting on a person is seeded straight
  *  in the throwaway database (same escape hatch as markEmailVerified): the run (made through the API) is moved to
  *  awaiting_approval and one pending approval is inserted for it. Returns the approval id. */
@@ -26,8 +40,8 @@ export function seedPendingApproval(runId: string, projectId: string, kind: 'A' 
   const lit = (v: unknown) => `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`
   const uuid = (v: string) => { if (!/^[0-9a-f-]{36}$/i.test(v)) throw new Error('not a uuid'); return `'${v}'` }
   const sql = `update ai_runs set state='awaiting_approval', phase='build' where id=${uuid(runId)};` +
-    `insert into ai_approvals (id, run_id, project_id, kind, subject, payload, risk_flags, state, bound_spec_hash, expires_at, created_at) ` +
-    `values (gen_random_uuid(), ${uuid(runId)}, ${uuid(projectId)}, '${kind}', '${subject.replace(/'/g, "''")}', ${lit(payload)}, ${lit(riskFlags)}, 'pending', '${'0'.repeat(64)}', now() + interval '1 day', now()) returning id`
+    `insert into ai_approvals (id, run_id, project_id, kind, subject, payload, payload_hash, risk_flags, state, bound_spec_hash, expires_at, created_at) ` +
+    `values (gen_random_uuid(), ${uuid(runId)}, ${uuid(projectId)}, '${kind}', '${subject.replace(/'/g, "''")}', ${lit(payload)}, '${payloadDigest(payload)}', ${lit(riskFlags)}, 'pending', '${'0'.repeat(64)}', now() + interval '1 day', now()) returning id`
   const out = execFileSync('docker', ['exec', 'bb-e2e-pg', 'psql', '-U', 'builder', '-d', 'builder', '-v', 'ON_ERROR_STOP=1', '-At', '-c', sql], { stdio: 'pipe' }).toString()
   const id = out.split('\n').find((l) => /^[0-9a-f-]{36}$/i.test(l.trim()))
   if (!id) throw new Error(`approval not seeded: ${out}`)
@@ -135,4 +149,15 @@ export async function importBrokenInvoiceFlow(api: Api, projectId: string) {
   ts.find((t: { name: string }) => t.name === 'auto_approve').when = 'amount <= '
   const r = await api.put(`/projects/${projectId}/behavior/state-machines`, { state_machines: machines, expected_version: cur.version })
   expect(r.status(), await r.text()).toBe(200)
+}
+
+/** Platform-admin API client for cleanup that must not depend on the UI path having worked. */
+export async function adminApi(request: APIRequestContext) {
+  const login = await request.post(`${API}/admin/login`, { data: ADMIN, headers: H })
+  expect(login.status(), await login.text()).toBe(200)
+  const headers = { ...H, Authorization: `Bearer ${(await login.json()).access_token}` }
+  return {
+    get: (path: string) => request.get(`${API}${path}`, { headers }),
+    put: (path: string, data?: unknown) => request.put(`${API}${path}`, { data, headers }),
+  }
 }

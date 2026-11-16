@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError, api, onQuotaExceeded } from './client'
-import { setAccessToken } from './session'
+import { onSessionLost, setAccessToken } from './session'
 
 function reply(status: number, body?: unknown): Response {
   return new Response(body === undefined ? null : JSON.stringify(body), {
@@ -59,6 +59,42 @@ describe('api client', () => {
     await expect(api.getProject('p1')).resolves.toEqual({ id: 'p1' })
     expect(fetchMock).toHaveBeenCalledTimes(3)
     expect(String(fetchMock.mock.calls[1][0])).toContain('/account/refresh')
+  })
+
+  it('a refresh outage (503) does not sign the user out and surfaces the original error', async () => {
+    const lost = vi.fn()
+    const off = onSessionLost(lost)
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(503, {}))
+    await expect(api.getProject('p1')).rejects.toMatchObject({ status: 401 })
+    expect(lost).not.toHaveBeenCalled()
+    off()
+  })
+
+  it('a refused refresh (401) signs the user out', async () => {
+    const lost = vi.fn()
+    const off = onSessionLost(lost)
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(401, {}))
+    await expect(api.getProject('p1')).rejects.toMatchObject({ status: 401 })
+    expect(lost).toHaveBeenCalledOnce()
+    off()
+  })
+
+  it('exportOrg and previewDocument refresh once on 401 and retry', async () => {
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(200, { access_token: 'n1' }))
+      .mockResolvedValueOnce(new Response('{}', { status: 200 }))
+    await expect(api.exportOrg('acme')).resolves.toMatchObject({ filename: 'acme-export.json' })
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(200, { access_token: 'n2' }))
+      .mockResolvedValueOnce(new Response('%PDF', { status: 200 }))
+    await expect(api.previewDocument('p1', { template: {}, data: {}, compute: null })).resolves.toBeInstanceOf(Blob)
+    expect(fetchMock).toHaveBeenCalledTimes(6)
   })
 })
 

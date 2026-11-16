@@ -3,7 +3,7 @@
  *  (E2E_PREVIEW_ORIGIN overrides). The preview API itself is mocked with page.route, so no generated app is needed. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
-import { createProjectViaApi, signedInUser } from './helpers'
+import { createProjectViaApi, importInvoiceFlow, signedInUser } from './helpers'
 
 const WEB = process.env.E2E_WEB_PORT ?? '5199'
 const PREVIEW = process.env.E2E_PREVIEW_ORIGIN ?? 'http://localhost:8799'
@@ -60,6 +60,7 @@ test('workbench: console sends as a role to the preview origin only, history red
   test.setTimeout(90_000)
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Workbench Project')
+  await importInvoiceFlow(api, id) // declares roles: without them the token/redaction checks below would pass vacuously
   const seen = { auth: [] as (string | undefined)[], hosts: [] as string[] }
   page.on('request', (r) => seen.hosts.push(new URL(r.url()).origin))
   await mockPreview(page, seen)
@@ -83,13 +84,12 @@ test('workbench: console sends as a role to the preview origin only, history red
   const role = page.getByLabel('Act as role')
   await expect(role.locator('option').first()).toHaveText('No role (anonymous)')
   const roles = await role.locator('option').count()
-  if (roles > 1) {
-    await role.selectOption({ index: 1 })
-    await page.getByLabel(/Test-user token/).fill('E2E-SECRET-TOKEN')
-  }
+  expect(roles, 'the project declares roles, so the role picker has more than "No role"').toBeGreaterThan(1)
+  await role.selectOption({ index: 1 })
+  await page.getByLabel(/Test-user token/).fill('E2E-SECRET-TOKEN')
   await page.getByRole('button', { name: 'Send request' }).click()
   await expect(page.getByTestId('wb-status')).toHaveText('422')
-  if (roles > 1) expect(seen.auth.at(-1)).toBe('Bearer E2E-SECRET-TOKEN')
+  expect(seen.auth.at(-1)).toBe('Bearer E2E-SECRET-TOKEN')
 
   // history: two entries, secrets redacted (response "token" key, bearer value)
   await expect(page.getByTestId('wb-history').locator('li')).toHaveCount(2)
