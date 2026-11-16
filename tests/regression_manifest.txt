@@ -328,3 +328,4 @@ tests/api/test_audit_b1_027.py
 tests/api/test_audit_b1_028.py
 tests/api/test_audit_b1_029.py
 tests/api/test_audit_b1_031.py
+tests/unit/test_create_blog_script.py

@@ -1,18 +1,32 @@
-"""Create a fully-fledged blog app via the Backend Builder API."""
-import httpx, json, sys
+"""Create a fully-fledged blog app via the Backend Builder API.
 
-BASE = "http://localhost:8000"
-c = httpx.Client(base_url=BASE, timeout=10)
+Env: BUILDER_TOKEN (required; session JWT or bb_pat_ API token),
+BUILDER_URL (default http://localhost:8000).
+Not idempotent: slug "blog-app" must be free. If a later step fails, the
+half-built project is deleted so the script can simply be re-run.
+"""
+import httpx, json, os, sys
+
+BASE = os.environ.get("BUILDER_URL", "http://localhost:8000")
+TOKEN = os.environ.get("BUILDER_TOKEN")
+if not TOKEN:
+    print("ERROR: set BUILDER_TOKEN to a bearer token (session JWT or bb_pat_ API token)")
+    sys.exit(1)
+c = httpx.Client(base_url=BASE, timeout=10, headers={"Authorization": f"Bearer {TOKEN}"})
+pid = None
 
 def j(r):
     if r.status_code >= 400:
         print(f"ERROR {r.status_code}: {r.text}")
+        if pid:
+            c.delete(f"/projects/{pid}")
+            print(f"  cleaned up partial project {pid}")
         sys.exit(1)
     return r.json()
 
 # ── 1. Project ─────────────────────────────────────────────────────────────
 proj = j(c.post("/projects", json={"name": "Blog App", "slug": "blog-app", "description": "A fully-featured blog platform with posts, categories, comments and tags."}))
-pid = proj["id"]
+pid = proj["id"]  # from here on, j() deletes the project on failure
 print(f"✓ Project: {proj['name']} ({pid})")
 
 # ── 2. Entities ────────────────────────────────────────────────────────────
@@ -124,7 +138,7 @@ print(f"✓ Auth config created")
 # ── 7. Roles ────────────────────────────────────────────────────────────────
 for role_data in [
     {"name": "admin",  "label": "Administrator", "is_default": False, "self_assignable": False, "position": 0},
-    {"name": "author", "label": "Author",        "is_default": False, "self_assignable": True,  "position": 1},
+    {"name": "author", "label": "Author",        "is_default": False, "self_assignable": False, "position": 1},
     {"name": "reader", "label": "Reader",        "is_default": True,  "self_assignable": True,  "position": 2},
 ]:
     r = j(c.post(f"/projects/{pid}/roles", json=role_data))
@@ -144,15 +158,20 @@ for cf in [
 perms = []
 for eid, entity_name in [(entities["Category"], "Category"), (entities["Tag"], "Tag"),
                           (entities["Post"], "Post"), (entities["Comment"], "Comment")]:
-    # Public read
+    # Public read, except Comment (author_email / spam / unapproved): admin only
+    read_roles = ["admin"] if entity_name == "Comment" else []
     for op in ["list", "get", "head"]:
-        perms.append({"entity_id": eid, "operation": op, "roles": [], "row_rule": None})
-    # Authors & admins can create
-    for op in ["create"]:
-        perms.append({"entity_id": eid, "operation": op, "roles": ["author", "admin"], "row_rule": None})
-    # Authors edit own, admins edit all
+        perms.append({"entity_id": eid, "operation": op, "roles": read_roles, "row_rule": None})
+    # Taxonomy is admin-curated; authors/admins create Posts; readers may comment
+    create_roles = {"Category": ["admin"], "Tag": ["admin"], "Post": ["author", "admin"],
+                    "Comment": ["reader", "author", "admin"]}[entity_name]
+    perms.append({"entity_id": eid, "operation": "create", "roles": create_roles, "row_rule": None})
+    # Authors edit own Posts/Comments (role_scoped: admins see all), taxonomy admin only
     for op in ["replace", "update"]:
-        perms.append({"entity_id": eid, "operation": op, "roles": ["admin"], "row_rule": None})
+        if entity_name in ("Post", "Comment"):
+            perms.append({"entity_id": eid, "operation": op, "roles": ["author", "admin"], "row_rule": "role_scoped"})
+        else:
+            perms.append({"entity_id": eid, "operation": op, "roles": ["admin"], "row_rule": None})
     # Only admins delete
     perms.append({"entity_id": eid, "operation": "delete", "roles": ["admin"], "row_rule": None})
 
