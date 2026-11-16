@@ -34,7 +34,7 @@ export function SearchPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     let off = false
     api.getBehaviorRoles(projectId).then(
-      (r) => { if (!off) { const names = r.roles.map((x) => x.name); setRoles(names); setRole(names[0] ?? '') } },
+      (r) => { if (!off) { const names = r.roles.map((x) => x.name); setRoles(names); setRole('') } },
       () => { if (!off) { setRoles([]); setRole('') } },
     )
     return () => { off = true }
@@ -76,6 +76,7 @@ export function SearchPage({ projectId }: { projectId: string }) {
             <div className="field">
               <label htmlFor={roleId}>Search as role</label>
               <select id={roleId} value={role} onChange={(e) => setRole(e.target.value)} data-testid="search-role">
+                <option value="">My own access</option>
                 {roles.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
             </div>

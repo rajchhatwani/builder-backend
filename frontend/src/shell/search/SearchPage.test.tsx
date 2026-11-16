@@ -24,7 +24,7 @@ describe('SearchPage', () => {
     expect((q('search-run') as HTMLButtonElement).disabled).toBe(true)
     await setInput(q('search-input') as HTMLInputElement, 'acme')
     await click(q('search-run'))
-    expect(m.search).toHaveBeenCalledWith('p', 'Invoice', 'acme', 20, 'admin')
+    expect(m.search).toHaveBeenCalledWith('p', 'Invoice', 'acme', 20, undefined)
     expect(q('search-total')?.textContent).toBe('1 result')
     expect(qa('search-hit')[0].textContent).toBe('title: Acme')
   })
