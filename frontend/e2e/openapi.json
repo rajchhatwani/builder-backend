@@ -12814,6 +12814,11 @@
    "ProjectRoleCreate": {
     "description": "Request body for POST /projects/{id}/roles.",
     "properties": {
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "inherits_from": {
       "anyOf": [
        {

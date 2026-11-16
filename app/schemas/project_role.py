@@ -32,6 +32,8 @@ class ProjectRoleCreate(BaseModel):
     invite_only: bool = False
     inherits_from: str | None = Field(default=None, max_length=60)
     position: int = Field(default=0, ge=0, le=2_147_483_647)
+    # Required when the new role gets more access than the public cell (else 409 access_weakened).
+    confirm_weakening: bool = False
 
     @field_validator("name")
     @classmethod

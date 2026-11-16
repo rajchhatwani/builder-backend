@@ -25,3 +25,15 @@ async def test_confirmed_role_and_permission_and_auth_edits_apply(client_for: Cl
     assert "delete" not in await _perm_ids(a, pid)
     r = await a.patch(f"/projects/{pid}/auth", json={"enabled": False, "confirm_weakening": True})
     assert r.status_code == 200 and r.json()["enabled"] is False, r.text
+
+
+async def test_role_create_that_gains_access_needs_confirmation(client_for: ClientFor) -> None:
+    a = await client_for("owner@example.com")
+    pid, _ = await project_with_spec(a)
+    body = {"name": "sneaky", "label": "Sneaky", "self_assignable": True, "inherits_from": "admin"}
+    r = await a.post(f"/projects/{pid}/roles", json=body)
+    assert r.status_code == 409 and r.json()["code"] == "access_weakened", r.text
+    names = [x["name"] for x in (await a.get(f"/projects/{pid}/roles")).json()["items"]]
+    assert "sneaky" not in names
+    r = await a.post(f"/projects/{pid}/roles", json={**body, "confirm_weakening": True})
+    assert r.status_code == 201, r.text

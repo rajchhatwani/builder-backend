@@ -131,12 +131,17 @@ class ProjectRoleService:
             inherits_from=data.inherits_from,
             position=data.position,
         )
-        self.session.add(role)
+
+        async def write() -> None:
+            self.session.add(role)
+            await self.session.flush()
+
         try:
-            await self.session.commit()
+            await guarded_write(self.session, project_id, data.confirm_weakening, write)
         except IntegrityError as exc:
             await self.session.rollback()
             raise _name_conflict() from exc
+        await self.session.refresh(role)  # the guard expires the session's objects
         return role
 
     async def list(
