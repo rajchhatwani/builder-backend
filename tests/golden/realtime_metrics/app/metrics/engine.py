@@ -143,6 +143,7 @@ def group_key(value: Any) -> str | None:
 
 
 MAX_DISTINCT_VALUES = 50_000
+MAX_GROUPS = 100  # distinct group-by values one metric may return (the builder's cap)
 _TEXT_TYPES = frozenset({"string", "text", "enum"})
 
 
@@ -156,6 +157,15 @@ def distinct_key(value: Any) -> str:
     except InvalidOperation:
         return str(value)
     return fmt(number) if number.is_finite() else str(value)
+
+
+def _check_groups(count: int) -> None:
+    if count > MAX_GROUPS:
+        raise AppError(
+            "metric_too_many_groups",
+            f"the group-by has more than {MAX_GROUPS} distinct values; group by a coarser field",
+            422,
+        )
 
 
 async def _distinct_in_python(
@@ -182,8 +192,11 @@ async def _distinct_in_python(
     if group_col is None:
         return out
     keys = (
-        await repo.session.execute(sa.select(group_col).select_from(repo.model).where(*where).distinct())
+        await repo.session.execute(
+            sa.select(group_col).select_from(repo.model).where(*where).distinct().limit(MAX_GROUPS + 1)
+        )
     ).all()
+    _check_groups(len(keys))
     buckets: dict[str | None, set[str]] = {group_key(r[0]): set() for r in keys}
     for r in found:
         buckets.setdefault(group_key(r[1]), set()).add(distinct_key(r[0]))
@@ -205,9 +218,14 @@ async def compute(repo: Repository[Any], d: dict[str, Any], types: dict[str, str
     group_col = _column(repo, d["group_by"], types[d["group_by"]])
     rows = (
         await repo.session.execute(
-            sa.select(group_col, *selects).select_from(repo.model).where(*where).group_by(group_col)
+            sa.select(group_col, *selects)
+            .select_from(repo.model)
+            .where(*where)
+            .group_by(group_col)
+            .limit(MAX_GROUPS + 1)
         )
     ).all()
+    _check_groups(len(rows))
     buckets = {group_key(row[0]): _value(d, row[1:]) for row in rows}
     order = sorted(buckets, key=lambda k: (k is None, k or ""))
     out["groups"] = [{"key": k, "value": buckets[k]} for k in order]

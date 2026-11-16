@@ -191,11 +191,20 @@ def ensure_user_profile(admin: str, token: str, attributes: list[dict[str, Any]]
             print(f"  added user attribute {attribute['name']}")
 
 
+def check_transport(base: str) -> None:
+    """The admin password is sent to this URL: https, or plain http only to a loopback host."""
+    parts = urllib.parse.urlsplit(base)
+    if parts.scheme == "https" and parts.hostname:
+        return
+    if parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1"):
+        return
+    raise RegisterError("KEYCLOAK_PUBLIC_URL must be https (or http://localhost for local work)")
+
+
 def main() -> int:
     document = json.loads(DOCUMENT.read_text(encoding="utf-8"))
     base = env("KEYCLOAK_PUBLIC_URL").rstrip("/")
-    if not base.startswith("https://") and "localhost" not in base and "127.0.0.1" not in base:
-        raise RegisterError("KEYCLOAK_PUBLIC_URL must be https (or localhost for local work)")
+    check_transport(base)
     api_url = env("API_PUBLIC_URL", "http://localhost:8000").rstrip("/")
     realm = document["realm"]
     admin = f"{base}/admin/realms/{urllib.parse.quote(realm, safe='')}"

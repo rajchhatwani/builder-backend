@@ -301,6 +301,15 @@ async def _write(
     return (await _transaction_outs(session, [stored]))[0], False
 
 
+def _refuse_reserved_key(key: str) -> None:
+    if key.startswith(MANAGED_KEY_PREFIXES):
+        raise AppError(
+            "reserved_key",
+            "idempotency keys starting with invoice:, payment: or payout: are reserved for invoicing",
+            422,
+        )
+
+
 def _unbalanced(sums: dict[str, int]) -> AppError:
     return AppError(
         "unbalanced",
@@ -314,6 +323,7 @@ async def post_transaction(
     session: AsyncSession, user: _t.Any, body: _s.TransactionIn
 ) -> tuple[_s.TransactionOut, bool]:
     tenant = tenant_of(user)
+    _refuse_reserved_key(body.idempotency_key)
     if any(e.amount_minor == 0 for e in body.entries):
         raise AppError("invalid_entries", "an entry amount cannot be zero", 422)
     fingerprint = _fingerprint(
@@ -355,6 +365,7 @@ async def reverse_transaction(
     session: AsyncSession, user: _t.Any, transaction_id: _uuid.UUID, body: _s.ReverseIn
 ) -> tuple[_s.TransactionOut, bool]:
     tenant = tenant_of(user)
+    _refuse_reserved_key(body.idempotency_key)
     fingerprint = _fingerprint("reverse", str(transaction_id), body.description)
     replay = await _replay_or_conflict(session, tenant, body.idempotency_key, fingerprint)
     if replay is not None:

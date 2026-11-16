@@ -255,11 +255,20 @@ def ensure_audience_scope(admin: str, token: str, suite: dict[str, Any]) -> str:
     return scope_id
 
 
+def check_transport(base: str) -> None:
+    """The admin password is sent to this URL: https, or plain http only to a loopback host."""
+    parts = urllib.parse.urlsplit(base)
+    if parts.scheme == "https" and parts.hostname:
+        return
+    if parts.scheme == "http" and parts.hostname in ("localhost", "127.0.0.1", "::1"):
+        return
+    raise RegisterError("KEYCLOAK_PUBLIC_URL must be https (or http://localhost for local work)")
+
+
 def main() -> int:
     document = json.loads(DOCUMENT.read_text(encoding="utf-8"))
     base = env("KEYCLOAK_PUBLIC_URL").rstrip("/")
-    if not base.startswith("https://") and "localhost" not in base and "127.0.0.1" not in base:
-        raise RegisterError("KEYCLOAK_PUBLIC_URL must be https (or localhost for local work)")
+    check_transport(base)
     api_url = env("API_PUBLIC_URL", "http://localhost:8000").rstrip("/")
     realm = document["realm"]
     admin = f"{base}/admin/realms/{urllib.parse.quote(realm, safe='')}"
@@ -287,7 +296,8 @@ def main() -> int:
     ensure_user_profile(admin, token, document.get("user_profile_attributes", []))
     if document.get("organizations"):
         enable_organizations(admin, token)
-        for client_id in document["browser_client_ids"]:
+        # a suite member's one client is both the API and the browser client (browser_client_ids is empty)
+        for client_id in document["browser_client_ids"] or [document["api_client_id"]]:
             ensure_default_scope(admin, token, internal[client_id], "organization")
     print("Done.")
     return 0
