@@ -16,6 +16,8 @@ from app.operations.geo import schemas as _s
 from app.operations.geo import service as _svc
 from app.operations.points import query_point
 
+NO_NUL = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
+
 router = _fa.APIRouter(prefix="/geo", tags=["geo"])
 
 Reader = _t.Annotated[AuthUser, role_dependency(_config.READ_ROLES)]
@@ -27,8 +29,8 @@ Offset = _t.Annotated[int, Query(ge=0)]
 def _point(
     lat_micro: _t.Annotated[int | None, Query()] = None,
     lng_micro: _t.Annotated[int | None, Query()] = None,
-    lat: _t.Annotated[str | None, Query(max_length=32)] = None,
-    lng: _t.Annotated[str | None, Query(max_length=32)] = None,
+    lat: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
+    lng: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
 ) -> tuple[int, int]:
     return query_point(lat_micro, lng_micro, lat, lng)
 
@@ -43,7 +45,7 @@ async def create_place(body: _s.PlaceCreate, session: SessionDep, user: Writer) 
 
 @router.get("/places", response_model=Page[_s.PlaceOut])
 async def list_places(
-    session: SessionDep, user: Reader, limit: Limit = 50, offset: Offset = 0, kind: _t.Annotated[str | None, Query(max_length=32)] = None
+    session: SessionDep, user: Reader, limit: Limit = 50, offset: Offset = 0, kind: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None
 ) -> Page[_s.PlaceOut]:
     items, total = await _svc.list_places(session, user, limit, offset, kind)
     return Page[_s.PlaceOut](items=items, total=total, limit=limit, offset=offset)
@@ -52,7 +54,7 @@ async def list_places(
 @router.get("/places/within", response_model=_s.PlaceHits)
 async def places_within(
     session: SessionDep, user: Reader, point: QueryPoint, radius_m: _t.Annotated[int, Query()],
-    limit: Limit = 50, kind: _t.Annotated[str | None, Query(max_length=32)] = None,
+    limit: Limit = 50, kind: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
 ) -> _s.PlaceHits:
     return await _svc.places_within(session, user, point, radius_m, limit, kind)
 
@@ -60,7 +62,7 @@ async def places_within(
 @router.get("/places/nearest", response_model=_s.PlaceHits)
 async def places_nearest(
     session: SessionDep, user: Reader, point: QueryPoint,
-    n: _t.Annotated[int, Query(ge=1, le=50)] = 5, kind: _t.Annotated[str | None, Query(max_length=32)] = None,
+    n: _t.Annotated[int, Query(ge=1, le=50)] = 5, kind: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
 ) -> _s.PlaceHits:
     return await _svc.places_nearest(session, user, point, n, kind)
 
@@ -116,7 +118,7 @@ async def evaluate(body: _s.EvaluateIn, session: SessionDep, user: Writer) -> _s
 @router.get("/events", response_model=Page[_s.FenceEventOut])
 async def list_events(
     session: SessionDep, user: Reader, limit: Limit = 50, offset: Offset = 0,
-    subject_id: _t.Annotated[str | None, Query(max_length=128)] = None, geofence_id: _uuid.UUID | None = None,
+    subject_id: _t.Annotated[str | None, Query(max_length=128, pattern=NO_NUL)] = None, geofence_id: _uuid.UUID | None = None,
 ) -> Page[_s.FenceEventOut]:
     items, total = await _svc.list_events(session, user, limit, offset, subject_id, geofence_id)
     return Page[_s.FenceEventOut](items=items, total=total, limit=limit, offset=offset)

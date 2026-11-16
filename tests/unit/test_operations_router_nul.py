@@ -49,6 +49,7 @@ def _client(files: dict[str, str], block: str) -> tuple[TestClient, MagicMock]:
         "app.core.pagination": _mod("app.core.pagination", Page=_Page),
         "app.db": _mod("app.db", SessionDep=Annotated[Any, fastapi.Depends(lambda: None)]),
         "app.operations": _mod("app.operations"),
+        "app.operations.points": _mod("app.operations.points", query_point=lambda *a: (1, 2)),
         "app.operations.common": _mod("app.operations.common", role_dependency=lambda roles: fastapi.Depends(lambda: None)),
     }
     cfg = _mod(f"{pkg}.config", READ_ROLES=(), WRITE_ROLES=(), ASSIGN_ROLES=(), BOX_CAP=100)
@@ -111,3 +112,17 @@ def test_prediction_nul_query_is_422(files: dict[str, str]) -> None:
     for p in ({"kind": "k\x00"}, {"model_id": "m\x00"}):
         assert c.get("/prediction/stats", params=p).status_code == 422
     assert not svc.list_records.called and not svc.stats.called
+
+
+def test_geo_nul_query_is_422(files: dict[str, str]) -> None:
+    """B1-016 (F-0913): geo text query params refuse NUL too."""
+    if "app/operations/geo/router.py" not in files:
+        pytest.skip("fixture has no geo block")
+    c, svc = _client(files, "geo")
+    pt = {"lat": "1.5", "lng": "2.5"}
+    assert c.get("/geo/places", params={"kind": "k\x00"}).status_code == 422
+    assert c.get("/geo/places/nearby", params={**pt, "radius_m": 10, "kind": "k\x00"}).status_code == 422
+    assert c.get("/geo/places/nearest", params={**pt, "kind": "k\x00"}).status_code == 422
+    assert c.get("/geo/events", params={"subject_id": "a\x00"}).status_code == 422
+    assert not svc.list_places.called and not svc.places_within.called
+    assert not svc.places_nearest.called and not svc.list_events.called
