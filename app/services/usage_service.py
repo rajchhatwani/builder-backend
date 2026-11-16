@@ -21,9 +21,10 @@ from typing import Any
 
 from sqlalchemy import func, select, text, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import metering
+from app.db import side_engine, side_slot
 from app.exceptions import AppError
 from app.models.usage import UsageEvent, UsageLimit
 
@@ -205,11 +206,10 @@ class UsageService:
         self, org_id: uuid.UUID, project_id: uuid.UUID | None, metric: str, amount: int
     ) -> None:
         """Own connection + commit: the refusal must outlive the caller's rolled-back request."""
-        bind = self.session.get_bind()
-        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(bind)  # type: ignore[arg-type]
+        engine = side_engine(self.session.get_bind())  # not the caller's pool (F-0276)
         now = self._clock()
         window = now.replace(minute=0, second=0, microsecond=0)
-        async with AsyncSession(engine, expire_on_commit=False) as s:
+        async with side_slot(), AsyncSession(engine, expire_on_commit=False) as s:
             # serialise refusals of one (org, metric) so the cap holds under parallel callers
             await s.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"),

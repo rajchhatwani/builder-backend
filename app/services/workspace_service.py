@@ -20,8 +20,9 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 
+from app.db import side_engine, side_slot
 from app.config import Settings, get_settings
 from app.core.generator import InvalidSpecError, generate
 from app.core.generator.zones import zone_for
@@ -557,10 +558,9 @@ class WorkspaceService:
     @asynccontextmanager
     async def _project_lock(self, project_id: uuid.UUID) -> AsyncIterator[None]:
         """Cross-process lock on the project (pg advisory lock on its own connection)."""
-        bind = self.session.bind
-        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(self.session.get_bind())  # type: ignore[arg-type]
+        engine = side_engine(self.session.get_bind())  # not the caller's pool (F-0276)
         key = project_id.int % (2**62)
-        async with engine.connect() as conn:
+        async with side_slot(), engine.connect() as conn:
             await conn.execute(text("SELECT pg_advisory_lock(:k)"), {"k": key})
             try:
                 yield
