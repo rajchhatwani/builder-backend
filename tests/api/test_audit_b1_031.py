@@ -259,7 +259,7 @@ async def test_subscription_event_older_than_checkout_is_not_dropped(
     client: AsyncClient,
     anon_client: AsyncClient,
     session_factory: Factory,
-    webhook_configured: None,
+    webhook_configured: None,  # noqa: F811
 ) -> None:
     org_id = await _team_org(client)
     t0 = 1_800_000_000
