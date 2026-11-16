@@ -13,9 +13,11 @@ STATE="$HOME/.local/share/bbmanual"; DATA="$STATE/data"; LOGS="$STATE/logs"
 HELP="python3 $ROOT/scripts/manual_helper.py"
 COMPOSE=(docker compose -f "$ROOT/docker-compose.manual.yml")
 ENV_FILE="${ENV_FILE:-$HOME/final_test.env}"; export ENV_FILE
-PORTS="8000 8081 8799 5432 6379 9000 1025 8025"
+PORTS="8000 8081 8799 5432 6379 9000 1025 8025 8790"
 
-dc() { $HELP run -- "${COMPOSE[@]}" "$@"; }
+# F-0409: the optional runner (docker.sock) profile starts only when BB_RUNNER_TOKEN is exported; down/reset always include it.
+dc() { if [ -n "${BB_RUNNER_TOKEN:-}" ]; then $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; else $HELP run -- "${COMPOSE[@]}" "$@"; fi; }
+dc_all() { $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; }
 psql_() { docker exec -i bbmanual-postgres psql -U builder -d builder -Atq "$@"; }
 prep() { [ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found"; exit 1; }
   umask 077; mkdir -p "$STATE" "$LOGS"; chmod 700 "$STATE"; umask 022; mkdir -p "$DATA/ws" "$DATA/previews"; }
@@ -104,7 +106,7 @@ cmd_status() {
 
 cmd_down() {
   stop_bg "$STATE/stripe.pid"; stop_bg "$STATE/ngrok.pid"; rm -f "${STATE:?}/stripe_whsec"
-  dc down --remove-orphans >/dev/null 2>&1 || true
+  dc_all down --remove-orphans >/dev/null 2>&1 || true
   echo "stopped (volumes and data kept; Stripe session secret deleted)."
 }
 
@@ -121,7 +123,7 @@ cmd_reset() {
     for c in $(docker ps -aq --filter network="$n"); do docker rm -f -v "$c" >/dev/null && echo "  sandbox container $c"; done
     if docker network rm "$n" >/dev/null 2>&1; then echo "  sandbox network $n"; fi
   done
-  dc down -v --remove-orphans 2>&1 | sed 's/^/  /' || true
+  dc_all down -v --remove-orphans 2>&1 | sed 's/^/  /' || true
   echo "  volumes bbmanual_pgdata, bbmanual_miniodata (database, object store)"
   if [ -d "$DATA" ]; then
     docker run --rm -v "$DATA:/d" alpine sh -c 'rm -rf /d/* /d/.[!.]* 2>/dev/null; true' >/dev/null 2>&1 || true
