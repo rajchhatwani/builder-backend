@@ -50,11 +50,12 @@ def check_deployment(spec: Spec, add: Add) -> None:
 
 
 def _check_slug(spec: Spec, block: SpecDeployment, add: Add) -> None:
-    """Resource names are `<slug>-<env>` cut to a cloud limit (32 for the AWS load balancer, 30 for GCP
-    service accounts such as `<slug>-deploy-<env>`): a longer slug makes environments collide."""
+    """Resource names are `<slug>-<env>` cut to a cloud limit (32 for the AWS load balancer,
+    30 for GCP service accounts such as `<slug>-deploy-<env>`): longer slugs collide."""
     longest_env = max((len(e.name) for e in block.environments), default=0)
     slug = spec.project.slug
-    limit = {"aws": 32 - 1 - longest_env, "gcp": 30 - len("-deploy-") - longest_env}.get(block.cloud)
+    limits = {"aws": 32 - 1 - longest_env, "gcp": 30 - len("-deploy-") - longest_env}
+    limit = limits.get(block.cloud)
     if limit is not None and len(slug) > limit:
         add(
             "project.slug",

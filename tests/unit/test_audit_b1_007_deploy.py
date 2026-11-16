@@ -1,4 +1,4 @@
-"""Audit B1-007: compose APP_ENV once, deploy IAM/names/ignore files, unsupported deploy features."""
+"""Audit B1-007: compose APP_ENV once, deploy IAM/names/ignore files, unsupported features."""
 
 import copy
 import json
@@ -38,7 +38,11 @@ def _no_dups(loader: _DupLoader, node: yaml.MappingNode, deep: bool = False) -> 
 
 
 _orig = _DupLoader.construct_mapping
-_DupLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, lambda l, n: _no_dups(l, n, True))  # type: ignore[arg-type]
+_MAP_TAG = yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG
+_DupLoader.add_constructor(
+    _MAP_TAG,
+    lambda ldr, n: _no_dups(ldr, n, True),  # type: ignore[arg-type]
+)
 
 
 def test_compose_has_no_duplicate_keys_for_keycloak_with_providers() -> None:
