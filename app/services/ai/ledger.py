@@ -205,7 +205,7 @@ class AiLedgerService:
         case is recorded (zero tokens). usage None otherwise: the call never reached the model.
 
         step_key (B-009): a retried step carries the same key; a ledger row with that key is written
-        once (the retry's row is skipped, under the org row lock). after_settle runs inside this same
+        once under the org row lock; a second real call for the same key is still billed (unkeyed row). after_settle runs inside this same
         transaction with its session, so the caller's own write (the model step) commits or rolls
         back together with the ledger row.
         """
@@ -227,22 +227,23 @@ class AiLedgerService:
                     select(AiCostLedger.id).where(AiCostLedger.step_key == step_key).limit(1)
                 )
             ).first() is not None
-            if not dup:
-                s.add(
-                    AiCostLedger(
-                        step_key=step_key,
-                        organization_id=res.org_id,
-                        project_id=project_id,
-                        run_id=run_id,
-                        model=model,
-                        task_class=task_class,
-                        input_tokens=u.input_tokens,
-                        output_tokens=u.output_tokens,
-                        cache_read_tokens=u.cache_read_tokens,
-                        cache_write_tokens=u.cache_write_tokens,
-                        cost_micro_usd=cost,
-                    )
+            # a dup key means a second REAL call was made for the same step (lease expiry): the
+            # provider billed it, so the org ledger records it too, unkeyed (the key stays unique)
+            s.add(
+                AiCostLedger(
+                    step_key=None if dup else step_key,
+                    organization_id=res.org_id,
+                    project_id=project_id,
+                    run_id=run_id,
+                    model=model,
+                    task_class=task_class,
+                    input_tokens=u.input_tokens,
+                    output_tokens=u.output_tokens,
+                    cache_read_tokens=u.cache_read_tokens,
+                    cache_write_tokens=u.cache_write_tokens,
+                    cost_micro_usd=cost,
                 )
+            )
             if after_settle is not None:
                 await s.flush()
                 await after_settle(s)

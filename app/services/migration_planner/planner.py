@@ -358,9 +358,9 @@ def _diff_relations(b: _Builder, old: Snapshot, new: Snapshot, replaced: set[str
 
 
 def _rel_remove(b: _Builder, old: Snapshot, r: Rel, new: Snapshot) -> None:
-    if r.from_entity not in new.tables or r.to_entity not in new.tables:
-        return  # a dropped table takes the relation with it
-    if r.is_join:
+    if not r.is_join and r.to_entity not in new.tables:
+        return  # the dropped child table takes its FK column with it
+    if r.is_join:  # the join table belongs to neither entity: always dropped explicitly
         b.add("destructive", StepKind.drop_table, r.from_entity, r.join_table, r.from_name, Safety.destructive,
               f"many-to-many {r.from_entity}.{r.from_name} removed: the link rows are lost",
               action="export the links first, then confirm the drop", sql=f"DROP TABLE {_q(r.join_table)}")

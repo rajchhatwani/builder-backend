@@ -90,6 +90,8 @@ async def add_entity(s: AsyncSession, pid: uuid.UUID, p: r.AddEntity) -> Entity:
     )
     for f in e.fields:
         await FieldService(s).create(entity.id, FieldCreate(**f.model_dump(), position=None))
+    if e.custom_fields is not None:
+        _store_cf(entity, e.custom_fields)
     return entity
 
 

@@ -58,7 +58,7 @@ async def _rows(f: Factory, org: uuid.UUID) -> int:
         return int((await s.execute(select(func.count()).select_from(AiCostLedger).where(AiCostLedger.organization_id == org))).scalar_one())
 
 
-async def test_same_step_key_bills_once_and_after_settle_runs_each_time(
+async def test_same_step_key_second_real_call_is_still_billed_unkeyed(
     client: AsyncClient, session_factory: Factory
 ) -> None:
     org = await _org(client)
@@ -75,13 +75,17 @@ async def test_same_step_key_bills_once_and_after_settle_runs_each_time(
             await ModelGateway(s, _cfg(), lambda k: P()).complete(
                 org, TaskClass.route, _req(), step_key="run1:3", after_settle=hook
             )
-    assert await _rows(session_factory, org) == 1
-    assert seen == [1, 1]
+    # B1-024 F-0191: two real provider calls were made, so both are billed; only one row owns the key
+    assert await _rows(session_factory, org) == 2
+    assert seen == [1, 2]
+    async with session_factory() as s:
+        keyed = (await s.execute(select(func.count()).select_from(AiCostLedger).where(AiCostLedger.step_key == "run1:3"))).scalar_one()
+    assert keyed == 1
     async with session_factory() as s:  # a different step bills normally; no key bills normally
         gw = ModelGateway(s, _cfg(), lambda k: P())
         await gw.complete(org, TaskClass.route, _req(), step_key="run1:4")
         await gw.complete(org, TaskClass.route, _req())
-    assert await _rows(session_factory, org) == 3
+    assert await _rows(session_factory, org) == 4
 
 
 async def test_failing_after_settle_rolls_the_ledger_row_back(

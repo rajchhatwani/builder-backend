@@ -162,16 +162,16 @@ class RequirementsService:
 
         if project_id in _IN_FLIGHT:
             raise AppError("intake_in_progress", "an intake is already running for this project", 409)
-        project_wait = await self._limited(f"intake:project:{project_id}", str(project_id), _limiter)
-        if project_wait is not None:
-            raise AppError(
-                "intake_rate_limited",
-                "too many intakes for this project; try again later",
-                429,
-                headers={"Retry-After": str(project_wait)},
-            )
-        _IN_FLIGHT.add(project_id)
+        _IN_FLIGHT.add(project_id)  # claimed before any await: a concurrent intake must see it
         try:
+            project_wait = await self._limited(f"intake:project:{project_id}", str(project_id), _limiter)
+            if project_wait is not None:
+                raise AppError(
+                    "intake_rate_limited",
+                    "too many intakes for this project; try again later",
+                    429,
+                    headers={"Retry-After": str(project_wait)},
+                )
             await self._run_intake(project, user_id, docs, deps)
         finally:
             _IN_FLIGHT.discard(project_id)

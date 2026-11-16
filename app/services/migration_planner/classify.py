@@ -45,9 +45,22 @@ def pg_type(c: Col) -> str:
     return base
 
 
+# longest text a value of that type renders to; None = unbounded / not provable
+_TEXT_LEN = {"integer": 11, "bigint": 20, "uuid": 36, "boolean": 5, "date": 10}
+
+
+def _fits_length(old: Col, limit: int) -> bool:
+    if old.type == "enum":
+        return bool(old.enum_values) and max(len(v) for v in old.enum_values) <= limit
+    n = _TEXT_LEN.get(old.type)
+    return n is not None and n <= limit
+
+
 def type_change(old: Col, new: Col) -> tuple[str, Safety, str]:
     """-> (kind, safety, reason). Only called when old.type != new.type."""
     pair = (old.type, new.type)
+    if new.type == "string" and new.max_length and old.type in _TO_TEXT_OK and not _fits_length(old, new.max_length):
+        return "shorten_length", Safety.destructive, f"{old.type} -> string({new.max_length}) can truncate values"
     if pair in _LOSSLESS or (new.type in {"string", "text"} and old.type in _TO_TEXT_OK):
         return "widen_type", Safety.safe, f"{old.type} -> {new.type} keeps every value"
     if old.type in {"string", "text"} and new.type in _CASTABLE_FROM_TEXT:

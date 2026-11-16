@@ -143,8 +143,12 @@ def docx_text(name: str, data: bytes, max_chars: int, deadline: float) -> str:
         lines.append(line)
 
     def walk(parent: ET.Element) -> None:
-        for el in parent:
-            if el.tag == f"{_W}p":
+        stack = [iter(parent)]  # explicit stack: nested content controls cannot exhaust the call stack
+        while stack:
+            el = next(stack[-1], None)
+            if el is None:
+                stack.pop()
+            elif el.tag == f"{_W}p":
                 t = _para_text(el)
                 if t:
                     add(f"# {t[:120]}" if _is_heading(el) else t)
@@ -155,7 +159,7 @@ def docx_text(name: str, data: bytes, max_chars: int, deadline: float) -> str:
                     if any(cells):
                         add("\t".join(cells[:MAX_COLS]))
             elif el.tag in (f"{_W}sdt", f"{_W}sdtContent"):
-                walk(el)
+                stack.append(iter(el))
 
     walk(body)
     return "\n".join(lines)
@@ -217,7 +221,7 @@ def xlsx_text(name: str, data: bytes, max_chars: int, deadline: float) -> str:
                     v = c.find(f"{_S}v")
                     val = (v.text or "") if v is not None else ""
                     if kind == "s":
-                        val = shared[int(val)] if val.isdigit() and int(val) < len(shared) else ""
+                        val = shared[int(val)] if val.isascii() and val.isdigit() and int(val) < len(shared) else ""
                     elif kind == "b":
                         val = "TRUE" if val == "1" else "FALSE"
                 val = _clean(val).replace("\t", " ").replace("\n", " ")[:MAX_CELL_CHARS]
@@ -225,7 +229,7 @@ def xlsx_text(name: str, data: bytes, max_chars: int, deadline: float) -> str:
                     cells[idx] = val
             if cells:
                 rows.append("\t".join(cells.get(i, "") for i in range(max(cells) + 1)))
-            total += sum(len(r) + 1 for r in rows[-1:])
+                total += len(rows[-1]) + 1
             if total > max_chars or time.monotonic() > deadline:
                 raise AppError("file_too_large", f"{name} has too much text to read", 413)
         if len(rows) > 1:  # a sheet with no cells says nothing

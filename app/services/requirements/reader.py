@@ -276,7 +276,12 @@ def read_document(filename: str, data: bytes) -> ReadDoc:
         from app.services.requirements import office
 
         extract = office.docx_text if ext == "docx" else office.xlsx_text
-        text = extract(name, data, MAX_TOTAL_CHARS, time.monotonic() + EXTRACT_SECONDS)
+        try:
+            text = extract(name, data, MAX_TOTAL_CHARS, time.monotonic() + EXTRACT_SECONDS)
+        except AppError:
+            raise
+        except Exception:  # hostile package: never a 500
+            raise AppError("file_invalid", f"{name} could not be read as a {ext.upper()} file", 422) from None
         if not text.strip():
             raise AppError("file_empty", f"{name} has no readable text", 422)
         doc = ReadDoc(name=name, kind=ext, pages=1, chars=len(text))

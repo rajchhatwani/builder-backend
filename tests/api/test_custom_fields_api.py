@@ -143,3 +143,16 @@ async def test_l7_define_undo_restores_exact_spec_hash_and_rename_is_refused(cli
     r = await client.patch(url(pid, "score"), json={"name": "points"})
     assert r.status_code == 409 and r.json()["code"] == "custom_field_rename_unsupported"
     assert "score" in [d["name"] for d in (await client.get(url(pid))).json()["items"]]
+
+
+async def test_b1_024_undo_remove_entity_restores_custom_fields(client: AsyncClient) -> None:
+    pid = await project(client)
+    before = (await client.get(url(pid))).json()
+    assert before["enabled"] is True and before["items"]
+    r = await client.post(f"/projects/{pid}/spec/ops", json={"op_type": "remove_entity", "payload": {"name": "Contact"}})
+    assert r.status_code in (200, 201), r.text
+    u = await client.post(f"/projects/{pid}/spec/undo")
+    assert u.status_code == 200, u.text
+    after = (await client.get(url(pid))).json()
+    assert after["enabled"] is True
+    assert [d["name"] for d in after["items"]] == [d["name"] for d in before["items"]]

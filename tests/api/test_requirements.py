@@ -295,3 +295,28 @@ async def test_per_user_intake_limit_with_retry_after(
     r = await intake(client, pids[2], prompt="Invoice flow")
     assert r.status_code == 429 and r.json()["code"] == "intake_user_rate_limited"
     assert int(r.headers["retry-after"]) >= 1
+
+
+async def test_b1_024_in_flight_claimed_before_limiter_await(
+    client: AsyncClient, provider: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import uuid
+
+    from app.services.requirements import service as svc
+
+    pid = await make_project(client)
+    seen: list[bool] = []
+    orig = svc.RequirementsService._limited
+
+    async def spy(self: Any, shared_key: str, local_key: str, local: Any) -> Any:
+        if shared_key.startswith("intake:project:"):
+            seen.append(uuid.UUID(pid) in svc._IN_FLIGHT)
+        return await orig(self, shared_key, local_key, local)
+
+    monkeypatch.setattr(svc.RequirementsService, "_limited", spy)
+    assert (await intake(client, pid, prompt="Invoice flow")).status_code == 200
+    assert seen == [True]  # claimed before the await, so a concurrent intake gets 409
+    assert uuid.UUID(pid) not in svc._IN_FLIGHT
+    monkeypatch.setattr(svc._limiter, "attempts", 0)
+    assert (await intake(client, pid, prompt="Invoice flow 2")).status_code == 429
+    assert uuid.UUID(pid) not in svc._IN_FLIGHT  # released on limiter refusal

@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
+from app.core import naming
 from app.core.enums import FieldType
 from app.core.custom_fields import COLUMN as CUSTOM_COLUMN
 from app.core.custom_fields import enabled_defs, is_enabled
@@ -47,6 +48,7 @@ class Rel:
     to_name: str
     on_delete: str
     required: bool
+    from_table: str = ""
 
     @property
     def key(self) -> tuple[str, str, str, str]:
@@ -62,7 +64,7 @@ class Rel:
 
     @property
     def join_table(self) -> str:
-        return f"{self.from_entity}_{self.from_name}".lower()
+        return naming.join_table_name(self.from_table or self.from_entity.lower(), self.from_name)
 
 
 @dataclass
@@ -129,7 +131,7 @@ def snapshot(spec: Spec, label: str) -> Snapshot:
         for end in (r.from_entity, r.to_entity):
             if end not in snap.tables:
                 raise MigrationPlanError(f"{label} spec: relation refers to unknown entity {end!r}")
-        rel = Rel(r.kind, r.from_entity, r.to_entity, r.from_name, r.to_name, r.on_delete, r.required)
+        rel = Rel(r.kind, r.from_entity, r.to_entity, r.from_name, r.to_name, r.on_delete, r.required, snap.tables[r.from_entity].table)
         if rel.key in snap.rels:
             raise MigrationPlanError(f"{label} spec: duplicate relation {rel.key}")
         snap.rels[rel.key] = rel
@@ -165,7 +167,7 @@ def apply_renames(old: Snapshot, new: Snapshot, renames: list[Rename]) -> Aligne
         out.tables[nn] = Table(nn, t.table, list(t.cols), t.soft_delete, dict(t.custom_defs))
     for rel in old.rels.values():
         fe, te = ent_map.get(rel.from_entity, rel.from_entity), ent_map.get(rel.to_entity, rel.to_entity)
-        nr = Rel(rel.kind, fe, te, rel.from_name, rel.to_name, rel.on_delete, rel.required)
+        nr = Rel(rel.kind, fe, te, rel.from_name, rel.to_name, rel.on_delete, rel.required, rel.from_table)
         out.rels[nr.key] = nr
     col_renames: dict[tuple[str, str], str] = {}
     for r in renames:
