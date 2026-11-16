@@ -32,4 +32,17 @@ describe('requirements logic', () => {
     expect(r.ok).toEqual([0])
     expect(r.errors).toHaveLength(3)
   })
+  it('accepts docx and xlsx like the server', () => {
+    const r = checkFiles([{ name: 'a.docx', size: 10 }, { name: 'b.XLSX', size: 10 }])
+    expect(r.ok).toEqual([0, 1])
+    expect(r.errors).toHaveLength(0)
+  })
+  it('mirrors server limits: 5 files, 5 MB each, 12 MB total, counting earlier picks', () => {
+    const f = (n: string, size = 10) => ({ name: n, size })
+    expect(checkFiles([1, 2, 3, 4, 5, 6].map((n) => f(`${n}.txt`))).ok).toHaveLength(5)
+    expect(checkFiles([f('a.pdf', 6 * 1024 * 1024)]).errors).toHaveLength(1)
+    const mb = 1024 * 1024
+    expect(checkFiles([f('a.pdf', 5 * mb), f('b.pdf', 5 * mb), f('c.pdf', 3 * mb)]).ok).toEqual([0, 1])
+    expect(checkFiles([f('x.txt')], [f('1.txt'), f('2.txt'), f('3.txt'), f('4.txt'), f('5.txt')]).ok).toEqual([])
+  })
 })

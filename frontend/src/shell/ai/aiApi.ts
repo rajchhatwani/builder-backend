@@ -58,8 +58,8 @@ export const aiApi = {
   pauseRun: (pid: string, rid: string) => call<Run>(`${P(pid)}/agent/runs/${rid}/pause`, json('POST')),
   runGates: (pid: string, rid: string) => call<GateRunResult>(`${P(pid)}/agent/runs/${rid}/gates`, json('POST')),
   resumeRun: (pid: string, rid: string) => call<Run>(`${P(pid)}/agent/runs/${rid}/resume`, json('POST')),
-  listApprovals: (pid: string, q: { state?: string; run_id?: string } = {}) => {
-    const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v) as [string, string][]).toString()
+  listApprovals: (pid: string, q: { state?: string; run_id?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams(Object.entries(q).filter(([, v]) => v).map(([k, v]) => [k, String(v)])).toString()
     return call<Approval[]>(`${P(pid)}/agent/approvals${qs ? `?${qs}` : ''}`)
   },
   getApproval: (pid: string, aid: string) => call<Approval>(`${P(pid)}/agent/approvals/${encodeURIComponent(aid)}`),

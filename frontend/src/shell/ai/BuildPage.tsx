@@ -143,12 +143,14 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
   useEffect(() => { void refresh() }, [refresh])
 
   const runState = run?.state
+  const runCost = run?.cost_micro_usd
+  const runSteps = run?.steps_used
   useEffect(() => {
     if (!orgSlug) return
     let off = false
     aiApi.platformBudget(orgSlug).then((b) => { if (!off) { setPlatform(b); setPlatformError(false) } }, () => { if (!off) setPlatformError(true) })
     return () => { off = true }
-  }, [orgSlug, runState])
+  }, [orgSlug, runState, runCost, runSteps]) // spend moves while the state stays 'running'
 
   const workspaceId = run?.workspace_id ?? null
   useEffect(() => {
@@ -156,7 +158,7 @@ export function BuildPage({ projectId, orgSlug }: { projectId: string; orgSlug?:
     let off = false
     aiApi.listPreviews(projectId).then((l) => { if (!off) setStagePreview(l.find((p) => p.workspace_id === workspaceId && ['starting', 'running', 'sleeping'].includes(p.state)) ?? null) }, () => undefined)
     return () => { off = true }
-  }, [tab, workspaceId, projectId])
+  }, [tab, workspaceId, projectId, runSteps]) // re-list as the run advances: the agent may start a preview later
   useEffect(() => {
     // S3-001: a resumed `stopped` run is driven inside the resume request; poll while that request is open
     const ms = pollInterval(runState ? { state: runState } : null, false) ?? (busy && runState ? POLL_MS : null)

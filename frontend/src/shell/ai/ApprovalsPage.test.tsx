@@ -36,10 +36,21 @@ const type = async (el: Element | null, v: string) => {
 const q = (id: string) => host.querySelector(`[data-testid=${id}]`)
 
 describe('Approvals inbox', () => {
+  it('asks for the server maximum and says so when the list is capped', async () => {
+    m.listApprovals.mockResolvedValue(Array.from({ length: 200 }, (_, i) => mk({ id: `id-${i}` })))
+    await mount()
+    expect(m.listApprovals).toHaveBeenCalledWith('p', { state: 'pending', limit: 200 })
+    expect(q('approvals-capped')).not.toBeNull()
+  })
+  it('shows no capped notice for a short list', async () => {
+    m.listApprovals.mockResolvedValue([mk()])
+    await mount()
+    expect(q('approvals-capped')).toBeNull()
+  })
   it('lists pending approvals with kind, risk, expiry and owner badge, linking Gate A to the plan page', async () => {
     m.listApprovals.mockResolvedValue([mk({ kind: 'D', requires_owner: true }), mk({ id: '33333333-aaaa-bbbb', kind: 'A', risk_flags: [] })])
     await mount()
-    expect(m.listApprovals).toHaveBeenCalledWith('p', { state: 'pending' })
+    expect(m.listApprovals).toHaveBeenCalledWith('p', { state: 'pending', limit: 200 })
     const rows = host.querySelectorAll('[data-testid=approval-row]')
     expect(rows).toHaveLength(2)
     expect(rows[0].textContent).toContain('Risky change')

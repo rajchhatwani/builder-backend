@@ -93,7 +93,7 @@ export function IntakePage({ projectId }: { projectId: string }) {
 
   const pick = (list: FileList | null) => {
     const all = [...(list ?? [])]
-    const { ok, errors } = checkFiles(all)
+    const { ok, errors } = checkFiles(all, files)
     setFileErrors(errors)
     setFiles((cur) => [...cur, ...ok.map((i) => all[i])])
     if (fileRef.current) fileRef.current.value = ''

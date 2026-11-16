@@ -61,6 +61,27 @@ describe('Build view', () => {
     await act(async () => { await new Promise((r) => setTimeout(r, 20)) })
     expect(q('stage-mock')?.textContent).toBe('w1')
   })
+  it('F-0614: the platform budget is re-read while a run stays running and its spend moves', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount(run({ state: 'running', phase: 'build', cost_micro_usd: 100 }))
+      m.platformBudget.mockClear()
+      m.getRun.mockResolvedValue(run({ state: 'running', phase: 'build', cost_micro_usd: 900, steps_used: 2 }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(3100) })
+      expect(m.platformBudget).toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
+  })
+  it('F-0615: the stage preview list is re-read as the run advances', async () => {
+    vi.useFakeTimers()
+    try {
+      await mount(run({ state: 'running', phase: 'build' }))
+      await act(async () => { (host.querySelector('#tab-stage') as HTMLElement).click() })
+      m.listPreviews.mockClear()
+      m.getRun.mockResolvedValue(run({ state: 'running', phase: 'build', steps_used: 2 }))
+      await act(async () => { await vi.advanceTimersByTimeAsync(3100) })
+      expect(m.listPreviews).toHaveBeenCalled()
+    } finally { vi.useRealTimers() }
+  })
   it('S3-001: after Resume on a stopped run the page keeps polling while the resume request is open', async () => {
     vi.useFakeTimers()
     try {

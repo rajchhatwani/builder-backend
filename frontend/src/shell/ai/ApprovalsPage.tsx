@@ -33,11 +33,14 @@ export function ApprovalsPage({ projectId }: { projectId: string }) {
   return approvalId ? <ReviewScreen key={approvalId} projectId={projectId} approvalId={approvalId} /> : <Inbox projectId={projectId} />
 }
 
+const LIST_LIMIT = 200 // server maximum
+
 function Inbox({ projectId }: { projectId: string }) {
   const [tab, setTab] = useState<Tab>('pending')
   const [items, setItems] = useState<Approval[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [capped, setCapped] = useState(false)
   const myRole = useMyRole(projectId)
 
   const seq = useRef(0)
@@ -53,8 +56,10 @@ function Inbox({ projectId }: { projectId: string }) {
     setLoading(true)
     try {
       // the server's "decided" is every closed state; list all and split here so expired ones land in the right tab
-      const all = approvalList(await aiApi.listApprovals(projectId, tab === 'pending' ? { state: 'pending' } : {}))
+      const raw = await aiApi.listApprovals(projectId, tab === 'pending' ? { state: 'pending', limit: LIST_LIMIT } : { limit: LIST_LIMIT })
+      const all = approvalList(raw)
       if (mine !== seq.current) return
+      setCapped(Array.isArray(raw) && raw.length >= LIST_LIMIT)
       setItems(all.filter((a) => (tab === 'pending' ? effectiveState(a) === 'pending' : effectiveState(a) !== 'pending')))
       setError('')
     } catch (e) { if (mine === seq.current) setError(errMsg(e)) } finally { if (mine === seq.current) setLoading(false) }
@@ -76,6 +81,7 @@ function Inbox({ projectId }: { projectId: string }) {
       <div role="tabpanel" id="approvals-panel" aria-labelledby={`apptab-${tab}`}>
         {loading && <p className="empty-state">Loading…</p>}
         {!loading && items.length === 0 && <p className="empty-state" data-testid="approvals-empty">{tab === 'pending' ? 'Nothing is waiting for you.' : 'No decisions yet.'}</p>}
+        {!loading && capped && <p className="muted" data-testid="approvals-capped">Showing the newest {LIST_LIMIT} approvals; older ones are not listed.</p>}
         {!loading && items.length > 0 && (
           <ul className="ai-list" data-testid="approvals-list">
             {items.map((a) => {

@@ -51,20 +51,28 @@ export function startCheck(map: RequirementsMap | null): StartCheck {
   return { canStart: true, needsConfirm: openCount > 0, openCount, reason: '' }
 }
 
-export const ALLOWED_EXT = ['pdf', 'txt', 'md']
-export const MAX_FILE_BYTES = 20 * 1024 * 1024
-export const MAX_FILES = 10
-/** Which of the chosen files can be uploaded, and why not for the rest. */
-export function checkFiles(files: Array<Pick<File, 'name' | 'size'>>): { ok: number[]; errors: string[] } {
+export const ALLOWED_EXT = ['pdf', 'txt', 'md', 'docx', 'xlsx']
+// Mirror app/services/requirements/reader.py (MAX_FILES, MAX_FILE_BYTES, MAX_TOTAL_BYTES).
+export const MAX_FILE_BYTES = 5 * 1024 * 1024
+export const MAX_TOTAL_BYTES = 12 * 1024 * 1024
+export const MAX_FILES = 5
+/** Which of the chosen files can be uploaded, and why not for the rest. `already` = files picked earlier. */
+export function checkFiles(
+  files: Array<Pick<File, 'name' | 'size'>>,
+  already: Array<Pick<File, 'size'>> = [],
+): { ok: number[]; errors: string[] } {
   const ok: number[] = []
   const errors: string[] = []
+  let count = already.length
+  let total = already.reduce((n, f) => n + f.size, 0)
   files.forEach((f, i) => {
     const ext = f.name.split('.').pop()?.toLowerCase() ?? ''
-    if (!ALLOWED_EXT.includes(ext)) errors.push(`${f.name}: only PDF, text and Markdown files are accepted.`)
-    else if (f.size > MAX_FILE_BYTES) errors.push(`${f.name}: larger than 20 MB.`)
+    if (!ALLOWED_EXT.includes(ext)) errors.push(`${f.name}: only PDF, Word, Excel, text and Markdown files are accepted.`)
+    else if (f.size > MAX_FILE_BYTES) errors.push(`${f.name}: larger than 5 MB.`)
     else if (f.size === 0) errors.push(`${f.name}: the file is empty.`)
-    else if (ok.length >= MAX_FILES) errors.push(`${f.name}: at most ${MAX_FILES} files per upload.`)
-    else ok.push(i)
+    else if (count >= MAX_FILES) errors.push(`${f.name}: at most ${MAX_FILES} files per upload.`)
+    else if (total + f.size > MAX_TOTAL_BYTES) errors.push(`${f.name}: files together would be larger than 12 MB.`)
+    else { ok.push(i); count++; total += f.size }
   })
   return { ok, errors }
 }

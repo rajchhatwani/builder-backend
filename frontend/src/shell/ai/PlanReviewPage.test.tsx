@@ -28,6 +28,34 @@ const q = (id: string) => host.querySelector(`[data-testid=${id}]`)
 const click = async (el: Element | null) => { await act(async () => { (el as HTMLElement).click() }) }
 
 describe('Plan review', () => {
+  it('F-0616: deny needs a note; with a note it is sent', async () => {
+    m.listApprovals.mockResolvedValue([mk()]); m.getApproval.mockImplementation(async () => mk())
+    await mount()
+    await click(q('plan-deny'))
+    expect(m.decide).not.toHaveBeenCalled()
+    expect(host.querySelector('[role=alert]')?.textContent).toContain('note')
+    const input = host.querySelector('#plan-note') as HTMLInputElement
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'too big')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    m.decide.mockResolvedValue(mk({ state: 'denied' }))
+    await click(q('plan-deny'))
+    expect(m.decide).toHaveBeenCalledWith('p', 'a1', false, 'too big', undefined, expect.anything())
+  })
+  it('F-0617: opening another run drops the old result and ignores its slow answer', async () => {
+    let slowA: (v: unknown) => void = () => undefined
+    m.listApprovals.mockImplementationOnce(() => new Promise((r) => { slowA = r }))
+    await mount()
+    m.listApprovals.mockResolvedValueOnce([mk({ id: 'b1', subject: 'plan B' })])
+    await act(async () => { window.location.hash = '#/p/p/plan?run=33333333-cccc'; window.dispatchEvent(new HashChangeEvent('hashchange')) })
+    await act(async () => { await Promise.resolve() })
+    await act(async () => { slowA([mk({ id: 'a-old' })]) })
+    await act(async () => { await Promise.resolve() })
+    expect(m.listApprovals).toHaveBeenCalledTimes(2)
+    expect(host.textContent).toContain('plan B')
+    expect(host.textContent).not.toContain('a-old')
+  })
   const same = () => m.getApproval.mockImplementation(async () => mk())
   it('approves an unedited plan without a plan in the body', async () => {
     m.listApprovals.mockResolvedValue([mk()]); same()

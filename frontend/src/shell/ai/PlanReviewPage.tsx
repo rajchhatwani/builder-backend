@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ApiError } from '../../api/client'
 import { aiApi } from './aiApi'
 import { PLAN_ERRORS, PLAN_KEYS, PLAN_LABEL, addRow, editedInfo, gateAFor, isEdited, phasesOf, planBody, planRows, toggleRow, type PlanKey, type PlanRow } from './planLogic'
-import { approvalFingerprint, approvalList, decideFailure, decisionGate, effectiveState } from './approvalLogic'
+import { approvalFingerprint, approvalList, decideFailure, decisionGate, effectiveState, noteValid } from './approvalLogic'
 import type { Approval } from './types'
 import { useMyRole } from './useMyRole'
 import { useNow } from './useNow'
@@ -24,16 +24,23 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
   const myRole = useMyRole(projectId)
   const now = useNow()
 
+  const seq = useRef(0)
   const load = useCallback(async () => {
+    const mine = ++seq.current // only the newest request may write
     try {
       // with a run in the link also the decided plan is shown (with what the reviewer changed)
       const list = approvalList(await aiApi.listApprovals(projectId, runId ? { run_id: runId } : { state: 'pending' }))
+      if (mine !== seq.current) return
       const a = gateAFor(list)
       setApproval(a)
       setRows(a ? planRows(a.payload) : [])
-    } catch (e) { setError(errMsg(e)) } finally { setLoading(false) }
+    } catch (e) { if (mine === seq.current) setError(errMsg(e)) } finally { if (mine === seq.current) setLoading(false) }
   }, [projectId, runId])
-  useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    // another run was opened: nothing of the previous one may stay on screen
+    setNote(''); setDone(''); setChanged(false); setError(''); setApproval(null); setRows([]); setLoading(true)
+    void load()
+  }, [load])
 
   const original = useMemo(() => (approval ? planRows(approval.payload) : []), [approval])
   const edited = isEdited(rows, original)
@@ -45,6 +52,7 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
   const decide = async (approve: boolean, text?: string, msg = '', plan?: Record<string, string[]>) => {
     if (!approval) return
     if (!gate.canDecide) return
+    if (!noteValid(approve, text ?? '')) { setError('Write a note to deny the plan, so the agent knows what to change.'); return }
     setBusy(true); setError('')
     try {
       // S3-005: decide only on the plan that was shown; if it changed meanwhile, show the new one and ask again
@@ -126,7 +134,7 @@ export function PlanReviewPage({ projectId }: { projectId: string }) {
                 <input aria-label="Name to add" value={addValue} maxLength={120} onChange={(e) => setAddValue(e.target.value)} />
                 <button className="small outline" disabled={!addValue.trim()} onClick={() => { setRows(addRow(rows, addKey, addValue)); setAddValue('') }}>Add</button>
               </div>
-              <label htmlFor="plan-note">Note (optional)</label>
+              <label htmlFor="plan-note">Note (required to deny)</label>
               <input id="plan-note" value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} />
               {edited && <p className="muted small-text" data-testid="plan-edited">You changed the scope. Approving sends your list: the build step is then limited to exactly what is left. The agent's original is kept on record.</p>}
               <div className="hstack">
