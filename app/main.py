@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import os
 import re
@@ -101,6 +102,7 @@ class SecurityMiddleware:
         self.app = app
         self.max_bytes = settings.max_request_bytes
         self.hsts = not settings.is_local
+        self.cors_origins = set(settings.cors_origins)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -119,12 +121,15 @@ class SecurityMiddleware:
             else self.max_bytes
         )
         declared = headers.get("content-length")
-        if declared is not None and declared.isdigit() and int(declared) > max_bytes:
-            await self._too_large(send, request_id)
-            return
+        ascii_len = declared is not None and re.fullmatch(r"[0-9]{1,18}", declared)
+        declared_len = int(declared) if ascii_len and declared else None
 
         received = 0
         too_large = False
+        started = False
+        swallow = False
+        generated = False
+        origin = headers.get("origin", "")
 
         async def limited_receive() -> Message:
             nonlocal received, too_large
@@ -140,7 +145,15 @@ class SecurityMiddleware:
         is_doc = path in _DOC_PATHS or path.startswith("/docs/")
 
         async def send_with_headers(message: Message) -> None:
+            nonlocal started, swallow, generated
+            if swallow:  # the app answered after an oversize chunked body: drop its response
+                return
             if message["type"] == "http.response.start":
+                if too_large and not generated:
+                    await emit_error(413, "payload_too_large", "request body is too large")
+                    swallow = True
+                    return
+                started = True
                 extra = [
                     (b"x-request-id", request_id.encode()),
                     (b"x-content-type-options", b"nosniff"),
@@ -159,32 +172,68 @@ class SecurityMiddleware:
                     extra.append(
                         (b"strict-transport-security", b"max-age=31536000; includeSubDomains")
                     )
+                if (
+                    generated
+                    and origin in self.cors_origins
+                    and b"access-control-allow-origin" not in names
+                ):
+                    extra += [
+                        (b"access-control-allow-origin", origin.encode("latin-1")),
+                        (b"access-control-allow-credentials", b"true"),
+                        (b"vary", b"Origin"),
+                        (b"access-control-expose-headers", b"X-Request-ID"),
+                    ]
                 message = {**message, "headers": [*message.get("headers", []), *extra]}
             await send(message)
 
+        async def emit_error(status: int, code: str, text: str) -> None:
+            """Send our own JSON error through the header/CORS path (it sits outside CORS)."""
+            nonlocal generated
+            generated = True
+            body = json.dumps({"code": code, "message": text, "details": []}).encode()
+            await send_with_headers(
+                {
+                    "type": "http.response.start",
+                    "status": status,
+                    "headers": [
+                        (b"content-type", b"application/json"),
+                        (b"content-length", str(len(body)).encode()),
+                        *([(b"connection", b"close")] if status == 413 else []),
+                    ],
+                }
+            )
+            await send_with_headers({"type": "http.response.body", "body": body})
+
+        if declared_len is not None and declared_len > max_bytes:
+            await emit_error(413, "payload_too_large", "request body is too large")
+            structlog.contextvars.unbind_contextvars("request_id")
+            return
+
         try:
             await self.app(scope, limited_receive, send_with_headers)
+            if too_large and not started and not swallow:
+                await emit_error(413, "payload_too_large", "request body is too large")
+        except Exception as exc:
+            log.error(
+                "unhandled_exception",
+                exc_info=exc,
+                path=path,
+                method=scope["method"],
+                request_id=request_id,
+            )
+            if started:
+                raise
+            if swallow:  # the 413 is already out; the app's follow-up error is moot
+                pass
+            elif too_large:
+                await emit_error(413, "payload_too_large", "request body is too large")
+            else:
+                await emit_error(500, "internal_error", "An unexpected error occurred")
         finally:
             structlog.contextvars.unbind_contextvars("request_id", "organization_id")
             rls.clear()
         if too_large:
-            log.warning("request_body_too_large", limit=self.max_bytes)
-
-    async def _too_large(self, send: Send, request_id: str) -> None:
-        body = b'{"code":"payload_too_large","message":"request body is too large","details":[]}'
-        await send(
-            {
-                "type": "http.response.start",
-                "status": 413,
-                "headers": [
-                    (b"content-type", b"application/json"),
-                    (b"content-length", str(len(body)).encode()),
-                    (b"x-request-id", request_id.encode()),
-                    (b"connection", b"close"),
-                ],
-            }
-        )
-        await send({"type": "http.response.body", "body": body})
+            log.warning("request_body_too_large", limit=max_bytes)
 
 
 def check_startup(settings: Settings) -> None:
