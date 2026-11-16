@@ -335,3 +335,4 @@ tests/unit/test_audit_b1_054.py
 tests/unit/test_audit_b1_056.py
 tests/unit/test_auth_b1_057.py
 tests/unit/test_audit_b1_059.py
+tests/unit/test_audit_b1_060.py

@@ -49,7 +49,9 @@ async def notes_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["Note"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await NoteRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await NoteRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "Note", Change.record_id == item_id)
@@ -72,7 +74,9 @@ async def tickets_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["Ticket"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await TicketRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await TicketRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "Ticket", Change.record_id == item_id)

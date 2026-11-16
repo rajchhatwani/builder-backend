@@ -27,13 +27,17 @@ class OrderRepository(_crud_base.Repository[Order]):
         ('ticket_no', 'ticket_no', False, True),
     )
 
-    async def create(self, data: dict[str, Any]) -> Order:
+    async def draw_numbers(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Draw the numbered fields; also used by the CSV import for every row it writes."""
         data = dict(data)
         for field, sequence, per_tenant, as_int in self.numbered:
             data[field] = await _numbering.draw(
                 self.session, sequence, tenant_id=self.tenant_id, per_tenant=per_tenant, as_int=as_int
             )
-        return await super().create(data)
+        return data
+
+    async def create(self, data: dict[str, Any]) -> Order:
+        return await super().create(await self.draw_numbers(data))
 
     async def _apply(self, item_id: _uuid.UUID, data: dict[str, Any]) -> Order:
         _numbering.refuse_change(tuple(n[0] for n in self.numbered), data)

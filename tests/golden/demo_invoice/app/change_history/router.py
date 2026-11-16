@@ -49,7 +49,9 @@ async def invoices_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["Invoice"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await InvoiceRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await InvoiceRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "Invoice", Change.record_id == item_id)
@@ -72,7 +74,9 @@ async def suppliers_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["Supplier"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await SupplierRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await SupplierRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "Supplier", Change.record_id == item_id)

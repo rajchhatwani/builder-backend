@@ -245,7 +245,10 @@ async def run_import(
 
     created = 0
     if not dry_run and pending:
+        draw = getattr(repo, "draw_numbers", None)  # numbered fields: drawn only when really writing
         for prepared, ctx in pending:
+            if draw is not None:
+                prepared = await draw(prepared)
             item = repo.model(**prepared)
             repo.session.add(item)
             ctx.item = item

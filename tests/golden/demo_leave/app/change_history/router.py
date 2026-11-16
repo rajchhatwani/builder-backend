@@ -49,7 +49,9 @@ async def employees_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["Employee"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await EmployeeRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await EmployeeRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "Employee", Change.record_id == item_id)
@@ -72,7 +74,9 @@ async def leave_requests_history(
     held = effective_roles(access.user.roles) if access.user is not None else set()
     if not held & set(HISTORY["LeaveRequest"]["view_roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
-    await LeaveRequestRepository(session, **access.repo_kwargs).get(item_id)  # 404 when not visible
+    await LeaveRequestRepository(session, **access.repo_kwargs).get(
+        item_id, include_deleted=True
+    )  # 404 when not visible; a soft-deleted record keeps its history readable
     rows = await session.execute(
         sa.select(Change)
         .where(Change.entity == "LeaveRequest", Change.record_id == item_id)

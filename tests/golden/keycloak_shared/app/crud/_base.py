@@ -64,9 +64,19 @@ class Repository[ModelT: Base]:
     def _col(self, name: str) -> Any:
         return self.model.__table__.c[name]
 
-    def _alive(self, *, policy: bool = True) -> list[Any]:
+    def _row_alive(self) -> list[Any]:
+        """Only the soft-delete filter: for re-reading a row this request just wrote and already found
+        under the full scope (a custom_filter scope may no longer match the new values)."""
+        return [self._col("deleted_at").is_(None)] if self.soft_delete else []
+
+    def _target_alive(self, target: type[Base]) -> list[Any]:
+        """A reference / many_to_many target that was soft-deleted does not exist for new links."""
+        column = target.__table__.c.get("deleted_at")
+        return [] if column is None else [column.is_(None)]
+
+    def _alive(self, *, policy: bool = True, deleted: bool = False) -> list[Any]:
         """Conditions every query starts from: not soft-deleted, and inside the access scope."""
-        conditions = [self._col("deleted_at").is_(None)] if self.soft_delete else []
+        conditions = [self._col("deleted_at").is_(None)] if self.soft_delete and not deleted else []
         conditions.extend(self._col(name) == value for name, value in self.scope.items())
         if policy and self.policy is not None:
             conditions.extend(self.policy.row_conditions(self._col))
@@ -133,12 +143,15 @@ class Repository[ModelT: Base]:
         rows = (await self.session.execute(stmt)).scalars().all()
         return list(rows), total
 
-    async def get(self, item_id: uuid.UUID, *, policy: bool = True) -> ModelT:
+    async def get(self, item_id: uuid.UUID, *, policy: bool = True, include_deleted: bool = False) -> ModelT:
         # policy=False: re-read a row this request just wrote. The write was already checked, and the
         # operation's own row filter may no longer match it (an update that closes a ticket).
         stmt = (
             sa.select(self.model)
-            .where(self._col("id") == item_id, *self._alive(policy=policy))
+            .where(
+                self._col("id") == item_id,
+                *(self._alive(deleted=include_deleted) if policy else self._row_alive()),
+            )
             .options(*self._loaders())
             .execution_options(populate_existing=True)
         )
@@ -281,6 +294,7 @@ class Repository[ModelT: Base]:
             stmt = sa.select(target.id).where(  # type: ignore[attr-defined]
                 target.id == value,  # type: ignore[attr-defined]
                 *self._inside_tenant(target),
+                *self._target_alive(target),
             )
             if (await self.session.execute(stmt)).first() is None:
                 raise AppError(
@@ -302,6 +316,7 @@ class Repository[ModelT: Base]:
                 stmt = sa.select(target).where(
                     target.id.in_(ids),  # type: ignore[attr-defined]
                     *self._inside_tenant(target),
+                    *self._target_alive(target),
                 )
                 by_id = {row.id: row for row in (await self.session.execute(stmt)).scalars()}
                 missing = [str(i) for i in ids if i not in by_id]
