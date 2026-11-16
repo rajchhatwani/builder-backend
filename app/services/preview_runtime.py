@@ -186,7 +186,7 @@ async def teardown(box: Sandbox, db_sandbox: str, app_sandbox: str) -> None:
             continue
 
 
-async def _wait_db(box: Sandbox, sandbox: str, timeout: float) -> None:
+async def _wait_db(box: Sandbox, sandbox: str, timeout: float) -> None:  # noqa: ASYNC109 - deadline semantics, not an asyncio.timeout
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         # TCP on loopback: the init-time temp server only listens on the unix socket.
@@ -205,7 +205,7 @@ async def _wait_app(
     box: Sandbox,
     sandbox: str,
     ip: str,
-    timeout: float,
+    timeout: float,  # noqa: ASYNC109
     secrets_in_use: tuple[str, ...] = (),
 ) -> None:
     deadline = time.monotonic() + timeout

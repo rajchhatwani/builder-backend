@@ -693,7 +693,7 @@ class WorkspaceService:
         dropped). Failures are logged, never raised, and never forgotten by the caller."""
         repo = self._repo(project_id)
         try:
-            if wt.exists():
+            if wt.exists():  # noqa: ASYNC240 - sub-ms local stat
                 await self._git(repo, "worktree", "remove", "--force", str(wt))
         except Exception:
             log.exception("worktree remove failed")
@@ -704,7 +704,7 @@ class WorkspaceService:
             except Exception:
                 log.warning("git %s failed during cleanup", args[0])
         failed = await self._drop_dbs([db, *snaps])
-        return (not wt.exists()), failed
+        return (not wt.exists()), failed  # noqa: ASYNC240
 
     async def discard(self, project_id: uuid.UUID, ws_id: uuid.UUID) -> WorkspaceRead:
         self._root()

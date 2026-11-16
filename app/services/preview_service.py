@@ -266,7 +266,7 @@ async def authenticate(preview_id: uuid.UUID, token: str | None) -> Preview:
     return p
 
 
-async def ensure_running(preview_id: uuid.UUID, timeout: float) -> Preview:
+async def ensure_running(preview_id: uuid.UUID, timeout: float) -> Preview:  # noqa: ASYNC109 - deadline semantics
     """Return the preview once it is running, waking it first when it sleeps (~3s cold start)."""
     deadline = time.monotonic() + timeout
     while True:
@@ -484,8 +484,8 @@ class PreviewService:
             raise AppError("workspace_not_ready", "that workspace cannot be previewed", 409)
         if not self.settings.workspace_root:
             raise AppError("workspaces_unavailable", "draft workspaces are not configured", 503)
-        wt = Path(ws.worktree_path).resolve()
-        if not wt.is_relative_to(Path(self.settings.workspace_root).resolve()) or not wt.is_dir():
+        wt = Path(ws.worktree_path).resolve()  # noqa: ASYNC240 - sub-ms local stat
+        if not wt.is_relative_to(Path(self.settings.workspace_root).resolve()) or not wt.is_dir():  # noqa: ASYNC240
             raise AppError("workspace_not_ready", "that workspace cannot be previewed", 409)
         return wt
 

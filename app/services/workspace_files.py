@@ -189,7 +189,7 @@ class WorkspaceFileService:
 
     async def _worktree(self, project_id: uuid.UUID, ws_id: uuid.UUID, lock: bool = False) -> Path:
         ws: Workspace = await self._ws._get(project_id, ws_id, lock=lock)
-        if ws.state != "active" or not ws.worktree_path or not Path(ws.worktree_path).is_dir():
+        if ws.state != "active" or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             raise AppError("workspace_inactive", "the workspace is not active", 409)
         return Path(ws.worktree_path)
 
