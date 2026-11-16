@@ -46,9 +46,11 @@ export function parseDefault(text: string, type: FieldType): unknown {
     case 'decimal': {
       const value = Number(trimmed)
       if (Number.isNaN(value)) throw new Error('Default must be a number.')
-      // Decimals (money) and big integers keep their exact digits as a string.
-      if (type === 'decimal' && /^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed
-      if (type === 'bigint' && /^-?\d+$/.test(trimmed) && !Number.isSafeInteger(value)) return trimmed
+      // The API takes JSON numbers only, so refuse values a JS number cannot hold exactly.
+      if (type === 'bigint' && /^-?\d+$/.test(trimmed) && !Number.isSafeInteger(value))
+        throw new Error('Default is too large to store exactly; use a smaller number.')
+      if (type === 'decimal' && trimmed.replace(/^-/, '').replace('.', '').replace(/^0+/, '').length > 15)
+        throw new Error('Default has too many digits to store exactly (max 15).')
       return value
     }
     case 'boolean':
