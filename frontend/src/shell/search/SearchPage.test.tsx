@@ -3,18 +3,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { click, mount, q, qa, setInput } from '../ai/testUtils'
 import { SearchPage } from './SearchPage'
 
-const m = vi.hoisted(() => ({ spec: vi.fn(), search: vi.fn(), reindex: vi.fn() }))
-vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: { getSpecJson: m.spec, searchProject: m.search, reindexSearch: m.reindex } }))
-beforeEach(() => { Object.values(m).forEach((f) => f.mockReset()); m.spec.mockResolvedValue({ entities: [{ name: 'Invoice', fields: [] }] }) })
+const m = vi.hoisted(() => ({ spec: vi.fn(), search: vi.fn(), reindex: vi.fn(), roles: vi.fn() }))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: { getSpecJson: m.spec, searchProject: m.search, reindexSearch: m.reindex, getBehaviorRoles: m.roles } }))
+beforeEach(() => { Object.values(m).forEach((f) => f.mockReset()); m.spec.mockResolvedValue({ entities: [{ name: 'Invoice', fields: [] }] }); m.roles.mockResolvedValue({ roles: [{ name: 'admin', label: 'Admin' }, { name: 'clerk', label: 'Clerk' }] }) })
 
 describe('SearchPage', () => {
+  it('sends the chosen role as as_role', async () => {
+    m.search.mockResolvedValue({ hits: [], total: 0 })
+    await mount(createElement(SearchPage, { projectId: 'p' }))
+    await setInput(q('search-role') as HTMLSelectElement, 'clerk')
+    await setInput(q('search-input') as HTMLInputElement, 'acme')
+    await click(q('search-run'))
+    expect(m.search).toHaveBeenCalledWith('p', 'Invoice', 'acme', 20, 'clerk')
+  })
+
+
   it('searches the chosen entity and lists hits', async () => {
     m.search.mockResolvedValue({ hits: [{ id: '1', title: 'Acme' }], total: 1 })
     await mount(createElement(SearchPage, { projectId: 'p' }))
     expect((q('search-run') as HTMLButtonElement).disabled).toBe(true)
     await setInput(q('search-input') as HTMLInputElement, 'acme')
     await click(q('search-run'))
-    expect(m.search).toHaveBeenCalledWith('p', 'Invoice', 'acme')
+    expect(m.search).toHaveBeenCalledWith('p', 'Invoice', 'acme', 20, 'admin')
     expect(q('search-total')?.textContent).toBe('1 result')
     expect(qa('search-hit')[0].textContent).toBe('title: Acme')
   })

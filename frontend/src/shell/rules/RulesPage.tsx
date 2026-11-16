@@ -75,6 +75,8 @@ function Workbench({ projectId, entities, machines }: { projectId: string; entit
   const [caret, setCaret] = useState(0)
   const [fields, setFields] = useState<ExpressionField[]>([])
   const [result, setResult] = useState<{ forText: string; forEntity: string; read: ExpressionCheckRead } | null>(null)
+  const [fieldsError, setFieldsError] = useState<string | null>(null)
+  const [fieldsTry, setFieldsTry] = useState(0)
   const [failure, setFailure] = useState<string | null>(null)
   const [dismissedAt, setDismissedAt] = useState<string | null>(null)
   const [forced, setForced] = useState(false)
@@ -88,12 +90,16 @@ function Workbench({ projectId, entities, machines }: { projectId: string; entit
   useEffect(() => {
     const ctrl = new AbortController()
     setFields([])
+    setFieldsError(null)
     api
       .checkExpression(projectId, entity, 'true', ctrl.signal)
       .then((r) => setFields(r.fields))
-      .catch(() => undefined)
+      .catch((err: unknown) => {
+        if (isAbort(err) || ctrl.signal.aborted) return
+        setFieldsError(err instanceof Error ? err.message : 'unknown error')
+      })
     return () => ctrl.abort()
-  }, [projectId, entity])
+  }, [projectId, entity, fieldsTry])
 
   // Live check: debounced, the previous request is cancelled when the text changes again.
   useEffect(() => {
@@ -286,7 +292,12 @@ function Workbench({ projectId, entities, machines }: { projectId: string; entit
 
       <section aria-labelledby="rules-fields" className="rules-fields">
         <h2 id="rules-fields">Fields of {entity}</h2>
-        {fields.length === 0 ? (
+        {fields.length === 0 && fieldsError !== null ? (
+          <p role="alert" data-testid="rules-fields-error">
+            Could not load fields: {fieldsError}{' '}
+            <button className="outline small" data-testid="rules-fields-retry" onClick={() => setFieldsTry((n) => n + 1)}>Try again</button>
+          </p>
+        ) : fields.length === 0 ? (
           <p className="muted">Loading fields…</p>
         ) : (
           <ul className="rules-field-list" data-testid="rules-fields">

@@ -67,7 +67,19 @@ export function SuitePage({ projectId }: { projectId: string }) {
     try {
       const auth = await api.updateAuthConfig(projectId, patchBody(next))
       let keycloak = load.keycloak
-      if (!remove) keycloak = await api.putKeycloak(projectId, keycloakBodyForSuite(load.keycloak, next.suiteId))
+      if (!remove) {
+        try {
+          keycloak = await api.putKeycloak(projectId, keycloakBodyForSuite(load.keycloak, next.suiteId))
+        } catch (err) {
+          setLoad({ status: 'ready', auth, keycloak })
+          setSaved(auth.suite)
+          setForm(formFromSuite(auth.suite))
+          setProvider(auth.provider)
+          setError(`The suite was saved, but Keycloak was not updated: ${msg(err, 'Could not save')}`)
+          await refreshIssues()
+          return
+        }
+      }
       setLoad({ status: 'ready', auth, keycloak })
       setSaved(auth.suite)
       setForm(formFromSuite(auth.suite))

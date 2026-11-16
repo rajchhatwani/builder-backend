@@ -1240,8 +1240,8 @@ export const api = {
     request<WorkspaceCheckpoint>(`/projects/${projectId}/workspaces/${wsId}/checkpoints`, { method: 'POST', body: json({ label }) }),
   rollbackWorkspace: (projectId: string, wsId: string, checkpointId: string) =>
     request<WorkspaceInfo>(`/projects/${projectId}/workspaces/${wsId}/rollback`, { method: 'POST', body: json({ checkpoint_id: checkpointId }) }),
-  searchProject: (projectId: string, entity: string, q: string, limit = 20) =>
-    request<Record<string, unknown>>(`/projects/${projectId}/search?${queryString({ entity, q, limit })}`),
+  searchProject: (projectId: string, entity: string, q: string, limit = 20, asRole?: string) =>
+    request<Record<string, unknown>>(`/projects/${projectId}/search?${queryString({ entity, q, limit, as_role: asRole })}`),
   /** Rebuilds the search index. The backend route is added separately; the body of the answer is shown as-is. */
   reindexSearch: (projectId: string) =>
     request<Record<string, unknown>>(`/projects/${projectId}/search/reindex`, { method: 'POST' }),

@@ -9,6 +9,8 @@ type Hit = Record<string, unknown>
 export function SearchPage({ projectId }: { projectId: string }) {
   const [entities, setEntities] = useState<string[] | null>(null)
   const [entity, setEntity] = useState('')
+  const [roles, setRoles] = useState<string[]>([])
+  const [role, setRole] = useState('')
   const [q, setQ] = useState('')
   const [hits, setHits] = useState<{ items: Hit[]; total: number } | null>(null)
   const [searching, setSearching] = useState(false)
@@ -17,6 +19,7 @@ export function SearchPage({ projectId }: { projectId: string }) {
   const [reindex, setReindex] = useState<Record<string, unknown> | null>(null)
   const [reindexError, setReindexError] = useState<string | null>(null)
   const entityId = useId()
+  const roleId = useId()
   const qId = useId()
 
   useEffect(() => {
@@ -28,11 +31,20 @@ export function SearchPage({ projectId }: { projectId: string }) {
     return () => { off = true }
   }, [projectId])
 
+  useEffect(() => {
+    let off = false
+    api.getBehaviorRoles(projectId).then(
+      (r) => { if (!off) { const names = r.roles.map((x) => x.name); setRoles(names); setRole(names[0] ?? '') } },
+      () => { if (!off) { setRoles([]); setRole('') } },
+    )
+    return () => { off = true }
+  }, [projectId])
+
   const search = async () => {
     if (!q.trim() || !entity) return
     setSearching(true); setError(null)
     try {
-      const r = await api.searchProject(projectId, entity, q.trim())
+      const r = await api.searchProject(projectId, entity, q.trim(), 20, role || undefined)
       const items = Array.isArray(r.hits) ? (r.hits as Hit[]) : []
       setHits({ items, total: typeof r.total === 'number' ? r.total : items.length })
     } catch (e) { setHits(null); setError(msg(e, 'The search failed')) } finally { setSearching(false) }
@@ -47,7 +59,7 @@ export function SearchPage({ projectId }: { projectId: string }) {
       <div className="page-header">
         <div>
           <h1>Search</h1>
-          <p>Search the records you imported. Results only include what the chosen role is allowed to see.</p>
+          <p>Search the records you imported. Results only include what the role you pick is allowed to see.</p>
         </div>
       </div>
       {entities === null && <p className="empty-state">Loading…</p>}
@@ -60,6 +72,14 @@ export function SearchPage({ projectId }: { projectId: string }) {
               {entities.map((n) => <option key={n} value={n}>{n}</option>)}
             </select>
           </div>
+          {roles.length > 0 && (
+            <div className="field">
+              <label htmlFor={roleId}>Search as role</label>
+              <select id={roleId} value={role} onChange={(e) => setRole(e.target.value)} data-testid="search-role">
+                {roles.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+          )}
           <div className="field">
             <label htmlFor={qId}>Search for</label>
             <input id={qId} type="search" value={q} maxLength={200} onChange={(e) => setQ(e.target.value)} data-testid="search-input" />

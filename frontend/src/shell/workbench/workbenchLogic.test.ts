@@ -115,6 +115,12 @@ describe('redaction and history', () => {
     expect(redactBodyText('oops Bearer abc.def.ghi failed')).toBe('oops Bearer [redacted] failed')
     expect(redactBodyText('{"token":"zzz","x":1}')).not.toContain('zzz')
   })
+  it('redacts quoted-key secrets in truncated (unparseable) JSON', () => {
+    const out = redactBodyText('{"items":[{"access_token":"abc123","password_hash":"zzz"}]}\n… truncated')
+    expect(out).not.toContain('abc123')
+    expect(out).not.toContain('zzz')
+    expect(redactBodyText('{"access_token": "abc123", "x": ')).not.toContain('abc123')
+  })
   it('caps history, newest first', () => {
     let list: HistoryEntry[] = []
     for (let i = 0; i < MAX_HISTORY + 5; i++) {

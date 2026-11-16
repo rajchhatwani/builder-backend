@@ -63,6 +63,20 @@ describe('SuitePage', () => {
     expect(q('[data-testid=suite-note]')!.textContent).toBe('Saved.')
   })
 
+  it('keeps the saved suite and refreshes issues when only the Keycloak write fails', async () => {
+    setup()
+    m.patch.mockResolvedValue(AUTH({ suite: SUITE }))
+    m.put.mockRejectedValue(new Error('keycloak down'))
+    await mount()
+    await click(q('input[type=checkbox]')!)
+    await type(host.querySelector('input[placeholder=acme]') as HTMLInputElement, 'acme')
+    m.validate.mockClear()
+    await click(btn(/^Save$/))
+    expect(q('[role=alert]')!.textContent).toMatch(/suite was saved, but Keycloak was not updated/)
+    expect(m.validate).toHaveBeenCalled()
+    expect(btn(/Remove from suite/)).toBeTruthy()
+  })
+
   it('shows the server error and the validation messages', async () => {
     setup(AUTH({ suite: SUITE }))
     m.validate.mockResolvedValue({ valid: false, issues: [{ path: 'auth.keycloak.realm', code: 'suite_realm_derived', message: "is derived: it must be 'suite-acme'" }] })

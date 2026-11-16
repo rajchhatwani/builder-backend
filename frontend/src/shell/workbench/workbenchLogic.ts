@@ -258,12 +258,12 @@ export function redactJson(v: unknown, depth = 0): Json {
 /** Redact a text body: JSON is redacted by key, anything else is kept only if short and never echoes bearer values. */
 export function redactBodyText(text: string): string {
   try {
-    return JSON.stringify(redactJson(JSON.parse(text)), null, 2)
+    return JSON.stringify(redactJson(JSON.parse(text.replace(/\n… truncated$/, ''))), null, 2)
   } catch {
     return text
       .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]')
       .replace(JWT, '[redacted]')
-      .replace(/([A-Za-z0-9_.-]+)(\s*[=:]\s*)("?)([^\s&",;]+)/g, (m, k: string, sep: string, q: string) => (SECRET_KEY.test(k) ? `${k}${sep}${q}[redacted]` : m))
+      .replace(/([A-Za-z0-9_.-]+)("?\s*[=:]\s*)("?)([^\s&",;]+)/g, (m, k: string, sep: string, q: string) => (SECRET_KEY.test(k) ? `${k}${sep}${q}[redacted]` : m))
       .slice(0, 2000)
   }
 }
