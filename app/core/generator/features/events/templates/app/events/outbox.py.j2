@@ -102,7 +102,9 @@ async def purge_delivered(
 ) -> int:
     """Delete delivered events older than the retention, and consumer markers older than TWICE the
     retention that no pending / failed event still needs. Failed events stay, and so does the
-    newest event of each record (its seq is the high-water mark for the record's next event).
+    newest event of each record for a further retention period (2x in all): its seq is the
+    high-water mark for the record's next event, so seq continues across a purge. A record idle for
+    longer than 2x the retention loses it too (that bounds the outbox), and its seq may restart.
 
     A marker is the idempotency record of a delivery that may be retried (a parked event can be
     requeued long after it first ran), so it outlives the events it guards: it is dropped only when it
@@ -110,8 +112,10 @@ async def purge_delivered(
     event is delivered or already gone. Returns the number of events removed."""
     days = retention_days if retention_days is not None else config.retention_days()
     cutoff = (now or utcnow()) - _dt.timedelta(days=days)
-    # The newest event of each record stays (until the record is deleted): it is the high-water mark
-    # `_next_seq` counts from, so a record edited after all its events were purged does not restart at 1.
+    # The newest event of each record stays until it is older than 2x the retention: it is the
+    # high-water mark `_next_seq` counts from, so a record edited soon after its events were purged does
+    # not restart at 1, while the outbox stays bounded (no event is kept forever).
+    marker_cutoff = (now or utcnow()) - _dt.timedelta(days=2 * days)
     newest = aliased(OutboxEvent)
     is_mark = sa.and_(
         OutboxEvent.seq
@@ -122,13 +126,13 @@ async def purge_delivered(
         )
         .scalar_subquery(),
         ~OutboxEvent.event_type.like("%.deleted"),
+        OutboxEvent.delivered_at >= marker_cutoff,
     )
     removed = await session.execute(
         sa.delete(OutboxEvent).where(
             OutboxEvent.status == DELIVERED, OutboxEvent.delivered_at < cutoff, ~is_mark
         )
     )
-    marker_cutoff = (now or utcnow()) - _dt.timedelta(days=2 * days)
     still_open = sa.select(OutboxEvent.id).where(
         OutboxEvent.id == HandledEvent.event_id, OutboxEvent.status != DELIVERED
     )

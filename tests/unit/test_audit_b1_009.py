@@ -62,3 +62,13 @@ def test_f0321_bound_templates_are_rendered_from_a_real_record() -> None:
     assert "_factories.make_employees" in src
     assert "SHADOWED" in src  # `extra` must not change the row values
     assert re.search(r"assert .* in text_of\(", src) or "in text" in src
+
+
+def test_f0318_seq_mark_is_bounded_and_purge_test_ages_past_it() -> None:
+    files = _files("events_orders")
+    purge = files["app/events/outbox.py"]
+    purge = purge[purge.index("async def purge_delivered"):purge.index("async def requeue_failed")]
+    assert "OutboxEvent.delivered_at >= marker_cutoff" in purge  # a mark is not kept forever
+    tests = files["tests/test_events.py"]
+    assert "test_the_seq_mark_is_dropped_after_twice_the_retention" in tests
+    assert "timedelta(days=40)" in tests  # the old purge test ages past 2x the retention

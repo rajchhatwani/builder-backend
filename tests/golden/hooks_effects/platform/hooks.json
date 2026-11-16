@@ -67,7 +67,7 @@
     "app/events/definitions.py": "1a3cb915027f400bb17985adf3b23ded0ce474e76d16e9a341ade8eb35674843",
     "app/events/hooks.py": "3d83b270759aba121626ceac364b6d17ef152f50130f7196221335bd751343c1",
     "app/events/models.py": "fac7a88365aee9857bf16dfcb84bf3947d97582f109fff4ece1ee8a3ebc661e8",
-    "app/events/outbox.py": "f4e0817d55f66de27bdbae655f7a5224f81e4b8b35801c64a2ede7108b5bf966",
+    "app/events/outbox.py": "8146a273f02c0f748d90b5871c2b54f9d52f56ed4cf2232086c8738a832db90a",
     "app/events/relay.py": "31ed4ca4bd945fbf55a23dac9b3d11e3fcaff082e139c320d067a8f30669b818",
     "app/events/types.py": "9d2788688ef8c0e66cf44c32ee77ca94408c061a7acf6ce2edbbe0fc34a92839",
     "app/hooks_gen/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",

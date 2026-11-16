@@ -378,7 +378,7 @@ async def test_delivered_events_are_purged_after_the_retention(http: AsyncClient
     await relay.deliver_one(session_factory, Recorder(fail=lambda _e: True), max_attempts=1)
     rows = await _all()
     assert sorted(r.status for r in rows) == [DELIVERED, DELIVERED, FAILED]
-    old = dt.datetime.now(dt.UTC) - dt.timedelta(days=20)
+    old = dt.datetime.now(dt.UTC) - dt.timedelta(days=40)  # past 2x the retention: no mark kept
     async with session_factory() as session:
         delivered = [r for r in rows if r.status == DELIVERED]
         await session.execute(
@@ -403,6 +403,18 @@ async def test_seq_never_restarts_after_a_purge(http: AsyncClient) -> None:
     await _change(http, record)
     seqs = sorted(r.seq for r in await _all() if str(r.aggregate_id) == record["id"])
     assert seqs[-1] == 2 and 1 not in seqs[1:], seqs  # the new event continues after the purged one
+
+
+async def test_the_seq_mark_is_dropped_after_twice_the_retention(http: AsyncClient) -> None:
+    await _create(http)
+    await relay.deliver_one(session_factory, Recorder())
+    old = dt.datetime.now(dt.UTC) - dt.timedelta(days=40)
+    async with session_factory() as session:
+        await session.execute(sa.update(OutboxEvent).values(delivered_at=old))
+        await session.commit()
+    async with session_factory() as session:
+        assert await outbox.purge_delivered(session, retention_days=14) == 1
+    assert await _all() == []  # the outbox stays bounded: an idle record keeps no event forever
 
 
 async def test_handled_markers_outlive_the_retention_while_their_event_may_still_be_retried(
