@@ -53,9 +53,11 @@ from app.core.suite_identity import (
     SUITE_REALM_PREFIX,
     suite_realm,
 )
+from app.core.validation_ai import ai_tables, check_ai
 from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
+from app.core.validation_booking import booking_tables, check_booking
 from app.core.validation_deploy import check_deployment
 from app.core.validation_documents import check_documents
 from app.core.validation_events import EV_TABLES, check_events, events_active
@@ -70,19 +72,28 @@ from app.core.validation_notifications import (
 from app.core.validation_numbering import check_numbered_fields
 from app.core.validation_observability import check_observability
 from app.core.validation_operations import operations_tables
-from app.core.validation_ai import ai_tables, check_ai
-from app.core.validation_booking import booking_tables, check_booking
-from app.core.validation_packs import LEDGER_TABLES, check_packs, ledger_active
+from app.core.validation_packs import (
+    INVOICING_TABLES,
+    LEDGER_TABLES,
+    PAYOUT_TABLES,
+    RECON_TABLES,
+    check_packs,
+    invoicing_active,
+    ledger_active,
+    payouts_active,
+    reconciliation_active,
+)
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
-from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
-from app.core.validation_secrets import check_block_secrets
 from app.core.validation_realtime import (
     RT_TABLES,
     check_metrics_layer,
     check_realtime,
     realtime_active,
 )
+from app.core.validation_routes import reserved_paths
+from app.core.validation_runtime import RC_TABLES, check_runtime_config, runtime_config_active
+from app.core.validation_secrets import check_block_secrets
 from app.core.validation_seed import SEED_TABLES, check_seed, seed_active
 from app.core.validation_storage import STORAGE_TABLES, check_storage, storage_active
 from app.core.validation_webhooks import WEBHOOK_TABLES, check_webhooks, webhooks_active
@@ -125,6 +136,8 @@ class _Ctx:
         self.namespaces: dict[str, dict[str, str]] = {}
         # entity name -> table name
         self.entity_tables: dict[str, str] = {}
+        # route prefixes of the active modules (an entity plural_path may not equal one)
+        self.module_paths: frozenset[str] = frozenset()
 
     def add(self, path: str, code: str, message: str) -> None:
         self.issues.append(ValidationIssue(path=path, code=code, message=message))
@@ -192,6 +205,18 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     if ledger_active(spec):
         for table in LEDGER_TABLES:
             ctx.tables[table] = "packs.money.ledger"
+    if reconciliation_active(spec):
+        for table in RECON_TABLES:
+            ctx.tables[table] = "packs.money.reconciliation"
+    if invoicing_active(spec):
+        for table in INVOICING_TABLES:
+            ctx.tables[table] = "packs.money.invoicing"
+    if payouts_active(spec):
+        for table in PAYOUT_TABLES:
+            ctx.tables[table] = "packs.money.payouts"
+    if spec.state_machines:
+        ctx.tables["state_transitions"] = "state_machines"
+    ctx.module_paths = reserved_paths(spec)
     for table in operations_tables(spec):
         ctx.tables[table] = "packs.operations"
     for table in booking_tables(spec):
@@ -357,6 +382,12 @@ def _check_entities(spec: Spec, ctx: _Ctx) -> dict[str, SpecEntity]:
                     f"{p}.plural_path",
                     "reserved_word",
                     f"{entity.plural_path!r} is served by the generated app itself",
+                )
+            if entity.plural_path in ctx.module_paths:
+                ctx.add(
+                    f"{p}.plural_path",
+                    "reserved_word",
+                    f"{entity.plural_path!r} is the route prefix of an enabled module",
                 )
             if entity.plural_path in paths_seen:
                 ctx.add(

@@ -315,7 +315,9 @@ def generate(definitions: dict[str, Any], profile: dict[str, Any]) -> SeedData:
                         values[col] = None
                         continue
                     rng = rng_for(seed, name, ent, col, t, i)
-                    pick = pool[i % len(pool)] if (gen.get("pick") or "cycle") == "cycle" else pool[rng.randrange(len(pool))]
+                    # a shared pool is cycled by the running index so a tenant-scoped child does not restart it per tenant
+                    at = i if pool_key is not None else g
+                    pick = pool[at % len(pool)] if (gen.get("pick") or "cycle") == "cycle" else pool[rng.randrange(len(pool))]
                     values[col] = pick.id
                 if scoped and t is not None:
                     values["tenant_id"] = tenant_ids[t]

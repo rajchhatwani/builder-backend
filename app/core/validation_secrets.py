@@ -39,7 +39,15 @@ def _walk(value: Any, path: str, key: str, add: Add) -> None:
             add(path, "secret_in_spec", f"{key!r} holds a long token-like value: credentials go in the vault API")
 
 
+LIST_SECTIONS = ("settings", "lists", "seed", "hooks")  # list sections a reader can fetch back (settings via GET /config)
+
+
 def check_block_secrets(spec: Spec, add: Add) -> None:
+    for section in LIST_SECTIONS:
+        for i, item in enumerate(getattr(spec, section)):
+            _walk(item.model_dump(mode="json"), f"{section}[{i}]", section, add)
+    if spec.documents is not None:
+        _walk(spec.documents.model_dump(mode="json"), "documents", "documents", add)
     for block in BLOCKS:
         model = getattr(spec, block)
         if model is not None:

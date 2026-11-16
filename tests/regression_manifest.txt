@@ -315,3 +315,4 @@ tests/unit/test_async_lint_sandbox.py
 tests/unit/test_generator_audit_b1_017.py
 tests/unit/test_generator_ident_sqlalchemy_names.py
 tests/unit/test_audit_b1_019.py
+tests/unit/test_audit_b1_020.py

@@ -287,7 +287,7 @@ def _check_agents(
             if action.entity is not None or action.fields:
                 add(ap, "unexpected_entity", "a note action has no entity and no fields")
         elif action.kind == "entity_create":
-            _check_entity_create(ap, action.entity, action.fields, entities, add)
+            _check_entity_create(ap, action.entity, action.fields, entities, add, spec)
             found = entities.get(action.entity) if action.entity is not None else None
             if found is not None and not any(
                 p.entity == found.name and p.operation == "create" and p.roles for p in (spec.auth.permissions if spec.auth is not None else [])
@@ -319,7 +319,7 @@ def _check_agents(
                 add(f"{gp}.require_eval", "eval_suite_other_agent", "require_eval must name a suite of the same agent")
 
 
-def _check_entity_create(path: str, entity: str | None, fields: list[str], entities: dict[str, SpecEntity], add: Add) -> None:
+def _check_entity_create(path: str, entity: str | None, fields: list[str], entities: dict[str, SpecEntity], add: Add, spec: Spec) -> None:
     if entity is None:
         add(f"{path}.entity", "missing_entity", "entity_create needs the entity (its table_name)")
         return
@@ -331,15 +331,27 @@ def _check_entity_create(path: str, entity: str | None, fields: list[str], entit
         add(f"{path}.fields", "empty", "entity_create needs at least one allow-listed field")
     _dups(f"{path}.fields", fields, add, "field")
     by_name = {f.name: f for f in found.fields}
+    # The agent insert bypasses the entity's transitions, numbering and field rules: those fields are refused.
+    machine = {m.field for m in spec.state_machines if m.entity == found.name}
+    numbered = {s.field for s in spec.sequences if s.entity == found.name and s.field}
+    create_roles = {r for perm in (spec.auth.permissions if spec.auth is not None else []) if perm.entity == found.name and perm.operation == "create" for r in perm.roles}
+    restricted = {
+        fa.field for fa in (spec.authorization.field_access if spec.authorization is not None else []) if fa.entity == found.name and fa.write_roles is not None and not create_roles <= set(fa.write_roles)
+    }
     for k, name in enumerate(fields):
         field = by_name.get(name)
         if field is None:
             add(f"{path}.fields[{k}]", "unknown_field", f"{name[:40]!r} is not a (non-system) field of {entity}")
         elif field.type in UNWRITABLE_FIELD_TYPES:
             add(f"{path}.fields[{k}]", "unsupported_field_type", f"a {field.type} field cannot be written by an agent")
+        elif name in machine or name in numbered or name in restricted:
+            add(f"{path}.fields[{k}]", "protected_field", f"{entity}.{name} is a state, numbered or write-restricted field: an agent cannot write it")
     for name, field in by_name.items():
         if field.required and field.default is None and name not in fields:
             add(f"{path}.fields", "required_field_missing", f"{entity}.{name} is required: list it in fields or no row could ever be created")
+    for rel in spec.relations:
+        if rel.required and rel.to_entity == found.name and rel.kind in ("one_to_many", "one_to_one"):
+            add(f"{path}.entity", "required_relation_missing", f"{entity} has a required foreign key from {rel.from_entity} that an agent cannot set")
 
 
 def _check_evals(ev: SpecAiEvals, ag: SpecAiAgents, add: Add, roles: Callable[[str, list[str]], None]) -> None:

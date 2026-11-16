@@ -31,7 +31,7 @@ def is_numeric_sequence(q: SpecSequence) -> bool:
 
 
 def longest_number(q: SpecSequence) -> int:
-    return len(q.prefix) + (YEAR_PART if q.reset_yearly else 0) + max(q.padding, COUNTER_DIGITS)
+    return len(q.prefix) + (YEAR_PART if q.reset_yearly else 0) + max(q.padding, COUNTER_DIGITS, len(str(q.start)))
 
 
 def check_numbered_fields(spec: Spec, entities: dict[str, SpecEntity], add: Add) -> None:
