@@ -57,7 +57,7 @@ class TokenStore:
         if row.revoked_at is not None:
             await self.revoke_family(row.family_id)
             await self.session.commit()
-            return Rotation("reused")
+            return Rotation("reused", family_id=row.family_id)
         if row.expires_at <= _now():
             return Rotation("expired")
         row.revoked_at = _now()

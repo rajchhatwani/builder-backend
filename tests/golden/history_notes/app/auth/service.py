@@ -1,5 +1,6 @@
 """Authentication business logic (generated). Routers stay thin; everything stateful is here."""
 
+import asyncio
 import datetime as dt
 import hmac
 import uuid
@@ -18,6 +19,7 @@ from app.auth.tokens import TokenStore
 from app.core.errors import AppError, ConflictError
 
 logger = structlog.get_logger()
+_DELIVERIES: set[asyncio.Future[None]] = set()
 
 # Purposes of a stored verification code, and the channel that delivers each.
 EMAIL_VERIFY = "email_verify"
@@ -74,7 +76,7 @@ class AuthService:
         user = AuthUser(
             email=email,
             phone=phone,
-            password_hash=security.hash_password(password),
+            password_hash=await security.hash_password_async(password),
             roles=list(dict.fromkeys([*config.DEFAULT_ROLES, *chosen, *invited, *founder_roles])),
             **({"tenant_id": tenant_id} if config.MULTI_TENANT else {}),
             # Following an invitation sent to this address proves the user controls it.
@@ -227,7 +229,7 @@ class AuthService:
         user = await self.by_email(email)
         # Always spend one password hash so unknown accounts take as long as known ones.
         stored = user.password_hash if user is not None else security.DUMMY_PASSWORD_HASH
-        valid = security.verify_password(password, stored)
+        valid = await security.verify_password_async(password, stored)
         if user is None or not valid:
             raise invalid_credentials()
         self._ensure_can_sign_in(user)
@@ -241,9 +243,9 @@ class AuthService:
             raise AppError("account_disabled", "this account is disabled", 403)
 
     async def change_password(self, user: AuthUser, current: str, new: str) -> None:
-        if not security.verify_password(current, user.password_hash):
+        if not await security.verify_password_async(current, user.password_hash):
             raise invalid_credentials()
-        user.password_hash = security.hash_password(new)
+        user.password_hash = await security.hash_password_async(new)
         await self._revoke_all_refresh_tokens(user.id)
         await self.session.commit()
 
@@ -289,6 +291,11 @@ class AuthService:
 
     async def refresh(self, raw_token: str) -> tuple[str, str, int]:
         rotation = await self.tokens.rotate(security.hash_secret(raw_token))
+        if rotation.status == "reused" and rotation.family_id is not None:
+            # Replay of a rotated token: the family is revoked, so end its session too.
+            await identity.end_session(
+                self.session, config.ISSUER, str(rotation.family_id), "refresh_reuse"
+            )
         if rotation.status != "ok" or rotation.user_id is None:
             message = "the refresh token has expired" if rotation.status == "expired" else (
                 "the refresh token is invalid"
@@ -422,10 +429,17 @@ class AuthService:
     async def _deliver(self, send: Any, purpose: str) -> None:
         """Delivery problems are logged, never shown: callers must not learn whether an
         address exists, and a mail outage should not turn into a failed sign-up."""
-        try:
-            await send()
-        except (DeliveryError, AppError) as exc:
-            logger.error("auth_delivery_failed", purpose=purpose, error=str(exc))
+        async def run() -> None:
+            try:
+                await send()
+            except (DeliveryError, AppError) as exc:
+                logger.error("auth_delivery_failed", purpose=purpose, error=str(exc))
+
+        # Not awaited: a slow mail server must not make a known address answer slower than an
+        # unknown one. The task is kept referenced until it finishes.
+        task = asyncio.ensure_future(run())
+        _DELIVERIES.add(task)
+        task.add_done_callback(_DELIVERIES.discard)
 
     async def resend_verification(self, email: str, mailer: Mailer) -> None:
         user = await self.by_email(email)
@@ -488,7 +502,7 @@ class AuthService:
         user = await self._verified_phone_user(phone)
         if user is None:
             # Spend comparable work on unknown numbers.
-            security.verify_password(code, security.DUMMY_PASSWORD_HASH)
+            await security.verify_password_async(code, security.DUMMY_PASSWORD_HASH)
             raise invalid_code()
         await self._consume_otp(user, SMS_LOGIN, code)
         await self.session.commit()
@@ -522,10 +536,10 @@ class AuthService:
                 raise AppError("reset_unavailable", "that reset method is not enabled", 400)
             found = await self._verified_phone_user(phone)
             if found is None:
-                security.verify_password(code, security.DUMMY_PASSWORD_HASH)
+                await security.verify_password_async(code, security.DUMMY_PASSWORD_HASH)
                 raise invalid_code()
             await self._consume_otp(found, PASSWORD_RESET, code)
             user = found
-        user.password_hash = security.hash_password(new_password)
+        user.password_hash = await security.hash_password_async(new_password)
         await self._revoke_all_refresh_tokens(user.id)
         await self.session.commit()

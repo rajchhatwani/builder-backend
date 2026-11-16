@@ -110,6 +110,13 @@ def derived_user_id(issuer: str, subject: str) -> uuid.UUID:
     return uuid.uuid5(_NAMESPACE, f"{issuer}\n{subject}")
 
 
+async def erase_emails(session: AsyncSession, user_id: uuid.UUID) -> None:
+    """Forget the e-mail address remembered when each identity was linked (right to erasure)."""
+    await session.execute(
+        sa.update(AuthIdentity).where(AuthIdentity.user_id == user_id).values(email_at_link=None)
+    )
+
+
 async def find_user_id(session: AsyncSession, issuer: str, subject: str) -> uuid.UUID | None:
     stmt = sa.select(AuthIdentity.user_id).where(
         AuthIdentity.issuer == issuer, AuthIdentity.subject == subject
@@ -216,7 +223,24 @@ async def session_is_live(session: AsyncSession, issuer: str, sid: str) -> bool:
     return revoked is None
 
 
-async def end_session(session: AsyncSession, issuer: str, sid: str, reason: str) -> int:
+async def end_session(
+    session: AsyncSession, issuer: str, sid: str, reason: str, *, user_id: uuid.UUID | None = None
+) -> int:
+    """End a session. With `user_id`, a session this API has not seen yet is recorded as already
+    ended, so its first request is refused instead of the logout being lost."""
+    if user_id is not None:
+        await session.execute(
+            insert(AuthSession)
+            .values(
+                id=uuid.uuid4(),
+                user_id=user_id,
+                sid=sid[:MAX_SUBJECT],
+                issuer=issuer,
+                created_at=_now(),
+                revoked_at=_now(),
+            )
+            .on_conflict_do_nothing(index_elements=["issuer", "sid"])
+        )
     result = await session.execute(
         sa.update(AuthSession)
         .where(

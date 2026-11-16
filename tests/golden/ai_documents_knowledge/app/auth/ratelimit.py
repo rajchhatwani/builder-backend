@@ -28,7 +28,10 @@ def parse_limit(limit: str) -> tuple[int, int]:
     match = _PERIOD_RE.fullmatch(period)
     if not count.isdigit() or match is None:
         raise ValueError(f"invalid rate limit {limit!r}")
-    return int(count), int(match.group(1) or 1) * _UNIT_SECONDS[match.group(2)]
+    limit_count, window = int(count), int(match.group(1) or 1) * _UNIT_SECONDS[match.group(2)]
+    if limit_count < 1 or window < 1:  # '0/hour' locks everyone out, '5/0minutes' never fires
+        raise ValueError(f"invalid rate limit {limit!r}")
+    return limit_count, window
 
 
 class RateLimiter:
@@ -78,12 +81,25 @@ class FailureRateLimiter(RateLimiter):
                 f"too many requests; retry in {retry_after} seconds",
                 429,
             )
+        # Reserve the slot before the endpoint runs, so a concurrent burst is counted too;
+        # give it back unless the endpoint rejects the call with a client error.
+        hits.append(now)
         try:
             yield
         except AppError as exc:
-            if 400 <= exc.status_code < 500 and exc.status_code != 429:
-                self._hits[client].append(time.monotonic())
+            if not (400 <= exc.status_code < 500 and exc.status_code != 429):
+                self._release(client, now)
             raise
+        except BaseException:
+            self._release(client, now)
+            raise
+        else:
+            self._release(client, now)
+
+    def _release(self, client: str, stamp: float) -> None:
+        hits = self._hits.get(client)
+        if hits is not None and stamp in hits:
+            hits.remove(stamp)
 
 
 def reset_all() -> None:

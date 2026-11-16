@@ -88,7 +88,7 @@ class TokenStore:
                 return Rotation("unknown")
             if result[0] == 2:
                 await self.client.eval(_REVOKE_SET, 1, _FAMILY + result[1], _PREFIX)
-                return Rotation("reused")
+                return Rotation("reused", family_id=uuid.UUID(result[1]))
         except RedisError as exc:
             raise _unavailable(exc) from exc
         return Rotation("ok", uuid.UUID(result[1]), uuid.UUID(result[2]))

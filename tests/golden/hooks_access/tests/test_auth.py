@@ -68,6 +68,10 @@ async def test_register_login_refresh_logout(client: AsyncClient, outbox: Outbox
         "/auth/refresh", json={"refresh_token": new_tokens["refresh_token"]}
     )
     assert after_replay.status_code == 401
+    # ... and the session of the thief's access token ends with it.
+    assert (
+        await client.get("/auth/me", headers=bearer(new_tokens["access_token"]))
+    ).status_code == 401
 
     fresh = await _login(client)
     assert (

@@ -190,5 +190,6 @@ async def delete_account(session: AsyncSession, user: AuthUser) -> None:
         setattr(user, field_name, None)
     user.is_active = False
     user.deleted_at = dt.datetime.now(dt.UTC)
+    await identity.erase_emails(session, user.id)
     await session.commit()
     logger.info("user_erased", user_id=str(user.id))

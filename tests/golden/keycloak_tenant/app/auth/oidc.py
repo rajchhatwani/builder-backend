@@ -278,9 +278,13 @@ def coerce_attribute(kind: str, value: Any, max_length: int | None, allowed: tup
             case "integer":
                 if isinstance(value, bool):
                     return None
-                if isinstance(value, int):
-                    return value
-                return int(value) if isinstance(value, str) and _INT_RE.fullmatch(value) else None
+                number = (
+                    value
+                    if isinstance(value, int)
+                    else int(value) if isinstance(value, str) and _INT_RE.fullmatch(value) else None
+                )
+                # the column is a 32-bit Integer: anything wider would fail the insert
+                return number if number is not None and -(2**31) <= number < 2**31 else None
             case "float":
                 if isinstance(value, bool):
                     return None

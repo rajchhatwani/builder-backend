@@ -2,6 +2,7 @@
 
 Passwords, tokens and codes use the standard library only."""
 
+import asyncio
 import base64
 import hashlib
 import hmac
@@ -67,6 +68,15 @@ def verify_password(password: str, stored: str) -> bool:
         return hmac.compare_digest(key, _b64d(expected))
     except (ValueError, TypeError):
         return False
+
+
+async def hash_password_async(password: str) -> str:
+    """scrypt is CPU and memory heavy: keep it off the event loop."""
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(password: str, stored: str) -> bool:
+    return await asyncio.to_thread(verify_password, password, stored)
 
 
 # Verified against when the account does not exist, so login time does not reveal it.

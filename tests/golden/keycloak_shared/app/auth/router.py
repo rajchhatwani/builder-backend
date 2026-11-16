@@ -56,7 +56,14 @@ async def backchannel_logout(request: _fa.Request, session: SessionDep) -> None:
     except oidc.InvalidTokenError as exc:
         raise AppError("invalid_token", "invalid logout token", 400) from exc
     if verified.sid is not None:
-        await identity.end_session(session, verified.issuer, verified.sid, "backchannel_logout")
+        user_id = (
+            await identity.find_user_id(session, verified.issuer, verified.sub)
+            if verified.sub is not None
+            else None
+        )
+        await identity.end_session(
+            session, verified.issuer, verified.sid, "backchannel_logout", user_id=user_id
+        )
     elif verified.sub is not None:
         user_id = await identity.find_user_id(session, verified.issuer, verified.sub)
         if user_id is not None:
