@@ -15,6 +15,7 @@ FIXTURES = Path(__file__).parent.parent / "fixtures" / "specs"
 def test_step2_states_gate_needs_separate_accounts(cloud: str) -> None:
     raw = json.loads((FIXTURES / f"deploy_{cloud}.json").read_text(encoding="utf-8"))
     doc = generate(Spec.model_validate(raw))["docs/DEPLOYMENT.md"]
-    step2 = doc.split("2. **Create the GitHub environments**")[1].split("3. **Set the variables**")[0]
+    after = doc.split("2. **Create the GitHub environments**")[1]
+    step2 = after.split("3. **Set the variables**")[0]
     assert "separate" in step2 and "only" in step2
     assert "same account" in step2
