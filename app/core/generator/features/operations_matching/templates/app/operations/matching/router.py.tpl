@@ -15,6 +15,8 @@ from app.operations.matching import config as _config
 from app.operations.matching import schemas as _s
 from app.operations.matching import service as _svc
 
+NO_NUL = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
+
 router = _fa.APIRouter(prefix="/matching", tags=["matching"])
 
 Reader = _t.Annotated[AuthUser, role_dependency(_config.READ_ROLES)]
@@ -41,8 +43,8 @@ async def list_assignments(
     session: SessionDep, user: Reader,
     limit: _t.Annotated[int, Query(ge=1, le=200)] = 50, offset: _t.Annotated[int, Query(ge=0)] = 0,
     status: _t.Annotated[_s.Status | None, Query()] = None,
-    request_ref: _t.Annotated[str | None, Query(max_length=128)] = None,
-    candidate_id: _t.Annotated[str | None, Query(max_length=128)] = None,
+    request_ref: _t.Annotated[str | None, Query(max_length=128, pattern=NO_NUL)] = None,
+    candidate_id: _t.Annotated[str | None, Query(max_length=128, pattern=NO_NUL)] = None,
 ) -> Page[_s.AssignmentOut]:
     items, total = await _svc.list_assignments(session, user, limit, offset, status, request_ref, candidate_id)
     return Page[_s.AssignmentOut](items=items, total=total, limit=limit, offset=offset)

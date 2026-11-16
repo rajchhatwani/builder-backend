@@ -15,6 +15,8 @@ from app.operations.prediction import config as _config
 from app.operations.prediction import schemas as _s
 from app.operations.prediction import service as _svc
 
+NO_NUL = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
+
 router = _fa.APIRouter(prefix="/prediction", tags=["prediction"])
 
 Reader = _t.Annotated[AuthUser, role_dependency(_config.READ_ROLES)]
@@ -35,8 +37,8 @@ async def record_actual(record_id: _uuid.UUID, body: _s.ActualIn, session: Sessi
 async def list_records(
     session: SessionDep, user: Reader,
     limit: _t.Annotated[int, Query(ge=1, le=200)] = 50, offset: _t.Annotated[int, Query(ge=0)] = 0,
-    kind: _t.Annotated[str | None, Query(max_length=32)] = None,
-    subject_ref: _t.Annotated[str | None, Query(max_length=128)] = None,
+    kind: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
+    subject_ref: _t.Annotated[str | None, Query(max_length=128, pattern=NO_NUL)] = None,
     has_actual: bool | None = None,
 ) -> Page[_s.RecordOut]:
     items, total = await _svc.list_records(session, user, limit, offset, kind, subject_ref, has_actual)
@@ -51,7 +53,7 @@ async def get_record(record_id: _uuid.UUID, session: SessionDep, user: Reader) -
 @router.get("/stats", response_model=_s.StatsOut)
 async def stats(
     session: SessionDep, user: Reader,
-    kind: _t.Annotated[str | None, Query(max_length=32)] = None,
-    model_id: _t.Annotated[str | None, Query(max_length=64)] = None,
+    kind: _t.Annotated[str | None, Query(max_length=32, pattern=NO_NUL)] = None,
+    model_id: _t.Annotated[str | None, Query(max_length=64, pattern=NO_NUL)] = None,
 ) -> _s.StatsOut:
     return await _svc.stats(session, user, kind, model_id)

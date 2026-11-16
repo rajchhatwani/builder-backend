@@ -344,3 +344,4 @@ tests/unit/test_audit_b1_009.py
 tests/unit/test_audit_b1_011.py
 tests/unit/test_audit_b1_012.py
 tests/unit/test_operations_input_guards.py
+tests/unit/test_operations_router_nul.py
