@@ -8,6 +8,7 @@ import uuid
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 
+import httpx
 import pytest
 from dns.exception import FormError
 from dns.resolver import YXDOMAIN
@@ -139,6 +140,21 @@ async def test_scim_cannot_change_the_email_of_an_account_in_other_orgs(
 # -- the outbound fetch connects to the address it checked ---------------------------------------
 
 
+class _Stream:
+    async def __aenter__(self) -> object:
+        async def chunks() -> object:
+            yield b"{}"
+
+        return SimpleNamespace(
+            status_code=200,
+            headers={},
+            request=httpx.Request("GET", "https://x.example/"),
+            aiter_bytes=chunks,
+        )
+
+    async def __aexit__(self, *_: object) -> None: ...
+
+
 async def test_outbound_fetch_is_pinned_to_the_checked_address(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -159,9 +175,9 @@ async def test_outbound_fetch_is_pinned_to_the_checked_address(
 
         async def __aexit__(self, *_: object) -> None: ...
 
-        async def request(self, method: str, url: str, **kw: object) -> object:
+        def stream(self, method: str, url: str, **kw: object) -> "_Stream":
             seen.update(url=url, **kw)
-            return SimpleNamespace(content=b"{}")
+            return _Stream()
 
     monkeypatch.setattr(oidc, "_resolve", resolve)
     monkeypatch.setattr(oidc.httpx, "AsyncClient", FakeClient)
