@@ -1,6 +1,6 @@
 /** F5-4: Operate > Documents review queue (new shell). Open a flagged document, correct the wrong field, approve it.
  *  The project API is mocked (see preview-mock.ts). Not run by its author; run with `npx playwright test e2e/documents.spec.ts`.
- *  The v2 "documents" route also renders the older PDF-templates panel above the queue, so axe is scoped to the queue page. */
+ *  The v2 "documents" route has two tabs: Review queue (this page) and PDF templates. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'

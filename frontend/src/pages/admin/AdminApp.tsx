@@ -191,8 +191,13 @@ export function AdminApp({ section }: { section: AdminSection }) {
             <button
               className="outline small"
               onClick={async () => {
-                await api.adminLogout()
-                setUser(null)
+                try {
+                  await api.adminLogout()
+                } catch {
+                  // the token is cleared locally anyway; still leave the console
+                } finally {
+                  setUser(null)
+                }
               }}
             >
               Sign out

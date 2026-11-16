@@ -185,9 +185,13 @@ export function AccountPage() {
       danger: true,
     })
     if (!ok) return
-    await api.revokeApiToken(token.id)
-    toast('Token revoked.')
-    load()
+    try {
+      await api.revokeApiToken(token.id)
+      toast('Token revoked.')
+      load()
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+    }
   }
 
   async function signOutEverywhere() {
@@ -197,7 +201,12 @@ export function AccountPage() {
       confirmLabel: 'Sign out everywhere',
     })
     if (!ok) return
-    await api.logoutEverywhere()
+    try {
+      await api.logoutEverywhere()
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+      return
+    }
     window.location.hash = '#/'
     window.location.reload()
   }

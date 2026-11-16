@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../../api/client'
 import type {
   AdminInsights,
   AdminOrg,
   AdminOrgMember,
   AdminOrgProject,
-  AdminSubscription,
-  AdminProject,
   AdminStats,
   AdminUser,
   ApiTokenInfo,
@@ -25,11 +23,35 @@ import { Modal } from '../../components/Modal'
 import { openViewingTab } from '../../api/viewing'
 import { useUi } from '../../components/Ui'
 import { SsoChecklist } from '../OrgSsoTab'
+import { LoadFailed } from '../../shell/behavior/ui'
 
 const ROLE_LABEL: Record<PlatformRole, string> = {
   customer: 'Customer',
   platform_support: 'Support (read-only)',
   platform_admin: 'Administrator',
+}
+
+const loadMsg = (e: unknown) => (e instanceof ApiError ? e.message : "Can't reach the server.")
+
+/** Debounced list fetch: a slower, older response never overwrites the newest query; failures are kept (not blanked). */
+function useDebouncedPage<T>(fetcher: () => Promise<T>, deps: unknown[]) {
+  const [data, setData] = useState<T | null>(null)
+  const [err, setErr] = useState('')
+  const [tries, setTries] = useState(0)
+  const fetchRef = useRef(fetcher)
+  fetchRef.current = fetcher
+  useEffect(() => {
+    let cancelled = false
+    const timer = setTimeout(() => {
+      fetchRef.current().then(
+        (d) => { if (!cancelled) { setErr(''); setData(d) } },
+        (e) => { if (!cancelled) setErr(loadMsg(e)) },
+      )
+    }, 200)
+    return () => { cancelled = true; clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [...deps, tries])
+  return { data, setData, err, retry: () => setTries((n) => n + 1) }
 }
 
 function when(iso: string | null): string {
@@ -71,9 +93,13 @@ function Pager<T>({ page, onPage }: { page: Page<T>; onPage: (offset: number) =>
 
 export function AdminOverview() {
   const [stats, setStats] = useState<AdminStats | null>(null)
+  const [err, setErr] = useState('')
+  const [tries, setTries] = useState(0)
   useEffect(() => {
-    api.adminStats().then(setStats).catch(() => undefined)
-  }, [])
+    let cancelled = false
+    api.adminStats().then((v) => { if (!cancelled) { setErr(''); setStats(v) } }, (e) => { if (!cancelled) setErr(loadMsg(e)) })
+    return () => { cancelled = true }
+  }, [tries])
   const cards: [string, number | undefined, string?][] = [
     ['People', stats?.users],
     ['Active', stats?.active_users],
@@ -86,6 +112,7 @@ export function AdminOverview() {
   return (
     <>
       <Header title="Overview">The state of the platform at a glance.</Header>
+      {err && <LoadFailed what="the overview" message={err} onRetry={() => setTries((n) => n + 1)} />}
       <div className="stat-grid">
         {cards.map(([label, value, tone]) => (
           <div key={label} className={`card stat-card ${tone ?? ''}`}>
@@ -359,12 +386,20 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
   const [tokensUser, setTokensUser] = useState<AdminUser | null>(null)
   const [resetting, setResetting] = useState<AdminUser | null>(null)
 
+  const [loadErr, setLoadErr] = useState('')
+  const seq = useRef(0)
   const load = useCallback(async () => {
-    setPage(await api.adminUsers({ q, status, role, limit: 25, offset }))
+    const mine = ++seq.current
+    try {
+      const p = await api.adminUsers({ q, status, role, limit: 25, offset })
+      if (mine === seq.current) { setLoadErr(''); setPage(p) }
+    } catch (e) {
+      if (mine === seq.current) setLoadErr(loadMsg(e))
+    }
   }, [q, status, role, offset])
 
   useEffect(() => {
-    const timer = setTimeout(() => load().catch(() => undefined), 200)
+    const timer = setTimeout(() => void load(), 200)
     return () => clearTimeout(timer)
   }, [load])
 
@@ -448,6 +483,7 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
         {!readOnly && <button onClick={() => setCreating(true)}>New person</button>}
       </div>
 
+      {loadErr && <LoadFailed what="this list" message={loadErr} onRetry={() => void load()} />}
       {page && (
         <>
           <table>
@@ -567,19 +603,16 @@ export function AdminUsers({ me, readOnly }: { me: UserAccount; readOnly: boolea
 // ── Projects (metadata only) ─────────────────────────────────────────────────
 
 export function AdminProjects() {
-  const [page, setPage] = useState<Page<AdminProject> | null>(null)
   const [q, setQ] = useState('')
   const [offset, setOffset] = useState(0)
-  useEffect(() => {
-    const timer = setTimeout(() => api.adminProjects(q, 25, offset).then(setPage).catch(() => undefined), 200)
-    return () => clearTimeout(timer)
-  }, [q, offset])
+  const { data: page, err: loadErr, retry } = useDebouncedPage(() => api.adminProjects(q, 25, offset), [q, offset])
   return (
     <>
       <Header title="Projects">Names, owners and size only. Customer data is not visible here.</Header>
       <div className="table-toolbar">
         <input type="search" placeholder="Search name or slug" value={q} onChange={(e) => { setOffset(0); setQ(e.target.value) }} />
       </div>
+      {loadErr && <LoadFailed what="this list" message={loadErr} onRetry={retry} />}
       {page && (
         <>
           <table>
@@ -684,14 +717,10 @@ function OverrideDialog({ org, onClose, onSaved }: { org: AdminOrg; onClose: () 
 
 export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
   const { toast } = useUi()
-  const [page, setPage] = useState<Page<AdminOrg> | null>(null)
   const [q, setQ] = useState('')
   const [offset, setOffset] = useState(0)
   const [editing, setEditing] = useState<AdminOrg | null>(null)
-  useEffect(() => {
-    const timer = setTimeout(() => api.adminOrganizations(q, 25, offset).then(setPage).catch(() => undefined), 200)
-    return () => clearTimeout(timer)
-  }, [q, offset])
+  const { data: page, setData: setPage, err: loadErr, retry } = useDebouncedPage(() => api.adminOrganizations(q, 25, offset), [q, offset])
 
   function saved(org: AdminOrg) {
     setEditing(null)
@@ -705,6 +734,7 @@ export function AdminOrganizations({ readOnly }: { readOnly: boolean }) {
       <div className="table-toolbar">
         <input type="search" placeholder="Search name or slug" value={q} onChange={(e) => { setOffset(0); setQ(e.target.value) }} />
       </div>
+      {loadErr && <LoadFailed what="this list" message={loadErr} onRetry={retry} />}
       {page && (
         <>
           <table>
@@ -1674,9 +1704,13 @@ export function AdminPlans({ readOnly }: { readOnly: boolean }) {
   const { toast } = useUi()
   const [plans, setPlans] = useState<PlanInfo[] | null>(null)
   const [editing, setEditing] = useState<PlanInfo | 'new' | null>(null)
+  const [planErr, setPlanErr] = useState('')
+  const [planTries, setPlanTries] = useState(0)
   useEffect(() => {
-    api.adminPlans().then(setPlans).catch(() => setPlans([]))
-  }, [])
+    let cancelled = false
+    api.adminPlans().then((v) => { if (!cancelled) { setPlanErr(''); setPlans(v) } }, (e) => { if (!cancelled) setPlanErr(loadMsg(e)) })
+    return () => { cancelled = true }
+  }, [planTries])
 
   function saved(plan: PlanInfo) {
     setEditing(null)
@@ -1694,9 +1728,11 @@ export function AdminPlans({ readOnly }: { readOnly: boolean }) {
           <h1>Plans</h1>
           <p>The catalog of plans and their caps. Empty caps mean unlimited.</p>
         </div>
-        {!readOnly && <button onClick={() => setEditing('new')}>New plan</button>}
+        {!readOnly && plans !== null && <button onClick={() => setEditing('new')}>New plan</button>}
       </div>
-      {plans === null ? (
+      {planErr && plans === null ? (
+        <LoadFailed what="the plans" message={planErr} onRetry={() => setPlanTries((n) => n + 1)} />
+      ) : plans === null ? (
         <p className="empty-state">Loading…</p>
       ) : (
         <table>
@@ -1755,19 +1791,15 @@ const BILLING_FILTERS: { id: string; label: string }[] = [
 
 export function AdminBilling({ readOnly }: { readOnly: boolean }) {
   const { toast } = useUi()
-  const [page, setPage] = useState<Page<AdminSubscription> | null>(null)
   const [status, setStatus] = useState('')
   const [q, setQ] = useState('')
   const [offset, setOffset] = useState(0)
   const [busy, setBusy] = useState(false)
   const [version, setVersion] = useState(0)
-  useEffect(() => {
-    const timer = setTimeout(
-      () => api.adminSubscriptions({ status, q, limit: 25, offset }).then(setPage).catch(() => undefined),
-      200,
-    )
-    return () => clearTimeout(timer)
-  }, [status, q, offset, version])
+  const { data: page, err: loadErr, retry } = useDebouncedPage(
+    () => api.adminSubscriptions({ status, q, limit: 25, offset }),
+    [status, q, offset, version],
+  )
 
   async function reconcile() {
     setBusy(true)
@@ -1809,6 +1841,7 @@ export function AdminBilling({ readOnly }: { readOnly: boolean }) {
           )}
         </span>
       </div>
+      {loadErr && <LoadFailed what="this list" message={loadErr} onRetry={retry} />}
       {page && (
         <>
           <table>
@@ -1875,9 +1908,14 @@ function Sparkbars({ series, label }: { series: { day: string; count: number }[]
 
 export function AdminInsightsPage() {
   const [data, setData] = useState<AdminInsights | null>(null)
+  const [err, setErr] = useState('')
+  const [tries, setTries] = useState(0)
   useEffect(() => {
-    api.adminInsights().then(setData).catch(() => undefined)
-  }, [])
+    let cancelled = false
+    api.adminInsights().then((v) => { if (!cancelled) { setErr(''); setData(v) } }, (e) => { if (!cancelled) setErr(loadMsg(e)) })
+    return () => { cancelled = true }
+  }, [tries])
+  if (err && !data) return <LoadFailed what="the insights" message={err} onRetry={() => setTries((n) => n + 1)} />
   if (!data) return <p className="empty-state">Loading…</p>
   const tiles: [string, number][] = [
     ['Organizations', data.total_orgs],
@@ -1910,7 +1948,6 @@ export function AdminInsightsPage() {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 export function AdminAudit() {
-  const [page, setPage] = useState<Page<AuditEntry> | null>(null)
   const [action, setAction] = useState('')
   const [result, setResult] = useState('')
   const [via, setVia] = useState('')
@@ -1918,17 +1955,10 @@ export function AdminAudit() {
   const [orgId, setOrgId] = useState(() => new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('organization_id') ?? '')
   const [offset, setOffset] = useState(0)
   const orgFilter = UUID_RE.test(orgId.trim()) ? orgId.trim() : undefined
-  useEffect(() => {
-    const timer = setTimeout(
-      () =>
-        api
-          .adminAudit({ action, result, via, organization_id: orgFilter, limit: 50, offset })
-          .then(setPage)
-          .catch(() => undefined),
-      200,
-    )
-    return () => clearTimeout(timer)
-  }, [action, result, via, orgFilter, offset])
+  const { data: page, err: loadErr, retry } = useDebouncedPage(
+    () => api.adminAudit({ action, result, via, organization_id: orgFilter, limit: 50, offset }),
+    [action, result, via, orgFilter, offset],
+  )
   return (
     <>
       <Header title="Audit log">An append-only record of sign-ins, changes and refused attempts.</Header>
@@ -1975,6 +2005,7 @@ export function AdminAudit() {
           />
         </div>
       </div>
+      {loadErr && <LoadFailed what="this list" message={loadErr} onRetry={retry} />}
       {page && (
         <>
           <table>

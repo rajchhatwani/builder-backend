@@ -33,7 +33,7 @@ function route(overrides: Record<string, () => Response> = {}): Handler {
   }
 }
 
-async function mount() {
+async function mount(section = 'overview') {
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -42,7 +42,7 @@ async function mount() {
     root.render(
       <QueryClientProvider client={qc}>
         <UiProvider>
-          <ProjectWorkspace projectId="p1" section="overview" />
+          <ProjectWorkspace projectId="p1" section={section as never} />
         </UiProvider>
       </QueryClientProvider>,
     )
@@ -111,5 +111,16 @@ describe('ProjectWorkspace load failures', () => {
     expect(host.querySelector('[data-testid="load-error"]')).toBeNull()
     expect(host.textContent).not.toContain("We can't find this project")
     expect(host.textContent).toContain('Demo')
+  })
+})
+
+describe('ProjectWorkspace documents section (v2)', () => {
+  it('F-0545 shows one document UI at a time, switched by tabs', async () => {
+    handler = route()
+    await mount('documents')
+    expect(host.querySelectorAll('h1').length).toBeLessThanOrEqual(1)
+    const tabs = [...host.querySelectorAll('.tab-btn')].map((b) => b.textContent)
+    expect(tabs).toEqual(['Review queue', 'PDF templates'])
+    expect(host.textContent).not.toContain('ten ready-made templates')
   })
 })

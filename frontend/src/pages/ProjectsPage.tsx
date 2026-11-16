@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api/client'
+import { api, ApiError } from '../api/client'
 import { formatDeletionDate } from '../api/dates'
 import type { Organization, Project } from '../api/types'
 import { NewProjectDialog } from '../components/NewProjectDialog'
@@ -166,9 +166,13 @@ export function ProjectsPage() {
       danger: true,
     })
     if (!ok) return
-    await api.deleteProject(project.id)
-    toast(`Deleted "${project.name}".`)
-    load()
+    try {
+      await api.deleteProject(project.id)
+      toast(`Deleted "${project.name}".`)
+      load()
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Can't reach the server.", 'danger')
+    }
   }
 
   return (

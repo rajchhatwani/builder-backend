@@ -101,14 +101,16 @@ export function UsageLimitsPage({ readOnly }: { readOnly: boolean }) {
     api.adminOrganizations('', 50, 0).then((p) => alive.current && setOrgs(p.items)).catch(() => undefined)
   }, [])
 
+  const seq = useRef(0)
   const load = useCallback((o: string) => {
+    const mine = ++seq.current
     setState('loading')
     api.adminOrgUsage(o).then((u) => {
-      if (!alive.current) return
+      if (!alive.current || mine !== seq.current) return
       setMetrics(u.metrics)
       setState('ready')
     }).catch((e) => {
-      if (!alive.current) return
+      if (!alive.current || mine !== seq.current) return
       setErr(e instanceof ApiError && e.status === 404 ? 'No organization with that id or slug.' : errText(e, 'Could not load'))
       setState('error')
     })

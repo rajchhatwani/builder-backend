@@ -64,6 +64,22 @@ describe('UsageLimitsPage', () => {
     expect(limit().value).toBe('100')
   })
 
+  it('F-0544 a late response for the previously picked org is ignored', async () => {
+    m.adminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
+    await mount()
+    let lateA!: (v: unknown) => void
+    m.adminOrgUsage.mockImplementationOnce(() => new Promise((r) => { lateA = r }))
+    m.adminOrgUsage.mockResolvedValueOnce({ metrics: [metric({ limit: 7 })] })
+    const input = document.getElementById('ul-org-id') as HTMLInputElement
+    await type(input, 'a')
+    await click(document.querySelector('[data-testid=ul-open]')!)
+    await type(input, 'b')
+    await click(document.querySelector('[data-testid=ul-open]')!)
+    expect(limit().value).toBe('7')
+    await act(async () => { lateA({ metrics: [metric({ limit: 999 })] }); await tick() })
+    expect(limit().value).toBe('7')
+  })
+
   it('shows empty and error states', async () => {
     m.adminOrganizations.mockResolvedValue({ items: [], total: 0, limit: 50, offset: 0 })
     await mount()

@@ -178,6 +178,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   const [modelVersion, setModelVersion] = useState(0)
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
+  const [docTab, setDocTab] = useState<'queue' | 'templates'>('queue')
   const org = useProjectOrg(project?.organization_id)
   // New shell only: one status call feeds the rail badges and the Home board (shared Query cache).
   const v2 = shellV2Enabled()
@@ -551,7 +552,18 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'documents' && (
+      {section === 'documents' && v2 && (
+        <SubTabs
+          tabs={[
+            { id: 'queue', label: 'Review queue' },
+            { id: 'templates', label: 'PDF templates' },
+          ]}
+          value={docTab}
+          onChange={setDocTab}
+        />
+      )}
+      {section === 'documents' && v2 && docTab === 'templates' && <DocumentsPanel projectId={project.id} onChanged={load} />}
+      {section === 'documents' && !v2 && (
         <>
           <PageTitle title="Documents">
             Generate invoices, receipts, statements, certificates and more as PDFs: ten ready-made templates you can edit, with totals recomputed on the server.
@@ -601,7 +613,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'ledger' && <LedgerPage projectId={project.id} />}
           {section === 'map' && <MapPage projectId={project.id} />}
           {section === 'bookings' && <BookingsPage projectId={project.id} />}
-          {section === 'documents' && <DocumentsPage projectId={project.id} />}
+          {section === 'documents' && docTab === 'queue' && <DocumentsPage projectId={project.id} />}
           {section === 'agentactions' && <AgentApprovalsPage projectId={project.id} />}
         </Suspense>
       )}
