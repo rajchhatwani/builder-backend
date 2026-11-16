@@ -383,12 +383,13 @@ _PG_IDENT_MAX = 63
 
 
 def _ident(name: str) -> str:
-    """A constraint/index name PostgreSQL accepts: names over 63 chars are shortened with a
-    stable hash suffix so the generated migration cannot crash on a valid spec."""
+    """A constraint/index name PostgreSQL accepts. Over 63 chars it is shortened exactly the way
+    SQLAlchemy shortens convention names in the generated models (first 55 chars + "_" + last 4
+    hex of md5), so the migration and the models agree and `alembic check` sees no drift."""
     if len(name) <= _PG_IDENT_MAX:
         return name
-    digest = hashlib.sha1(name.encode()).hexdigest()[:8]  # noqa: S324 - naming, not security
-    return f"{name[: _PG_IDENT_MAX - 9]}_{digest}"
+    digest = hashlib.md5(name.encode(), usedforsecurity=False).hexdigest()[-4:]
+    return f"{name[: _PG_IDENT_MAX - 8]}_{digest}"
 
 
 # What the database column can hold. Anything outside is rejected by the schema (422) so a
