@@ -145,6 +145,27 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
       return
     }
 
+    const reload = async (fullReload: boolean, updated: ProjectPermission[] | null) => {
+      // Reload so the matrix and the saved ids match the server (also after deletions).
+      const fresh = fullReload ? await api.listAllPermissions(projectId) : (updated ?? [])
+      const map: Record<string, PermissionEntry> = {}
+      const ids: Record<string, string> = fullReload ? {} : { ...savedIds.current }
+      for (const p of fresh) {
+        const key = `${p.entity_id}:${p.operation}`
+        ids[key] = p.id
+        map[key] = {
+          entity_id: p.entity_id,
+          operation: p.operation,
+          roles: p.roles ?? [],
+          row_rule: p.row_rule ?? null,
+          custom_filter_field: p.custom_filter_field ?? null,
+          custom_filter_value: p.custom_filter_value ?? null,
+        }
+      }
+      savedIds.current = ids
+      setPermissions(map)
+    }
+
     try {
       let updated: ProjectPermission[] | null = null
       if (entries.length > 0) {
@@ -179,6 +200,8 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
               danger: true,
             })
             if (!ok) {
+              // The bulk upsert already persisted: resync the matrix and saved ids.
+              await reload(true, updated)
               setSaving(false)
               return
             }
@@ -187,24 +210,7 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
           await api.deletePermission(savedIds.current[k], true)
         }
       }
-      // Reload so the matrix and the saved ids match the server (also after deletions).
-      const fresh = clearedKeys.length > 0 ? await api.listAllPermissions(projectId) : (updated ?? [])
-      const map: Record<string, PermissionEntry> = {}
-      const ids: Record<string, string> = clearedKeys.length > 0 ? {} : { ...savedIds.current }
-      for (const p of fresh) {
-        const key = `${p.entity_id}:${p.operation}`
-        ids[key] = p.id
-        map[key] = {
-          entity_id: p.entity_id,
-          operation: p.operation,
-          roles: p.roles ?? [],
-          row_rule: p.row_rule ?? null,
-          custom_filter_field: p.custom_filter_field ?? null,
-          custom_filter_value: p.custom_filter_value ?? null,
-        }
-      }
-      savedIds.current = ids
-      setPermissions(map)
+      await reload(clearedKeys.length > 0, updated)
       setSuccess('Permissions saved successfully.')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Failed to save permissions.')

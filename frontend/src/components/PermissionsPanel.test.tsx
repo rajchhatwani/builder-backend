@@ -4,12 +4,12 @@ import { click, flush, mount } from '../shell/ai/testUtils'
 import { ApiError } from '../api/client'
 import { PermissionsPanel } from './PermissionsPanel'
 
-const m = vi.hoisted(() => ({ list: vi.fn(), bulk: vi.fn(), del: vi.fn() }))
+const m = vi.hoisted(() => ({ list: vi.fn(), bulk: vi.fn(), del: vi.fn(), confirm: vi.fn() }))
 vi.mock('../api/client', async (orig) => ({
   ...(await orig<typeof import('../api/client')>()),
   api: { listAllPermissions: m.list, bulkUpsertPermissions: m.bulk, deletePermission: m.del },
 }))
-vi.mock('./Ui', () => ({ useUi: () => ({ confirm: vi.fn(async () => true), toast: vi.fn() }) }))
+vi.mock('./Ui', () => ({ useUi: () => ({ confirm: m.confirm, toast: vi.fn() }) }))
 
 const entities = [{ id: 'e1', name: 'Post' }] as never
 const roles = [{ id: 'r1', name: 'admin', label: 'admin' }] as never
@@ -21,6 +21,7 @@ const perm = (id: string, op: string, rolesList: string[]) => ({
 beforeEach(() => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', '') }
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open') }
+  m.confirm.mockReset(); m.confirm.mockResolvedValue(true)
   m.list.mockReset(); m.bulk.mockReset(); m.del.mockReset()
   m.del.mockResolvedValue(undefined)
 })
@@ -61,5 +62,17 @@ describe('PermissionsPanel revoke', () => {
     const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
     await clearCellAndSave(host, 'list')
     expect(m.del.mock.calls).toEqual([['p-list', false], ['p-list', true]])
+  })
+
+  it('reloads the matrix when the delete confirm is declined after a bulk upsert persisted (F-0905)', async () => {
+    m.list.mockResolvedValueOnce([perm('p-list', 'list', ['admin']), perm('p-get', 'get', ['admin'])])
+    m.bulk.mockResolvedValue([perm('p-get', 'get', ['admin'])])
+    m.del.mockRejectedValueOnce(new ApiError(409, { code: 'access_weakened', message: 'more access', details: [] }))
+    m.confirm.mockResolvedValue(false)
+    m.list.mockResolvedValue([perm('p-get', 'get', ['admin'])])
+    const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
+    await clearCellAndSave(host, 'list')
+    expect(m.bulk).toHaveBeenCalled()
+    expect(m.list).toHaveBeenCalledTimes(2)
   })
 })
