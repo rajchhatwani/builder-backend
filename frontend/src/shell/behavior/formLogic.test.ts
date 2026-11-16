@@ -75,6 +75,10 @@ describe('history mapping', () => {
   it('spots secret-looking names like the backend', () => {
     expect(looksSecret('API_KEY')).toBe(true)
     expect(looksSecret('subject')).toBe(false)
+    for (const n of ['passphrase', 'card_number', 'cardNumber', 'pin_code', 'userPin', 'PWD', 'my-otp', 'cvv', 'ssn', 'iban', 'credentials']) {
+      expect(looksSecret(n), n).toBe(true)
+    }
+    for (const n of ['shipping', 'spinning', 'pinned_at', 'option']) expect(looksSecret(n), n).toBe(false)
   })
 })
 

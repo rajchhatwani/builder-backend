@@ -12,9 +12,18 @@ import type {
 
 export const SETTING_TYPES = ['string', 'int', 'bool', 'decimal'] as const
 /** Same words as app/core/validation_runtime.py SECRET_WORDS (the backend refuses these names). */
-export const SECRET_WORDS = ['secret', 'password', 'passwd', 'token', 'credential', 'private_key', 'api_key']
+export const SECRET_WORDS = [
+  'secret', 'password', 'passwd', 'passphrase', 'token', 'credential', 'private_key', 'api_key', 'cardnumber', 'card_number',
+]
+/** Short words match whole name parts only ("pin_code", "userPin"), so "shipping" stays allowed. */
+export const SECRET_PARTS = ['pwd', 'pin', 'otp', 'cvv', 'cvc', 'ssn', 'iban', 'credentials']
+const PART_SPLIT = /[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/
 
-export const looksSecret = (name: string) => SECRET_WORDS.some((w) => name.toLowerCase().includes(w))
+export const looksSecret = (name: string) => {
+  const lowered = name.toLowerCase()
+  if (SECRET_WORDS.some((w) => lowered.includes(w))) return true
+  return name.split(PART_SPLIT).some((p) => p && SECRET_PARTS.includes(p.toLowerCase()))
+}
 
 let nextKey = 1
 export const newKey = () => nextKey++

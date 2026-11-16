@@ -59,15 +59,19 @@ export function useSection<Row, Body>(
     }
   }, [projectId])
 
+  const loadSeq = useRef(0)
   const load = useCallback(async () => {
+    const seq = ++loadSeq.current
     setS((p) => ({ ...p, status: 'loading', conflict: false, saveError: '', savedNote: '' }))
     try {
       const [read, issues] = await Promise.all([cfgRef.current.load(projectId), fetchIssues()])
+      if (seq !== loadSeq.current) return // a newer load (retry / other project) owns the state now
       setS((p) => ({
         ...p, status: 'ready', rows: read.items.map(cfgRef.current.fromBody), saved: read.items, version: read.version,
         dirty: false, conflict: false, issues, clientErrs: {},
       }))
     } catch (err) {
+      if (seq !== loadSeq.current) return
       setS((p) => ({ ...p, status: 'error', loadError: err instanceof Error ? err.message : 'Could not load' }))
     }
   }, [projectId, fetchIssues])

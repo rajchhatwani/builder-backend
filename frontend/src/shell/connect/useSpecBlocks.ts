@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { ValidationIssue } from '../../api/types'
 import type { SpecBlocks } from './specTypes'
@@ -17,8 +17,13 @@ export function useSpecBlocks(projectId: string): { load: SpecLoad; reload: (qui
     if (quiet !== true) setLoad({ status: 'loading' })
     setN((v) => v + 1)
   }, [])
+  const shownFor = useRef(projectId)
   useEffect(() => {
     let live = true
+    if (shownFor.current !== projectId) {
+      shownFor.current = projectId
+      setLoad({ status: 'loading' }) // never show the previous project's spec as ready
+    }
     Promise.all([api.getSpecBlocks(projectId), api.validateProject(projectId).then((r) => r.issues).catch(() => [] as ValidationIssue[])])
       .then(([spec, issues]) => live && setLoad({ status: 'ready', spec: spec ?? {}, issues }))
       .catch((e: unknown) => live && setLoad({ status: 'error', message: e instanceof Error ? e.message : 'Could not load the spec' }))

@@ -3,7 +3,7 @@
  *  directly. The rules mirror app/core/validation_seed.py (GENERATORS, INJECTIVE, SEEDABLE) to keep users from picking
  *  an impossible combination; the backend validator stays the truth and its messages are shown as they come. */
 import type { SeedFieldBody, SeedGeneratorBody, SeedProfileBody, StateMachineBody, ValidationIssue } from '../../api/types'
-import { issuesForSection, newKey, SECRET_WORDS, type FieldErrors, type SectionIssues } from './formLogic'
+import { issuesForSection, looksSecret, newKey, type FieldErrors, type SectionIssues } from './formLogic'
 
 export const SEEDABLE = ['string', 'text', 'integer', 'bigint', 'float', 'decimal', 'boolean', 'date', 'datetime', 'enum']
 const INT_TYPES = ['integer', 'bigint']
@@ -27,7 +27,6 @@ const INJECTIVE = ['sequence', 'email']
 const MAX_WORD_LENGTH = 7 // seed_engine.MAX_WORD_LENGTH
 const NAME_RE = /^[a-z][a-z0-9_]{0,23}$/
 
-export const looksSecret = (name: string) => SECRET_WORDS.some((w) => name.toLowerCase().includes(w))
 export const isProfileName = (name: string) => NAME_RE.test(name)
 
 // ── Catalogue (built from the entities / fields / relations / state machines APIs) ──────────

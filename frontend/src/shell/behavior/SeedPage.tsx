@@ -93,11 +93,13 @@ export function SeedPage({ projectId }: { projectId: string }) {
   const [cat, setCat] = useState<CatalogLoad>({ status: 'loading' })
   const [editing, setEditing] = useState<Set<number>>(new Set())
 
+  const catSeq = useRef(0)
   const loadCat = useCallback(() => {
+    const seq = ++catSeq.current
     setCat({ status: 'loading' })
     loadCatalog(projectId).then(
-      (catalog) => { typesRef.current = columnTypes(catalog); setCat({ status: 'ready', catalog }) },
-      (err: unknown) => setCat({ status: 'error', message: err instanceof Error ? err.message : 'Could not load the entities' }),
+      (catalog) => { if (seq !== catSeq.current) return; typesRef.current = columnTypes(catalog); setCat({ status: 'ready', catalog }) },
+      (err: unknown) => seq === catSeq.current && setCat({ status: 'error', message: err instanceof Error ? err.message : 'Could not load the entities' }),
     )
   }, [projectId])
   useEffect(loadCat, [loadCat])

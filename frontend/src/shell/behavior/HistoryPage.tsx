@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../../api/client'
 import type { HistoryBody } from '../../api/types'
 import { blankHistory, historyFromBody, historyToBody, looksSecret, type HistoryRow } from './formLogic'
@@ -49,11 +49,13 @@ export function HistoryPage({ projectId }: { projectId: string }) {
   const [cat, setCat] = useState<CatalogLoad>({ status: 'loading' })
   const [pick, setPick] = useState('')
 
+  const catSeq = useRef(0)
   const loadCat = useCallback(() => {
+    const seq = ++catSeq.current
     setCat({ status: 'loading' })
     loadCatalog(projectId).then(
-      (catalog) => setCat({ status: 'ready', catalog }),
-      (err: unknown) => setCat({ status: 'error', message: err instanceof Error ? err.message : 'Could not load the entities' }),
+      (catalog) => seq === catSeq.current && setCat({ status: 'ready', catalog }),
+      (err: unknown) => seq === catSeq.current && setCat({ status: 'error', message: err instanceof Error ? err.message : 'Could not load the entities' }),
     )
   }, [projectId])
   useEffect(loadCat, [loadCat])
