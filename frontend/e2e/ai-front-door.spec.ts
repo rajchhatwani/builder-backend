@@ -22,7 +22,7 @@ test('front door: rail group, intake box, empty plan review, build view with tab
   await page.getByLabel('What should the backend do?').fill('A small leave-request system with manager approval.')
   await expect(submit).toBeEnabled()
   await page.getByLabel('Add documents').setInputFiles({ name: 'virus.exe', mimeType: 'application/octet-stream', buffer: Buffer.from('x') })
-  await expect(page.getByRole('alert').filter({ hasText: 'only PDF, text and Markdown' })).toBeVisible()
+  await expect(page.getByRole('alert').filter({ hasText: 'only PDF, Word, Excel, text and Markdown' })).toBeVisible()
   await page.getByLabel('Add documents').setInputFiles({ name: 'brief.md', mimeType: 'text/markdown', buffer: Buffer.from('# Brief\nManagers approve leave.') })
   await expect(page.getByTestId('intake-files')).toContainText('brief.md')
 
