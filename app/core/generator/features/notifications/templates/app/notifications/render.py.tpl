@@ -76,9 +76,9 @@ def clean_values(values: Mapping[str, object], variables: set[str] | frozenset[s
 # A value placed inside one of these attributes of an HTML template is a URL: only these schemes pass.
 # The attribute values are found in ONE pass over the template (a per-placeholder scan is quadratic).
 _URL_ATTR_RE = re.compile(
-    r"""(?:href|src|action|formaction|xlink:href|poster|background|cite)\s*=\s*(?:"[^"]*|'[^']*|[^\s"'>]*)""",
-    re.IGNORECASE,
+    r"""(?:href|src|action|formaction|xlink:href|poster|background|cite)\s*=\s*""", re.IGNORECASE
 )
+_UNQUOTED_END_RE = re.compile(r"""[\s"'>]""")
 _SAFE_SCHEMES = ("http", "https", "mailto", "tel")
 _SCHEME_RE = re.compile(r"([a-z][a-z0-9+.\-]*):")
 _STRIP = re.compile(r"[\s\x00-\x1f\x7f\u0080-\u009f\u200b-\u200f\u2028\u2029\u2060\ufeff]+")
@@ -95,12 +95,43 @@ def safe_url(value: str) -> str:
 
 
 def _url_spans(template: str) -> tuple[list[int], list[int]]:
-    """Start and end offsets of every URL attribute value (an unterminated quote runs to the end)."""
+    """Start offsets of every URL attribute keyword (overlapping ones too, so a decoy such as
+    `alt="src=" src=...` cannot hide the real one) and, for each, the running maximum of the end of
+    its value (an unterminated quote runs to the end). Linear: the next delimiter is cached."""
     starts: list[int] = []
     ends: list[int] = []
-    for found in _URL_ATTR_RE.finditer(template):
-        starts.append(found.start())
-        ends.append(found.end())
+    size = len(template)
+    cache: dict[str, int] = {}
+
+    def next_end(kind: str, pos: int) -> int:
+        known = cache.get(kind)
+        if known is None or known < pos:
+            if kind == "u":
+                hit = _UNQUOTED_END_RE.search(template, pos)
+                known = hit.start() if hit else size
+            else:
+                found = template.find(kind, pos)
+                known = size if found < 0 else found
+            cache[kind] = known
+        return known
+
+    best = 0
+    pos = 0
+    while True:
+        found = _URL_ATTR_RE.search(template, pos)
+        if found is None:
+            break
+        start = found.start()
+        pos = start + 1
+        value = found.end()
+        quote = template[value] if value < size and template[value] in "\"'" else None
+        if quote is None:
+            end = next_end("u", value)
+        else:
+            end = min(size, next_end(quote, value + 1) + 1)
+        best = max(best, end)
+        starts.append(start)
+        ends.append(best)
     return starts, ends
 
 

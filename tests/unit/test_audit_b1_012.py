@@ -159,3 +159,22 @@ def test_f0369_grid_cell_is_documented_as_fixed() -> None:
         encoding="utf-8"
     )
     assert "FIXED once places exist" in text
+
+
+def test_f0364_decoy_attribute_does_not_hide_real_url_attr() -> None:
+    render = _load(RENDER, "b1_012_render4")
+    values = {"a": "javascript:alert(1)"}
+    sub = render._substitute
+    assert sub('<img alt="src=" src="{{a}}">', values, str, urls=True) == '<img alt="src=" src="#">'
+    assert sub("<img alt='href=' href={{a}}>", values, str, urls=True) == "<img alt='href=' href=#>"
+    assert sub('<a title=src=" href="{{a}}">', values, str, urls=True) == (
+        '<a title=src=" href="#">'
+    )
+
+
+def test_f0364_overlapping_spans_stay_linear() -> None:
+    render = _load(RENDER, "b1_012_render5")
+    body = 'src="' * 20000 + "{{a}}"
+    start = time.perf_counter()
+    render._substitute(body, {"a": "x"}, str, urls=True)
+    assert time.perf_counter() - start < 2.0
