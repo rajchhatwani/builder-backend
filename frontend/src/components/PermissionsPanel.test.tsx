@@ -1,6 +1,7 @@
 import { createElement } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { click, flush, mount } from '../shell/ai/testUtils'
+import { ApiError } from '../api/client'
 import { PermissionsPanel } from './PermissionsPanel'
 
 const m = vi.hoisted(() => ({ list: vi.fn(), bulk: vi.fn(), del: vi.fn() }))
@@ -41,7 +42,7 @@ describe('PermissionsPanel revoke', () => {
     m.bulk.mockResolvedValue([perm('p-get', 'get', ['admin'])])
     const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
     await clearCellAndSave(host, 'list')
-    expect(m.del).toHaveBeenCalledWith('p-list')
+    expect(m.del).toHaveBeenCalledWith('p-list', false)
     expect(host.textContent).not.toContain('No permissions configured')
   })
 
@@ -49,8 +50,16 @@ describe('PermissionsPanel revoke', () => {
     m.list.mockResolvedValue([perm('p-list', 'list', ['admin'])])
     const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
     await clearCellAndSave(host, 'list')
-    expect(m.del).toHaveBeenCalledWith('p-list')
+    expect(m.del).toHaveBeenCalledWith('p-list', false)
     expect(m.bulk).not.toHaveBeenCalled()
     expect(host.textContent).not.toContain('No permissions configured')
+  })
+
+  it('asks and retries a cleared slot with confirm when the server answers access_weakened (F-0902)', async () => {
+    m.list.mockResolvedValue([perm('p-list', 'list', ['admin'])])
+    m.del.mockRejectedValueOnce(new ApiError(409, { code: 'access_weakened', message: 'more access', details: [] }))
+    const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
+    await clearCellAndSave(host, 'list')
+    expect(m.del.mock.calls).toEqual([['p-list', false], ['p-list', true]])
   })
 })

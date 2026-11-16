@@ -12,6 +12,8 @@ interface RolesPanelProps {
   keycloak?: boolean
 }
 
+class CancelledSave extends Error {}
+
 export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
   const { confirm } = useUi()
   const [roles, setRoles] = useState<ProjectRole[]>([])
@@ -96,6 +98,23 @@ export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
       })
   }
 
+  /** Runs a role write; on 409 access_weakened asks once, then repeats it confirmed. */
+  async function withWeakeningConfirm(run: (confirmed: boolean) => Promise<unknown>) {
+    try {
+      await run(false)
+    } catch (err) {
+      if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
+      const ok = await confirm({
+        title: 'This gives some roles more access',
+        message: `${err.message}. Save anyway?`,
+        confirmLabel: 'Save anyway',
+        danger: true,
+      })
+      if (!ok) throw new CancelledSave()
+      await run(true)
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     setSubmitting(true)
@@ -105,14 +124,15 @@ export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
       const pos = typeof position === 'number' ? position : Number(position) || 0
 
       if (editing) {
-        await api.updateRole(editing.id, {
+        const patch = {
           label,
           is_default: isDefault,
           self_assignable: selfAssignable,
           invite_only: inviteOnly,
           inherits_from: inherits,
           position: pos,
-        })
+        }
+        await withWeakeningConfirm((ok) => api.updateRole(editing.id, patch, ok))
       } else {
         const data: ProjectRoleCreate = {
           name,
@@ -123,11 +143,12 @@ export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
           inherits_from: inherits,
           position: pos,
         }
-        await api.createRole(projectId, data)
+        await withWeakeningConfirm((ok) => api.createRole(projectId, data, ok))
       }
       handleCloseDialog()
       load()
     } catch (err) {
+      if (err instanceof CancelledSave) return
       if (err instanceof ApiError && err.status === 409) {
         setFormError('A role with this name already exists.')
       } else {

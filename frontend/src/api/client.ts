@@ -855,14 +855,18 @@ export const api = {
 
   listRoles: (projectId: string, limit = 50, offset = 0) =>
     request<Page<ProjectRole>>(`/projects/${projectId}/roles?limit=${limit}&offset=${offset}`),
-  createRole: (projectId: string, data: ProjectRoleCreate) =>
+  /** A role that gains access answers 409 access_weakened unless confirmWeakening is true. */
+  createRole: (projectId: string, data: ProjectRoleCreate, confirmWeakening = false) =>
     request<ProjectRole>(`/projects/${projectId}/roles`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(confirmWeakening ? { ...data, confirm_weakening: true } : data),
     }),
   getRole: (roleId: string) => request<ProjectRole>(`/roles/${roleId}`),
-  updateRole: (roleId: string, data: ProjectRoleUpdate) =>
-    request<ProjectRole>(`/roles/${roleId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateRole: (roleId: string, data: ProjectRoleUpdate, confirmWeakening = false) =>
+    request<ProjectRole>(`/roles/${roleId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(confirmWeakening ? { ...data, confirm_weakening: true } : data),
+    }),
   deleteRole: (roleId: string) => request<void>(`/roles/${roleId}`, { method: 'DELETE' }),
 
   // ── Permissions ──────────────────────────────────────────────────────────
@@ -885,8 +889,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ permissions, confirm_weakening: confirmWeakening }),
     }),
-  deletePermission: (permissionId: string) =>
-    request<void>(`/permissions/${permissionId}`, { method: 'DELETE' }),
+  deletePermission: (permissionId: string, confirmWeakening = false) =>
+    request<void>(`/permissions/${permissionId}${confirmWeakening ? '?confirm_weakening=true' : ''}`, {
+      method: 'DELETE',
+    }),
 
   // ── Auth Custom Fields ───────────────────────────────────────────────────
 

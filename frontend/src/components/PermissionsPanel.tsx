@@ -165,7 +165,28 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
           updated = await api.bulkUpsertPermissions(projectId, entries, true)
         }
       }
-      for (const k of clearedKeys) await api.deletePermission(savedIds.current[k])
+      let deleteConfirmed = false
+      for (const k of clearedKeys) {
+        try {
+          await api.deletePermission(savedIds.current[k], deleteConfirmed)
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
+          if (!deleteConfirmed) {
+            const ok = await confirm({
+              title: 'This gives some roles more access',
+              message: `${err.message}. Save anyway?`,
+              confirmLabel: 'Save anyway',
+              danger: true,
+            })
+            if (!ok) {
+              setSaving(false)
+              return
+            }
+            deleteConfirmed = true
+          }
+          await api.deletePermission(savedIds.current[k], true)
+        }
+      }
       // Reload so the matrix and the saved ids match the server (also after deletions).
       const fresh = clearedKeys.length > 0 ? await api.listAllPermissions(projectId) : (updated ?? [])
       const map: Record<string, PermissionEntry> = {}
