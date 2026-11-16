@@ -28,6 +28,14 @@ PASSWORD_RESET = "password_reset"
 SMS_LOGIN = "sms_login"
 PHONE_VERIFY = "phone_verify"
 _EMAIL, _SMS = "email", "sms"
+# Columns every AuthUser has; any other column is a custom registration field.
+_CORE_COLUMNS = frozenset(
+    {
+        "id", "email", "phone", "password_hash", "roles", "role_source", "tenant_id", "is_active",
+        "email_verified_at", "phone_verified_at", "last_login_at", "deleted_at",
+        "created_at", "updated_at",
+    }
+)
 
 
 def _now() -> dt.datetime:
@@ -262,6 +270,9 @@ class AuthService:
             user.roles = []
             user.is_active = False
             user.deleted_at = _now()
+            for column in AuthUser.__table__.columns:  # custom registration fields: PII, unique keys
+                if column.name not in _CORE_COLUMNS:
+                    setattr(user, column.name, None)
             await identity.erase_emails(self.session, user.id)
         await self.session.commit()
 

@@ -128,3 +128,18 @@ def test_tenancy_tests_cover_update_and_replace(tenant: dict[str, str]) -> None:
 def test_builtin_jwt_tests_cover_header_tampering(shop: dict[str, str]) -> None:
     src = shop["tests/test_auth.py"]
     assert '"none"' in src and "kid" in src
+
+
+# F-0880 (B1-058) ----------------------------------------------------------------------
+
+
+def test_soft_delete_makes_every_custom_column_nullable(shop: dict[str, str]) -> None:
+    models = shop["app/auth/models.py"]
+    line = next(x for x in models.splitlines() if x.strip().startswith("full_name:"))
+    assert "nullable=True" in line  # required at registration, but erasable on delete
+
+
+def test_soft_delete_clears_custom_columns(shop: dict[str, str]) -> None:
+    service = shop["app/auth/service.py"]
+    delete = service.split("async def delete_account", 1)[1].split("# --- tokens", 1)[0]
+    assert "_CORE_COLUMNS" in delete or "__table__.columns" in delete

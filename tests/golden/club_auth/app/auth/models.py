@@ -54,7 +54,7 @@ class AuthUser(_models_base.Base):
     deleted_at: _orm.Mapped[_dt.datetime | None] = _orm.mapped_column(
         _sa.DateTime(timezone=True), nullable=True
     )
-    handle: _orm.Mapped[str] = _orm.mapped_column(_sa.String(20), nullable=False)
+    handle: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(20), nullable=True)
     created_at: _orm.Mapped[_dt.datetime] = _orm.mapped_column(
         _sa.DateTime(timezone=True), nullable=False, default=_models_base.utcnow
     )

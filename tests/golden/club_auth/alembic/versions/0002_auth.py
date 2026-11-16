@@ -42,7 +42,7 @@ def upgrade() -> None:
         sa.Column("phone_verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("handle", sa.String(20), nullable=False),
+        sa.Column("handle", sa.String(20), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.PrimaryKeyConstraint("id", name="pk_auth_users"),

@@ -58,7 +58,7 @@ class AuthUser(_models_base.Base):
     age: _orm.Mapped[int | None] = _orm.mapped_column(_sa.Integer(), nullable=True)
     birthday: _orm.Mapped[_dt.date | None] = _orm.mapped_column(_sa.Date(), nullable=True)
     company: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(60), nullable=True)
-    full_name: _orm.Mapped[str] = _orm.mapped_column(_sa.String(80), nullable=False)
+    full_name: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(80), nullable=True)
     handle: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(30), nullable=True)
     newsletter: _orm.Mapped[bool | None] = _orm.mapped_column(_sa.Boolean(), nullable=True)
     plan: _orm.Mapped[_t.Literal['free', 'pro'] | None] = _orm.mapped_column(_sa.String(64), nullable=True)

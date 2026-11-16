@@ -157,7 +157,7 @@ def _variant(
             return sample
 
 
-def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
+def _custom_field(field: SpecAuthCustomField, *, erasable: bool = False) -> CustomFieldCtx:
     default = _default_literal(field)
     required_input = field.required and default is None
     nullable_input = not field.required and default is None
@@ -236,7 +236,8 @@ def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
         schema_decl += f" = _pd.Field({', '.join(parts)})"
 
     # A required field with a default is filled in by the schema, so it is never null.
-    is_nullable = not field.required
+    # `erasable`: soft delete nulls the column, so even a required field must allow NULL.
+    is_nullable = erasable or not field.required
     mapped = f"{ann} | None" if is_nullable else ann
     column_decl = (
         f"{field.name}: _orm.Mapped[{mapped}] = "
@@ -268,7 +269,8 @@ def _auth_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
     reset = auth.password_reset
     roles = sorted(auth.roles, key=lambda r: r.name)
     custom = tuple(
-        _custom_field(f) for f in sorted(auth.registration.custom_fields, key=lambda f: f.name)
+        _custom_field(f, erasable=auth.deletion_mode != "hard")
+        for f in sorted(auth.registration.custom_fields, key=lambda f: f.name)
     )
     return {
         "a": auth,

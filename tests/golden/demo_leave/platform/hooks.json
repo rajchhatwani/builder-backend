@@ -41,7 +41,7 @@
     "app/auth/router.py": "7649481c6883470c2047089ccdb43eff307f8d973b59e77d910edf2779e2b275",
     "app/auth/schemas.py": "fb35d541ffb630145db2df9f74e639dc72850962750f8061f1d988992b935eb2",
     "app/auth/security.py": "8e8a31d6bcf112e94563d3566627f52936bf9391b964747c224c9944e9a6350a",
-    "app/auth/service.py": "824f823ada5ed518530deb58549a0a584682033c1e91b44e9ec393171f4b8662",
+    "app/auth/service.py": "f0fcdb295e20c0c86572d383de8e7b9e62b5c900685b5c33434d7ba13cf282d3",
     "app/auth/tokens.py": "cedcfa304fba4eaed871eb15091c30acec11a796e592afd32f5cda55f19f368a",
     "app/change_history/__init__.py": "bd62ce22a71141959e4c90dedd85b991be365dce7b6ab6e87718c26a1335b4d5",
     "app/change_history/definitions.py": "f3459c6f72fccc909718634efec322d35015ec6c97b00a668d0d5312bb4bd0c5",
