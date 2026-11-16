@@ -306,3 +306,4 @@ tests/unit/test_alembic_env_url.py
 tests/api/test_organizations.py::test_team_org_cannot_take_the_reserved_holding_slug
 tests/api/test_migrations.py::test_one_live_run_migration_keeps_newest_and_supersedes_older
 tests/unit/test_behavior_block_routes_lint.py
+tests/unit/test_validation_seed_lint.py

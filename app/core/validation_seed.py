@@ -321,7 +321,7 @@ def _check_entity_plan(
                 "required_field_missing",
                 f"{pe.entity}.{f.name} is required: give it a generator",
             )
-    for col, (target, required, _unique) in fk_cols.items():
+    for col, (_target, required, _unique) in fk_cols.items():
         if required and col not in given:
             add(
                 f"{ep}.fields",
