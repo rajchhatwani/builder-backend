@@ -51,8 +51,13 @@ export function ViewingBanner() {
     setBusy(true)
     try {
       await api.endImpersonation()
-    } catch {
-      /* the session may already be over; either way we leave */
+    } catch (err) {
+      // 401/404/410: the session is already over, so leave. Anything else: it may still be live.
+      if (!(err instanceof ApiError && [401, 404, 410].includes(err.status))) {
+        toast("Couldn't end the support session. It may still be active; try Exit again.", 'danger')
+        setBusy(false)
+        return
+      }
     }
     setViewing(null)
     window.close()

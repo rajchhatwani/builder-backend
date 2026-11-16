@@ -20,6 +20,8 @@ export function SimulatorTab({ projectId, catalogue }: { projectId: string; cata
   const [busy, setBusy] = useState(false)
 
   const entityInfo = catalogue.entities.find((e) => e.name === entity)
+  const allowedOps = OPERATIONS.filter((o) => entityInfo?.ops.includes(o))
+  const effectiveOp = allowedOps.includes(op as never) ? op : (allowedOps[0] ?? op)
   const attributes = Object.entries(catalogue.resource[entity] ?? {})
   const multiTenant = 'tenant_id' in catalogue.subject
 
@@ -46,7 +48,7 @@ export function SimulatorTab({ projectId, catalogue }: { projectId: string; cata
     if (ip !== '') env.client_ip = ip
     setBusy(true)
     try {
-      setResult(await api.simulateAuthorization(projectId, { entity, op, subject, resource, env }))
+      setResult(await api.simulateAuthorization(projectId, { entity, op: effectiveOp, subject, resource, env }))
     } catch (err) {
       setError(err instanceof ApiError || err instanceof Error ? err.message : 'The simulation failed.')
     } finally {
@@ -64,7 +66,7 @@ export function SimulatorTab({ projectId, catalogue }: { projectId: string; cata
         Uses the saved policies and the same engine as the generated backend, so the answer is what your API will do.
         For <em>create</em>, the record is the data being sent. Fields you leave out count as empty.
       </p>
-      <form onSubmit={run}>
+      <form onSubmit={run} onChange={() => setResult(null)}>
         <div className="field-grid">
           <label>
             Entity
@@ -84,8 +86,8 @@ export function SimulatorTab({ projectId, catalogue }: { projectId: string; cata
           </label>
           <label>
             Action
-            <select value={op} onChange={(e) => setOp(e.target.value)}>
-              {OPERATIONS.filter((o) => entityInfo?.ops.includes(o)).map((o) => (
+            <select value={effectiveOp} onChange={(e) => setOp(e.target.value)}>
+              {allowedOps.map((o) => (
                 <option key={o} value={o}>
                   {o}
                 </option>

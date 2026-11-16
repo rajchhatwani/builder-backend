@@ -1,3 +1,4 @@
+import { useRawText } from '../../forms/useRawText'
 import type { Operand, PolicyCondition, PolicyGroup, PolicyLeaf } from '../../api/types'
 import {
   ENV_ATTRIBUTES,
@@ -22,6 +23,22 @@ interface Context {
   catalogue: Catalogue
   /** Entities the policy's actions reach: record attributes are offered for these. */
   entities: string[]
+}
+
+function LiteralInput({ value, listValue, hintKind, onChange }: { value: unknown; listValue: boolean; hintKind: string | undefined; onChange: (v: unknown) => void }) {
+  const [text, setText] = useRawText<unknown>(value, (t) => parseLiteral(t, listValue, hintKind), literalToText)
+  return (
+    <input
+      aria-label="Value"
+      value={text}
+      placeholder={listValue ? 'a, b, c' : 'value'}
+      style={{ minWidth: '10rem' }}
+      onChange={(e) => {
+        setText(e.target.value)
+        onChange(parseLiteral(e.target.value, listValue, hintKind))
+      }}
+    />
+  )
 }
 
 function OperandEditor({
@@ -90,23 +107,26 @@ function OperandEditor({
         </select>
       )}
       {kind === 'literal' && (
-        <input
-          aria-label="Value"
-          value={literalToText((operand as { literal: unknown }).literal)}
-          placeholder={listValue ? 'a, b, c' : 'value'}
-          style={{ minWidth: '10rem' }}
-          onChange={(e) => onChange({ literal: parseLiteral(e.target.value, listValue, hintKind) })}
-        />
+        <LiteralInput value={(operand as { literal: unknown }).literal} listValue={listValue} hintKind={hintKind} onChange={(literal) => onChange({ literal })} />
       )}
     </span>
   )
 }
 
+/** Kind of what an operand points at (record attribute, person attribute or moment), when known. */
+function kindOfOperand(ctx: Context, operand: Operand): string | undefined {
+  const k = operandKind(operand)
+  const name = operandName(operand)
+  if (k === 'resource') return resourceKind(ctx.catalogue, ctx.entities, name)
+  if (k === 'subject') return ctx.catalogue.subject[name]
+  if (k === 'env') return ENV_ATTRIBUTES.find((a) => a.id === name)?.kind
+  return undefined
+}
+
 function LeafEditor({ leaf, onChange, onRemove, ctx }: { leaf: PolicyLeaf; onChange: (l: PolicyLeaf) => void; onRemove: () => void; ctx: Context }) {
   const op = OPS.find((o) => o.id === leaf.op) ?? OPS[0]
-  const leftKind = operandKind(leaf.left) === 'resource' ? resourceKind(ctx.catalogue, ctx.entities, operandName(leaf.left)) : undefined
-  const rightKind =
-    leaf.right && operandKind(leaf.right) === 'resource' ? resourceKind(ctx.catalogue, ctx.entities, operandName(leaf.right)) : undefined
+  const leftKind = kindOfOperand(ctx, leaf.left)
+  const rightKind = leaf.right ? kindOfOperand(ctx, leaf.right) : undefined
 
   return (
     <div
@@ -138,7 +158,9 @@ function LeafEditor({ leaf, onChange, onRemove, ctx }: { leaf: PolicyLeaf; onCha
             void _drop
             onChange({ ...rest, op: next.id })
           } else {
-            onChange({ ...leaf, op: next.id, right: leaf.right ?? { literal: '' } })
+            const old = leaf.right ?? { literal: '' }
+            const right = 'literal' in old ? { literal: parseLiteral(literalToText(old.literal), Boolean(next.list), leftKind) } : old
+            onChange({ ...leaf, op: next.id, right })
           }
         }}
       >

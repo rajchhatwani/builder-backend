@@ -1,4 +1,5 @@
 import { useUi } from '../Ui'
+import { ParsedTextarea } from '../ParsedTextarea'
 import { BLOCK_LABELS, columnsToText, newBlock, rowsToText, textToColumns, textToRows, type Block, type BlockType } from './blocks'
 
 const MAX_IMAGE_BYTES = 200_000
@@ -37,7 +38,7 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (b: Block) =
       return (
         <label>
           One row per line, written <code>label :: value</code>
-          <textarea rows={4} value={rowsToText(block.rows)} onChange={(e) => set({ rows: textToRows(e.target.value) })} />
+          <ParsedTextarea rows={4} value={textToRows(rowsToText(block.rows))} parse={textToRows} toText={rowsToText} onChange={(rows) => set({ rows })} />
         </label>
       )
     case 'table':
@@ -49,7 +50,7 @@ function BlockFields({ block, onChange }: { block: Block; onChange: (b: Block) =
           </label>
           <label>
             One column per line, written <code>header :: value :: left|right|center :: width</code> (use <code>{'{{item.field}}'}</code>)
-            <textarea rows={5} value={columnsToText(block.columns)} onChange={(e) => set({ columns: textToColumns(e.target.value) })} />
+            <ParsedTextarea rows={5} value={textToColumns(columnsToText(block.columns))} parse={textToColumns} toText={columnsToText} onChange={(columns) => set({ columns })} />
           </label>
         </>
       )

@@ -4,6 +4,7 @@ import {
   type Path, type Resolved,
 } from './schemaLogic'
 import type { JsonSchema, PathErrors } from './types'
+import { useRawText } from './useRawText'
 
 export interface SchemaFormProps {
   schema: JsonSchema
@@ -296,6 +297,7 @@ function ArrayField({ s, path, value, onChange, label, schema }: NodeProps & { s
   const hint = uiOf(schema)
   const arr = Array.isArray(value) ? value : []
   const focusNext = useRef<string | null>(null)
+  const [csvText, setCsvText] = useRawText<string[]>(arr as string[], csvToList, listToCsv)
 
   useEffect(() => {
     const sel = focusNext.current
@@ -313,7 +315,7 @@ function ArrayField({ s, path, value, onChange, label, schema }: NodeProps & { s
         <input id={id} type="text" readOnly={c.readOnly} aria-invalid={bad || undefined}
           aria-describedby={[`${id}-help`, bad && `${id}-err`].filter(Boolean).join(' ')}
           onBlur={() => c.touch(path)}
-          value={listToCsv(arr)} onChange={(e) => onChange(csvToList(e.target.value))} />
+          value={csvText} onChange={(e) => { setCsvText(e.target.value); onChange(csvToList(e.target.value)) }} />
         <Help id={`${id}-help`} text={helpText} />
         {bad && <small id={`${id}-err`} className="bh-error" data-testid="field-error">{msgs.join(' ')}</small>}
       </div>
