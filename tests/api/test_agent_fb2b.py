@@ -263,12 +263,14 @@ async def test_approved_weaken_access_rule_adds_the_grant_to_the_draft(client: A
     await _decide(client, pid)
     await _resume(client, pid, rid, allow_stop=True)
     marks = [s["output"] for s in await _steps(client, pid, rid) if (s["output"] or {}).get("executed")]
-    assert marks and marks[0]["executed"]["executed"] is True, marks
+    # B1-023: Invoice.get has no permission row (open to every caller); a grant would RESTRICT it to
+    # one role, so the approved action is a reported no-op (the row case is in test_audit_b1_023.py)
+    assert marks and marks[0]["executed"]["executed"] is False, marks
+    assert "already open" in marks[0]["executed"]["reason"], marks
     async with e2e._FACTORY() as s:
         spec = await run_spec(s, uuid.UUID(rid), uuid.UUID(pid))
         assert spec.auth is not None
-        grants = [p for p in spec.auth.permissions if p.entity == "Invoice" and p.operation == "get"]
-        assert grants and "clerk" in grants[0].roles
+        assert not [p for p in spec.auth.permissions if p.entity == "Invoice" and p.operation == "get"]
 
 
 async def test_approved_e_fetch_docs_executes_and_returns_untrusted_text(

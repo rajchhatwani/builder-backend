@@ -148,6 +148,25 @@ def _deletion_risk(before: Spec, after: Spec) -> bool:
     return False
 
 
+def transition_loosened(before: Mapping[str, Any], after: Mapping[str, Any]) -> bool:
+    """B1-023: `after` lets more people run an existing transition: its roles changed, it became
+    automatic, or its guard was dropped. Both are normalised transition dicts."""
+    if set(before.get("roles") or []) != set(after.get("roles") or []):
+        return True
+    if not before.get("auto") and after.get("auto"):
+        return True
+    return bool(before.get("when")) and not after.get("when")
+
+
+def _transition_access_changed(before: Spec, after: Spec) -> bool:
+    old = {(m.entity, t.name): t.model_dump(mode="json") for m in before.state_machines for t in m.transitions}
+    return any(
+        (m.entity, t.name) in old and transition_loosened(old[(m.entity, t.name)], t.model_dump(mode="json"))
+        for m in after.state_machines
+        for t in m.transitions
+    )
+
+
 def risk_flags(
     spec_before: Spec, spec_after: Spec, *, dependencies: Iterable[str] = ()
 ) -> list[str]:
@@ -159,6 +178,8 @@ def risk_flags(
     b_kc = (b_auth.get("keycloak") or {}).get("mode")
     a_kc = (a_auth.get("keycloak") or {}).get("mode")
     if b_auth != a_auth or _dump(spec_before.authorization) != _dump(spec_after.authorization):
+        flags.add("auth")
+    elif _transition_access_changed(spec_before, spec_after):
         flags.add("auth")
     if bool(b_tenant) != bool(a_tenant) or b_kc != a_kc:
         flags.add("tenancy")

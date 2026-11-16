@@ -602,10 +602,10 @@ async def test_m1_global_sections(monkeypatch: pytest.MonkeyPatch) -> None:
     new = {"key": "k2", "type": "int", "default": 2}
     # dropping the existing k1 is refused
     r = await agent_tools.execute(make_ctx(), "set_section", {"section": "settings", "items": [new]})
-    assert r.needs_plan_extension == ("section_item", "settings:k1")
+    assert r.needs_plan_extension is None and r.failures[0].rule_id == "plan_scope"  # B1-023: hard refusal
     # changing k1 is refused
     r = await agent_tools.execute(make_ctx(), "set_section", {"section": "settings", "items": [{"key": "k1", "type": "int", "default": 9}]})
-    assert r.needs_plan_extension == ("section_item", "settings:k1")
+    assert r.needs_plan_extension is None and r.failures[0].rule_id == "plan_scope"
     # keeping k1 and adding k2 is fine
     r = await agent_tools.execute(make_ctx(), "set_section", {"section": "settings", "items": [{"key": "k1", "type": "int", "default": 1}, new]})
     assert r.ok, (r.failures, r.needs_plan_extension)
@@ -624,7 +624,7 @@ async def test_m1_empty_plan_changes_nothing(monkeypatch: pytest.MonkeyPatch) ->
         ("request_dependency", {"name": "orjson", "version": "3.10.0", "reason": "r"}),
     ]:
         r = await agent_tools.execute(make_ctx(plan=empty), tool, args)
-        assert not r.ok and r.needs_plan_extension is not None, tool
+        assert not r.ok and r.needs_plan_extension is None and r.failures[0].rule_id == "plan_scope", tool  # B1-023
 
 
 async def test_m2_relation_scope_and_cascade(monkeypatch: pytest.MonkeyPatch) -> None:

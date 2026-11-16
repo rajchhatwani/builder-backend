@@ -201,6 +201,7 @@ _EXTEND_KEYS = {"entity": "entities", "hook": "hooks", "zone": "zones", "depende
 
 
 MAX_EXTEND_ITEMS = 20
+APPLY_GRACE_STEPS = 10  # model/tool steps the apply phase may use beyond max_steps (B1-023)
 
 
 def extension_request(items: list[tuple[str, str]]) -> ApprovalRequest:
@@ -1107,9 +1108,16 @@ class RunDriver:
                     return
                 continue
             cost = await self._cost(run_id)
-            stop = bud.check_limits(
-                b, steps=run.steps_used, cost_micro_usd=cost, elapsed_seconds=wall_ms / 1000
-            )
+            if run.phase == "apply":
+                # B1-023: the final review is approved; the budget that ran out building must not discard
+                # it. Only a few extra steps are allowed to finish the apply (cost and wall are not charged).
+                stop = bud.check_limits(
+                    b, steps=max(0, run.steps_used - APPLY_GRACE_STEPS), cost_micro_usd=0, elapsed_seconds=0
+                )
+            else:
+                stop = bud.check_limits(
+                    b, steps=run.steps_used, cost_micro_usd=cost, elapsed_seconds=wall_ms / 1000
+                )
             if stop is not None:
                 await self._stop(run_id, stop)
                 return

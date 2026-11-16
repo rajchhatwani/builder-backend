@@ -319,3 +319,5 @@ tests/unit/test_audit_b1_020.py
 tests/unit/test_audit_b1_021.py
 tests/api/test_audit_b1_021.py
 tests/unit/test_slug_trailing_newline.py
+tests/unit/test_audit_b1_023.py
+tests/api/test_audit_b1_023_agent.py

@@ -103,7 +103,8 @@ async def _execute(ctx: ToolContext, name: str, input: dict[str, Any]) -> ToolRe
     else:
         if tool.perm in WRITE_CLASSES and not (ctx.plan.entities or ctx.plan.hooks or ctx.plan.zones
                                                or ctx.plan.dependencies):
-            return ToolResult(ok=False, needs_plan_extension=("plan", "empty"), failures=(failure(
+            # B1-023: no plan extension unlocks an empty plan (the run loop has no 'plan' extension kind)
+            return ToolResult(ok=False, failures=(failure(
                 "plan_scope", name, "a plan that lists what may change", "the plan is empty",
                 "nothing may change under an empty plan"),))  # fmt: skip
         scope = SCOPES.get(name)

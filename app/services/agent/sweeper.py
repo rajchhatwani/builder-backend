@@ -143,13 +143,22 @@ async def _expire_abandoned(factory: async_sessionmaker[AsyncSession], now: date
     stopped: list[uuid.UUID] = []
     async with factory() as s:
         runs = list(
-            (await s.execute(select(AiRun).where(AiRun.state == "awaiting_approval").limit(200))).scalars()
+            (await s.execute(select(AiRun).where(AiRun.state == "awaiting_approval").order_by(AiRun.updated_at).limit(200))
+            ).scalars()
         )
         for run in runs:
             rows = list(
                 (await s.execute(select(AiApproval).where(AiApproval.run_id == run.id))).scalars()
             )
-            live = [a for a in rows if a.state != "expired" and not (a.state == "pending" and a.expires_at < now)]
+            steps = (
+                await s.execute(select(AiStep.output).where(AiStep.run_id == run.id, AiStep.kind == "system"))
+            ).scalars()
+            used = {str((o or {}).get("approval_id", "")).split(":")[0] for o in steps}  # decisions already consumed
+            live = [
+                a for a in rows
+                if a.state not in ("expired", "superseded") and str(a.id) not in used
+                and not (a.state == "pending" and a.expires_at < now)
+            ]
             if not rows or live:
                 continue
             res = await s.execute(

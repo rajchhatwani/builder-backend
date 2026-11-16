@@ -5,7 +5,9 @@ Anything that touches auth, access or tenancy is refused here and belongs to the
 
 from typing import Any
 
+from app.core.spec_models import SpecTransition
 from app.exceptions import AppError
+from app.services.agent.approval_service import transition_loosened
 from app.services.agent.contract import (
     ApprovalKind,
     ApprovalRequest,
@@ -136,9 +138,44 @@ def _check_section(args: dict[str, Any]) -> None:
         raise refuse("tool_s_bang", f"set_section:{section[:40]}", "a behaviour section", "auth/access/tenancy", S_BANG_HINT)
     if section not in SECTIONS:
         raise refuse("section_unknown", f"set_section:{section[:40]}", f"one of {list(SECTIONS)}", section[:40], "call list_blocks")
-    key = has_key(args["items"])
+    items = args["items"]
+    if section == "state_machines":  # B1-023: a transition's roles/auto are compared semantically (set_section)
+        items = [_without_transition_roles(i) for i in items]
+    key = has_key(items)
     if key:
         raise refuse("tool_s_bang", f"set_section:{section}", "no auth/access/tenancy content", f"item key '{key[:30]}'", S_BANG_HINT)
+
+
+def _without_transition_roles(item: Any) -> Any:
+    if not isinstance(item, dict):
+        return item
+    trs = item.get("transitions")
+    if not isinstance(trs, list):
+        return item
+    return {**item, "transitions": [{k: v for k, v in t.items() if k != "roles"} if isinstance(t, dict) else t for t in trs]}
+
+
+async def _loosened_transitions(ctx: ToolContext, items: list[dict[str, Any]]) -> list[str]:
+    """`entity.transition` of every EXISTING transition the new items open up (roles changed, auto on, guard dropped)."""
+    cur = {str(m.get("entity")): m for m in await _current_section(ctx, "state_machines")}
+    out: list[str] = []
+    for item in items:
+        old = cur.get(str(item.get("entity")))
+        if old is None:
+            continue
+        old_t = {str(t.get("name")): _norm_transition(t) for t in old.get("transitions") or []}
+        for t in item.get("transitions") or []:
+            before = old_t.get(str(t.get("name")))
+            if before is not None and transition_loosened(before, _norm_transition(t)):
+                out.append(f"{item.get('entity')}.{t.get('name')}")
+    return sorted(out)
+
+
+def _norm_transition(t: dict[str, Any]) -> dict[str, Any]:
+    try:
+        return SpecTransition.model_validate(t).model_dump(mode="json")
+    except Exception:
+        return dict(t)
 
 
 ENTITY_SECTIONS = {"state_machines": "entity", "history": "entity"}
@@ -195,10 +232,14 @@ async def scope_set_section(ctx: ToolContext, args: dict[str, Any]) -> tuple[str
         return None
     # global sections (settings, sequences, lists, seed): the plan must be non-empty, only NEW
     # items may be added; an existing item is never changed or dropped by the agent.
+    # B1-023: no plan extension can unlock these (nothing extends them), so they are hard refusals.
     if not (plan.entities or plan.hooks):
-        return ("plan", f"{section} (empty plan)")
+        raise refuse("plan_scope", f"set_section:{section}", "a plan that lists what may change",
+                     "the plan is empty", "nothing may change under an empty plan")
     for key in removed + changed:
-        return ("section_item", f"{section}:{key}")
+        raise refuse("plan_scope", f"set_section:{section}", "only new items in a global section",
+                     f"existing item '{key[:60]}' changed or dropped",
+                     "keep existing items as they are; only add new ones")
     return None
 
 
@@ -208,6 +249,11 @@ def _same(current: dict[str, Any], item: dict[str, Any]) -> bool:
 
 async def set_section(ctx: ToolContext, args: dict[str, Any]) -> ToolResult:
     section, items = args["section"], args["items"]
+    if section == "state_machines":
+        loose = await _loosened_transitions(ctx, items)
+        if loose:  # B1-023: who may move a record is access; opening it up needs the owner
+            return _ask_human("set_section", f"open up who may run transition(s) {', '.join(loose)[:200]}",
+                              section=section, items=items, risks=["auth"])  # fmt: skip
     if section == "hooks":
         current = await _current_hooks(ctx)
         names = {str(i.get("name", "")) for i in items}

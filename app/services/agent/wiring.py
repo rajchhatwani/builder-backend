@@ -121,18 +121,25 @@ async def _git(path: str, *args: str) -> list[str]:
     return out.decode(errors="replace").splitlines() if proc.returncode == 0 else []
 
 
-async def _changed_files(session: AsyncSession, ws: Workspace | None, cap: int = 100) -> list[str]:
-    """Paths that differ from the draft's first checkpoint (committed or not, plus untracked)."""
+async def _changed_files(
+    session: AsyncSession, ws: Workspace | None, cap: int = 100, run: AiRun | None = None
+) -> list[str]:
+    """Paths that differ from THIS run's start checkpoint (committed or not, plus untracked). A reused
+    workspace keeps older runs' checkpoints; only without a run-start checkpoint does the oldest one count."""
     if ws is None or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
         return []
-    first = (
-        await session.execute(
-            select(WorkspaceCheckpoint.git_sha)
-            .where(WorkspaceCheckpoint.workspace_id == ws.id)
-            .order_by(WorkspaceCheckpoint.created_at)
-            .limit(1)
-        )
-    ).scalar_one_or_none()
+    base = select(WorkspaceCheckpoint.git_sha).where(WorkspaceCheckpoint.workspace_id == ws.id)
+    first = None
+    if run is not None and run.started_at is not None:
+        first = (
+            await session.execute(
+                base.where(WorkspaceCheckpoint.label == "run-start", WorkspaceCheckpoint.created_at >= run.started_at)
+                .order_by(WorkspaceCheckpoint.created_at)
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+    if first is None:
+        first = (await session.execute(base.order_by(WorkspaceCheckpoint.created_at).limit(1))).scalar_one_or_none()
     names: set[str] = set()
     if first:
         names.update(await _git(ws.worktree_path, "diff", "--name-only", first))
@@ -174,7 +181,7 @@ class Approvals:
         base = Spec.model_validate(raw) if isinstance(raw, dict) else None
         if spec_changes(base, now):
             return False
-        return not await _changed_files(session, await _workspace(run))
+        return not await _changed_files(session, await _workspace(run), run=run)
 
     async def prepare_promotion(self, run: AiRun) -> dict[str, bytes]:
         """B-004, before apply: the custom-zone files the VALID final approval covers, re-read from the
@@ -221,7 +228,7 @@ class Approvals:
         if hooks:
             payload["hooks"] = hooks[:100]
         ws = await _workspace(run)
-        payload["files"] = await _changed_files(session, ws)
+        payload["files"] = await _changed_files(session, ws, run=run)
         if ws is not None and ws.worktree_path and Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             # B-004: the custom-zone files this approval covers, with their hashes (bound by the payload hash)
             payload["file_hashes"] = await asyncio.to_thread(

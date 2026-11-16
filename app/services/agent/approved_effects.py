@@ -23,7 +23,6 @@ from urllib.parse import urlsplit
 
 import httpx
 
-from app.core.spec_models import SpecPermission
 from app.exceptions import AppError
 from app.models.agent import AiApproval, AiRun
 from app.services.agent.draft import add_draft_op, run_spec
@@ -47,6 +46,10 @@ def _need(p: dict[str, Any], *keys: str) -> list[Any]:
     return [p[k] for k in keys]
 
 
+class _NoOp(Exception):
+    """The approved action has nothing to do (the outcome says why)."""
+
+
 async def _d_op(session: AsyncSession, run: AiRun, p: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     kind = str(p.get("op_type"))
     if kind == "remove_entity":
@@ -57,6 +60,11 @@ async def _d_op(session: AsyncSession, run: AiRun, p: dict[str, Any]) -> tuple[s
     if kind == "update_field":
         e, n, c = _need(p, "entity", "name", "changes")
         return "update_field", {"entity": e, "name": n, "changes": c}
+    if kind == "set_section":  # B1-023: a state-machine change that opens up a transition, approved by the owner
+        sec, items = _need(p, "section", "items")
+        if sec != "state_machines":
+            raise AppError("approval_not_applicable", "only state machines are applied from an approval", 422)
+        return "set_section", {"section": sec, "items": items}
     if kind == "add_relation":
         return "add_relation", {"relation": _need(p, "relation")[0]}
     if kind in ("change_tenancy_mode", "weaken_access_rule"):
@@ -67,10 +75,13 @@ async def _d_op(session: AsyncSession, run: AiRun, p: dict[str, Any]) -> tuple[s
             spec.auth.multi_tenant = _need(p, "mode")[0] == "multi"
         else:
             entity, role, action = _need(p, "entity", "role", "action")
+            ent = next((e for e in spec.entities if e.name == entity), None)
+            if ent is None or action not in ent.options.operations:
+                raise AppError("approval_not_applicable", "the entity has no such operation", 422)
             row = next((x for x in spec.auth.permissions if x.entity == entity and x.operation == action), None)
-            if row is None:
-                spec.auth.permissions.append(SpecPermission(entity=entity, operation=action, roles=[role]))
-            elif role not in row.roles:
+            if row is None:  # no row = already open to every caller; a row would RESTRICT it to one role
+                raise _NoOp("the operation has no permission row, so it is already open; nothing to loosen")
+            if role not in row.roles:
                 row.roles.append(role)
         return "replace_spec", {"spec": spec.model_dump(mode="json")}
     raise AppError("approval_not_applicable", f"no executor for '{kind[:40]}'", 422)
@@ -184,7 +195,10 @@ async def execute(session: AsyncSession, run: AiRun, approval: AiApproval) -> di
             op_type = payload.get("op_type")
             if op_type == "request_dependency" or "package" in payload:
                 return {"executed": False, "reason": "dependencies are approved in the dependency policy"}
-            name, op = await _d_op(session, run, payload)
+            try:
+                name, op = await _d_op(session, run, payload)
+            except _NoOp as exc:
+                return {"executed": False, "action": str(op_type), "reason": str(exc)}
             seq = await add_draft_op(session, run.id, run.project_id, name, op, commit=False)
             return {"executed": True, "action": str(op_type), "draft_seq": seq}
         if approval.kind == "E":
