@@ -4,7 +4,7 @@ import datetime as dt
 import typing as _t
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
 
 from app.operations.points import Point, PointOut
 
@@ -132,6 +132,17 @@ class RouteOut(BaseModel):
 
 class EtaIn(RouteIn):
     depart_at: dt.datetime | None = None
+
+    @field_validator("depart_at")
+    @classmethod
+    def _depart_in_range(cls, value: dt.datetime | None) -> dt.datetime | None:
+        if value is None:
+            return value
+        now = dt.datetime.now(dt.UTC)
+        aware = value if value.tzinfo is not None else value.replace(tzinfo=dt.UTC)
+        if abs(aware - now) > dt.timedelta(days=3650):
+            raise ValueError("depart_at must be within 10 years of now")
+        return value
 
 
 class EtaOut(BaseModel):

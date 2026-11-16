@@ -8,10 +8,12 @@ line injection)."""
 
 import html as _html
 import re
+from bisect import bisect_right
 from collections.abc import Callable, Mapping
 
 MAX_VALUE = 2000
 MAX_VARIABLES = 50
+MAX_PLACEHOLDERS = 500
 PLACEHOLDER_RE = re.compile(r"\{\{\s*([a-z][a-z0-9_]{0,39})\s*\}\}")
 _BRACES = ("{{", "}}", "{%", "%}", "{#", "#}")
 _CONTROL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u0080-\u009f  ‪-‮⁦-⁩]")
@@ -41,6 +43,8 @@ def check_template(text: str, variables: set[str] | frozenset[str]) -> None:
     unknown = sorted(placeholders(text) - set(variables))
     if unknown:
         raise RenderError(f"unknown variable(s): {', '.join(unknown)}")
+    if len(PLACEHOLDER_RE.findall(text)) > MAX_PLACEHOLDERS:
+        raise RenderError(f"a template may use at most {MAX_PLACEHOLDERS} placeholders")
     rest = PLACEHOLDER_RE.sub("", text)
     if any(token in rest for token in _BRACES):
         raise RenderError("only {{ name }} placeholders of declared variables are allowed")
@@ -70,8 +74,9 @@ def clean_values(values: Mapping[str, object], variables: set[str] | frozenset[s
 
 
 # A value placed inside one of these attributes of an HTML template is a URL: only these schemes pass.
+# The attribute values are found in ONE pass over the template (a per-placeholder scan is quadratic).
 _URL_ATTR_RE = re.compile(
-    r"""(?:href|src|action|formaction|xlink:href|poster|background|cite)\s*=\s*(?:"[^"]*|'[^']*|[^\s"'>]*)$""",
+    r"""(?:href|src|action|formaction|xlink:href|poster|background|cite)\s*=\s*(?:"[^"]*|'[^']*|[^\s"'>]*)""",
     re.IGNORECASE,
 )
 _SAFE_SCHEMES = ("http", "https", "mailto", "tel")
@@ -89,12 +94,28 @@ def safe_url(value: str) -> str:
     return value
 
 
+def _url_spans(template: str) -> tuple[list[int], list[int]]:
+    """Start and end offsets of every URL attribute value (an unterminated quote runs to the end)."""
+    starts: list[int] = []
+    ends: list[int] = []
+    for found in _URL_ATTR_RE.finditer(template):
+        starts.append(found.start())
+        ends.append(found.end())
+    return starts, ends
+
+
 def _substitute(
     template: str, values: Mapping[str, str], transform: Callable[[str], str], urls: bool = False
 ) -> str:
+    starts, ends = _url_spans(template) if urls else ([], [])
+
+    def in_url(position: int) -> bool:
+        index = bisect_right(starts, position) - 1
+        return index >= 0 and position < ends[index]
+
     def one(match: re.Match[str]) -> str:
         raw = values.get(match.group(1), "")
-        if urls and _URL_ATTR_RE.search(template[: match.start()]):
+        if urls and in_url(match.start()):
             raw = safe_url(raw)
         return transform(raw)
 

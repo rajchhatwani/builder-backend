@@ -74,8 +74,13 @@ def match(lines: Sequence[Item], entries: Sequence[Item], tolerance: int = 0) ->
         for line in ordered:
             if line.id in found:
                 continue
+            # same sign only: a credit never pairs with a reversal, whatever the tolerance
             low = bisect_left(keys, line.amount - tolerance)
             high = bisect_right(keys, line.amount + tolerance)
+            if line.amount > 0:
+                low = max(low, bisect_left(keys, 1))
+            else:
+                high = min(high, bisect_left(keys, 0))
             if low < high:
                 index = min(
                     range(low, high),

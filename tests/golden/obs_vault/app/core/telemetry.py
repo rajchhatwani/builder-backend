@@ -56,6 +56,7 @@ EXTRA_REDACT_KEYS: tuple[str, ...] = ()
 DB_SPANS = False
 
 _QUERY_VALUE_RE = re.compile(r"([?&][^=&#\s]+)=([^&#\s]*)")
+_QUERY_KEYS = {"url.query", "http.query"}  # new HTTP semconv: a whole query string, no leading "?"
 _TRUE = {"1", "true", "yes", "on"}
 
 redact.register_secret_keys(EXTRA_REDACT_KEYS)
@@ -93,6 +94,8 @@ def mask_query(text: str) -> str:
 def _clean_value(key: str, value: Any) -> Any:
     if redact.is_secret_key(key):
         return redact.REDACTED
+    if isinstance(value, str) and key in _QUERY_KEYS:
+        return mask_query("?" + redact.scrub_text(value))[1:]
     if isinstance(value, str):
         return mask_query(redact.scrub_text(value))
     if isinstance(value, Sequence) and not isinstance(value, bytes):

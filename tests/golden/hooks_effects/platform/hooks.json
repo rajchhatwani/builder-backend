@@ -91,7 +91,7 @@
     "app/notifications/definitions.py": "609fd829aad99275f53670aa1f452e80833812b5160ca46538d25d2e94084207",
     "app/notifications/dispatcher.py": "f2cb22a499407d4e7a9b0f9c06de5e3bad13dd7ba83898ed14b6c54179f6efcf",
     "app/notifications/models.py": "8d08a54c61bea9fae545f506961c02abf4bafbea8e047e175ddc5b76fced80cd",
-    "app/notifications/render.py": "bd859e9ab0641db6740dde50a2d4923486f4ca0d3172dd3ae3c545cf91b96683",
+    "app/notifications/render.py": "357e42ce18e97e59c15f2603315af21109c6da674750c165759c09be4c794e96",
     "app/notifications/router.py": "53803a3e546c2f236bf2fde18e28ecc9ef79b3082fd357e4d3e139d2c16606ad",
     "app/notifications/service.py": "5496396bb5336852a0f1af198933bd7677415400dbcd948e1c3f5f782ab6ac7c",
     "app/notifications/triggers.py": "4d4d7ce802cd9b73d9d6b2e183458688124ddfa48052ef0cea4593613c978528",

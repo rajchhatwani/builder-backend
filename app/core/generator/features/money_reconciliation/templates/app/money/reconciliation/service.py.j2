@@ -540,6 +540,12 @@ async def close_run(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID) -> 
         return await _run_out(session, run), True
     await _lock_account(session, tenant, run.account_id)
     picture = await _results(session, tenant, run)
+    if picture.entries_truncated:
+        raise AppError(
+            "entries_truncated",
+            "too many unmatched ledger entries to close this run; narrow period_start / period_end",
+            422,
+        )
     run.status = "closed"
     run.summary = picture.summary.model_dump(mode="json")
     run.closed_by = getattr(user, "id", None)
