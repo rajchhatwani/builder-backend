@@ -9,11 +9,12 @@ export type SpecLoad =
   | { status: 'ready'; spec: SpecBlocks; issues: ValidationIssue[] }
 
 /** Loads the spec and the backend validator's issues (a failing validator only empties the issue list). */
-export function useSpecBlocks(projectId: string): { load: SpecLoad; reload: () => void } {
+export function useSpecBlocks(projectId: string): { load: SpecLoad; reload: (quiet?: boolean) => void } {
   const [load, setLoad] = useState<SpecLoad>({ status: 'loading' })
   const [n, setN] = useState(0)
-  const reload = useCallback(() => {
-    setLoad({ status: 'loading' })
+  /** `quiet`: re-read without flipping to 'loading' (keeps sibling panels, and what they hold in memory, mounted). */
+  const reload = useCallback((quiet?: boolean) => {
+    if (!quiet) setLoad({ status: 'loading' })
     setN((v) => v + 1)
   }, [])
   useEffect(() => {

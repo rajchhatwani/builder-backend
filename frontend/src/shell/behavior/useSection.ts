@@ -15,6 +15,8 @@ export interface SectionConfig<Row, Body> {
   toBody: (r: Row) => Body
 }
 
+const isTouchedKey = (k: string, t: string) => k === t || k.startsWith(`${t}[`)
+
 const NO_ISSUES: SectionIssues = { section: [], rows: {} }
 
 export interface SectionState<Row, Body> {
@@ -80,9 +82,10 @@ export function useSection<Row, Body>(
     setS((p) => {
       let issues = p.issues
       if (!touched) issues = NO_ISSUES
-      else if (p.issues.rows[touched[0]]?.fields[touched[1]]) {
+      else if (Object.keys(p.issues.rows[touched[0]]?.fields ?? {}).some((k) => isTouchedKey(k, touched[1]))) {
         const row = p.issues.rows[touched[0]]
-        const { [touched[1]]: _gone, ...rest } = row.fields
+        // the field's own message and its indexed children (`fields` -> `fields[2]`, `items[0].value`)
+        const rest = Object.fromEntries(Object.entries(row.fields).filter(([k]) => !isTouchedKey(k, touched[1])))
         issues = { ...p.issues, rows: { ...p.issues.rows, [touched[0]]: { ...row, fields: rest } } }
       }
       return { ...p, rows, dirty: true, issues, savedNote: '', saveError: '' }
@@ -101,7 +104,8 @@ export function useSection<Row, Body>(
       const read = await cfgRef.current.save(projectId, cur.rows.map(cfgRef.current.toBody), cur.version)
       const issues = await fetchIssues()
       setS((p) => ({
-        ...p, saving: false, saved: read.items, version: read.version, dirty: false, issues,
+        // rows edited while the save was in flight are newer than what was sent: they stay dirty
+        ...p, saving: false, saved: read.items, version: read.version, dirty: p.rows !== cur.rows, issues,
         savedNote: `Saved (version ${read.version}).`,
         // keep the user's rows (and keys): the server echoes them
       }))

@@ -52,3 +52,50 @@ describe('useSection: independent per-section versions', () => {
     await act(async () => root.unmount())
   })
 })
+
+describe('useSection: edits during save and stale per-field messages', () => {
+  it('F-0631: rows edited while a save is in flight stay dirty', async () => {
+    let release!: () => void
+    const gate = new Promise<void>((r) => { release = r })
+    let version = 1
+    const cfg: SectionConfig<Item, Item> = {
+      key: 'settings', check: () => ({}), load: async () => ({ version, items: [{ k: 'a' }] }),
+      save: async (_p, items) => { await gate; version += 1; return { version, items } },
+      fromBody: (b) => b, toBody: (r) => r,
+    }
+    let h!: ReturnType<typeof useSection<Item, Item>>
+    function Probe() {
+      h = useSection('p', cfg)
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    await act(async () => root.render(createElement(Probe)))
+    let pending!: Promise<void>
+    await act(async () => { pending = h.save() })
+    await act(async () => h.change([{ k: 'newer' }], [0, 'k']))
+    await act(async () => { release(); await pending })
+    expect(h.state.dirty).toBe(true)
+    expect(h.state.rows).toEqual([{ k: 'newer' }])
+    await act(async () => root.unmount())
+  })
+
+  it('F-0633: editing fields clears indexed messages such as fields[2]', async () => {
+    const cfg: SectionConfig<Item, Item> = {
+      key: 'history', check: () => ({}), load: async () => ({ version: 1, items: [{ k: 'a' }] }),
+      save: async (_p, items) => ({ version: 2, items }), fromBody: (b) => b, toBody: (r) => r,
+      mapIssues: () => ({ section: [], rows: { 0: { fields: { 'fields[2]': ['bad'], other: ['keep'] } } } }) as never,
+    }
+    let h!: ReturnType<typeof useSection<Item, Item>>
+    function Probe() {
+      h = useSection('p', cfg)
+      return null
+    }
+    const root = createRoot(document.createElement('div'))
+    await act(async () => root.render(createElement(Probe)))
+    expect(h.state.issues.rows[0].fields['fields[2]']).toBeTruthy()
+    await act(async () => h.change([{ k: 'a' }], [0, 'fields']))
+    expect(h.state.issues.rows[0].fields['fields[2]']).toBeUndefined()
+    expect(h.state.issues.rows[0].fields.other).toEqual(['keep'])
+    await act(async () => root.unmount())
+  })
+})

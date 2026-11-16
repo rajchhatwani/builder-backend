@@ -118,6 +118,23 @@ describe('Webhooks live panel', () => {
   })
 })
 
+describe('Webhooks live panel refresh (F-0634)', () => {
+  it('saving the block re-reads the spec so the live panel appears', async () => {
+    const off = { ...SPEC.webhooks, enabled: false }
+    m.getSpecBlocks.mockResolvedValueOnce({ ...SPEC, webhooks: off }).mockResolvedValue(SPEC)
+    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
+    m.getBlock.mockResolvedValue({ webhooks: off, version: 1 })
+    m.putBlock.mockImplementation(async (_p: string, _n: string, b: Record<string, unknown>) => ({ webhooks: b.webhooks, version: 2 }))
+    await mount(createElement(WebhooksPage, { projectId: 'p', origin: 'http://localhost:9999' }))
+    expect(q('wh-live')).toBeNull()
+    await act(async () => { host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click() })
+    await act(async () => { btn(/^Save$/).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(m.getSpecBlocks).toHaveBeenCalledTimes(2)
+    expect(q('wh-live')).not.toBeNull()
+  })
+})
+
 describe('Workers page', () => {
   beforeEach(() => {
     m.getSpecBlocks.mockResolvedValue(SPEC)

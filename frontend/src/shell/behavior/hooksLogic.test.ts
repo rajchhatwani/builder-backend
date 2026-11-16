@@ -3,7 +3,7 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { HookBody } from '../../api/types'
 import {
-  CEILINGS, autoModels, blankHook, buildPoint, defaultPolicy, hookClientErrors, hookFromBody, hookIssues, hookToBody,
+  CEILINGS, addOutputField, autoModels, renameOutputField, blankHook, buildPoint, defaultPolicy, hookClientErrors, hookFromBody, hookIssues, hookToBody,
   legalKinds, legalPolicies, parsePoint, pointOptions, renameHook, retarget, setInputFromEntity, setOutputFromEntity,
   settableFields, stubReady, stubText, type HookCatalog,
 } from './hooksLogic'
@@ -201,5 +201,21 @@ describe('stub text hardening', () => {
     expect(stubText(hook)).toBe('')
     expect(stubReady({ ...hookFromBody(fixtureHooks[0]), kind: 'x\nimport os' })).toBe(false)
     expect(stubText({ ...fixtureHooks[0], kind: 'effect' })).toContain('kind=effect')
+  })
+})
+
+describe('output field rename and add (F-0632)', () => {
+  const base = { ...blankHook({ Note: { fields: [], stateField: null, transitions: [] } } as HookCatalog), point: 'Note.after_commit', policy: 'fallback' as const }
+  it('renaming an output field moves its fallback value', () => {
+    const row = { ...base, outputFields: [{ name: 'done', type: 'bool', required: true }], fallback: { done: 'true' } }
+    const next = renameOutputField(row, 0, 'ok')
+    expect(next.outputFields[0].name).toBe('ok')
+    expect(hookToBody(next).fallback).toEqual({ ok: true })
+  })
+  it('adding output fields twice gives unique names', () => {
+    const row = addOutputField(addOutputField({ ...base, outputFields: [] }))
+    const names = row.outputFields.map((f) => f.name)
+    expect(new Set(names).size).toBe(2)
+    expect(names.every((n) => n !== '')).toBe(true)
   })
 })

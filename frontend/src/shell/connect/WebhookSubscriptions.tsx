@@ -38,6 +38,11 @@ export function WebhookSubscriptions({ origin, events, inbound }: { origin: stri
     if (timer.current) clearTimeout(timer.current)
     setShown(null)
   }
+  function forget() {
+    setConn(null)
+    setSubs(null)
+    setToken('')
+  }
   async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
     setBusy(true)
     setError('')
@@ -45,6 +50,8 @@ export function WebhookSubscriptions({ origin, events, inbound }: { origin: stri
       return await fn()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'The request failed')
+      // the token was refused (expired or wrong): go back to the token form instead of leaving a dead page
+      if ((e as { status?: number } | null)?.status === 401) forget()
       return undefined
     } finally {
       setBusy(false)
@@ -158,6 +165,9 @@ export function WebhookSubscriptions({ origin, events, inbound }: { origin: stri
       )}
       {conn && subs && (
         <>
+          <div className="bh-actions">
+            <button type="button" className="small outline" disabled={busy} onClick={() => { forget(); setError('') }}>Use a different token</button>
+          </div>
           {subs.length === 0 ? (
             <p className="muted" data-testid="wh-none">No subscriptions yet.</p>
           ) : (

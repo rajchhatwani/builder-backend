@@ -74,10 +74,11 @@ export function settingToBody(r: SettingRow): SettingBody {
     default: def,
     label: r.label.trim() || null,
     description: r.description.trim() || null,
-    minimum: r.type === 'int' ? numOrRaw(r.minimum) : r.minimum.trim() || null,
-    maximum: r.type === 'int' ? numOrRaw(r.maximum) : r.maximum.trim() || null,
+    // fields hidden for this type are not sent (the backend rejects them)
+    minimum: r.type === 'int' ? numOrRaw(r.minimum) : r.type === 'decimal' ? r.minimum.trim() || null : null,
+    maximum: r.type === 'int' ? numOrRaw(r.maximum) : r.type === 'decimal' ? r.maximum.trim() || null : null,
     // not an integer: send a value the API schema accepts; clientErrors() blocks the save first
-    max_length: INT.test(maxLen) ? Number(maxLen) : null,
+    max_length: r.type === 'string' && INT.test(maxLen) ? Number(maxLen) : null,
     read_roles: textToRoles(r.read_roles),
     edit_roles: textToRoles(r.edit_roles),
   }
@@ -195,7 +196,7 @@ export function clientErrors(section: 'settings' | 'sequences' | 'lists' | 'hist
   rows.forEach((row, i) => {
     if (section === 'settings') {
       const r = row as SettingRow
-      if (r.max_length.trim() && !nonNegInt(r.max_length)) out[`${i}.max_length`] = NEED_INT
+      if (r.type === 'string' && r.max_length.trim() && !nonNegInt(r.max_length)) out[`${i}.max_length`] = NEED_INT
     } else if (section === 'sequences') {
       const r = row as SequenceRow
       if (!nonNegInt(r.padding)) out[`${i}.padding`] = NEED_INT

@@ -100,6 +100,24 @@ describe('WebhookSubscriptions', () => {
     expect(host.querySelector('[data-testid=wh-error]')?.textContent).toContain('could not be refreshed')
   })
 
+  it('F-0635: a 401 after connecting drops the token form back; a button changes the token', async () => {
+    await mountConnected()
+    m.setEnabled.mockRejectedValue(Object.assign(new Error('The generated API answered 401'), { status: 401 }))
+    await act(async () => { btn(/Disable/).click() })
+    await act(async () => { await Promise.resolve() })
+    expect(host.querySelector('#wh-token')).not.toBeNull()
+    expect(host.querySelector('[data-testid=wh-error]')?.textContent).toContain('401')
+    expect(host.querySelector('[data-testid=wh-table]')).toBeNull()
+  })
+
+  it('F-0635: "Use a different token" resets the connection', async () => {
+    await mountConnected()
+    expect(host.querySelector('#wh-token')).toBeNull()
+    await act(async () => { btn(/Use a different token/).click() })
+    expect(host.querySelector('#wh-token')).not.toBeNull()
+    expect(host.querySelector('[data-testid=wh-table]')).toBeNull()
+  })
+
   it('empties the token input once connected', async () => {
     await mountConnected()
     expect(host.querySelector('#wh-token')).toBeNull()

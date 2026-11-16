@@ -41,6 +41,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const [notes, setNotes] = useState('')
   const [reason, setReason] = useState('')
   const tokenId = useId(), resId = useId(), custId = useId(), notesId = useId(), reasonId = useId()
+  const loaded = useRef('')
   const cellRefs = useRef(new Map<string, HTMLButtonElement>())
 
   const resource = resources.s === 'ok' ? resources.v.items.find((r) => r.id === resourceId) ?? null : null
@@ -54,7 +55,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
     return { status: r.status, json }
   }, [origin, active, doFetch])
 
-  useEffect(() => { setActive(''); setToken(''); setResources({ s: 'idle' }); setResourceId(''); setAnchor(''); setAvail({ s: 'idle' }); setBookings({ s: 'idle' }); setSelKey(null); setError(null); setNotice(null) }, [projectId])
+  useEffect(() => { loaded.current = ''; setActive(''); setToken(''); setResources({ s: 'idle' }); setResourceId(''); setAnchor(''); setAvail({ s: 'idle' }); setBookings({ s: 'idle' }); setSelKey(null); setError(null); setNotice(null) }, [projectId])
 
   const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean, keep = false) => {
     if (!keep) set({ s: 'loading' })
@@ -85,7 +86,10 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
     let dead = false
     const off = () => dead
     const { from, to } = weekInstants(week, resource.timezone)
-    const keep = false
+    // same resource and week as the last load: refresh in place so the grid (focus, selection) stays mounted
+    const loadKey = `${resource.id}|${week.from}`
+    const keep = loaded.current === loadKey
+    loaded.current = loadKey
     void get<Page<Booking>>(`/booking/bookings?resource_id=${encodeURIComponent(resource.id)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=200`, setBookings, off, keep)
     if (resource.mode === 'slot') void get<Avail>(`/booking/resources/${encodeURIComponent(resource.id)}/availability?from=${week.from}&to=${week.to}&include_taken=true`, setAvail, off, keep)
     else setAvail({ s: 'ok', v: { slots: [] } })
@@ -150,7 +154,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
     <section aria-labelledby="bk-h" data-testid="bookings-page" className="stack">
       <h1 id="bk-h">Bookings</h1>
       <p className="muted">Week calendar of the running project&apos;s bookable resources. Create a hold, confirm it before it expires, or cancel. The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="bookings-token-form">
+      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { loaded.current = ''; setActive(token); setRefresh((n) => n + 1) } }} data-testid="bookings-token-form">
         <label htmlFor={tokenId}>Bearer token</label>
         <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="bookings-token" />
         <button type="submit" disabled={!token} data-testid="bookings-load">Load calendar</button>

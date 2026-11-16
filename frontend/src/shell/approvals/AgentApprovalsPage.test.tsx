@@ -110,6 +110,21 @@ describe('AgentApprovalsPage', () => {
     expect(q('approve-p1')).not.toBeNull(); expect(q('acknowledge-p1')).toBeNull(); expect(q('reject-p1')).not.toBeNull(); expect(q('handoff-p1')).not.toBeNull()
     expect(q('approve-p2')).toBeNull(); expect(q('acknowledge-p2')).not.toBeNull(); expect(q('reject-p2')).not.toBeNull(); expect(q('outcome-success-p1')).toBeNull()
   })
+  it('steps back a page when deciding the last item of a later page empties it', async () => {
+    let shrunk = false
+    const { f, calls } = api((m, url) => {
+      if (!shrunk || m !== 'GET' || !url.includes('/proposals?')) return undefined
+      const off = Number(/offset=(\d+)/.exec(url)?.[1] ?? 0)
+      return off >= 20 ? json({ items: [], total: 20, limit: 20, offset: off }) : json({ items: [P()], total: 20, limit: 20, offset: off })
+    }, [P(), P2], 21)
+    await load(f)
+    await click(q('agentapprovals-next'))
+    shrunk = true
+    await click(q('approve-p1'))
+    await flush()
+    expect(calls.at(-1)!.url).toContain('offset=0')
+    expect(q('agentapprovals-prev')).not.toBeNull()
+  })
   it('approves and refreshes', async () => {
     const { f, calls } = api()
     await load(f); await click(q('approve-p1'))

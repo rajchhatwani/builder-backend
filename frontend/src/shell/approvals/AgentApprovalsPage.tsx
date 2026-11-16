@@ -75,6 +75,10 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
   const items = list.s === 'ok' ? list.v.items : []
   const total = list.s === 'ok' ? list.v.total ?? items.length : 0
   const pg = pageInfo(total, LIMIT, offset)
+  // the last row of a later page was decided: that page is gone, step back to the last page that still exists
+  useEffect(() => {
+    if (list.s === 'ok' && items.length === 0 && offset > 0 && total > 0) setOffset(Math.max(0, Math.ceil(total / LIMIT) - 1) * LIMIT)
+  }, [list.s, items.length, offset, total])
 
   function onRowKey(e: React.KeyboardEvent, i: number) {
     if (!['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) return

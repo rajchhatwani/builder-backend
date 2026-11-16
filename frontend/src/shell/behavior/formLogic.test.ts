@@ -4,6 +4,19 @@ import {
   looksSecret, parseIssuePath, previewNumber, sequenceFromBody, sequenceToBody, settingFromBody, settingToBody, textToRoles,
 } from './formLogic'
 
+describe('settings hidden fields (F-0629)', () => {
+  it('drops max_length unless string and minimum/maximum unless int/decimal', () => {
+    const asInt = settingToBody({ ...blankSetting(), key: 'x', type: 'int', max_length: '50' })
+    expect(asInt.max_length).toBeNull()
+    const asStr = settingToBody({ ...blankSetting(), key: 'x', type: 'string', minimum: '1', maximum: '9', max_length: '50' })
+    expect(asStr.minimum).toBeNull()
+    expect(asStr.maximum).toBeNull()
+    expect(asStr.max_length).toBe(50)
+    expect(settingToBody({ ...blankSetting(), key: 'x', type: 'bool', minimum: '1' }).minimum).toBeNull()
+    expect(clientErrors('settings', [{ ...blankSetting(), type: 'int', max_length: 'abc' }])).toEqual({})
+  })
+})
+
 describe('settings mapping', () => {
   it('round-trips an int setting (numbers stay numbers, roles become lists)', () => {
     const body = { key: 'approval_threshold', type: 'int', default: 1000, label: 'T', minimum: 0, maximum: 1000000, read_roles: ['manager', 'admin'], edit_roles: ['admin'] }

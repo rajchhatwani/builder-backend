@@ -338,3 +338,22 @@ export function hookIssues(issues: ValidationIssue[]): SectionIssues {
   }
   return { section: raw.section, rows }
 }
+
+/** Rename output field `n`, moving its fallback value to the new name (fallback is keyed by field name). */
+export function renameOutputField(row: HookRow, n: number, name: string): HookRow {
+  const old = row.outputFields[n]?.name
+  const fallback = { ...row.fallback }
+  if (old !== undefined && old !== name && old in fallback) {
+    fallback[name] = fallback[old]
+    delete fallback[old]
+  }
+  return { ...row, fallback, outputFields: row.outputFields.map((x, m) => (m === n ? { ...x, name } : x)) }
+}
+
+/** Append an output field with a name no other output field has (names key the fallback values and the React rows). */
+export function addOutputField(row: HookRow): HookRow {
+  const used = new Set(row.outputFields.map((f) => f.name))
+  let i = row.outputFields.length + 1
+  while (used.has(`field_${i}`)) i += 1
+  return { ...row, outputFields: [...row.outputFields, { name: `field_${i}`, type: 'string', required: true }] }
+}

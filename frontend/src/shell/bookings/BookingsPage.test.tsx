@@ -113,6 +113,21 @@ describe('BookingsPage', () => {
     expect(calls.filter((c) => c.url.includes('/availability')).length).toBeGreaterThan(1) // reloaded after the write
   })
 
+  it('F-0636: a refresh or action keeps the grid mounted (focus and selection survive)', async () => {
+    const { f } = api()
+    await load(f)
+    const grid = q('bookings-grid')!
+    const c = cell(WED9)
+    await click(c)
+    ;(c as HTMLElement).focus()
+    await click(q('bookings-refresh'))
+    expect(grid.isConnected).toBe(true)
+    expect(cell(WED9)).toBe(c)
+    expect(document.activeElement).toBe(c)
+    expect(q('bookings-booking-info')).not.toBeNull()
+    await click(q('bookings-confirm'))
+    expect(grid.isConnected).toBe(true)
+  })
   it('confirm a held slot', async () => {
     const { f, calls } = api()
     await load(f)

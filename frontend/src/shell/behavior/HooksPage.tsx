@@ -4,7 +4,7 @@ import { api } from '../../api/client'
 import type { HookBody, HookFieldBody } from '../../api/types'
 import {
   CEILINGS, ENTITY_TO_HOOK, FIXED_OUTPUT, GATE_COMMAND, HOOK_TYPES, blankHook, hookClientErrors, hookFromBody, hookIssues,
-  hookToBody, legalKinds, legalPolicies, parsePoint, pointOptions, renameHook, retarget, setInputFromEntity,
+  addOutputField, renameOutputField, hookToBody, legalKinds, legalPolicies, parsePoint, pointOptions, renameHook, retarget, setInputFromEntity,
   setOutputFromEntity, settableFields, signatureLine, stubPath, stubReady, stubText,
   type HookCatalog, type HookRow, type PointOption,
 } from './hooksLogic'
@@ -289,7 +289,7 @@ export function HooksPage({ projectId }: { projectId: string }) {
                     {r.outputFields.map((f, n) => (
                       <div key={n} className="bh-grid">
                         <Field id={`${id}-of-${n}`} label={`Output field ${n + 1} name`}>
-                          {(p) => <input {...p} value={f.name} onChange={(e) => replace(i, { ...r, outputFields: r.outputFields.map((x, m) => (m === n ? { ...x, name: e.target.value } : x)) }, 'outputFields')} />}
+                          {(p) => <input {...p} value={f.name} onChange={(e) => replace(i, renameOutputField(r, n, e.target.value), 'outputFields')} />}
                         </Field>
                         <Field id={`${id}-ot-${n}`} label={`Output field ${n + 1} type`}>
                           {(p) => (
@@ -301,14 +301,14 @@ export function HooksPage({ projectId }: { projectId: string }) {
                         <button className="outline small" aria-label={`Remove output field ${n + 1}`} onClick={() => replace(i, { ...r, outputFields: r.outputFields.filter((_, m) => m !== n) }, 'outputFields')}>Remove field</button>
                       </div>
                     ))}
-                    <button className="outline small" onClick={() => replace(i, { ...r, outputFields: [...r.outputFields, { name: '', type: 'string', required: true }] }, 'outputFields')}>Add output field</button>
+                    <button className="outline small" onClick={() => replace(i, addOutputField(r), 'outputFields')}>Add output field</button>
                   </div>
                 )}
                 {msgs(i, 'outputFields').length > 0 && <small className="bh-error" data-testid="field-error">{msgs(i, 'outputFields').join(' ')}</small>}
                 {r.policy === 'fallback' && (
                   <div className="bh-grid" data-testid="fallback-values">
-                    {r.outputFields.map((f) => (
-                      <Field key={f.name} id={`${id}-fb-${f.name}`} label={`Fallback value for ${f.name}`} hint={f.type} messages={f.name === r.outputFields[0]?.name ? msgs(i, 'fallback') : undefined}>
+                    {r.outputFields.map((f, n) => (
+                      <Field key={n} id={`${id}-fb-${n}`} label={`Fallback value for ${f.name}`} hint={f.type} messages={f.name === r.outputFields[0]?.name ? msgs(i, 'fallback') : undefined}>
                         {(p) => <input {...p} value={r.fallback[f.name] ?? ''} onChange={(e) => replace(i, { ...r, fallback: { ...r.fallback, [f.name]: e.target.value } }, 'fallback')} />}
                       </Field>
                     ))}

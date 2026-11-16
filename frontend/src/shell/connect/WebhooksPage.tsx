@@ -1,3 +1,4 @@
+import { useCallback } from 'react'
 import type { JsonSchema } from '../../forms'
 import schema from '../../forms/schemas/webhooks.json'
 import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
@@ -8,11 +9,13 @@ import { WebhookSubscriptions } from './WebhookSubscriptions'
 /** Connect > Webhooks. The configuration (events, limits, receivers) is edited here through PUT /behavior/webhooks;
  *  subscriptions and signing secrets live in the generated project, so they are managed live against its API. */
 export function WebhooksPage({ projectId, origin = PREVIEW_ORIGIN }: { projectId: string; origin?: string | null }) {
-  const { load } = useSpecBlocks(projectId)
+  const { load, reload } = useSpecBlocks(projectId)
+  // stable: BlockFormPage's load/save callbacks depend on it
+  const onSaved = useCallback(() => reload(true), [reload])
   const w = load.status === 'ready' ? load.spec.webhooks : null
   return (
     <div className="co-page">
-      <BlockFormPage projectId={projectId} path="webhooks" key_="webhooks" title="Webhooks" schema={schema as JsonSchema}
+      <BlockFormPage projectId={projectId} path="webhooks" key_="webhooks" title="Webhooks" schema={schema as JsonSchema} onSaved={onSaved}
         intro="Events your project sends to other systems (signed, retried, with a delivery log) and the incoming webhooks it accepts. Webhooks need events, jobs and providers to be switched on." />
       {w?.enabled && (origin ? (
         <WebhookSubscriptions origin={origin} events={w.events ?? []} inbound={(w.inbound ?? []).map((i) => i.name)} />
