@@ -523,6 +523,37 @@ def _check_bounds(field: SpecField, ftype: FieldType, p: str, ctx: _Ctx) -> bool
     ):
         ctx.add(p, "invalid_range", "min_value must not exceed max_value")
         ok = False
+    if ok:
+        ok = _check_column_range(field, ftype, p, ctx)
+    return ok
+
+
+_COLUMN_LIMITS = {
+    FieldType.integer: (-(2**31), 2**31 - 1),
+    FieldType.bigint: (-(2**63), 2**63 - 1),
+    FieldType.decimal: (-(10**12), 10**12),  # Numeric(18, 6): 12 integer digits
+}
+
+
+def _check_column_range(field: SpecField, ftype: FieldType, p: str, ctx: _Ctx) -> bool:
+    """Bounds no value can satisfy: outside what the column stores, or no integer in between."""
+    ok = True
+    limits = _COLUMN_LIMITS.get(ftype)
+    if limits is not None:
+        low, high = limits
+        for name, value in (("min_value", field.min_value), ("max_value", field.max_value)):
+            if value is not None and not low <= value <= high:
+                ctx.add(f"{p}.{name}", "out_of_range", f"must be within {low}..{high} for {ftype.value}")
+                ok = False
+    if (
+        ok
+        and ftype in (FieldType.integer, FieldType.bigint)
+        and field.min_value is not None
+        and field.max_value is not None
+        and math.ceil(field.min_value) > math.floor(field.max_value)
+    ):
+        ctx.add(p, "invalid_range", "no integer lies between min_value and max_value")
+        ok = False
     return ok
 
 

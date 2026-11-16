@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("employee", "hr", "manager")),
     "update": _access.access_dependency(roles=("hr",)),
     "head": _access.access_dependency(roles=("employee", "hr", "manager")),
+    "replace": _access.access_dependency(roles=("hr",)),
 }
 
 
@@ -82,9 +83,9 @@ async def create_employees(
 
 @router.put("/{item_id}", response_model=EmployeeRead)
 async def replace_employees(
-    item_id: _uuid.UUID, body: EmployeeCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: EmployeeCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> EmployeeRead:
-    item = await EmployeeRepository(session).replace(item_id, body.model_dump())
+    item = await EmployeeRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return EmployeeRead.model_validate(item)
 
 

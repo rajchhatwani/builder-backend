@@ -39,20 +39,20 @@ class StateChange(BaseModel):
 _access_orders = _ACCESS_orders["get"]
 
 
-async def _can_replace_orders(user: CurrentUser) -> _access.Access | AppError:
-    """The entity's own replace access for this caller; a refusal is kept, not raised: only a transition
-    with no `roles` needs it."""
-    try:
-        return await _ACCESS_orders["replace"](user)
-    except AppError as refused:
-        return refused
-
-
 async def _can_update_orders(user: CurrentUser) -> _access.Access | AppError:
     """The entity's own update access for this caller; a refusal is kept, not raised: only a transition
     with no `roles` needs it."""
     try:
         return await _ACCESS_orders["update"](user)
+    except AppError as refused:
+        return refused
+
+
+async def _can_replace_orders(user: CurrentUser) -> _access.Access | AppError:
+    """The entity's own replace access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_orders["replace"](user)
     except AppError as refused:
         return refused
 
@@ -82,19 +82,19 @@ async def apply_orders_transition(
     name: str,
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_orders)],
-    can_replace: Annotated[_access.Access | AppError, Depends(_can_replace_orders)],
     can_update: Annotated[_access.Access | AppError, Depends(_can_update_orders)],
+    can_replace: Annotated[_access.Access | AppError, Depends(_can_replace_orders)],
 ) -> OrderRead:
     # No `roles` on the transition = anyone who may update this record: the entity's update access
     # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
     wanted = next((x for x in engine.machine("Order")["transitions"] if x["name"] == name and not x["auto"]), None)
     if wanted is not None and not wanted["roles"]:
-        if isinstance(can_replace, AppError):
-            raise can_replace
-        await OrderRepository(session, **can_replace.repo_kwargs).get(item_id)
         if isinstance(can_update, AppError):
             raise can_update
         await OrderRepository(session, **can_update.repo_kwargs).get(item_id)
+        if isinstance(can_replace, AppError):
+            raise can_replace
+        await OrderRepository(session, **can_replace.repo_kwargs).get(item_id)
     repo = OrderRepository(session, **access.repo_kwargs)
     item = await engine.apply(
         repo,

@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("admin", "agent", "auditor")),
     "update": _access.access_dependency(roles=("admin", "agent")),
     "head": _access.access_dependency(roles=("admin", "agent", "auditor")),
+    "replace": _access.access_dependency(roles=("admin", "agent")),
 }
 
 
@@ -82,9 +83,9 @@ async def create_tickets(
 
 @router.put("/{item_id}", response_model=TicketRead)
 async def replace_tickets(
-    item_id: _uuid.UUID, body: TicketCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: TicketCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> TicketRead:
-    item = await TicketRepository(session).replace(item_id, body.model_dump())
+    item = await TicketRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return TicketRead.model_validate(item)
 
 

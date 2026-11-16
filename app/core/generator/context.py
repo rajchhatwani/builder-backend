@@ -5,6 +5,7 @@ Everything that ends up as Python source is built here, from validated identifie
 never depends on dict or set ordering.
 """
 
+import hashlib
 import math
 from dataclasses import dataclass, field, replace
 from typing import Any
@@ -378,6 +379,18 @@ def default_expr(f: SpecField) -> str | None:
     raise ValueError(f"unknown field type {f.type}")
 
 
+_PG_IDENT_MAX = 63
+
+
+def _ident(name: str) -> str:
+    """A constraint/index name PostgreSQL accepts: names over 63 chars are shortened with a
+    stable hash suffix so the generated migration cannot crash on a valid spec."""
+    if len(name) <= _PG_IDENT_MAX:
+        return name
+    digest = hashlib.sha1(name.encode()).hexdigest()[:8]  # noqa: S324 - naming, not security
+    return f"{name[: _PG_IDENT_MAX - 9]}_{digest}"
+
+
 # What the database column can hold. Anything outside is rejected by the schema (422) so a
 # value the column cannot store never reaches the database as a 500.
 _INT_RANGE = {"integer": (-(2**31), 2**31 - 1), "bigint": (-(2**63), 2**63 - 1)}
@@ -413,17 +426,27 @@ def _sample(f: SpecField) -> str:
         case "text":
             return '"sample text " + _token(6)'
         case "integer" | "bigint":
+            rmin, rmax = _INT_RANGE[f.type]
             low = math.ceil(f.min_value) if f.min_value is not None else None
             high = math.floor(f.max_value) if f.max_value is not None else None
             if low is None:
                 low = min(1, high) if high is not None else 1
             if high is None:
                 high = low + 1000
+            low = min(max(low, rmin), rmax)
+            high = min(max(high, rmin), rmax)
             return f"_random.randint({low}, {max(low, high)})"
         case "float" | "decimal":
-            low_f = f.min_value if f.min_value is not None else 0
-            high_f = f.max_value if f.max_value is not None else low_f + 1000
-            body = f"round(_random.uniform({_number(low_f)}, {_number(max(low_f, high_f))}), 2)"
+            lo, hi = f.min_value, f.max_value
+            if lo is None:
+                lo = 0 if hi is None or hi >= 0 else hi - 1000
+            if hi is None:
+                hi = lo + 1000
+            hi = max(lo, hi)
+            body = f"round(_random.uniform({_number(lo)}, {_number(hi)}), 2)"
+            if round(lo, 2) != lo or round(hi, 2) != hi:
+                # 2-dp rounding could step outside [min, max]: clamp after rounding
+                body = f"min(max({body}, {_number(lo)}), {_number(hi)})"
             return body if f.type == "float" else f"str({body})"
         case "boolean":
             return "True"
@@ -543,7 +566,7 @@ def _fk_ctx(rel: SpecRelation, tables: dict[str, str], to_table: str) -> FkCtx:
         on_delete=ondelete,
         required=required,
         unique=one_to_one,
-        constraint_name=f"fk_{to_table}_{column}_{from_table}",
+        constraint_name=_ident(f"fk_{to_table}_{column}_{from_table}"),
         attr=rel.to_name,
         back_attr=rel.from_name,
         target_is_self=self_ref,
@@ -705,10 +728,10 @@ def _build_entity(
         if a.target_entity != e.name:
             related[a.target_module] = a.target_entity
 
-    indexes = [(f"ix_{table}_{f.name}", f.name) for f in e.fields if f.indexed and not f.unique]
-    indexes += [(f"ix_{table}_{fk.column}", fk.column) for fk in fks if not fk.unique]
-    uniques = [(f"uq_{table}_{f.name}", f.name) for f in e.fields if f.unique]
-    uniques += [(f"uq_{table}_{fk.column}", fk.column) for fk in fks if fk.unique]
+    indexes = [(_ident(f"ix_{table}_{f.name}"), f.name) for f in e.fields if f.indexed and not f.unique]
+    indexes += [(_ident(f"ix_{table}_{fk.column}"), fk.column) for fk in fks if not fk.unique]
+    uniques = [(_ident(f"uq_{table}_{f.name}"), f.name) for f in e.fields if f.unique]
+    uniques += [(_ident(f"uq_{table}_{fk.column}"), fk.column) for fk in fks if fk.unique]
 
     custom = _custom_ctx(e)
     migration_columns = ['sa.Column("id", sa.Uuid(), nullable=False),']
@@ -774,9 +797,9 @@ def build_context(spec: Spec) -> ProjectCtx:
                 left_table=left,
                 right_table=right,
                 on_delete=_ON_DELETE_SQL[OnDelete(rel.on_delete)],
-                left_constraint=f"fk_{name}_left_id_{left}",
-                right_constraint=f"fk_{name}_right_id_{right}",
-                pk_name=f"pk_{name}",
+                left_constraint=_ident(f"fk_{name}_left_id_{left}"),
+                right_constraint=_ident(f"fk_{name}_right_id_{right}"),
+                pk_name=_ident(f"pk_{name}"),
             )
         )
     joins.sort(key=lambda j: j.name)
@@ -966,13 +989,19 @@ def _inherit_unlisted_access(
     entity: EntityCtx, perms: dict[str, Any], access: list[AccessCtx]
 ) -> list[AccessCtx]:
     """An operation without its own permission on an entity that has permissions must not be a
-    side door: HEAD (an existence probe) follows `get`, DELETE follows `update` (else `replace`)."""
+    side door: HEAD (an existence probe) and LIST follow `get`, DELETE follows `update` (else
+    `replace`), REPLACE follows `update`."""
     if not perms:
         return access
     by_op = {a.op: a for a in access}
     extra: list[AccessCtx] = []
     inherited: set[str] = set()
-    for op, sources in (("head", ("get",)), ("delete", ("update", "replace"))):
+    for op, sources in (
+        ("head", ("get",)),
+        ("list", ("get",)),
+        ("delete", ("update", "replace")),
+        ("replace", ("update",)),
+    ):
         if op not in entity.ops or op in perms:
             continue
         src = next((by_op[s] for s in sources if s in perms and s in by_op), None)

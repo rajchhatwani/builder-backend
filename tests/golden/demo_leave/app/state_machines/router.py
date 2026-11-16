@@ -48,6 +48,15 @@ async def _can_update_leave_requests(user: CurrentUser) -> _access.Access | AppE
         return refused
 
 
+async def _can_replace_leave_requests(user: CurrentUser) -> _access.Access | AppError:
+    """The entity's own replace access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_leave_requests["replace"](user)
+    except AppError as refused:
+        return refused
+
+
 def _roles_leave_requests(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -74,6 +83,7 @@ async def apply_leave_requests_transition(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_leave_requests)],
     can_update: Annotated[_access.Access | AppError, Depends(_can_update_leave_requests)],
+    can_replace: Annotated[_access.Access | AppError, Depends(_can_replace_leave_requests)],
 ) -> LeaveRequestRead:
     # No `roles` on the transition = anyone who may update this record: the entity's update access
     # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
@@ -82,6 +92,9 @@ async def apply_leave_requests_transition(
         if isinstance(can_update, AppError):
             raise can_update
         await LeaveRequestRepository(session, **can_update.repo_kwargs).get(item_id)
+        if isinstance(can_replace, AppError):
+            raise can_replace
+        await LeaveRequestRepository(session, **can_replace.repo_kwargs).get(item_id)
     repo = LeaveRequestRepository(session, **access.repo_kwargs)
     item = await engine.apply(
         repo,

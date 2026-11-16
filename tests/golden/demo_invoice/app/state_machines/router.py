@@ -48,6 +48,15 @@ async def _can_update_invoices(user: CurrentUser) -> _access.Access | AppError:
         return refused
 
 
+async def _can_replace_invoices(user: CurrentUser) -> _access.Access | AppError:
+    """The entity's own replace access for this caller; a refusal is kept, not raised: only a transition
+    with no `roles` needs it."""
+    try:
+        return await _ACCESS_invoices["replace"](user)
+    except AppError as refused:
+        return refused
+
+
 def _roles_invoices(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -74,6 +83,7 @@ async def apply_invoices_transition(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_invoices)],
     can_update: Annotated[_access.Access | AppError, Depends(_can_update_invoices)],
+    can_replace: Annotated[_access.Access | AppError, Depends(_can_replace_invoices)],
 ) -> InvoiceRead:
     # No `roles` on the transition = anyone who may update this record: the entity's update access
     # (roles and row rules) must pass as well as the read access above. Listed roles keep the role check.
@@ -82,6 +92,9 @@ async def apply_invoices_transition(
         if isinstance(can_update, AppError):
             raise can_update
         await InvoiceRepository(session, **can_update.repo_kwargs).get(item_id)
+        if isinstance(can_replace, AppError):
+            raise can_replace
+        await InvoiceRepository(session, **can_replace.repo_kwargs).get(item_id)
     repo = InvoiceRepository(session, **access.repo_kwargs)
     item = await engine.apply(
         repo,

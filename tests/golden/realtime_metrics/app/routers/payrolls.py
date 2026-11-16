@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("admin",)),
     "update": _access.access_dependency(roles=("admin",)),
     "head": _access.access_dependency(roles=("admin",)),
+    "replace": _access.access_dependency(roles=("admin",)),
 }
 
 
@@ -80,9 +81,9 @@ async def create_payrolls(
 
 @router.put("/{item_id}", response_model=PayrollRead)
 async def replace_payrolls(
-    item_id: _uuid.UUID, body: PayrollCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: PayrollCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> PayrollRead:
-    item = await PayrollRepository(session).replace(item_id, body.model_dump())
+    item = await PayrollRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return PayrollRead.model_validate(item)
 
 

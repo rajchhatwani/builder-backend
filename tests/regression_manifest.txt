@@ -312,3 +312,4 @@ tests/unit/test_async_lint_agent.py
 tests/unit/test_async_lint_read_tools.py
 tests/unit/test_reader_control_chars_lint.py
 tests/unit/test_async_lint_sandbox.py
+tests/unit/test_generator_audit_b1_017.py

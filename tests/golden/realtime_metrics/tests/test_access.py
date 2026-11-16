@@ -89,7 +89,7 @@ async def test_expenses_rows_belong_to_their_creator(
 
 
 async def test_payrolls_routes_need_a_signed_in_user(client: AsyncClient) -> None:
-    for op in ("create", "delete", "get", "list", "update", "head"):
+    for op in ("create", "delete", "get", "list", "update", "head", "replace"):
         response = await _call(client, op, "payrolls")
         assert response.status_code == 401, (op, response.text)
         if op != "head":  # a HEAD response has no body to read the code from
@@ -101,7 +101,7 @@ async def test_payrolls_routes_reject_users_without_the_required_role(
 ) -> None:
     # A freshly registered user only holds the default role(s).
     async with client_for(await sign_in_plain(client, "plain@example.com")) as plain:
-        for op in ("create", "delete", "get", "list", "update", "head"):
+        for op in ("create", "delete", "get", "list", "update", "head", "replace"):
             response = await _call(plain, op, "payrolls")
             assert response.status_code == 403, (op, response.text)
             if op != "head":

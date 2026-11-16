@@ -82,8 +82,8 @@
     "app/platform_sdk/helpers.py": "47833db406bfdb1161597af0a7dbf40b2216d259aac22b47547e7e37022da544",
     "app/routers/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "app/routers/_health.py": "d0fc448f3291df26677764bba21972b177ba8578b0bf9543ac57e02ad0344a0b",
-    "app/routers/invoices.py": "f3858f244a02dc06e01b334de3f3ff82056e458e329e03f0a2547323e57ba21d",
-    "app/routers/suppliers.py": "b24236a3c38e7d59f790ebb0d04bfcd3e4425164c8e7e799ce2a56a4806c0899",
+    "app/routers/invoices.py": "49d8e8421798589f31ac2bafa43f854bea80c2c217b3dcc5cbc6d4840949807b",
+    "app/routers/suppliers.py": "07d4f8b1a7d0157fbc6b25c7cc7a81e870dcf22adb4ed6fa593ebd89fa2067ae",
     "app/runtime_config/__init__.py": "6812bcc2a3554012b8ebe59bb9e24f4b9759fc8421f612a67e37c2a8b139d399",
     "app/runtime_config/definitions.py": "c126a2897ca3894ca69c65d9836971b915f9bfbc3aa9409eb0bb258082aa2ad1",
     "app/runtime_config/lists.py": "a783e5ff4e02b6a7fa0e0cdc9487063bee754cfee96cd4101a5afab2b82cc231",
@@ -115,7 +115,7 @@
     "app/state_machines/expr/runtime.py": "ddfc057a1444b8836fb58d337a370f262966f645826c87b01f7dd40910c8a5b9",
     "app/state_machines/hooks.py": "808ac990e88eafbfb86bc9a0092d51670ee2848532b0e9fe04cb9973be597216",
     "app/state_machines/models.py": "2205982c3e59e3663d828ccc311db45e32742fc4e7ca858fb266f422e383bd9d",
-    "app/state_machines/router.py": "f26a1726325fc8b5ab753354b183c22bec097b34c77b638ef18ff0de64995b99"
+    "app/state_machines/router.py": "c6461e86ada1bb817e4a43ec645fe24d00cf317c9da2c32b3375223d5822d409"
   },
   "guarded_sha256": {
     "Dockerfile": "cc7e28011233461a78472e4bc38ed5edd7f2e9ebb73bb043e261c9d4e06f2761",

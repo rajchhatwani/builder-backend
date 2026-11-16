@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("admin", "agent", "auditor")),
     "update": _access.access_dependency(roles=("admin", "agent")),
     "head": _access.access_dependency(roles=("admin", "agent", "auditor")),
+    "replace": _access.access_dependency(roles=("admin", "agent")),
 }
 
 
@@ -82,9 +83,9 @@ async def create_notes(
 
 @router.put("/{item_id}", response_model=NoteRead)
 async def replace_notes(
-    item_id: _uuid.UUID, body: NoteCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: NoteCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> NoteRead:
-    item = await NoteRepository(session).replace(item_id, body.model_dump())
+    item = await NoteRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return NoteRead.model_validate(item)
 
 

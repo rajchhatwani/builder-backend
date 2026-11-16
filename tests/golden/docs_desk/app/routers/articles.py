@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(match=('status', 'published')),
     "update": _access.access_dependency(roles=("staff",)),
     "head": _access.access_dependency(match=('status', 'published')),
+    "replace": _access.access_dependency(roles=("staff",)),
 }
 
 
@@ -80,9 +81,9 @@ async def create_articles(
 
 @router.put("/{item_id}", response_model=ArticleRead)
 async def replace_articles(
-    item_id: _uuid.UUID, body: ArticleCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: ArticleCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> ArticleRead:
-    item = await ArticleRepository(session).replace(item_id, body.model_dump())
+    item = await ArticleRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return ArticleRead.model_validate(item)
 
 

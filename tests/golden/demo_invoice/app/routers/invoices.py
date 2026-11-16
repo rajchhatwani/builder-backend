@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("admin", "approver", "clerk")),
     "update": _access.access_dependency(roles=("admin",)),
     "head": _access.access_dependency(roles=("admin", "approver", "clerk")),
+    "replace": _access.access_dependency(roles=("admin",)),
 }
 
 
@@ -82,9 +83,9 @@ async def create_invoices(
 
 @router.put("/{item_id}", response_model=InvoiceRead)
 async def replace_invoices(
-    item_id: _uuid.UUID, body: InvoiceCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: InvoiceCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> InvoiceRead:
-    item = await InvoiceRepository(session).replace(item_id, body.model_dump())
+    item = await InvoiceRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return InvoiceRead.model_validate(item)
 
 

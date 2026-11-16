@@ -21,6 +21,7 @@ _ACCESS = {
     "list": _access.access_dependency(roles=("employee", "hr", "manager")),
     "update": _access.access_dependency(roles=("hr",)),
     "head": _access.access_dependency(roles=("employee", "hr", "manager")),
+    "replace": _access.access_dependency(roles=("hr",)),
 }
 
 
@@ -82,9 +83,9 @@ async def create_leave_requests(
 
 @router.put("/{item_id}", response_model=LeaveRequestRead)
 async def replace_leave_requests(
-    item_id: _uuid.UUID, body: LeaveRequestCreate, session: _db.SessionDep
+    item_id: _uuid.UUID, body: LeaveRequestCreate, session: _db.SessionDep, access: _t.Annotated[_access.Access, _fa.Depends(_ACCESS["replace"])]
 ) -> LeaveRequestRead:
-    item = await LeaveRequestRepository(session).replace(item_id, body.model_dump())
+    item = await LeaveRequestRepository(session, **access.repo_kwargs).replace(item_id, body.model_dump())
     return LeaveRequestRead.model_validate(item)
 
 
