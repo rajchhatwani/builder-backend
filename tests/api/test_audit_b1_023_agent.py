@@ -27,7 +27,7 @@ from tests.api.test_agent_runs import (
     _run,
     _url,
     finish,
-    install,  # noqa: F401  (fixture)
+    install as install,  # fixture re-export
 )
 
 
