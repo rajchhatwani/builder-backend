@@ -121,7 +121,7 @@ def test_geo_nul_query_is_422(files: dict[str, str]) -> None:
     c, svc = _client(files, "geo")
     pt = {"lat": "1.5", "lng": "2.5"}
     assert c.get("/geo/places", params={"kind": "k\x00"}).status_code == 422
-    assert c.get("/geo/places/nearby", params={**pt, "radius_m": 10, "kind": "k\x00"}).status_code == 422
+    assert c.get("/geo/places/within", params={**pt, "radius_m": 10, "kind": "k\x00"}).status_code == 422
     assert c.get("/geo/places/nearest", params={**pt, "kind": "k\x00"}).status_code == 422
     assert c.get("/geo/events", params={"subject_id": "a\x00"}).status_code == 422
     assert not svc.list_places.called and not svc.places_within.called
