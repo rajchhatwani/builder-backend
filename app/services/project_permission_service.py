@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.access_layers import weakens
 from app.exceptions import AppError
 from app.models.entity import Entity
+from app.models.enums import RowRule
 from app.models.project import Project
 from app.models.project_permission import ProjectPermission
 from app.models.project_role import ProjectRole
@@ -250,6 +251,23 @@ class ProjectPermissionService:
                 )
 
         updates = data.model_dump(exclude_unset=True, exclude={"confirm_weakening"})
+        rule = updates.get("row_rule", perm.row_rule)
+        field = updates.get("custom_filter_field", perm.custom_filter_field)
+        value = updates.get("custom_filter_value", perm.custom_filter_value)
+        if rule == RowRule.custom_filter:
+            if not field or value is None:
+                raise AppError(
+                    code="validation_error",
+                    message="custom_filter needs custom_filter_field and custom_filter_value",
+                    status_code=422,
+                )
+        elif field is not None or value is not None:
+            raise AppError(
+                code="validation_error",
+                message="custom_filter_field / custom_filter_value only apply to row_rule "
+                "'custom_filter'",
+                status_code=422,
+            )
 
         async def write() -> None:
             for key, value in updates.items():

@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, delete, func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -351,10 +351,28 @@ class PlatformAuthService:
                 else "not_admin"
             )
             if not password_ok and not locked:
-                user.failed_logins += 1
-                if user.failed_logins >= self.settings.login_max_failures:
-                    user.locked_until = now + timedelta(minutes=self.settings.lockout_minutes)
-                    user.failed_logins = 0
+                # Atomic: parallel guesses must each count (a read-modify-write loses updates).
+                bumped = func.coalesce(PlatformUser.failed_logins, 0) + 1
+                trips = bumped >= self.settings.login_max_failures
+                new_count = (
+                    await self.db.execute(
+                        update(PlatformUser)
+                        .where(PlatformUser.id == user.id)
+                        .values(
+                            failed_logins=case((trips, 0), else_=bumped),
+                            locked_until=case(
+                                (
+                                    trips,
+                                    now + timedelta(minutes=self.settings.lockout_minutes),
+                                ),
+                                else_=PlatformUser.locked_until,
+                            ),
+                        )
+                        .returning(PlatformUser.failed_logins)
+                        .execution_options(synchronize_session=False)
+                    )
+                ).scalar_one()
+                if new_count == 0:
                     reason = "locked_now"
             await self._login_failed(user, email, info, reason)
             if locked and password_ok and user.locked_until is not None:

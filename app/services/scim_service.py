@@ -126,11 +126,19 @@ class ScimService:
             )
 
     async def issue_token(
-        self, org: Organization, actor: PlatformUser, info: RequestInfo
+        self,
+        org: Organization,
+        actor: PlatformUser,
+        info: RequestInfo,
+        *,
+        actor_role: OrgRole = OrgRole.owner,
     ) -> tuple[ScimDirectory, str, bool]:
         """Create the directory (switched on) or rotate its token. The old token stops at once;
         after an operator rotation the directory is switched back on.
-        Returns (directory, raw token — shown once, created?)."""
+        Returns (directory, raw token — shown once, created?).
+        Owner-only: the bearer can promote/demote/remove members including owners."""
+        if actor_role is not OrgRole.owner:
+            raise await self.orgs._owner_only(org.id)  # noqa: SLF001
         await self._require_allowed(org, actor)
         raw, digest = new_token()
         directory = await self.directory(org.id)
@@ -602,6 +610,7 @@ class ScimService:
         member = await self.db.get(OrganizationMember, (org.id, user.id))
         org_projects = select(Project.id).where(Project.organization_id == org.id)
         if member is not None:
+            await self.orgs.lock_owners(org.id)  # serialise with other owner removals/demotions
             heir = (
                 await self.db.execute(
                     select(OrganizationMember.user_id)
@@ -759,17 +768,7 @@ class ScimService:
             if member is None or role is None or member.role is role:
                 continue
             if member.role is OrgRole.owner:
-                others = (
-                    await self.db.execute(
-                        select(func.count())
-                        .select_from(OrganizationMember)
-                        .where(
-                            OrganizationMember.organization_id == org.id,
-                            OrganizationMember.role == OrgRole.owner,
-                            OrganizationMember.user_id != su.user_id,
-                        )
-                    )
-                ).scalar_one()
+                others = [u for u in await self.orgs.lock_owners(org.id) if u != su.user_id]
                 if not others:
                     continue  # never leave the org without an owner
             previous = member.role

@@ -160,6 +160,9 @@ class ProjectService:
     async def delete(self, project_id: uuid.UUID) -> None:
         project = await self.get(project_id)
         org_id = project.organization_id
+        from app.services import preview_service  # late: preview_service imports this layer
+
+        await preview_service.end_for_projects(self.session, [project_id])
         await self.session.delete(project)
         await self.session.flush()
         # workspaces vanish by cascade: recompute the org's gauges from the rows that are left

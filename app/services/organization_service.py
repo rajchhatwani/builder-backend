@@ -622,6 +622,7 @@ class OrganizationService:
                 message="only an owner can transfer ownership",
                 status_code=403,
             )
+        await self.lock_owners(organization_id)
         src.role = OrgRole.admin
         dst.role = OrgRole.owner
         await self.db.commit()
@@ -702,10 +703,15 @@ class OrganizationService:
                 await self.db.execute(select(Project).where(Project.organization_id == org.id))
             ).scalars()
         )
+        from app.services import preview_service  # late: avoid an import cycle
+
+        await preview_service.end_for_projects(self.db, [p.id for p in projects])
         for project in projects:
             await self.db.delete(project)  # entities, configs, members cascade in the DB
         await self.db.flush()
-        await reconcile_gauges(self.db, org.id)  # the cascade took workspaces the gauge still counts
+        await reconcile_gauges(
+            self.db, org.id
+        )  # the cascade took workspaces the gauge still counts
         member_ids = list(
             (
                 await self.db.execute(
@@ -1250,18 +1256,22 @@ class OrganizationService:
             raise AppError(code="not_found", message="member not found", status_code=404)
         return row
 
-    async def _require_another_owner(self, organization_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        others = (
-            await self.db.execute(
-                select(func.count())
-                .select_from(OrganizationMember)
-                .where(
-                    OrganizationMember.organization_id == organization_id,
-                    OrganizationMember.role == OrgRole.owner,
-                    OrganizationMember.user_id != user_id,
-                )
+    async def lock_owners(self, organization_id: uuid.UUID) -> list[uuid.UUID]:
+        """Lock the org's whole owner set (FOR UPDATE, id order) and return their user ids, so
+        concurrent demote/remove/leave of owners serialise and re-read the committed roles."""
+        rows = await self.db.execute(
+            select(OrganizationMember.user_id)
+            .where(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.role == OrgRole.owner,
             )
-        ).scalar_one()
+            .order_by(OrganizationMember.user_id)
+            .with_for_update()
+        )
+        return list(rows.scalars())
+
+    async def _require_another_owner(self, organization_id: uuid.UUID, user_id: uuid.UUID) -> None:
+        others = len([u for u in await self.lock_owners(organization_id) if u != user_id])
         if not others:
             raise AppError(
                 code="last_owner",

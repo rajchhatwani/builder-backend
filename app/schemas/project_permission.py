@@ -11,6 +11,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, model_validator
 
 from app.models.enums import AuthOperation, RowRule
+from app.schemas._patch import NoNullPatch
 
 
 class PermissionEntry(BaseModel):
@@ -54,8 +55,10 @@ class ProjectPermissionBulkUpsert(BaseModel):
     confirm_weakening: bool = False
 
 
-class ProjectPermissionUpdate(BaseModel):
+class ProjectPermissionUpdate(NoNullPatch):
     """Request body for PATCH /projects/{id}/permissions/{permission_id}."""
+
+    not_null = frozenset({"roles", "confirm_weakening"})
 
     roles: list[str] | None = Field(default=None, max_length=50)
     row_rule: RowRule | None = None

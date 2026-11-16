@@ -390,7 +390,7 @@ async def issue_scim_token(
     service = ScimService(db, settings)
     org_id = ctx.org.id
     _directory, raw, created = await service.issue_token(
-        ctx.org, ctx.principal.user, request_info(request)
+        ctx.org, ctx.principal.user, request_info(request), actor_role=ctx.role
     )
     response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
     read = await config_read(service, org_id)

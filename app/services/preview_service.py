@@ -246,6 +246,26 @@ async def end_preview(preview_id: uuid.UUID, to_state: str, error: str | None = 
     return True
 
 
+async def end_for_projects(db: AsyncSession, project_ids: list[uuid.UUID]) -> None:
+    """Tear down every preview of these projects (stack + code dir) before the rows cascade away.
+    A teardown failure is logged, never blocks the delete (the sandbox reaper is the backstop)."""
+    if not project_ids:
+        return
+    ids = (
+        await db.execute(
+            select(Preview.id).where(
+                Preview.project_id.in_(project_ids),
+                Preview.state.in_(LIVE_STATES + ("failed",)),
+            )
+        )
+    ).scalars()
+    for preview_id in list(ids):
+        try:
+            await end_preview(preview_id, "killed", "project deleted")
+        except Exception:  # noqa: BLE001
+            log.exception("preview %s teardown on project delete failed", preview_id)
+
+
 async def sleep_preview(preview_id: uuid.UUID, error: str | None = None) -> bool:
     p = await _load(preview_id)
     if p is None or not await _claim(preview_id, ("running",), "stopping", app_ip=None):
@@ -321,13 +341,18 @@ async def sweep(now: datetime | None = None) -> SweepResult:
     async with session_factory()() as s:
         kill = await kill_switch_on(s)
         rows = list(
-            (await s.execute(select(Preview).where(Preview.state.in_(LIVE_STATES)))).scalars()
+            (
+                await s.execute(select(Preview).where(Preview.state.in_(LIVE_STATES + ("failed",))))
+            ).scalars()
         )
         off_projects = set(
             (
                 await s.execute(
                     select(Project.id)
-                    .join(PreviewOrgLimits, PreviewOrgLimits.organization_id == Project.organization_id)
+                    .join(
+                        PreviewOrgLimits,
+                        PreviewOrgLimits.organization_id == Project.organization_id,
+                    )
                     .where(PreviewOrgLimits.enabled.is_(False))
                 )
             ).scalars()
@@ -335,6 +360,11 @@ async def sweep(now: datetime | None = None) -> SweepResult:
     box = get_sandbox(settings)
     for p in rows:
         try:
+            if p.state == "failed":
+                # a failed start keeps its generated code dir until it expires (then wiped)
+                if now >= p.expires_at:
+                    out.expired += await end_preview(p.id, "expired")
+                continue
             if now >= p.expires_at:
                 out.expired += await end_preview(p.id, "expired")
             elif kill or p.project_id in off_projects:
@@ -474,9 +504,7 @@ class PreviewService:
         profile = "demo" if "demo" in names else (names[0] if names else None)
         return spec_hash(spec), profile, files
 
-    async def _workspace_files(
-        self, project_id: uuid.UUID, workspace_id: uuid.UUID
-    ) -> Path:
+    async def _workspace_files(self, project_id: uuid.UUID, workspace_id: uuid.UUID) -> Path:
         ws = await self.session.get(Workspace, workspace_id)
         if ws is None or ws.project_id != project_id:
             raise AppError("not_found", "workspace not found", 404)
@@ -639,7 +667,9 @@ class PreviewService:
             if d.is_dir():
                 d.chmod(0o755)
 
-    async def kill(self, project_id: uuid.UUID, preview_id: uuid.UUID, user: PlatformUser) -> PreviewRead:
+    async def kill(
+        self, project_id: uuid.UUID, preview_id: uuid.UUID, user: PlatformUser
+    ) -> PreviewRead:
         p = await self._get(project_id, preview_id)
         project = await self._project(project_id)
         await end_preview(preview_id, "killed")
