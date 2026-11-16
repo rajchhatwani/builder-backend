@@ -5,7 +5,13 @@ import datetime as dt
 import uuid
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _no_nul(value: str | None) -> str | None:
+    if value is not None and "\x00" in value:
+        raise ValueError("a NUL character cannot be stored")
+    return value
 
 DocumentStatus = Literal["extracted", "needs_review", "approved", "rejected"]
 
@@ -18,11 +24,15 @@ class DocumentIn(BaseModel):
     content: str = Field(min_length=1, max_length=2_000_000)  # the spec's max_text_chars is checked after parsing
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=100)
 
+    _nul = field_validator("kind", "title", "content", "idempotency_key")(_no_nul)
+
 
 class CorrectIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     value: str | None = Field(max_length=10_000)
+
+    _nul = field_validator("value")(_no_nul)
 
 
 class ApproveIn(BaseModel):

@@ -41,6 +41,14 @@ def now() -> dt.datetime:
     return utcnow()  # tests replace this
 
 
+# Never captured: token responses and passwords (auth), and the AI gateway, which commits several times and has its own idempotency_key.
+NO_CAPTURE_PREFIXES = ("/auth", "/ai")
+
+
+def capturable(path: str) -> bool:
+    return not any(path == p or path.startswith(p + "/") for p in NO_CAPTURE_PREFIXES)
+
+
 def parse_key(raw: str) -> str:
     if KEY_RE.fullmatch(raw) is None:
         raise AppError(

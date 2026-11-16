@@ -75,6 +75,25 @@ def _directives(contents: list[str]) -> dict[str, str]:
     return found
 
 
+_MAX_EXTRACT_NAMES = 200
+
+
+def _label_index(text: str) -> dict[str, tuple[str, int]]:
+    """First `label: value` / `label = value` line per label, parsed linearly (no backtracking pattern): label -> (value, offset of the value)."""
+    index: dict[str, tuple[str, int]] = {}
+    position = 0
+    for line in text.split("\n"):
+        sep = min((i for i in (line.find(":"), line.find("=")) if i >= 0), default=-1)
+        if sep >= 0:
+            label = line[:sep].strip(" \t").lower().replace(" ", "_")
+            if label and label not in index:
+                rest = line[sep + 1 :]
+                lead = len(rest) - len(rest.lstrip(" \t"))
+                index[label] = (rest.strip(" \t"), position + sep + 1 + lead)
+        position += len(line) + 1
+    return index
+
+
 def _extract(contents: list[str], markers: bool) -> str | None:
     names: list[str] | None = None
     segments: list[tuple[int, str]] = []
@@ -86,14 +105,16 @@ def _extract(contents: list[str], markers: bool) -> str | None:
             segments.append((int(match.group(1)), content[match.end() :]))
     if names is None:
         return None
+    names = list(dict.fromkeys(names))[:_MAX_EXTRACT_NAMES]  # duplicates and absurd lists cost nothing
+    indexed = [(offset, _label_index(text)) for offset, text in segments]
     fields: dict[str, dict[str, object]] = {}
     for name in names:
-        label = re.compile(r"(?im)^[ \t]*" + re.escape(name).replace("_", "[ _]") + r"[ \t]*[:=][ \t]*(.*?)[ \t]*$")
-        for offset, text in segments:
-            found = label.search(text)
-            if found is None or not found.group(1):
+        wanted = name.strip().lower().replace(" ", "_")
+        for offset, index in indexed:
+            found = index.get(wanted)
+            if found is None or not found[0]:
                 continue
-            raw, start = found.group(1), offset + found.start(1)
+            raw, start = found[0], offset + found[1]
             hint = _CONF.search(raw) if markers else None
             value = raw[: hint.start()].rstrip() if hint else raw
             if not value:

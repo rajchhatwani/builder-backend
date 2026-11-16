@@ -5,7 +5,13 @@ import datetime as dt
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt
+from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator
+
+
+def _no_nul(value: str | None) -> str | None:
+    if value is not None and "\x00" in value:
+        raise ValueError("a NUL character cannot be stored")
+    return value
 
 CallStatus = Literal["reserved", "ok", "error"]
 
@@ -16,6 +22,8 @@ class Message(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str = Field(min_length=1, max_length=20_000)
 
+    _nul = field_validator("content")(_no_nul)
+
 
 class CompleteIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -23,6 +31,8 @@ class CompleteIn(BaseModel):
     stage: str = Field(min_length=1, max_length=40)
     messages: list[Message] = Field(min_length=1, max_length=50)
     idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
+
+    _nul = field_validator("stage", "idempotency_key")(_no_nul)
     max_output_tokens: StrictInt | None = Field(default=None, ge=1, le=100_000)
     response_format: Literal["text", "json"] = "text"
 

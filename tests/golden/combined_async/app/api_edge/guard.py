@@ -50,6 +50,8 @@ async def _quota(request: Request, edge: EdgeState, who: caller.Caller) -> None:
     matched = quota.matching(request.url.path, request.method)
     if not matched:
         return
+    if not who.authenticated:
+        return  # anonymous callers share the "-" tenant key with single-tenant users: they must not be able to use up the app's quota
     try:
         exceeded = await quota.charge(who.tenant_key, matched)
     except quota.StoreError as exc:

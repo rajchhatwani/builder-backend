@@ -331,3 +331,4 @@ tests/api/test_audit_b1_031.py
 tests/unit/test_create_blog_script.py
 tests/unit/test_manual_stack_runner_profile.py
 tests/unit/test_compose_hardening.py
+tests/unit/test_audit_b1_054.py

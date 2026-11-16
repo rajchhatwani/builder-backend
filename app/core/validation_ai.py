@@ -95,6 +95,8 @@ def check_ai(spec: Spec, add: Add) -> None:
         return
     if spec.auth is None or not spec.auth.enabled:
         add(p, "needs_auth", "the ai pack needs auth.enabled: every route needs a signed-in caller")
+    elif spec.auth.provider == "keycloak":
+        add(p, "needs_builtin_auth", "the ai pack needs the builtin auth provider: it keys its fingerprints with the project's JWT key, which a keycloak project does not hold")
     elif spec.authorization is not None and spec.authorization.model != "rbac":
         add(p, "needs_rbac", "the ai pack needs authorization.model rbac (it checks roles, not abac / pbac policies)")
     if pack.documents is not None and pack.gateway is not None and pack.gateway.zero_retention:

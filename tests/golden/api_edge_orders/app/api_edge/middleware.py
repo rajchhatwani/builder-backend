@@ -98,7 +98,7 @@ class ApiEdgeMiddleware:
         raw_key = headers.get("idempotency-key")
         cfg = definitions.IDEMPOTENCY
         assert cfg is not None
-        if raw_key is not None and method in cfg["methods"]:
+        if raw_key is not None and method in cfg["methods"] and idempotency.capturable(path):
             try:
                 edge.key = idempotency.parse_key(raw_key)
                 body = await _read_body(receive, idempotency.MAX_REQUEST_BYTES)

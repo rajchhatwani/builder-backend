@@ -55,7 +55,7 @@ def _scoped(stmt: _t.Any, model: _t.Any, tenant: _uuid.UUID | None) -> _t.Any:
 
 def _fingerprint(*parts: object) -> str:
     """Salted (HMAC with the project secret): the stored request hash cannot be used to guess a document."""
-    key = get_auth_settings().auth_jwt_secret.encode()
+    key = get_auth_settings().jwt_key.encode()
     return hmac.new(key, json.dumps(parts, separators=(",", ":"), default=str).encode(), hashlib.sha256).hexdigest()
 
 
@@ -154,7 +154,10 @@ async def _fields_of(session: AsyncSession, ids: list[_uuid.UUID]) -> dict[_uuid
 
 
 def _sees_all(user: _t.Any) -> bool:
-    return _gateway.has_role(user, _config.READ_ROLES) or _gateway.has_role(user, _config.REVIEW_ROLES)
+    # an empty role list grants NOBODY the all-documents view (has_role treats empty as "everyone"): the default is own documents only
+    return bool(_config.READ_ROLES and _gateway.has_role(user, _config.READ_ROLES)) or bool(
+        _config.REVIEW_ROLES and _gateway.has_role(user, _config.REVIEW_ROLES)
+    )
 
 
 async def _load_out(session: AsyncSession, tenant: _uuid.UUID | None, document_id: _uuid.UUID) -> _s.DocumentOut:

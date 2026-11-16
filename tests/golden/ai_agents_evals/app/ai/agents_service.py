@@ -65,7 +65,7 @@ def _scoped(stmt: _t.Any, model: _t.Any, tenant: _uuid.UUID | None) -> _t.Any:
 
 def _fingerprint(*parts: object) -> str:
     """Salted (HMAC with the project secret): the stored request hash cannot be used to guess a goal."""
-    key = get_auth_settings().auth_jwt_secret.encode()
+    key = get_auth_settings().jwt_key.encode()
     return hmac.new(key, json.dumps(parts, separators=(",", ":"), sort_keys=True, default=str).encode(), hashlib.sha256).hexdigest()
 
 

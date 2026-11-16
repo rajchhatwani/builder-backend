@@ -3,7 +3,13 @@
 import datetime as dt
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+def _no_nul(value: str | None) -> str | None:
+    if value is not None and "\x00" in value:
+        raise ValueError("a NUL character cannot be stored")
+    return value
 
 
 class SourceIn(BaseModel):
@@ -13,6 +19,8 @@ class SourceIn(BaseModel):
     text: str = Field(min_length=1, max_length=5_000_000)  # the spec's max_text_chars is checked after parsing
     allowed_roles: list[str] | None = Field(default=None, max_length=50)
     owner_only: bool | None = None
+
+    _nul = field_validator("title", "text")(_no_nul)
 
 
 class SourceOut(BaseModel):
@@ -30,6 +38,8 @@ class SearchIn(BaseModel):
 
     query: str = Field(min_length=1, max_length=500)
     limit: int = Field(default=5, ge=1, le=20)
+
+    _nul = field_validator("query")(_no_nul)
 
 
 class HitOut(BaseModel):
@@ -50,6 +60,8 @@ class AskIn(BaseModel):
 
     question: str = Field(min_length=1, max_length=1000)
     limit: int = Field(default=4, ge=1, le=10)
+
+    _nul = field_validator("question")(_no_nul)
 
 
 class CitationOut(BaseModel):

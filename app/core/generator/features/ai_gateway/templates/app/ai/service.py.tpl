@@ -65,7 +65,7 @@ def has_role(user: _t.Any, roles: tuple[str, ...]) -> bool:
 
 def _fingerprint(*parts: object) -> str:
     """SALTED hash (HMAC-SHA256 keyed with the project's secret): a low-entropy prompt cannot be guessed from the ledger."""
-    key = get_auth_settings().auth_jwt_secret.encode()
+    key = get_auth_settings().jwt_key.encode()
     return hmac.new(key, json.dumps(parts, separators=(",", ":"), sort_keys=True, default=str).encode(), hashlib.sha256).hexdigest()
 
 
@@ -198,6 +198,7 @@ async def complete(session: AsyncSession, user: _t.Any, body: _s.CompleteIn, *, 
 
     # 1. reserve the worst case, all or nothing, with the period row locked
     period = await _lock_period(session, tenant, start)
+    await _release_stale(session, tenant, period, now)  # before the replay lookup: a crashed first call must not wedge its key
     if body.idempotency_key is not None and caller is not None:
         found = (
             await session.execute(
@@ -218,7 +219,6 @@ async def complete(session: AsyncSession, user: _t.Any, body: _s.CompleteIn, *, 
             if found_hash != request_hash:
                 raise AppError("idempotency_conflict", "this idempotency_key was already used for a different call", 409)
             return await _replay(session, tenant, found_id)
-    await _release_stale(session, tenant, period, now)
     spent, reserved = period.spent_micro_usd, period.reserved_micro_usd
     if spent + reserved + worst > _config.BUDGET_LIMIT_MICRO_USD:
         await session.commit()  # keeps the stale releases; nothing else changed
