@@ -26,4 +26,36 @@ describe('MachinesPage', () => {
     expect(host.querySelector('[data-testid=machines-empty]')).not.toBeNull()
     expect(host.textContent).toContain('hook points at a missing entity')
   })
+
+  async function render() {
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    await act(async () => { root!.render(createElement(MachinesPage, { projectId: 'p' })) })
+    for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve() })
+  }
+  const btn = (re: RegExp) => [...host.querySelectorAll('button')].find((b) => re.test(b.textContent ?? ''))!
+
+  it('shows an error and retries (F-0656)', async () => {
+    m.machines.mockRejectedValueOnce(new Error('machines down'))
+    m.issues.mockResolvedValue({ issues: [] })
+    await render()
+    expect(host.textContent).toContain('machines down')
+    m.machines.mockResolvedValue({ state_machines: [] })
+    await act(async () => { btn(/Try again/).click() })
+    for (let i = 0; i < 5; i++) await act(async () => { await Promise.resolve() })
+    expect(host.querySelector('[data-testid=machines-empty]')).not.toBeNull()
+  })
+
+  it('selecting a transition shows its detail, switching machine clears it (F-0656)', async () => {
+    const mk = (entity: string) => ({ entity, field: 'status', initial: 'a', states: ['a', 'b'], transitions: [{ name: `go_${entity}`, from_states: ['a'], to_state: 'b' }] })
+    m.machines.mockResolvedValue({ state_machines: [mk('Invoice'), mk('Leave')] })
+    m.issues.mockResolvedValue({ issues: [] })
+    await render()
+    expect(host.querySelector('[data-testid=transition-detail-empty]')).not.toBeNull()
+    await act(async () => { btn(/go_Invoice/).click() })
+    expect(host.querySelector('[data-testid=transition-detail]')).not.toBeNull()
+    await act(async () => { btn(/Leave/).click() })
+    expect(host.querySelector('[data-testid=transition-detail-empty]')).not.toBeNull()
+  })
 })

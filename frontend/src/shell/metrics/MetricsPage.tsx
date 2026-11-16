@@ -19,6 +19,7 @@ type TabId = (typeof TABS)[number]['id']
 export function MetricsPage({ projectId }: { projectId: string }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const [refreshError, setRefreshError] = useState(false)
   const [tab, setTab] = useState<TabId>('metrics')
   const refs = useRef<Record<string, HTMLButtonElement | null>>({})
 
@@ -30,6 +31,7 @@ export function MetricsPage({ projectId }: { projectId: string }) {
   useEffect(() => {
     let cancelled = false
     setLoad({ status: 'loading' })
+    setRefreshError(false)
     reload()
       .then((r) => { if (!cancelled) setLoad({ status: 'ready', ...r }) })
       .catch((err: unknown) => { if (!cancelled) setLoad({ status: 'error', message: errorMessage(err, 'Could not load metrics') }) })
@@ -39,8 +41,10 @@ export function MetricsPage({ projectId }: { projectId: string }) {
   const refresh = async () => {
     try {
       setLoad({ status: 'ready', ...(await reload()) })
-    } catch (err) {
-      setLoad({ status: 'error', message: errorMessage(err, 'Could not load metrics') })
+      setRefreshError(false)
+    } catch {
+      // the change itself succeeded: keep the page and the old lists, say only that the refresh failed
+      setRefreshError(true)
     }
   }
 
@@ -71,6 +75,11 @@ export function MetricsPage({ projectId }: { projectId: string }) {
       )}
       {load.status === 'ready' && (
         <>
+          {refreshError && (
+            <p role="alert" className="error-text" data-testid="refresh-error">
+              Saved, but the list could not refresh. <button type="button" className="btn btn-sm" onClick={() => void refresh()}>Refresh now</button>
+            </p>
+          )}
           <div role="tablist" aria-label="Metrics and reports" className="stage-tablist" onKeyDown={onKey}>
             {TABS.map((t) => (
               <button key={t.id} ref={(el) => { refs.current[t.id] = el }} type="button" role="tab" id={`metrics-tab-${t.id}`} aria-selected={tab === t.id}
