@@ -223,8 +223,9 @@ function lines(text: string): string[] {
     .filter((line) => line !== '')
 }
 
-function toWrite(f: Form): PaymentsWrite {
-  const hasPayable = f.entity !== '' && f.amountField !== '' && f.statusField !== ''
+export function toWrite(f: Form): PaymentsWrite {
+  // Keep a partial pick (entity or amount chosen) so validation reports the gap instead of silently dropping it.
+  const hasPayable = f.entity !== '' || f.amountField !== '' || f.statusField !== ''
   return {
     provider: f.provider,
     payable: hasPayable

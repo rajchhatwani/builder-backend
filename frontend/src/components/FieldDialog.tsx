@@ -36,7 +36,7 @@ function defaultToText(value: unknown): string {
 }
 
 /** Turns the text box into the JSON value the API expects for the field's type. */
-function parseDefault(text: string, type: FieldType): unknown {
+export function parseDefault(text: string, type: FieldType): unknown {
   const trimmed = text.trim()
   if (trimmed === '') return null
   switch (type) {
@@ -46,6 +46,9 @@ function parseDefault(text: string, type: FieldType): unknown {
     case 'decimal': {
       const value = Number(trimmed)
       if (Number.isNaN(value)) throw new Error('Default must be a number.')
+      // Decimals (money) and big integers keep their exact digits as a string.
+      if (type === 'decimal' && /^-?\d+(\.\d+)?$/.test(trimmed)) return trimmed
+      if (type === 'bigint' && /^-?\d+$/.test(trimmed) && !Number.isSafeInteger(value)) return trimmed
       return value
     }
     case 'boolean':

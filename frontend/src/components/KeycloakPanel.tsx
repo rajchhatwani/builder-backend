@@ -186,7 +186,10 @@ export function KeycloakPanel({ project, provider, issues, onChanged }: Keycloak
   }, [project.id])
 
   // Projects whose own Keycloak this project could trust (shared mode).
+  // Only scanned once shared mode is chosen: it costs one request per project.
+  const shared = form.mode === 'shared'
   useEffect(() => {
+    if (!shared) return
     let cancelled = false
     api.listProjects(200, 0).then(async (page) => {
       const others = page.items.filter((p) => p.id !== project.id)
@@ -199,11 +202,13 @@ export function KeycloakPanel({ project, provider, issues, onChanged }: Keycloak
         ),
       )
       if (!cancelled) setOtherHubs(found.filter((x): x is NonNullable<typeof x> => x !== null))
+    }).catch(() => {
+      if (!cancelled) setOtherHubs([])
     })
     return () => {
       cancelled = true
     }
-  }, [project.id])
+  }, [project.id, shared])
 
   function set<K extends keyof Form>(key: K, value: Form[K]) {
     setForm((f) => ({ ...f, [key]: value }))
