@@ -122,7 +122,7 @@ class Sandbox(ABC):
         """One-shot: start, wait at most limits.wall_seconds (then kill), collect, destroy."""
 
     @abstractmethod
-    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:
+    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:  # noqa: ASYNC109 - timeout is a protocol arg enforced by the impl
         """Run a command inside a live sandbox. On timeout the whole sandbox is killed."""
 
     @abstractmethod

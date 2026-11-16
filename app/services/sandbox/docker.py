@@ -230,7 +230,7 @@ class DockerSandbox(Sandbox):
     async def _docker(
         self,
         *args: str,
-        timeout: float = 60,
+        timeout: float = 60,  # noqa: ASYNC109 - subprocess deadline arg, enforced via wait_for
         env: dict[str, str] | None = None,
         cap: int = MAX_OUTPUT_BYTES,
     ) -> tuple[int, str, str]:
@@ -399,7 +399,7 @@ class DockerSandbox(Sandbox):
         finally:
             await self.destroy(sid)
 
-    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:
+    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:  # noqa: ASYNC109 - protocol arg, enforced by the impl
         name = name_for(sandbox_id)
         started = time.monotonic()
         timeout = max(0.1, min(timeout, 3600))

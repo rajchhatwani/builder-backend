@@ -44,7 +44,7 @@ class RemoteSandbox(Sandbox):
         self._auth = {"Authorization": "Bearer " + s.sandbox_runner_token.get_secret_value()}
 
     async def _call(
-        self, op: str, body: dict[str, Any] | None = None, timeout: float = _DEFAULT_TIMEOUT
+        self, op: str, body: dict[str, Any] | None = None, timeout: float = _DEFAULT_TIMEOUT  # noqa: ASYNC109 - protocol arg, enforced by the impl
     ) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(
@@ -85,7 +85,7 @@ class RemoteSandbox(Sandbox):
         )
         return self._result(d)
 
-    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:
+    async def exec(self, sandbox_id: str, argv: list[str], timeout: float) -> RunResult:  # noqa: ASYNC109 - protocol arg, forwarded to remote runner
         timeout = max(0.1, min(timeout, 3600))
         d = await self._call(
             "exec", {"sandbox_id": sandbox_id, "argv": argv, "timeout": timeout}, timeout + 30
