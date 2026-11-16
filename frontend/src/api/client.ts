@@ -845,10 +845,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateAuthConfig: (projectId: string, data: AuthConfigUpdate) =>
+  /** Turning sign-in off answers 409 access_weakened unless confirmWeakening is true. */
+  updateAuthConfig: (projectId: string, data: AuthConfigUpdate, confirmWeakening = false) =>
     request<AuthConfig>(`/projects/${projectId}/auth`, {
       method: 'PATCH',
-      body: JSON.stringify(data),
+      body: JSON.stringify(confirmWeakening ? { ...data, confirm_weakening: true } : data),
     }),
 
   // ── Roles ────────────────────────────────────────────────────────────────

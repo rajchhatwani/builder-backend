@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
+import { useUi } from './Ui'
 import type {
   AuthConfig,
   AuthConfigUpdate,
@@ -17,6 +18,7 @@ export interface AuthConfigPanelProps {
 }
 
 export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
+  const { confirm } = useUi()
   const [loading, setLoading] = useState(true)
   const [notConfigured, setNotConfigured] = useState(false)
   const [settingUp, setSettingUp] = useState(false)
@@ -226,7 +228,20 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
       : { ...shared, ...builtinOnly }
 
     try {
-      const updated = await api.updateAuthConfig(projectId, updateData)
+      let updated
+      try {
+        updated = await api.updateAuthConfig(projectId, updateData, false)
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
+        const ok = await confirm({
+          title: 'This makes some rules public',
+          message: `${err.message}. Save anyway?`,
+          confirmLabel: 'Save anyway',
+          danger: true,
+        })
+        if (!ok) return
+        updated = await api.updateAuthConfig(projectId, updateData, true)
+      }
       populateForm(updated)
       setMessage({ ok: true, text: 'Auth configuration saved.' })
     } catch (err) {
