@@ -17,7 +17,7 @@ Security invariants enforced here:
 import uuid
 from typing import Any
 
-from sqlalchemy import desc, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError
@@ -58,6 +58,50 @@ def _cap_dict(obj: dict[str, Any]) -> dict[str, object]:
 
 def _cap_list(obj: list[Any]) -> list[dict[str, object]]:
     return _cap(obj)  # type: ignore[no-any-return]
+
+
+
+_JSON_TYPES = {
+    "int": "integer", "integer": "integer", "float": "number", "decimal": "number",
+    "bool": "boolean", "boolean": "boolean",
+}
+
+
+def _openapi_from_spec(spec: Any) -> dict[str, object]:
+    """Deterministic OpenAPI 3.1 description of the entity CRUD surface, built from the spec
+    (no code generation)."""
+    paths: dict[str, object] = {}
+    schemas: dict[str, object] = {}
+    for e in spec.entities:
+        props = {
+            f.name: {"type": _JSON_TYPES.get(str(f.type).lower(), "string")} for f in e.fields
+        }
+        required = [f.name for f in e.fields if f.required]
+        schemas[e.name] = {"type": "object", "properties": props, "required": required}
+        ref = {"$ref": f"#/components/schemas/{e.name}"}
+        ok = {"200": {"description": "OK", "content": {"application/json": {"schema": ref}}}}
+        ops = {str(o) for o in e.options.operations} if e.options else set()
+        base = "/" + e.plural_path.strip("/")
+        coll: dict[str, object] = {}
+        item: dict[str, object] = {}
+        if "list" in ops:
+            coll["get"] = {"operationId": f"list_{e.name}", "responses": ok}
+        if "create" in ops:
+            coll["post"] = {"operationId": f"create_{e.name}", "responses": ok}
+        for op, verb in (("get", "get"), ("replace", "put"), ("update", "patch"),
+                         ("delete", "delete"), ("head", "head")):
+            if op in ops:
+                item[verb] = {"operationId": f"{op}_{e.name}", "responses": ok}
+        if coll:
+            paths[base] = coll
+        if item:
+            paths[base + "/{id}"] = item
+    return {
+        "openapi": "3.1.0",
+        "info": {"title": spec.project.name, "version": "1.0.0"},
+        "paths": paths,
+        "components": {"schemas": schemas},
+    }
 
 
 class McpService:
@@ -222,46 +266,8 @@ class McpService:
     async def get_openapi(self, principal: Principal, project_id: uuid.UUID) -> dict[str, object]:
         """Return the generated project's OpenAPI spec (from last snapshot or re-generated)."""
         await self._resolve_membership(principal, project_id)
-        from app.models.generation import Generation
-
-        gen = (
-            await self.db.execute(
-                select(Generation)
-                .where(Generation.project_id == project_id)
-                .order_by(desc(Generation.created_at))
-                .limit(1)
-            )
-        ).scalar_one_or_none()
-
         spec = await SpecService(self.db).assemble(project_id)
-        import asyncio
-
-        from app.core.generator.engine import InvalidSpecError, generate
-
-        try:
-            # Generation is CPU-bound (0.3-0.6 s); keep it off the event loop.
-            file_tree = await asyncio.to_thread(generate, spec)
-        except InvalidSpecError as exc:
-            raise AppError(
-                code="invalid_spec", message=str(exc)[:300], status_code=422
-            ) from exc
-        slug = spec.project.slug
-        openapi_content = file_tree.get("openapi.json") or file_tree.get(f"{slug}/openapi.json")
-        if openapi_content:
-            import json as _json
-
-            try:
-                result: dict[str, object] = _json.loads(openapi_content)
-            except Exception:
-                result = {"raw": openapi_content[:MAX_RESPONSE_CHARS]}
-        else:
-            result = {
-                "message": "openapi.json not in generated output",
-                "available_files": sorted(file_tree.keys())[:20],
-                "hint": "Generate the project first via generate_project to create a snapshot.",
-            }
-            if gen is not None:
-                result["last_generation"] = str(gen.created_at)
+        result = _openapi_from_spec(spec)
         await self._audit(principal, "get_openapi", project_id)
         return _cap_dict(result)
 

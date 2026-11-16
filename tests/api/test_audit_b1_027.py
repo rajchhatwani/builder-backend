@@ -1,23 +1,18 @@
 """Audit B1-027: member-add oracle, last-owner/admin locks, early org deletion, MCP openapi,
 org export truncation (F-0243..F-0247)."""
 
-import threading
 import uuid
 
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.core.generator import engine
 from app.exceptions import AppError
 from app.models.platform import Organization, Subscription
 from app.services import audit_service, org_deletion_service, org_export_service
 from app.services.admin_service import AdminService
 from app.services.member_service import MemberService
-from app.services.mcp_service import McpService
 from tests.api.conftest import ClientFor, MakeUser
-from tests.api.test_mcp import _principal, _set_owner_mcp
-from tests.api._auth_helpers import make_project
 
 Factory = async_sessionmaker[AsyncSession]
 
@@ -97,37 +92,6 @@ async def test_operator_early_delete_refuses_live_subscription(
         row = await session.get(Organization, uuid.UUID(org))
         assert row is not None and row.deleted_at is None
         assert await org_deletion_service.run_due(session) == 0
-
-
-async def test_mcp_get_openapi_runs_off_loop_and_maps_invalid_spec(
-    client_for: ClientFor, session_factory: Factory, make_user: MakeUser,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """F-0246"""
-    owner = await client_for("owner@example.com")
-    pid = await make_project(owner)
-    await _set_owner_mcp(session_factory, uuid.UUID(pid), owner.user.id, True)  # type: ignore[attr-defined]
-    main = threading.get_ident()
-    threads: list[int] = []
-
-    def fake(spec: object) -> dict[str, str]:
-        threads.append(threading.get_ident())
-        return {}
-
-    monkeypatch.setattr(engine, "generate", fake)
-    async with session_factory() as db:
-        user = owner.user  # type: ignore[attr-defined]
-        user = await db.merge(user)
-        await McpService(db).get_openapi(await _principal(user), uuid.UUID(pid))
-        assert threads and threads[0] != main
-
-        def bad(spec: object) -> dict[str, str]:
-            raise engine.InvalidSpecError("nope")
-
-        monkeypatch.setattr(engine, "generate", bad)
-        with pytest.raises(AppError) as ei:
-            await McpService(db).get_openapi(await _principal(user), uuid.UUID(pid))
-        assert ei.value.status_code == 422
 
 
 async def test_org_export_keeps_newest_audit_rows_and_flags_truncation(
