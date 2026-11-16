@@ -14,3 +14,9 @@ def test_down_and_reset_include_runner_profile():
 def test_up_honours_runner_token_and_port_checked():
     assert "BB_RUNNER_TOKEN" in SCRIPT
     assert re.search(r'PORTS="[^"]*\b8790\b', SCRIPT)
+
+
+def test_runner_token_placeholder_for_down_without_token():
+    pat = r'dc_all\(\) \{ BB_RUNNER_TOKEN="\$\{BB_RUNNER_TOKEN:-unused-for-down\}"'
+    assert re.search(pat, SCRIPT)
+    assert re.search(r'dc\(\).*else BB_RUNNER_TOKEN="unused-for-down" \$HELP', SCRIPT)

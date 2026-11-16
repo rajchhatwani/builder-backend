@@ -16,8 +16,9 @@ ENV_FILE="${ENV_FILE:-$HOME/final_test.env}"; export ENV_FILE
 PORTS="8000 8081 8799 5432 6379 9000 1025 8025 8790"
 
 # F-0409: the optional runner (docker.sock) profile starts only when BB_RUNNER_TOKEN is exported; down/reset always include it.
-dc() { if [ -n "${BB_RUNNER_TOKEN:-}" ]; then $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; else $HELP run -- "${COMPOSE[@]}" "$@"; fi; }
-dc_all() { $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; }
+# compose interpolates ${BB_RUNNER_TOKEN:?} even without the profile, so always give it a placeholder value.
+dc() { if [ -n "${BB_RUNNER_TOKEN:-}" ]; then BB_RUNNER_TOKEN="$BB_RUNNER_TOKEN" $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; else BB_RUNNER_TOKEN="unused-for-down" $HELP run -- "${COMPOSE[@]}" "$@"; fi; }
+dc_all() { BB_RUNNER_TOKEN="${BB_RUNNER_TOKEN:-unused-for-down}" $HELP run -- "${COMPOSE[@]}" --profile runner "$@"; }
 psql_() { docker exec -i bbmanual-postgres psql -U builder -d builder -Atq "$@"; }
 prep() { [ -f "$ENV_FILE" ] || { echo "env file $ENV_FILE not found"; exit 1; }
   umask 077; mkdir -p "$STATE" "$LOGS"; chmod 700 "$STATE"; umask 022; mkdir -p "$DATA/ws" "$DATA/previews"; }
