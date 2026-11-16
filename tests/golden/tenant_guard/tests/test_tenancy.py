@@ -122,5 +122,15 @@ async def test_employees_rows_stay_inside_their_tenant(client: AsyncClient) -> N
         assert (await colleague.get(f"/employees/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/employees/{item_id}")).status_code == 404
 
+        foreign_payload = await _factories.payload_employees(tenant_b)
+        before = (await tenant_a.get(f"/employees/{item_id}")).json()
+        assert (
+            await tenant_b.patch(f"/employees/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (
+            await tenant_b.put(f"/employees/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (await tenant_a.get(f"/employees/{item_id}")).json() == before, "row unchanged"
+
         assert (await tenant_b.delete(f"/employees/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/employees/{item_id}")).status_code == 204

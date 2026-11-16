@@ -29,6 +29,7 @@
     "app/auth/middleware.py": "generated",
     "app/auth/models.py": "generated",
     "app/auth/provider_lock.py": "generated",
+    "app/auth/purge.py": "generated",
     "app/auth/ratelimit.py": "generated",
     "app/auth/router.py": "generated",
     "app/auth/schemas.py": "generated",

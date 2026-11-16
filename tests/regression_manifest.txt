@@ -333,3 +333,4 @@ tests/unit/test_manual_stack_runner_profile.py
 tests/unit/test_compose_hardening.py
 tests/unit/test_audit_b1_054.py
 tests/unit/test_audit_b1_056.py
+tests/unit/test_auth_b1_057.py

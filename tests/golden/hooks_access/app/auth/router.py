@@ -84,7 +84,8 @@ async def my_tenant(user: CurrentUser, session: SessionDep) -> TenantRead:
 
 @router.delete("/me", status_code=204)
 async def delete_me(user: CurrentUser, session: SessionDep) -> None:
-    """Permanently deletes the account and everything that belongs to it."""
+    """Permanently deletes the account. Rows it created are kept: their `created_by_id` is set
+    to NULL (SET NULL), so they are no longer tied to a person."""
     await AuthService(session).delete_account(user)
 
 

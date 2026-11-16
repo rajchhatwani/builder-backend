@@ -40,7 +40,7 @@ async def test_fields_follow_keycloak_when_they_change(client: AsyncClient) -> N
     sub = uuid.uuid4()
     await client.get("/auth/me", headers=bearer(token(sub=sub, **SAMPLES)))
     n = 1  # the value of age for a different sample
-    changed = {"age": 13 + n}
+    changed = {"age": 13 + n % 108}
     await client.get("/auth/me", headers=bearer(token(sub=sub, **changed)))
     async with session_factory() as session:
         row = await session.get(AuthUser, sub)

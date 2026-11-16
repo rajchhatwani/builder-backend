@@ -112,9 +112,11 @@ async def my_tenant(user: CurrentUser, session: SessionDep) -> TenantRead:
 @router.delete("/me", status_code=204)
 async def delete_me(user: CurrentUser, session: SessionDep) -> None:
 {% if hard_delete %}
-    """Permanently deletes the account and everything that belongs to it."""
+    """Permanently deletes the account. Rows it created are kept: their `created_by_id` is set
+    to NULL (SET NULL), so they are no longer tied to a person."""
 {% else %}
-    """Disables the account (soft delete): it can no longer sign in, but the row is kept."""
+    """Disables the account (soft delete): it can no longer sign in, and its e-mail, phone and
+    password are erased so they can be registered again. The (anonymised) row is kept."""
 {% endif %}
     await AuthService(session).delete_account(user)
 

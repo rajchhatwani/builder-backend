@@ -2,7 +2,10 @@
 
 import pytest
 from httpx import AsyncClient
+from sqlalchemy import delete
 
+from app.auth.models import AuthUser
+from app.db import session_factory
 from tests._auth_support import (
     Outbox,
     client_for,
@@ -56,9 +59,15 @@ async def test_an_invitation_works_once_and_only_for_its_address(
     mine = await registration_payload("invited@example.com", n=3)
     mine["invite_token"] = token
     assert (await client.post("/auth/register", json=mine)).status_code == 201
+    # Free the address again, so only the single-use rule can refuse the second attempt.
+    async with session_factory() as session:
+        await session.execute(delete(AuthUser).where(AuthUser.email == "invited@example.com"))
+        await session.commit()
     again = await registration_payload("invited@example.com", n=4)
     again["invite_token"] = token
-    assert (await client.post("/auth/register", json=again)).status_code in (400, 409)
+    reused = await client.post("/auth/register", json=again)
+    assert reused.status_code == 400, reused.text
+    assert reused.json()["code"] == "invalid_invitation"
 
     forged = await registration_payload("forged@example.com", n=5)
     forged["invite_token"] = "not-a-real-token"

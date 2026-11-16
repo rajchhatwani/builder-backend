@@ -163,6 +163,16 @@ async def test_labels_rows_stay_inside_their_tenant(client: AsyncClient) -> None
         assert (await colleague.get(f"/labels/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/labels/{item_id}")).status_code == 404
 
+        foreign_payload = await _factories.payload_labels(tenant_b)
+        before = (await tenant_a.get(f"/labels/{item_id}")).json()
+        assert (
+            await tenant_b.patch(f"/labels/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (
+            await tenant_b.put(f"/labels/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (await tenant_a.get(f"/labels/{item_id}")).json() == before, "row unchanged"
+
         assert (await tenant_b.delete(f"/labels/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/labels/{item_id}")).status_code == 204
 
@@ -190,6 +200,16 @@ async def test_tasks_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
 
         assert (await tenant_b.get(f"/tasks/{item_id}")).status_code == 404
         assert (await tenant_b.head(f"/tasks/{item_id}")).status_code == 404
+
+        foreign_payload = await _factories.payload_tasks(tenant_b)
+        before = (await tenant_a.get(f"/tasks/{item_id}")).json()
+        assert (
+            await tenant_b.patch(f"/tasks/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (
+            await tenant_b.put(f"/tasks/{item_id}", json=foreign_payload)
+        ).status_code == 404
+        assert (await tenant_a.get(f"/tasks/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/tasks/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/tasks/{item_id}")).status_code == 204

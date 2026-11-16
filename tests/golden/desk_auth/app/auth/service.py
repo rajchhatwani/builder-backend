@@ -254,8 +254,15 @@ class AuthService:
         if config.HARD_DELETE:
             await self.session.execute(sa.delete(AuthUser).where(AuthUser.id == user.id))
         else:
+            # Tombstone: the address and phone become free to register again, and nothing
+            # that identifies the person or lets anyone sign in as them is kept.
+            user.email = f"deleted+{user.id}@invalid"
+            user.phone = None
+            user.password_hash = "!"  # not a scrypt hash: verify_password() always refuses it
+            user.roles = []
             user.is_active = False
             user.deleted_at = _now()
+            await identity.erase_emails(self.session, user.id)
         await self.session.commit()
 
     # --- tokens -------------------------------------------------------------------

@@ -86,7 +86,8 @@ async def my_tenant(user: CurrentUser, session: SessionDep) -> TenantRead:
 
 @router.delete("/me", status_code=204)
 async def delete_me(user: CurrentUser, session: SessionDep) -> None:
-    """Disables the account (soft delete): it can no longer sign in, but the row is kept."""
+    """Disables the account (soft delete): it can no longer sign in, and its e-mail, phone and
+    password are erased so they can be registered again. The (anonymised) row is kept."""
     await AuthService(session).delete_account(user)
 
 

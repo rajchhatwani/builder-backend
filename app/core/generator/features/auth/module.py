@@ -34,6 +34,7 @@ _VERBATIM = (
     "app/auth/ratelimit.py.tpl",
     "app/auth/service.py.tpl",
     "app/auth/provider_lock.py.tpl",
+    "app/auth/purge.py.tpl",
     "tests/test_provider_lock.py.tpl",
 )
 _RENDERED = (
@@ -62,6 +63,7 @@ _KEYCLOAK_VERBATIM = (
     "tests/test_provider_lock.py.tpl",
     "keycloak/app/auth/deps.py.tpl",
     "keycloak/app/auth/oidc.py.tpl",
+    "keycloak/app/auth/purge.py.tpl",
     "keycloak/app/auth/service.py.tpl",
 )
 _KEYCLOAK_RENDERED = (
@@ -121,7 +123,14 @@ def _default_literal(field: SpecAuthCustomField) -> str | None:
             return pyrepr(raw)
 
 
-def _variant(field_type: str, sample: str) -> str:
+def _variant(
+    field_type: str,
+    sample: str,
+    *,
+    low: float | None = None,
+    high: float | None = None,
+    enum_values: list[str] | None = None,
+) -> str:
     """A python expression, using the variable `n` (0-9), that differs for every n and is
     valid wherever `sample` is. Types that cannot vary keep their sample."""
     match field_type:
@@ -133,12 +142,17 @@ def _variant(field_type: str, sample: str) -> str:
             return 'f"https://example.com/sample{n}"'
         case "string" | "text":
             return f'f"{ast.literal_eval(sample)[:-1]}{{n}}"'
-        case "integer":
-            return f"{sample} + n"
-        case "float":
+        case "integer" | "float":
+            if low is not None and high is not None:
+                span = int(high - low) + 1  # stays inside [low, high]; repeats if span < 10
+                return f"{sample} + n % {max(span, 1)}"
+            if high is not None:
+                return f"{sample} - n"  # counts down from the maximum
             return f"{sample} + n"
         case "date":
             return 'f"2000-01-{10 + n}"'
+        case "enum" if enum_values and len(enum_values) > 1:
+            return f"{tuple(enum_values)!r}[n % {len(enum_values)}]"
         case _:
             return sample
 
@@ -167,7 +181,10 @@ def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
                 "email": pyrepr("sample@example.com"),
                 "phone": pyrepr("+14155550100"),
                 "url": pyrepr("https://example.com/sample"),
-            }.get(field.type, pyrepr("x" * max(field.min_length or 0, 6)))
+            }.get(
+                field.type,
+                pyrepr("x" * min(max(field.min_length or 0, 6), length)),
+            )
         case "integer" | "float":
             ann = "int" if field.type == "integer" else "float"
             sa_type, mig_type = (
@@ -181,6 +198,8 @@ def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
                 constraints.append(f"le={_number(field.max_value)}")
             if field.min_value is not None:
                 sample = _number(field.min_value)
+            elif field.max_value is not None:
+                sample = _number(field.max_value)
             else:
                 sample = "1" if field.type == "integer" else "1.5"
         case "boolean":
@@ -200,7 +219,13 @@ def _custom_field(field: SpecAuthCustomField) -> CustomFieldCtx:
         case _:  # unreachable: validation rejects unknown types
             raise ValueError(f"unsupported custom field type {field.type!r}")
 
-    variant = _variant(field.type, sample)
+    variant = _variant(
+        field.type,
+        sample,
+        low=getattr(field, "min_value", None),
+        high=getattr(field, "max_value", None),
+        enum_values=field.enum_values,
+    )
     parts = list(constraints)
     if default is not None:
         parts.append(f"default={default}")

@@ -28,6 +28,7 @@
     "app/auth/policy.py": "generated",
     "app/auth/policy_data.py": "generated",
     "app/auth/provider_lock.py": "generated",
+    "app/auth/purge.py": "generated",
     "app/auth/ratelimit.py": "generated",
     "app/auth/router.py": "generated",
     "app/auth/schemas.py": "generated",
