@@ -213,17 +213,20 @@ class AdminService:
         return temporary
 
     async def _require_another_admin(self, user_id: uuid.UUID) -> None:
-        others = (
-            await self.db.execute(
-                select(func.count())
-                .select_from(PlatformUser)
-                .where(
-                    PlatformUser.platform_role == PlatformRole.platform_admin,
-                    PlatformUser.status == AccountStatus.active,
-                    PlatformUser.id != user_id,
+        # Lock the active admin rows so two admins suspending each other serialise.
+        others = len(
+            (
+                await self.db.execute(
+                    select(PlatformUser.id)
+                    .where(
+                        PlatformUser.platform_role == PlatformRole.platform_admin,
+                        PlatformUser.status == AccountStatus.active,
+                        PlatformUser.id != user_id,
+                    )
+                    .with_for_update()
                 )
-            )
-        ).scalar_one()
+            ).all()
+        )
         if not others:
             raise AppError(
                 code="last_admin",

@@ -115,8 +115,8 @@ async def test_project_member_must_belong_to_the_org(
     r = await client.post(
         f"/projects/{pid}/members", json={"email": "outsider@example.com", "role": "viewer"}
     )
-    assert r.status_code == 409
-    assert r.json()["code"] == "not_an_org_member"
+    assert r.status_code == 404
+    assert r.json()["code"] == "user_unavailable"
 
     r = await client.post(
         f"/projects/{pid}/members", json={"email": "bob@example.com", "role": "viewer"}

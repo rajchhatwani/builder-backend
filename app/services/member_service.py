@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import AppError
@@ -26,35 +26,28 @@ class MemberService:
     async def add(
         self, project_id: uuid.UUID, email: str, role: MemberRole, mcp_enabled: bool = False
     ) -> tuple[ProjectMember, PlatformUser]:
-        user = (
-            await self.db.execute(
-                select(PlatformUser).where(PlatformUser.email == normalize_email(email))
+        query = select(PlatformUser).where(PlatformUser.email == normalize_email(email))
+        # §3.2: a project member must belong to the project's organization first. Sharing
+        # outside it means inviting them to the org (which is where seats are counted).
+        project = await self.db.get(Project, project_id)
+        if project is not None and project.organization_id is not None:
+            query = query.join(
+                OrganizationMember,
+                (OrganizationMember.user_id == PlatformUser.id)
+                & (OrganizationMember.organization_id == project.organization_id),
             )
-        ).scalar_one_or_none()
-        # One answer for "no such person" and "suspended": do not confirm which addresses exist.
+        user = (await self.db.execute(query)).scalar_one_or_none()
+        # One answer for "no such person", "suspended" and "not in this org": do not confirm
+        # which addresses exist on the platform.
         if user is None or user.status is not AccountStatus.active:
             raise AppError(
                 code="user_unavailable",
-                message="no active account with that e-mail",
+                message="no active account with that e-mail in this organization",
                 status_code=404,
             )
         existing = await self.db.get(ProjectMember, (project_id, user.id))
         if existing is not None:
             raise AppError(code="conflict", message="already a member", status_code=409)
-        # §3.2: a project member must belong to the project's organization first. Sharing
-        # outside it means inviting them to the org (which is where seats are counted).
-        project = await self.db.get(Project, project_id)
-        if project is not None and project.organization_id is not None:
-            in_org = await self.db.get(OrganizationMember, (project.organization_id, user.id))
-            if in_org is None:
-                raise AppError(
-                    code="not_an_org_member",
-                    message=(
-                        "this person isn't a member of the project's organization; "
-                        "invite them to the organization first"
-                    ),
-                    status_code=409,
-                )
         member = ProjectMember(
             project_id=project_id,
             user_id=user.id,
@@ -101,17 +94,21 @@ class MemberService:
         return member
 
     async def _require_another_owner(self, project_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        others = (
-            await self.db.execute(
-                select(func.count())
-                .select_from(ProjectMember)
-                .where(
-                    ProjectMember.project_id == project_id,
-                    ProjectMember.role == MemberRole.owner,
-                    ProjectMember.user_id != user_id,
+        # Lock the owner rows so two owners removing each other serialise: the second one
+        # re-evaluates the role filter after the first commits and sees no other owner.
+        others = len(
+            (
+                await self.db.execute(
+                    select(ProjectMember.user_id)
+                    .where(
+                        ProjectMember.project_id == project_id,
+                        ProjectMember.role == MemberRole.owner,
+                        ProjectMember.user_id != user_id,
+                    )
+                    .with_for_update()
                 )
-            )
-        ).scalar_one()
+            ).all()
+        )
         if not others:
             raise AppError(
                 code="last_owner",

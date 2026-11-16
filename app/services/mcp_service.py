@@ -234,9 +234,17 @@ class McpService:
         ).scalar_one_or_none()
 
         spec = await SpecService(self.db).assemble(project_id)
-        from app.core.generator.engine import generate
+        import asyncio
 
-        file_tree = generate(spec)
+        from app.core.generator.engine import InvalidSpecError, generate
+
+        try:
+            # Generation is CPU-bound (0.3-0.6 s); keep it off the event loop.
+            file_tree = await asyncio.to_thread(generate, spec)
+        except InvalidSpecError as exc:
+            raise AppError(
+                code="invalid_spec", message=str(exc)[:300], status_code=422
+            ) from exc
         slug = spec.project.slug
         openapi_content = file_tree.get("openapi.json") or file_tree.get(f"{slug}/openapi.json")
         if openapi_content:

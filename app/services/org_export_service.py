@@ -40,6 +40,7 @@ def _iso(value: datetime | None) -> str | None:
 class OrgExportService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
+        self.audit_truncated = False
 
     async def build(self, org: Organization) -> dict[str, Any]:
         members = await self._members(org.id)
@@ -67,6 +68,7 @@ class OrgExportService:
             "sso": await self._sso(org.id),
             "scim": await self._scim(org.id),
             "audit": audit,
+            "audit_truncated": self.audit_truncated,
         }
 
     async def _plan(self, org_id: uuid.UUID) -> dict[str, Any] | None:
@@ -197,10 +199,14 @@ class OrgExportService:
             await self.db.execute(
                 select(AuditLog)
                 .where(AuditLog.organization_id == org_id)
-                .order_by(AuditLog.id)
-                .limit(AUDIT_LIMIT)
+                .order_by(AuditLog.id.desc())
+                .limit(AUDIT_LIMIT + 1)
             )
         ).scalars()
+        # Keep the NEWEST rows; report when older ones were dropped.
+        rows = list(rows)
+        self.audit_truncated = len(rows) > AUDIT_LIMIT
+        rows = list(reversed(rows[:AUDIT_LIMIT]))
         return [
             {
                 "at": _iso(r.at),

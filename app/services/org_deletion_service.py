@@ -18,6 +18,7 @@ import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.exceptions import AppError
 from app.models.platform import Organization, Subscription
 from app.services import audit_service
 from app.services.billing_service import has_live_stripe_subscription
@@ -34,7 +35,16 @@ async def execute(
     actor_email: str | None = None,
     reason: str = "grace period ended",
 ) -> int:
-    """Delete one org that has a pending request. Returns how many projects went with it."""
+    """Delete one org that has a pending request. Returns how many projects went with it.
+
+    Refuses (409) an org that holds a live Stripe subscription: deleting it would leave Stripe
+    billing a customer whose organization is gone."""
+    if await _took_a_subscription(session, organization_id):
+        raise AppError(
+            code="live_subscription",
+            message="the organization has a live subscription; cancel it before deleting",
+            status_code=409,
+        )
     projects = await OrganizationService(session).execute_deletion(organization_id)
     await audit_service.record(
         session,
@@ -68,9 +78,13 @@ async def run_due(session: AsyncSession, *, now: datetime | None = None) -> int:
     done = 0
     for org_id in due:
         try:
-            if await _took_a_subscription(session, org_id):
-                continue
             await execute(session, org_id)
+        except AppError as exc:
+            if exc.code == "live_subscription":
+                continue  # left for an operator; not a failure
+            await session.rollback()
+            log.error("org_deletion_failed", organization_id=str(org_id), error=type(exc).__name__)
+            continue
         except Exception as exc:  # noqa: BLE001 — one bad org must not stop the others
             await session.rollback()
             log.error("org_deletion_failed", organization_id=str(org_id), error=type(exc).__name__)
