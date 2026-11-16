@@ -145,7 +145,8 @@ CronJob, default-deny network policy, pod budgets, restricted security contexts)
 ```bash
 kubectl create secret generic tenant-pay-payments ...      # see deploy/k8s/kustomization.yaml
 kubectl create secret generic tenant-pay-migrator ...
-kubectl apply -f deploy/k8s/jobs.yaml                      # runs the migrate Job
+kubectl delete job/tenant-pay-migrate --ignore-not-found    # a Job's pod template cannot be changed, so recreate it on every release
+kubectl kustomize deploy/k8s | kubectl apply -f - -l component=migrate   # runs the migrate Job with the image set in kustomization.yaml
 kubectl wait --for=condition=complete job/tenant-pay-migrate --timeout=300s
 kubectl apply -k deploy/k8s
 ```
@@ -159,7 +160,9 @@ NetworkPolicy at all.
 Run `deploy/sql/roles.sql` once as the database administrator (the file explains how, with the
 passwords passed on the command line). Use the `_app` login for `DATABASE_URL` everywhere and the
 `_migrator` login only for migrations. The `_app` login cannot change the schema and can only
-append to the audit log.
+append to the audit log. (Migration 0003 removes the
+`_app` login's UPDATE/DELETE/TRUNCATE on `pay_audit_log` when that login exists; check with
+`\dp pay_audit_log`, and re-run `roles.sql` after the migrations if the role was created later.)
 
 ## 6. Going from test to live
 

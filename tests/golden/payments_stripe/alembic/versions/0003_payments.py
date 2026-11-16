@@ -249,6 +249,19 @@ def upgrade() -> None:
         "CREATE TRIGGER pay_audit_no_truncate BEFORE TRUNCATE ON pay_audit_log "
         "FOR EACH STATEMENT EXECUTE FUNCTION pay_audit_protect()"
     )
+    # The app login (deploy/sql/roles.sql) may only append to the audit trail. roles.sql normally runs
+    # before the tables exist, so its REVOKE cannot reach this table: do it here, once the role exists.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'pay_shop_app') THEN
+                REVOKE UPDATE, DELETE, TRUNCATE ON pay_audit_log FROM pay_shop_app;
+            END IF;
+        END
+        $$
+        """
+    )
 
 
 def downgrade() -> None:

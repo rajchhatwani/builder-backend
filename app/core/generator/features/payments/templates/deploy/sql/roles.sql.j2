@@ -10,7 +10,7 @@
 --
 --   psql "$ADMIN_DATABASE_URL" \
 --        -v migrator_password="$(openssl rand -base64 32)" -v app_password="$(openssl rand -base64 32)" \
---        -v database={{ slug_sql }} -f roles.sql
+--        -v ON_ERROR_STOP=1 -v database={{ slug_sql }} -f roles.sql
 --
 -- Then deploy with DATABASE_URL pointing at the _app login, and give the migration step (the
 -- Kubernetes migrate Job, or `alembic upgrade head` run by hand) the _migrator login.
@@ -38,4 +38,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO {{ slug_s
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {{ slug_sql }}_app;
 
 -- The audit trail is append-only for the app, whatever else happens (a trigger enforces this too).
-REVOKE UPDATE, DELETE, TRUNCATE ON pay_audit_log FROM {{ slug_sql }}_app;
+-- On a fresh database the table does not exist yet: migration 0003 then does this REVOKE itself.
+-- Running this file again after the migrations is always safe.
+SELECT format('REVOKE UPDATE, DELETE, TRUNCATE ON pay_audit_log FROM {{ slug_sql }}_app')
+WHERE to_regclass('public.pay_audit_log') IS NOT NULL\gexec

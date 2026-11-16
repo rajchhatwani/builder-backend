@@ -116,6 +116,10 @@ async def _sync(ids: list[uuid.UUID], counts: dict[str, int]) -> None:
                 counts["errors"] += 1
                 await session.rollback()
                 logger.warning("reconcile_provider_error", payment_id=str(payment_id), code=exc.code)
+            except Exception:  # noqa: BLE001 - one bad payment must not stop the pass
+                counts["errors"] += 1
+                await session.rollback()
+                logger.exception("reconcile_payment_error", payment_id=str(payment_id))
 
 
 async def _refunds(now: datetime, counts: dict[str, int]) -> None:
@@ -136,6 +140,10 @@ async def _refunds(now: datetime, counts: dict[str, int]) -> None:
                 await service.dispatch_refund(session, refund_id)
             except (AppError, ProviderError):
                 await session.rollback()
+            except Exception:  # noqa: BLE001 - one bad refund must not stop the pass
+                counts["errors"] += 1
+                await session.rollback()
+                logger.exception("reconcile_refund_error", refund_id=str(refund_id))
     pending = await _ids(
         sa.select(Refund.id)
         .where(
@@ -158,6 +166,10 @@ async def _refunds(now: datetime, counts: dict[str, int]) -> None:
             except ProviderError:
                 counts["errors"] += 1
                 await session.rollback()
+            except Exception:  # noqa: BLE001 - one bad refund must not stop the pass
+                counts["errors"] += 1
+                await session.rollback()
+                logger.exception("reconcile_refund_error", refund_id=str(refund_id))
 
 
 async def _events(now: datetime, counts: dict[str, int]) -> None:

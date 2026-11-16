@@ -137,7 +137,9 @@ else. Start with the planned 1 worker replica(s) across your servers
 Run `deploy/sql/roles.sql` once as the database administrator (the file explains how, with the
 passwords passed on the command line). Use the `_app` login for `DATABASE_URL` everywhere and the
 `_migrator` login only for migrations. The `_app` login cannot change the schema and can only
-append to the audit log.
+append to the audit log. (Migration 0003 removes the
+`_app` login's UPDATE/DELETE/TRUNCATE on `pay_audit_log` when that login exists; check with
+`\dp pay_audit_log`, and re-run `roles.sql` after the migrations if the role was created later.)
 
 ## 6. Going from test to live
 

@@ -294,7 +294,12 @@ async def cancel_payment(session: AsyncSession, user: AuthUser, payment_id: uuid
         checkout = await provider.expire_checkout(payment.provider_session_id)
     except ProviderRejected:
         # Already completed or expired at the provider: learn the real state, then say so.
-        checkout = await provider.retrieve_checkout(payment.provider_session_id)
+        try:
+            checkout = await provider.retrieve_checkout(payment.provider_session_id)
+        except ProviderUnavailable:
+            raise AppError("provider_unavailable", "the payment service is unavailable; retry", 502) from None
+        except ProviderRejected:
+            raise ConflictError("this payment can no longer be cancelled") from None
         await sync_payment_from_checkout(session, payment.id, checkout)
         raise ConflictError("this payment can no longer be cancelled") from None
     except ProviderUnavailable:
@@ -484,7 +489,8 @@ async def request_refund(
             422,
         )
     threshold = config.REFUND_APPROVAL_THRESHOLD_MINOR
-    needs_approval = threshold is not None and amount > threshold
+    # Cumulative, so splitting one large refund into several small ones cannot avoid the second person.
+    needs_approval = threshold is not None and payment.refund_reserved_minor + amount > threshold
     refund = Refund(
         id=uuid.uuid4(),
         payment_id=payment.id,
@@ -685,6 +691,7 @@ async def apply_provider_refund(
                 )
             ).scalar_one_or_none()
     created = False
+    changed = False
     if refund is None:
         # Made outside this system (the provider's dashboard): record it, it is real money.
         refund = Refund(
@@ -703,6 +710,7 @@ async def apply_provider_refund(
     else:
         if refund.provider_refund_id is None:
             refund.provider_refund_id = reported.refund_id
+            changed = True
         if refund.amount_minor != reported.amount_minor:
             logger.error("refund_amount_mismatch", refund_id=str(refund.id))
         target = reported.status
@@ -710,10 +718,27 @@ async def apply_provider_refund(
         if target != refund.status and state.can_move(state.REFUND_TRANSITIONS, refund.status, target):
             refund.status = target
             refund.failure_code = reported.failure_code
+            changed = True
     if created:
         refund.provider_refund_id = reported.refund_id
+    if not created and not changed:
+        # Nothing new: no audit row (the log is append-only), but note the check so the periodic
+        # recheck does not pick this refund up on every pass.
+        refund.updated_at = datetime.now(UTC)
+        await session.commit()
+        return
     await session.flush()
-    await _recompute_refund_totals(session, payment)
+    overflow = await _recompute_refund_totals(session, payment)
+    if overflow:
+        logger.error("refund_over_reserved", payment_id=str(payment.id))
+        await audit.append(
+            session,
+            payment_id=payment.id,
+            event="refund_over_reserved",
+            data={"refund_id": str(refund.id), "amount_minor": reported.amount_minor},
+            actor_type=audit.ACTOR_PROVIDER,
+            tenant_id=payment.tenant_id,
+        )
     await audit.append(
         session,
         payment_id=payment.id,
@@ -726,8 +751,12 @@ async def apply_provider_refund(
     await session.commit()
 
 
-async def _recompute_refund_totals(session: AsyncSession, payment: Payment) -> None:
-    """Rebuild the refund totals from the refunds themselves, so they can never drift."""
+async def _recompute_refund_totals(session: AsyncSession, payment: Payment) -> bool:
+    """Rebuild the refund totals from the refunds themselves, so they can never drift.
+
+    Returns True if the refunds add up to more than the payment (money refunded in the provider's
+    dashboard on top of ours): the totals are clamped to satisfy the database bounds and the caller
+    records the overflow; the refund rows themselves stay exact."""
     reserved, refunded = (
         await session.execute(
             sa.select(
@@ -740,9 +769,11 @@ async def _recompute_refund_totals(session: AsyncSession, payment: Payment) -> N
             ).where(Refund.payment_id == payment.id)
         )
     ).one()
-    payment.refund_reserved_minor = int(reserved)
-    payment.refunded_minor = int(refunded)
+    overflow = int(reserved) > payment.amount_minor
+    payment.refund_reserved_minor = min(int(reserved), payment.amount_minor)
+    payment.refunded_minor = min(int(refunded), payment.refund_reserved_minor)
     await session.flush()
+    return overflow
 
 
 async def _update_payable_after_refund(session: AsyncSession, payment: Payment) -> None:

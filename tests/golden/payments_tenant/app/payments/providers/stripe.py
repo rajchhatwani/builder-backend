@@ -174,7 +174,8 @@ class StripeProvider:
                     return self._parse(response.read(_MAX_RESPONSE_BYTES + 1))
             except urllib.error.HTTPError as exc:
                 data = exc.read(_MAX_RESPONSE_BYTES + 1)
-                if exc.code == 429 or exc.code >= 500:
+                if exc.code in (408, 409, 429) or exc.code >= 500:
+                    # 409: the same idempotency key is still in flight; the payment may be live.
                     last = f"http_{exc.code}"
                 else:
                     raise ProviderRejected(self._error_code(data, exc.code)) from None
@@ -377,7 +378,7 @@ class StripeProvider:
         signatures: list[str] = []
         for part in parts:
             key, _, value = part.strip().partition("=")
-            if key == "t" and value.isdigit() and len(value) <= 12:
+            if key == "t" and re.fullmatch(r"[0-9]{1,12}", value):
                 timestamp = int(value)
             elif key == "v1" and re.fullmatch(r"[0-9a-fA-F]{64}", value):
                 signatures.append(value.lower())

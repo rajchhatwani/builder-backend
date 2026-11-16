@@ -9,7 +9,10 @@
 #        --from-literal=PAYMENTS_WEBHOOK_IP_ALLOWLIST=<provider CIDRs>{% endif %}
 #
 #      kubectl create secret generic {{ slug }}-migrator --from-literal=DATABASE_URL='postgresql+asyncpg://{{ slug_sql }}_migrator:...@db:5432/{{ slug_sql }}?ssl=require'
-# 3. Run the migrate Job first (jobs.yaml), then the rest.
+# 3. Run the migrate Job first, through kustomize so its image is rewritten (never `kubectl apply -f jobs.yaml`):
+#      kubectl delete job/{{ slug }}-migrate --ignore-not-found
+#      kubectl kustomize deploy/k8s | kubectl apply -f - -l component=migrate
+#    then apply everything: kubectl apply -k deploy/k8s
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:

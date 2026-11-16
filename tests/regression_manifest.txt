@@ -194,6 +194,7 @@ tests/unit/test_keycloak_generation.py
 tests/unit/test_keycloak_validation.py
 tests/unit/test_naming.py
 tests/unit/test_oidc.py
+tests/unit/test_payments_audit_b1_017.py
 tests/unit/test_payments_generation.py
 tests/unit/test_payments_sizing.py
 tests/unit/test_payments_validation.py

@@ -259,7 +259,7 @@ async def _read_capped_body(request: Request) -> bytes | None:
     """The request body, or None if it is larger than the cap (never reads more than cap + 1)."""
     limit = config.WEBHOOK_MAX_BODY_BYTES
     declared = request.headers.get("content-length")
-    if declared is not None and (not declared.isdigit() or int(declared) > limit):
+    if declared is not None and (not (declared.isascii() and declared.isdigit()) or int(declared) > limit):
         return None
     chunks: list[bytes] = []
     size = 0
@@ -287,6 +287,9 @@ async def receive_webhook(provider_name: str, request: Request) -> Response:
         event = get_provider().verify_webhook(body, request.headers)
     except WebhookRejected as exc:
         logger.warning("webhook_rejected", reason=exc.reason)
+        return reject
+    except Exception:  # noqa: BLE001 - nothing a stranger sends may become a 500 with a trace
+        logger.warning("webhook_rejected", reason="verify_error")
         return reject
     async with session_factory() as session:
         event_pk, is_new = await events.store_event(session, provider_name, event, body)
