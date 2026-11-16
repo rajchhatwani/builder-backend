@@ -88,7 +88,7 @@ async def _body(request: Request) -> Any:
         raise ScimError(413, "the body is too large")
     try:
         return json.loads(raw or b"null")
-    except (ValueError, UnicodeDecodeError) as exc:
+    except (ValueError, UnicodeDecodeError, RecursionError) as exc:
         raise ScimError(400, "the body isn't valid JSON", "invalidSyntax") from exc
 
 

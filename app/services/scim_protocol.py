@@ -24,6 +24,7 @@ MEDIA_TYPE = "application/scim+json"
 
 DEFAULT_PAGE = 100
 MAX_PAGE = 200
+MAX_START_INDEX = 1_000_000_000  # keeps OFFSET inside int64
 MAX_OPERATIONS = 100
 MAX_MEMBERS = 1000
 
@@ -118,7 +119,7 @@ def paging(start_index: str | None, count: str | None) -> tuple[int, int]:
         size = int(count) if count not in (None, "") else DEFAULT_PAGE
     except ValueError as exc:
         raise invalid("startIndex and count must be integers") from exc
-    return max(start, 1), min(max(size, 0), MAX_PAGE)
+    return min(max(start, 1), MAX_START_INDEX), min(max(size, 0), MAX_PAGE)
 
 
 # -- users -------------------------------------------------------------------------------------

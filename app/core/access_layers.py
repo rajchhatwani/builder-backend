@@ -363,6 +363,9 @@ def access_diff(before: Spec, after: Spec) -> dict[str, Any]:
         claimable = role_new and not entity_new and role in open_roles and layer != "row"
         if claimable and beyond_public(key, a):
             effect = "gain"
+        elif b is None and a not in (None, "no") and layer == "object" and not (entity_new or role_new):
+            # a new operation cell on an existing entity and role that now grants access
+            effect = "gain"
         elif entity_new or role_new:
             effect = "added"
         elif entity_gone or role_gone:

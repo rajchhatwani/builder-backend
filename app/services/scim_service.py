@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
@@ -443,6 +444,14 @@ class ScimService:
             conditions.append(ScimUser.id != except_id)
         return (await self.db.execute(select(ScimUser.id).where(*conditions))).first() is not None
 
+    async def _flush_unique(self) -> None:
+        """A parallel create of the same user loses on a unique index: answer 409, not 500."""
+        try:
+            await self.db.flush()
+        except IntegrityError as exc:
+            await self.db.rollback()
+            raise ScimError(409, "this user is already being provisioned", "uniqueness") from exc
+
     async def create_user(self, ctx: ScimContext, body: object) -> dict[str, object]:
         data = proto.parse_user(body)
         org = ctx.org
@@ -478,7 +487,7 @@ class ScimService:
                 default_organization_id=org.id,
             )
             self.db.add(user)
-            await self.db.flush()
+            await self._flush_unique()
         su = ScimUser(
             organization_id=org.id,
             user_id=user.id,
@@ -490,7 +499,7 @@ class ScimService:
             active=data.active,
         )
         self.db.add(su)
-        await self.db.flush()
+        await self._flush_unique()
         if data.active:
             await self._join(ctx, su, user)
         if created_account:

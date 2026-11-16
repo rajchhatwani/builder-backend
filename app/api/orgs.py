@@ -174,6 +174,8 @@ async def list_my_orgs(
     principal: Principal = Depends(current_principal),
     db: AsyncSession = Depends(get_session),
 ) -> Page[OrganizationRead]:
+    if principal.token_project_id is not None:  # a project-pinned token does not browse orgs
+        return Page[OrganizationRead](items=[], total=0, limit=page.limit, offset=page.offset)
     summaries = await OrganizationService(db).list_for_user(principal.user.id)
     if principal.impersonation is not None:  # §4.5: a "view as" session sees its one org only
         summaries = [
@@ -217,7 +219,7 @@ async def list_my_pending_invitations(
     principal: Principal = Depends(current_principal),
     db: AsyncSession = Depends(get_session),
 ) -> Page[InvitationRead]:
-    if principal.user.email_verified_at is None:
+    if principal.user.email_verified_at is None or principal.token_project_id is not None:
         return Page[InvitationRead](items=[], total=0, limit=0, offset=0)
     rows = await OrganizationService(db).list_pending_for_email(principal.user.email)
     items = [_invitation_read(r.invitation, r.organization.slug, r.organization.name) for r in rows]

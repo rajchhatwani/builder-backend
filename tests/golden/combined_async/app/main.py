@@ -5,7 +5,7 @@ import pkgutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
@@ -15,7 +15,7 @@ from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 from app.config import get_settings
-from app.core.errors import register_exception_handlers
+from app.core.errors import register_exception_handlers, reject_nul_characters
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
 from app.events.relay import start_relay, stop_relay
@@ -54,7 +54,12 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    app = FastAPI(title='Combined Async', version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title='Combined Async',
+        version="0.1.0",
+        lifespan=lifespan,
+        dependencies=[Depends(reject_nul_characters)],
+    )
     install_api_edge(app)  # idempotency, rate limits, API versions: before any router is included
     app.add_middleware(
         CORSMiddleware,

@@ -5,7 +5,7 @@ import pkgutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
@@ -49,7 +49,7 @@ from app.config import get_settings
 {% if observability %}
 from app.core import telemetry
 {% endif %}
-from app.core.errors import register_exception_handlers
+from app.core.errors import register_exception_handlers, reject_nul_characters
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
 {% if documents %}
@@ -194,6 +194,7 @@ def create_app() -> FastAPI:
         title={{ name | pyrepr }},
         version="0.1.0",
         lifespan=lifespan,
+        dependencies=[Depends(reject_nul_characters)],
         # The "Authorize" button in /docs signs in through Keycloak with PKCE (no secret).
         swagger_ui_init_oauth={
             "clientId": DOCS_CLIENT_ID,
@@ -202,7 +203,12 @@ def create_app() -> FastAPI:
         },
     )
 {% else %}
-    app = FastAPI(title={{ name | pyrepr }}, version="0.1.0", lifespan=lifespan)
+    app = FastAPI(
+        title={{ name | pyrepr }},
+        version="0.1.0",
+        lifespan=lifespan,
+        dependencies=[Depends(reject_nul_characters)],
+    )
 {% endif %}
 {% if api_edge %}
     install_api_edge(app)  # idempotency, rate limits, API versions: before any router is included
