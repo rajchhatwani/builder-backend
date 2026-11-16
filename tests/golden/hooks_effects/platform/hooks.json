@@ -50,7 +50,7 @@
     "app/auth/tokens.py": "cedcfa304fba4eaed871eb15091c30acec11a796e592afd32f5cda55f19f368a",
     "app/config.py": "4e5d6547f26331336e0d8f56d1f0d5facf28922a436ad420a684f026414f41f5",
     "app/core/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-    "app/core/errors.py": "eaafd596ce6212031b141feb2df80fdacb3f281be97ccc7daeabecf3986e837d",
+    "app/core/errors.py": "c3d5d57880daac955f092c9342ca6403f7ed40f4af51a3893b480982d4ad4612",
     "app/core/logging.py": "4c994070af4c7c24273eedfa51cec2f32ef89a5a7e9ce65dafbb9c3192459e49",
     "app/core/pagination.py": "f9503cc5aa62d5cef1d8924046b093b73aa7e19757245811e39da053f3b85cd7",
     "app/core/redact.py": "ad598dcf29bb50c06ed34d21949ab9b8fe7928fef7b1c991f902932925425e4d",

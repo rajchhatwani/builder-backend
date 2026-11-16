@@ -42,7 +42,7 @@ async def reject_nul_characters(request: Request) -> None:
     """PostgreSQL text cannot hold U+0000: answer 422 for it in the path, query or a JSON body."""
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     bad = "\x00" in request.url.path or b"%00" in request.scope.get("query_string", b"")
-    if not bad and content_type == "application/json":
+    if not bad and (content_type == "application/json" or content_type.endswith("+json")):
         body = await request.body()
         bad = b"\x00" in body or re.search(rb"(?<!\\)(?:\\\\)*\\u0000", body) is not None
     if bad:
