@@ -224,3 +224,11 @@ async def test_invitation_rejects_malformed_email_and_consumes_no_seat(
         assert r.status_code == 422, (bad, r.status_code)
     pending = (await client.get("/orgs/acme/invitations")).json()
     assert (pending["total"] if isinstance(pending, dict) else len(pending)) == 0
+
+
+async def test_team_org_cannot_take_the_reserved_holding_slug(client: AsyncClient) -> None:
+    """AUDIT F-0139: 'unclaimed-projects' is the holding org's slug; bootstrap moves its projects."""
+    r = await client.post("/orgs", json={"name": "Mine", "slug": "unclaimed-projects"})
+    assert r.status_code == 422
+    r = await client.post("/orgs", json={"name": "Unclaimed projects"})  # slug from the name
+    assert r.status_code == 422

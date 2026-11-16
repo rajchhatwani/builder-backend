@@ -178,6 +178,10 @@ class OrganizationService:
             raise AppError(
                 code="invalid_slug", message="organization slug is required", status_code=422
             )
+        if candidate == UNCLAIMED_ORG_SLUG:
+            raise AppError(
+                code="reserved_slug", message="that organization slug is reserved", status_code=422
+            )
         org = Organization(
             name=name.strip(),
             slug=candidate,

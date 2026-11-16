@@ -23,7 +23,9 @@ target_metadata = Base.metadata
 
 # Always resolve the DB URL from app settings/env, never the static alembic.ini value.
 _s = get_settings()
-config.set_main_option("sqlalchemy.url", _s.migrations_database_url or _s.database_url)
+# "%" must be doubled: ConfigParser interpolates, and URL passwords are %-encoded.
+_url = _s.migrations_database_url or _s.database_url
+config.set_main_option("sqlalchemy.url", _url.replace("%", "%%"))
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

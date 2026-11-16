@@ -8,6 +8,7 @@ import os
 import subprocess
 import sys
 import uuid
+from datetime import timedelta
 from pathlib import Path
 
 import asyncpg
@@ -401,3 +402,65 @@ async def test_project_slug_per_org_migration_is_reversible_on_populated_data(
     finally:
         await conn.close()
     _alembic(fresh_db, "upgrade", "head")
+
+
+async def test_one_live_run_migration_keeps_newest_and_supersedes_older(fresh_db: str) -> None:
+    """AUDIT F-0140: b30a00000032 stops older live runs on a workspace before the unique index."""
+    _alembic(fresh_db, "upgrade", "b30a00000031")
+    conn = await _connect(fresh_db)
+    try:
+        org = await conn.fetchval(
+            "INSERT INTO organizations (id, name, slug, kind, created_at, updated_at) VALUES "
+            "(gen_random_uuid(), 'o', 'o-live', 'team', now(), now()) RETURNING id"
+        )
+        proj = await conn.fetchval(
+            "INSERT INTO projects (id, name, slug, db_engine, version, organization_id, "
+            "created_at, updated_at) VALUES (gen_random_uuid(), 'P', 'p', 'postgres', 1, $1, "
+            "now(), now()) RETURNING id",
+            org,
+        )
+        ws = await conn.fetchval(
+            "INSERT INTO workspaces (id, project_id, name, state, base_spec_seq, spec_seq, "
+            "branch, created_at, updated_at) VALUES (gen_random_uuid(), $1, 'w', 'open', 0, 0, "
+            "'b', now(), now()) RETURNING id",
+            proj,
+        )
+        run_sql = (
+            "INSERT INTO ai_runs (id, project_id, workspace_id, goal, state, phase, budgets, "
+            "steps_used, repairs_used, cost_micro_usd, lease_owner, lease_until, created_at, "
+            "updated_at) VALUES (gen_random_uuid(), $1, $2, 'g', $3, 'build', '{}'::jsonb, 0, 0, "
+            "0, 'w1', now() + interval '1 hour', now() - $4::interval, now()) RETURNING id"
+        )
+        old = await conn.fetchval(run_sql, proj, ws, "running", timedelta(hours=2))
+        new = await conn.fetchval(run_sql, proj, ws, "awaiting_approval", timedelta(hours=1))
+        done = await conn.fetchval(run_sql, proj, ws, "completed", timedelta(hours=3))
+        await conn.execute(
+            "INSERT INTO ai_approvals (id, project_id, run_id, kind, subject, payload, "
+            "risk_flags, state, bound_spec_hash, expires_at, created_at) VALUES "
+            "(gen_random_uuid(), $1, $2, 'A', 's', '{}'::jsonb, '[]'::jsonb, 'pending', 'h', "
+            "now() + interval '1 day', now())",
+            proj,
+            old,
+        )
+    finally:
+        await conn.close()
+
+    _alembic(fresh_db, "upgrade", "head")
+
+    conn = await _connect(fresh_db)
+    try:
+        rows = {
+            r["id"]: r
+            for r in await conn.fetch(
+                "SELECT id, state, stop_code, lease_owner, lease_until, finished_at FROM ai_runs"
+            )
+        }
+        assert rows[new]["state"] == "awaiting_approval" and rows[new]["lease_owner"] == "w1"
+        assert rows[old]["state"] == "stopped" and rows[old]["stop_code"] == "superseded"
+        assert rows[old]["lease_owner"] is None and rows[old]["lease_until"] is None
+        assert rows[old]["finished_at"] is not None
+        assert rows[done]["state"] == "completed" and rows[done]["stop_code"] is None
+        # the stopped run's approval row is not deleted by the migration
+        assert await conn.fetchval("SELECT count(*) FROM ai_approvals WHERE run_id=$1", old) == 1
+    finally:
+        await conn.close()

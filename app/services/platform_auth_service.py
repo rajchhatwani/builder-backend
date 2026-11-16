@@ -788,7 +788,10 @@ class PlatformAuthService:
             sa_update(Project)
             .where(
                 Project.organization_id.in_(
-                    select(Organization.id).where(Organization.slug == UNCLAIMED_ORG_SLUG)
+                    select(Organization.id).where(
+                        Organization.slug == UNCLAIMED_ORG_SLUG,
+                        Organization.created_by.is_(None),
+                    )
                 )
             )
             .values(organization_id=admin_org.id)
