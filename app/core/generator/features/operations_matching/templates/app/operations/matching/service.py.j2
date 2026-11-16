@@ -43,8 +43,10 @@ def assignment_out(row: MatchAssignment) -> _s.AssignmentOut:
     )
 
 
-async def _candidates(session: AsyncSession, tn: Tenant, given: _t.Sequence[_s.CandidateIn]) -> list[_sc.Candidate]:
-    """Candidates with coordinates; one without takes its latest /location position (when that block exists)."""
+async def _candidates(session: AsyncSession, tn: Tenant, given: _t.Sequence[_s.CandidateIn]
+) -> tuple[list[_sc.Candidate], list[tuple[str, str]]]:
+    """(candidates with coordinates, excluded). One without coordinates takes its latest /location position (when that
+    block exists); a stored position older than POSITION_MAX_AGE_SECONDS excludes only that candidate (`stale_position`)."""
     found: dict[str, tuple[int, int]] = {}
     stale: set[str] = set()
 {% if location %}
@@ -57,14 +59,16 @@ async def _candidates(session: AsyncSession, tn: Tenant, given: _t.Sequence[_s.C
         found = {r.subject_id: (r.lat_micro, r.lng_micro) for r in rows if r.subject_id not in stale}
 {% endif %}
     out = []
+    excluded: list[tuple[str, str]] = []
     for c in given:
         micro = c.micro or found.get(c.id)
         if micro is None and c.id in stale:
-            raise AppError("stale_position", f"candidate {c.id!r} last reported its position over {_config.POSITION_MAX_AGE_SECONDS}s ago", 422, [{"candidate_id": c.id}])
+            excluded.append((c.id, "stale_position"))
+            continue
         if micro is None:
             raise AppError("candidate_without_location", f"candidate {c.id!r} has no coordinates and no known position", 422, [{"candidate_id": c.id}])
         out.append(_sc.Candidate(c.id, micro[0], micro[1], c.load, c.rating_milli))
-    return out
+    return out, sorted(excluded)
 
 
 async def _expire_due(session: AsyncSession, tn: Tenant, request_ref: str | None = None) -> int:
@@ -103,8 +107,9 @@ def _ranked_out(items: list[_sc.Ranked]) -> list[_s.RankedOut]:
 
 
 async def rank(session: AsyncSession, user: _t.Any, body: _s.RankIn) -> _s.RankOut:
-    cands = await _candidates(session, tenant(user), body.candidates)
+    cands, stale = await _candidates(session, tenant(user), body.candidates)
     ranked, excluded = _sc.rank(body.point.micro, cands, WEIGHTS, _config.MAX_DISTANCE_M, _config.MAX_LOAD)
+    excluded = sorted([*excluded, *stale])
     return _s.RankOut(items=_ranked_out(ranked), excluded=[_s.ExcludedOut(candidate_id=c, reason=r) for c, r in excluded])
 
 
@@ -119,10 +124,11 @@ def _new_row(tn: Tenant, user: _t.Any, ref: str, pick: _sc.Ranked) -> MatchAssig
 
 async def assign(session: AsyncSession, user: _t.Any, body: _s.AssignIn) -> _s.AssignmentOut:
     tn = tenant(user)
-    cands = await _candidates(session, tn, body.candidates)
+    cands, stale = await _candidates(session, tn, body.candidates)
     await _expire_due(session, tn, body.request_ref)
     skip = (await _declined(session, tn, [body.request_ref])).get(body.request_ref, set())
     ranked, _excluded = _sc.rank(body.point.micro, cands, WEIGHTS, _config.MAX_DISTANCE_M, _config.MAX_LOAD, skip)
+    _excluded = sorted([*_excluded, *stale])
     if not ranked:
         await session.commit()
         raise AppError("no_candidates", "no eligible candidate for this request", 422, [{"excluded": [{"candidate_id": c, "reason": r} for c, r in _excluded]}])
@@ -140,7 +146,7 @@ async def assign(session: AsyncSession, user: _t.Any, body: _s.AssignIn) -> _s.A
 
 async def batch(session: AsyncSession, user: _t.Any, body: _s.BatchIn) -> _s.BatchOut:
     tn = tenant(user)
-    cands = await _candidates(session, tn, body.candidates)
+    cands, _stale = await _candidates(session, tn, body.candidates)  # stale candidates are simply not offered
     refs = [r.request_ref for r in body.requests]
     await _expire_due(session, tn)
     active = {

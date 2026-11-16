@@ -118,7 +118,65 @@ def test_location_new_subjects_are_serialised_by_an_advisory_lock(files: dict[st
     assert lock < count
 
 
-def test_matching_ignores_stale_positions(files: dict[str, str]) -> None:
-    src = files["app/operations/matching/service.py"]
-    assert "stale_position" in src and "POSITION_MAX_AGE_SECONDS" in src
-    assert "POSITION_MAX_AGE_SECONDS" in files["app/operations/matching/config.py"]
+def _service(files: dict[str, str]) -> Any:
+    from datetime import UTC, datetime, timedelta  # noqa: F401
+    from unittest.mock import MagicMock
+
+    stubs = _points(files)
+    geo = types.ModuleType("app.operations.geomath")
+    exec(compile(files["app/operations/geomath.py"], "g.py", "exec"), geo.__dict__)  # noqa: S102
+    for n in ("app.operations.matching",):
+        setattr(stubs[n], "config", stubs[f"{n}.config"])
+    stubs["app.operations.geomath"] = geo
+    sc = _load(files, "sc", "app/operations/matching/scoring.py", stubs)
+    stubs["app.operations.matching.scoring"] = sc
+    setattr(stubs["app.operations.matching"], "scoring", sc)
+    stubs["app.operations.matching.schemas"] = _load(files, "ms", "app/operations/matching/schemas.py", stubs)
+    for n in ("app.operations.common", "app.operations.location.models", "app.operations.matching.models",
+              "app.operations.location"):
+        stubs[n] = MagicMock()
+    stubs["app.core.errors"].AppError = type("AppError", (Exception,), {
+        "__init__": lambda self, code, msg, status=400, details=None: setattr(self, "code", code) or None})
+    return _load(files, "svc", "app/operations/matching/service.py", stubs)
+
+
+class _Rows:
+    def __init__(self, rows: list[Any]) -> None:
+        self.rows = rows
+
+    def scalars(self) -> list[Any]:
+        return self.rows
+
+
+class _Session:
+    def __init__(self, rows: list[Any]) -> None:
+        self.rows = rows
+
+    async def execute(self, _stmt: Any) -> _Rows:
+        return _Rows(self.rows)
+
+
+@pytest.mark.asyncio
+async def test_stale_position_excludes_only_that_candidate(files: dict[str, str]) -> None:
+    from datetime import UTC, datetime, timedelta
+    from types import SimpleNamespace as NS
+
+    svc = _service(files)
+    svc._sa = NS(select=lambda *_a: NS(where=lambda *_b: None))
+    svc.scoped = lambda stmt, *_a: stmt
+    now = datetime.now(UTC)
+    old = now - timedelta(seconds=svc._config.POSITION_MAX_AGE_SECONDS + 60)
+    rows = [NS(subject_id="old", updated_at=old, lat_micro=1, lng_micro=2),
+            NS(subject_id="fresh", updated_at=now, lat_micro=3, lng_micro=4)]
+    given = [svc._s.CandidateIn(id=i) for i in ("old", "fresh")] + [svc._s.CandidateIn(id="own", **_POINT)]
+    cands, excluded = await svc._candidates(_Session(rows), None, given)
+    assert [c.id for c in cands] == ["fresh", "own"]
+    assert excluded == [("old", "stale_position")]
+
+    class _Body:
+        candidates = given
+        point = svc._s.RankIn.model_fields and NS(micro=(3, 4))
+
+    out = await svc.rank(_Session(rows), NS(id=None), _Body)
+    assert {e.candidate_id: e.reason for e in out.excluded}["old"] == "stale_position"
+    assert "fresh" in {i.candidate_id for i in out.items}
