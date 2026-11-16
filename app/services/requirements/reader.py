@@ -113,7 +113,7 @@ class SourcedItem:
 
 # -- sanitising what the model wrote ------------------------------------------------------------
 
-_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f​-‏‪-‮⁦-⁩]")
+_CTRL = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
 _TAGS = re.compile(r"<[/!?]?\s*[A-Za-z_][^>]*(?:>|$)")
 _WS = re.compile(r"\s+")
 _SECRETISH = re.compile(
