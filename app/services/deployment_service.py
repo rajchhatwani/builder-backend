@@ -4,6 +4,7 @@ import uuid
 from dataclasses import asdict
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import deploy_sizing as sizing
@@ -89,12 +90,11 @@ class DeploymentService:
             raise AppError(code="not_found", message="project not found", status_code=404)
         return project
 
-    async def _row(self, project_id: uuid.UUID) -> ProjectDeployment | None:
-        return (
-            await self.session.execute(
-                select(ProjectDeployment).where(ProjectDeployment.project_id == project_id)
-            )
-        ).scalar_one_or_none()
+    async def _row(self, project_id: uuid.UUID, *, lock: bool = False) -> ProjectDeployment | None:
+        query = select(ProjectDeployment).where(ProjectDeployment.project_id == project_id)
+        if lock:  # serialise concurrent saves so the expected_version check cannot be raced
+            query = query.with_for_update()
+        return (await self.session.execute(query)).scalar_one_or_none()
 
     def _read(self, project_id: uuid.UUID, row: ProjectDeployment | None) -> DeploymentRead:
         if row is None:
@@ -114,7 +114,7 @@ class DeploymentService:
 
     async def put(self, project_id: uuid.UUID, data: DeploymentWrite) -> DeploymentRead:
         await self._project(project_id)
-        row = await self._row(project_id)
+        row = await self._row(project_id, lock=True)
         current = row.version if row is not None else 0
         if data.expected_version is not None and data.expected_version != current:
             raise AppError(
@@ -130,7 +130,15 @@ class DeploymentService:
         else:
             row.version = current + 1
         apply_spec(row, spec)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:  # two first saves raced
+            await self.session.rollback()
+            raise AppError(
+                code="conflict",
+                message="the settings were saved by someone else just now; reload and retry",
+                status_code=409,
+            ) from exc
         return await self.get(project_id)
 
     @staticmethod

@@ -13,7 +13,7 @@ from app.schemas.documents import (
     LibraryItem,
     PreviewRequest,
 )
-from app.services.documents_service import DocumentsService, library, render_preview
+from app.services.documents_service import DocumentsService, library, render_preview_async
 from app.services.spec_service import SpecService
 
 router = APIRouter(prefix="/projects/{project_id}/documents", tags=["documents"])
@@ -64,7 +64,7 @@ async def documents_library(project_id: uuid.UUID) -> list[LibraryItem]:
     summary="Render a template with data and return the PDF (nothing is saved)",
 )
 async def documents_preview(project_id: uuid.UUID, body: PreviewRequest) -> Response:
-    pdf = render_preview(body)
+    pdf = await render_preview_async(body)
     return Response(
         content=pdf,
         media_type="application/pdf",

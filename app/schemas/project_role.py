@@ -6,6 +6,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.schemas._patch import NoNullPatch
+
 # Role names follow the same snake_case identifier rules as field names but are
 # forced to lowercase. Reserved words are checked in the validation module.
 _ROLE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -29,7 +31,7 @@ class ProjectRoleCreate(BaseModel):
     self_assignable: bool = False
     invite_only: bool = False
     inherits_from: str | None = Field(default=None, max_length=60)
-    position: int = Field(default=0, ge=0)
+    position: int = Field(default=0, ge=0, le=2_147_483_647)
 
     @field_validator("name")
     @classmethod
@@ -44,15 +46,17 @@ class ProjectRoleCreate(BaseModel):
         return v
 
 
-class ProjectRoleUpdate(BaseModel):
+class ProjectRoleUpdate(NoNullPatch):
     """Request body for PATCH /projects/{id}/roles/{name}."""
+
+    not_null = frozenset({"label", "is_default", "self_assignable", "invite_only", "position"})
 
     label: str | None = Field(default=None, min_length=1, max_length=100)
     is_default: bool | None = None
     self_assignable: bool | None = None
     invite_only: bool | None = None
     inherits_from: str | None = Field(default=None, max_length=60)
-    position: int | None = Field(default=None, ge=0)
+    position: int | None = Field(default=None, ge=0, le=2_147_483_647)
 
 
 class ProjectRoleRead(BaseModel):

@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.models.enums import AuthCustomFieldType
+from app.schemas._patch import NoNullPatch
 
 # Field names share the project's general snake_case identifier rules.
 _NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -59,7 +60,7 @@ class AuthCustomFieldCreate(BaseModel):
     # Extra metadata reserved for future use (e.g. regex, UI hint)
     extra: dict[str, Any] | None = None
 
-    position: int = Field(default=0, ge=0)
+    position: int = Field(default=0, ge=0, le=2_147_483_647)
 
     @field_validator("name")
     @classmethod
@@ -115,8 +116,10 @@ class AuthCustomFieldCreate(BaseModel):
         return self
 
 
-class AuthCustomFieldUpdate(BaseModel):
+class AuthCustomFieldUpdate(NoNullPatch):
     """Request body for PATCH /projects/{id}/auth/custom-fields/{id}."""
+
+    not_null = frozenset({"label", "required", "unique", "indexed", "position"})
 
     label: str | None = Field(default=None, min_length=1, max_length=100)
     required: bool | None = None
@@ -129,7 +132,7 @@ class AuthCustomFieldUpdate(BaseModel):
     default_value: str | None = Field(default=None, max_length=500)
     enum_values: list[str] | None = Field(default=None, max_length=100)
     extra: dict[str, Any] | None = None
-    position: int | None = Field(default=None, ge=0)
+    position: int | None = Field(default=None, ge=0, le=2_147_483_647)
 
 
 class AuthCustomFieldRead(BaseModel):

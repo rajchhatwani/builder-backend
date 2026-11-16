@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from app.models.enums import FieldType
+from app.schemas._patch import NoNullPatch
 
 _NAME_RE = r"^[a-z][a-z0-9_]*$"
 
@@ -16,25 +17,26 @@ class FieldCreate(BaseModel):
     unique: bool = False
     indexed: bool = False
     default: Any | None = None
-    max_length: int | None = Field(default=None, ge=1)
+    max_length: int | None = Field(default=None, ge=1, le=2_147_483_647)
     min_value: float | None = None
     max_value: float | None = None
     enum_values: list[str] | None = None
-    position: int | None = Field(default=None, ge=0)
+    position: int | None = Field(default=None, ge=0, le=2_147_483_647)
 
 
-class FieldUpdate(BaseModel):
+class FieldUpdate(NoNullPatch):
+    not_null = frozenset({"name", "type", "required", "unique", "indexed", "position"})
     name: str | None = Field(default=None, min_length=1, max_length=100, pattern=_NAME_RE)
     type: FieldType | None = None
     required: bool | None = None
     unique: bool | None = None
     indexed: bool | None = None
     default: Any | None = None
-    max_length: int | None = Field(default=None, ge=1)
+    max_length: int | None = Field(default=None, ge=1, le=2_147_483_647)
     min_value: float | None = None
     max_value: float | None = None
     enum_values: list[str] | None = None
-    position: int | None = Field(default=None, ge=0)
+    position: int | None = Field(default=None, ge=0, le=2_147_483_647)
 
 
 class FieldRead(BaseModel):

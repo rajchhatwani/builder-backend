@@ -64,7 +64,7 @@ class AiSettingsWrite(BaseModel):
     approval_policy: ApprovalPolicyOverride | None = None
     api_key: SecretStr | None = Field(default=None, min_length=20, max_length=300)
     clear_api_key: bool = False
-    monthly_budget_micro_usd: int | None = Field(default=None, ge=0)
+    monthly_budget_micro_usd: int | None = Field(default=None, ge=0, le=9_223_372_036_854_775_807)
     clear_budget: bool = False
 
     @field_validator("api_key")
@@ -72,7 +72,9 @@ class AiSettingsWrite(BaseModel):
     def _api_key_format(cls, v: SecretStr | None) -> SecretStr | None:
         # Never echo the value in the error.
         if v is not None and not _API_KEY.fullmatch(v.get_secret_value()):
-            raise ValueError("not a valid provider API key (expected an sk- prefixed key, 20+ characters)")
+            raise ValueError(
+                "not a valid provider API key (expected an sk- prefixed key, 20+ characters)"
+            )
         return v
 
 

@@ -316,3 +316,5 @@ tests/unit/test_generator_audit_b1_017.py
 tests/unit/test_generator_ident_sqlalchemy_names.py
 tests/unit/test_audit_b1_019.py
 tests/unit/test_audit_b1_020.py
+tests/unit/test_audit_b1_021.py
+tests/api/test_audit_b1_021.py

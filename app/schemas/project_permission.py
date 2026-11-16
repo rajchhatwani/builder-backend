@@ -50,6 +50,8 @@ class ProjectPermissionBulkUpsert(BaseModel):
     """
 
     permissions: list[PermissionEntry] = Field(min_length=1, max_length=500)
+    # Required when the new matrix gives some role more access than the saved one (else 409).
+    confirm_weakening: bool = False
 
 
 class ProjectPermissionUpdate(BaseModel):
@@ -59,6 +61,7 @@ class ProjectPermissionUpdate(BaseModel):
     row_rule: RowRule | None = None
     custom_filter_field: str | None = Field(default=None, max_length=100)
     custom_filter_value: str | None = Field(default=None, max_length=500)
+    confirm_weakening: bool = False
 
 
 class ProjectPermissionRead(BaseModel):

@@ -99,7 +99,7 @@ class KeycloakService:
         slug = project.slug.replace("_", "-")
         config = await self._config(project_id)
 
-        source = await self._check_source(project_id, data)
+        source = await self._check_source(project, data)
         realm = data.realm or (source.realm if source is not None else slug)
 
         # Other projects point at this realm; changing what it is would break them.
@@ -137,14 +137,18 @@ class KeycloakService:
         return config
 
     async def _check_source(
-        self, project_id: uuid.UUID, data: KeycloakConfigWrite
+        self, project: Project, data: KeycloakConfigWrite
     ) -> ProjectKeycloakConfig | None:
+        project_id = project.id
         if data.source_project_id is None:
             return None
         if data.mode != KeycloakMode.shared:
             raise _invalid("source_project_id is only for shared mode")
         if data.source_project_id == project_id:
             raise _invalid("a project cannot trust its own Keycloak as a shared one")
+        other = await self.session.get(Project, data.source_project_id)
+        if other is None or other.organization_id != project.organization_id:
+            raise _not_found("source project")  # never reveal a project of another org
         source = await self._config(data.source_project_id)
         if source is None or source.mode != KeycloakMode.own:
             raise _invalid("source_project_id must be a project that runs its own Keycloak")

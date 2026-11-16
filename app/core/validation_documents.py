@@ -16,7 +16,7 @@ Add = Callable[[str, str, str], None]
 
 ID_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
 MAX_TEMPLATES = 30
-RATE_RE = re.compile(r"\d{1,6}/\d{0,3}(second|minute|hour|day)s?")
+RATE_RE = re.compile(r"[1-9][0-9]{0,5}/([1-9][0-9]{0,2})?(second|minute|hour|day)s?")
 BUILTIN_ROW_FIELDS = {"id", "created_at", "updated_at", "created_by_id"}
 
 

@@ -14,6 +14,7 @@ from app.models.enums import (
     SmsProvider,
     TokenStore,
 )
+from app.schemas._patch import NoNullPatch
 
 # ── SMTP config sub-schema ────────────────────────────────────────────────────
 
@@ -54,7 +55,7 @@ class SmsConfig(BaseModel):
 
 # ── Rate limit string pattern ─────────────────────────────────────────────────
 
-_RATE_PATTERN = r"^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$"
+_RATE_PATTERN = r"^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$"
 
 
 # ── AuthConfig Create / Update ────────────────────────────────────────────────
@@ -122,12 +123,33 @@ class AuthConfigCreate(BaseModel):
         return self
 
 
-class AuthConfigUpdate(BaseModel):
+class AuthConfigUpdate(NoNullPatch):
     """Request body for PATCH /projects/{id}/auth.
 
     All fields optional — only supplied fields are updated.
     Cross-field rules are re-checked after merging current state with the patch.
     """
+
+    not_null = frozenset(
+        {
+            "enabled",
+            "token_store",
+            "access_token_ttl_minutes",
+            "refresh_token_ttl_days",
+            "jwt_algorithm",
+            "email_magic_link_enabled",
+            "sms_otp_enabled",
+            "otp_ttl_minutes",
+            "email_verification_required",
+            "invite_only",
+            "multi_tenant",
+            "deletion_mode",
+            "login_rate_limit",
+            "register_rate_limit",
+            "reset_rate_limit",
+            "security_headers_enabled",
+        }
+    )
 
     enabled: bool | None = None
     token_store: TokenStore | None = None

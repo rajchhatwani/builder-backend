@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.spec_models import ALLOWED_OPERATIONS as _ALLOWED_OPERATIONS
+from app.schemas._patch import NoNullPatch
 
 _NAME_RE = r"^[A-Z][A-Za-z0-9]*$"
 
@@ -33,7 +34,8 @@ class EntityCreate(BaseModel):
     options: EntityOptions = Field(default_factory=EntityOptions)
 
 
-class EntityUpdate(BaseModel):
+class EntityUpdate(NoNullPatch):
+    not_null = frozenset({"name", "table_name", "plural_path", "options"})
     name: str | None = Field(default=None, min_length=1, max_length=100, pattern=_NAME_RE)
     table_name: str | None = Field(default=None, max_length=100)
     plural_path: str | None = Field(default=None, max_length=100)

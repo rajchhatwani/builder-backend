@@ -861,10 +861,10 @@ export const api = {
       if (all.length >= page.total || page.items.length === 0) return all
     }
   },
-  bulkUpsertPermissions: (projectId: string, permissions: PermissionEntry[]) =>
+  bulkUpsertPermissions: (projectId: string, permissions: PermissionEntry[], confirmWeakening = false) =>
     request<ProjectPermission[]>(`/projects/${projectId}/permissions`, {
       method: 'POST',
-      body: JSON.stringify({ permissions }),
+      body: JSON.stringify({ permissions, confirm_weakening: confirmWeakening }),
     }),
   deletePermission: (permissionId: string) =>
     request<void>(`/permissions/${permissionId}`, { method: 'DELETE' }),

@@ -8,13 +8,14 @@ import uuid
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import authz_engine as eng
 from app.core import authz_recommender as recommender
 from app.core import authz_tools
-from app.core.enums import AuthorizationModel
 from app.core.access_layers import access_diff, access_matrix, weakens
+from app.core.enums import AuthorizationModel
 from app.core.spec_models import (
     Spec,
     SpecAuthorization,
@@ -31,8 +32,8 @@ from app.schemas.authorization import (
     AccessMatrixResponse,
     AuthorizationRead,
     AuthorizationWrite,
-    FieldAccessBody,
     CoverageResponse,
+    FieldAccessBody,
     PolicyBody,
     RecommendRequest,
     RecommendResponse,
@@ -86,12 +87,13 @@ class AuthorizationService:
             raise AppError(code="not_found", message="project not found", status_code=404)
         return project
 
-    async def _row(self, project_id: uuid.UUID) -> ProjectAuthorization | None:
-        return (
-            await self.session.execute(
-                select(ProjectAuthorization).where(ProjectAuthorization.project_id == project_id)
-            )
-        ).scalar_one_or_none()
+    async def _row(
+        self, project_id: uuid.UUID, *, lock: bool = False
+    ) -> ProjectAuthorization | None:
+        query = select(ProjectAuthorization).where(ProjectAuthorization.project_id == project_id)
+        if lock:  # serialise concurrent saves so the expected_version check cannot be raced
+            query = query.with_for_update()
+        return (await self.session.execute(query)).scalar_one_or_none()
 
     async def get(self, project_id: uuid.UUID) -> AuthorizationRead:
         await self._project(project_id)
@@ -117,7 +119,7 @@ class AuthorizationService:
 
     async def put(self, project_id: uuid.UUID, data: AuthorizationWrite) -> AuthorizationRead:
         await self._project(project_id)
-        row = await self._row(project_id)
+        row = await self._row(project_id, lock=True)
         current = row.version if row is not None else 0
         if data.expected_version is not None and data.expected_version != current:
             raise AppError(
@@ -133,7 +135,9 @@ class AuthorizationService:
             model=data.model.value,
             policies=[SpecPolicy.model_validate(p.model_dump()) for p in data.policies],
             attachments=data.attachments,
-            field_access=[SpecFieldAccess.model_validate(f.model_dump()) for f in data.field_access],
+            field_access=[
+                SpecFieldAccess.model_validate(f.model_dump()) for f in data.field_access
+            ],
         )
         if not data.confirm_weakening:
             before = await _spec_service(self.session).assemble(project_id)
@@ -154,7 +158,15 @@ class AuthorizationService:
         else:
             row.version = current + 1
         apply_spec(row, spec)
-        await self.session.commit()
+        try:
+            await self.session.commit()
+        except IntegrityError as exc:  # two first saves raced
+            await self.session.rollback()
+            raise AppError(
+                code="conflict",
+                message="the settings were saved by someone else just now; reload and retry",
+                status_code=409,
+            ) from exc
         return await self.get(project_id)
 
     async def issues(self, project_id: uuid.UUID) -> list[dict[str, str]]:
@@ -233,7 +245,9 @@ class AuthorizationService:
         if body.permissions is not None:
             if after.auth is None:
                 raise _invalid("the project has no auth section: permissions cannot be proposed")
-            after.auth.permissions = [SpecPermission.model_validate(p.model_dump()) for p in body.permissions]
+            after.auth.permissions = [
+                SpecPermission.model_validate(p.model_dump()) for p in body.permissions
+            ]
         if body.field_access is not None:
             if after.authorization is None:
                 after.authorization = SpecAuthorization()

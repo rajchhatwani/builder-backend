@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field, field_validator
 
 from app.models.enums import DbEngine
+from app.schemas._patch import NoNullPatch
 
 _SLUG_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 
@@ -27,7 +28,8 @@ class ProjectCreate(BaseModel):
         return value
 
 
-class ProjectUpdate(BaseModel):
+class ProjectUpdate(NoNullPatch):
+    not_null = frozenset({"version", "name", "slug"})
     version: int
     name: str | None = Field(default=None, min_length=1, max_length=100)
     slug: str | None = Field(default=None, max_length=100)

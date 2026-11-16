@@ -574,7 +574,9 @@ def _check_column_range(field: SpecField, ftype: FieldType, p: str, ctx: _Ctx) -
         low, high = limits
         for name, value in (("min_value", field.min_value), ("max_value", field.max_value)):
             if value is not None and not low <= value <= high:
-                ctx.add(f"{p}.{name}", "out_of_range", f"must be within {low}..{high} for {ftype.value}")
+                ctx.add(
+                    f"{p}.{name}", "out_of_range", f"must be within {low}..{high} for {ftype.value}"
+                )
                 ok = False
     if (
         ok
@@ -879,7 +881,7 @@ AUTH_USER_COLUMNS = frozenset(
         "invite_token",
     }
 )
-_RATE_LIMIT_RE = re.compile(r"[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?")
+_RATE_LIMIT_RE = re.compile(r"[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?")
 _EMAIL_RE = re.compile(r"[^@\s\"'<>]+@[^@\s\"'<>]+\.[^@\s\"'<>]+")
 _HOST_RE = re.compile(r"[A-Za-z0-9]([A-Za-z0-9.-]{0,251}[A-Za-z0-9])?")
 _PHONE_E164_RE = re.compile(r"\+[1-9][0-9]{6,14}")
@@ -1541,7 +1543,9 @@ def _check_suite(auth: SpecAuth, project_slug: str, ctx: _Ctx) -> None:
                 f"is derived for a suite member: it must be {realm!r}",
             )
         if kc.mode != KeycloakMode.shared:
-            ctx.add("auth.keycloak.mode", "suite_requires_shared", "a suite member uses shared mode")
+            ctx.add(
+                "auth.keycloak.mode", "suite_requires_shared", "a suite member uses shared mode"
+            )
         if not _CLIENT_ID_RE.fullmatch(project_slug):
             ctx.add(
                 "project.slug",

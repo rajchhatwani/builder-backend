@@ -13,11 +13,14 @@ Business rules enforced here:
 """
 
 import uuid
+from collections.abc import Awaitable, Callable
+from typing import TypeVar
 
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.access_layers import weakens
 from app.exceptions import AppError
 from app.models.entity import Entity
 from app.models.project import Project
@@ -28,6 +31,8 @@ from app.schemas.project_permission import (
     ProjectPermissionBulkUpsert,
     ProjectPermissionUpdate,
 )
+
+_T = TypeVar("_T")
 
 
 class ProjectPermissionService:
@@ -118,6 +123,35 @@ class ProjectPermissionService:
                 details=errors,
             )
 
+    async def _guarded(
+        self, project_id: uuid.UUID, confirm: bool, write: Callable[[], Awaitable[_T]]
+    ) -> _T:
+        """Run `write` (flush only), refuse with 409 access_weakened if it gives a role more
+        access unless `confirm`, else commit. Same guard as PUT /authorization and spec ops."""
+        if confirm:
+            result = await write()
+            await self.session.commit()
+            return result
+        from app.services.spec_service import SpecService  # late: spec_service imports models
+
+        before = await SpecService(self.session).assemble(project_id)
+        result = await write()
+        await self.session.flush()
+        self.session.expire_all()
+        after = await SpecService(self.session).assemble(project_id)
+        gained = weakens(before, after)
+        if gained:
+            await self.session.rollback()
+            raise AppError(
+                code="access_weakened",
+                message=f"this change gives {len({c['role'] for c in gained})} role(s) more "
+                "access; review POST /access/diff and repeat with confirm_weakening",
+                status_code=409,
+                details=gained[:100],
+            )
+        await self.session.commit()
+        return result
+
     # ── Public API ────────────────────────────────────────────────────────────
 
     async def bulk_upsert(
@@ -135,32 +169,33 @@ class ProjectPermissionService:
 
         self._validate_entries(data.permissions, entity_ids, role_names)
 
-        # Postgres ON CONFLICT DO UPDATE (upsert)
-        for entry in data.permissions:
-            stmt = (
-                pg_insert(ProjectPermission)
-                .values(
-                    project_id=project_id,
-                    entity_id=entry.entity_id,
-                    operation=entry.operation,
-                    roles=entry.roles,
-                    row_rule=entry.row_rule,
-                    custom_filter_field=entry.custom_filter_field,
-                    custom_filter_value=entry.custom_filter_value,
+        async def write() -> None:
+            # Postgres ON CONFLICT DO UPDATE (upsert)
+            for entry in data.permissions:
+                stmt = (
+                    pg_insert(ProjectPermission)
+                    .values(
+                        project_id=project_id,
+                        entity_id=entry.entity_id,
+                        operation=entry.operation,
+                        roles=entry.roles,
+                        row_rule=entry.row_rule,
+                        custom_filter_field=entry.custom_filter_field,
+                        custom_filter_value=entry.custom_filter_value,
+                    )
+                    .on_conflict_do_update(
+                        constraint="uq_project_permissions_project_entity_op",
+                        set_={
+                            "roles": entry.roles,
+                            "row_rule": entry.row_rule,
+                            "custom_filter_field": entry.custom_filter_field,
+                            "custom_filter_value": entry.custom_filter_value,
+                        },
+                    )
                 )
-                .on_conflict_do_update(
-                    constraint="uq_project_permissions_project_entity_op",
-                    set_={
-                        "roles": entry.roles,
-                        "row_rule": entry.row_rule,
-                        "custom_filter_field": entry.custom_filter_field,
-                        "custom_filter_value": entry.custom_filter_value,
-                    },
-                )
-            )
-            await self.session.execute(stmt)
+                await self.session.execute(stmt)
 
-        await self.session.commit()
+        await self._guarded(project_id, data.confirm_weakening, write)
         return await self._list_all(project_id)
 
     async def list_paginated(
@@ -214,10 +249,14 @@ class ProjectPermissionService:
                     status_code=422,
                 )
 
-        updates = data.model_dump(exclude_unset=True)
-        for key, value in updates.items():
-            setattr(perm, key, value)
-        await self.session.commit()
+        updates = data.model_dump(exclude_unset=True, exclude={"confirm_weakening"})
+
+        async def write() -> None:
+            for key, value in updates.items():
+                setattr(perm, key, value)
+
+        await self._guarded(perm.project_id, data.confirm_weakening, write)
+        await self.session.refresh(perm)  # the guard expires the session's objects
         return perm
 
     async def delete(self, permission_id: uuid.UUID) -> None:

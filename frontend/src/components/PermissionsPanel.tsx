@@ -2,6 +2,7 @@ import { useState, useEffect, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
 import type { Entity, ProjectRole, AuthOperation, RowRule, PermissionEntry } from '../api/types'
 import { Modal } from './Modal'
+import { useUi } from './Ui'
 
 const AUTH_OPERATIONS: AuthOperation[] = ['list', 'get', 'create', 'replace', 'update', 'delete', 'head']
 
@@ -14,6 +15,7 @@ interface PermissionsPanelProps {
 }
 
 export function PermissionsPanel({ projectId, entities, roles, keycloak = false }: PermissionsPanelProps) {
+  const { confirm } = useUi()
   const [permissions, setPermissions] = useState<Record<string, PermissionEntry>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -135,7 +137,23 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
     }
 
     try {
-      const updated = await api.bulkUpsertPermissions(projectId, entries)
+      let updated
+      try {
+        updated = await api.bulkUpsertPermissions(projectId, entries)
+      } catch (err) {
+        if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
+        const ok = await confirm({
+          title: 'This gives some roles more access',
+          message: `${err.message}. Save anyway?`,
+          confirmLabel: 'Save anyway',
+          danger: true,
+        })
+        if (!ok) {
+          setSaving(false)
+          return
+        }
+        updated = await api.bulkUpsertPermissions(projectId, entries, true)
+      }
       const map: Record<string, PermissionEntry> = {}
       for (const p of updated) {
         const key = `${p.entity_id}:${p.operation}`

@@ -1519,6 +1519,7 @@
      "monthly_budget_micro_usd": {
       "anyOf": [
        {
+        "maximum": 9.223372036854776e+18,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -2433,7 +2434,7 @@
      "login_rate_limit": {
       "default": "5/15minutes",
       "maxLength": 50,
-      "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+      "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
       "title": "Login Rate Limit",
       "type": "string"
      },
@@ -2459,14 +2460,14 @@
      "register_rate_limit": {
       "default": "10/hour",
       "maxLength": 50,
-      "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+      "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
       "title": "Register Rate Limit",
       "type": "string"
      },
      "reset_rate_limit": {
       "default": "3/hour",
       "maxLength": 50,
-      "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+      "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
       "title": "Reset Rate Limit",
       "type": "string"
      },
@@ -2843,7 +2844,7 @@
       "anyOf": [
        {
         "maxLength": 50,
-        "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+        "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
         "type": "string"
        },
        {
@@ -2893,7 +2894,7 @@
       "anyOf": [
        {
         "maxLength": 50,
-        "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+        "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
         "type": "string"
        },
        {
@@ -2906,7 +2907,7 @@
       "anyOf": [
        {
         "maxLength": 50,
-        "pattern": "^[0-9]{1,6}/[0-9]{0,4}(second|minute|hour|day)s?$",
+        "pattern": "^[1-9][0-9]{0,5}/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$",
         "type": "string"
        },
        {
@@ -3100,6 +3101,7 @@
      },
      "position": {
       "default": 0,
+      "maximum": 2147483647.0,
       "minimum": 0.0,
       "title": "Position",
       "type": "integer"
@@ -3416,6 +3418,7 @@
      "position": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -5687,6 +5690,7 @@
      "max_length": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 1.0,
         "type": "integer"
        },
@@ -5728,6 +5732,7 @@
      "position": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -5938,6 +5943,7 @@
      "max_length": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 1.0,
         "type": "integer"
        },
@@ -5986,6 +5992,7 @@
      "position": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -12545,6 +12552,11 @@
    "ProjectPermissionBulkUpsert": {
     "description": "Request body for POST /projects/{id}/permissions (full matrix replace).\n\nEntries with duplicate (entity_id, operation) pairs within the same request\nare rejected by the service before touching the DB.",
     "properties": {
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "permissions": {
       "items": {
        "$ref": "#/components/schemas/PermissionEntry"
@@ -12650,6 +12662,11 @@
    "ProjectPermissionUpdate": {
     "description": "Request body for PATCH /projects/{id}/permissions/{permission_id}.",
     "properties": {
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "custom_filter_field": {
       "anyOf": [
        {
@@ -12828,6 +12845,7 @@
      },
      "position": {
       "default": 0,
+      "maximum": 2147483647.0,
       "minimum": 0.0,
       "title": "Position",
       "type": "integer"
@@ -12973,6 +12991,7 @@
      "position": {
       "anyOf": [
        {
+        "maximum": 2147483647.0,
         "minimum": 0.0,
         "type": "integer"
        },
@@ -39501,6 +39520,18 @@
        ],
        "description": "The project version the caller last read. If it is no longer current the write is refused with 409 (details[0].current_version). Omitted: last write wins.",
        "title": "Expected Version"
+      }
+     },
+     {
+      "description": "Required when the new spec gives some role more access than the saved one (else 409 access_weakened with the diff in details).",
+      "in": "query",
+      "name": "confirm_weakening",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Required when the new spec gives some role more access than the saved one (else 409 access_weakened with the diff in details).",
+       "title": "Confirm Weakening",
+       "type": "boolean"
       }
      }
     ],

@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.models.enums import OnDelete, RelationKind
+from app.schemas._patch import NoNullPatch
 
 _NAME_RE = r"^[a-z][a-z0-9_]*$"
 
@@ -18,7 +19,8 @@ class RelationCreate(BaseModel):
     required: bool = False
 
 
-class RelationUpdate(BaseModel):
+class RelationUpdate(NoNullPatch):
+    not_null = frozenset({"from_name", "to_name", "on_delete", "required"})
     from_name: str | None = Field(default=None, min_length=1, max_length=100, pattern=_NAME_RE)
     to_name: str | None = Field(default=None, min_length=1, max_length=100, pattern=_NAME_RE)
     on_delete: OnDelete | None = None
