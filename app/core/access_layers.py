@@ -314,11 +314,42 @@ def access_diff(before: Spec, after: Spec) -> dict[str, Any]:
     renames = detect_renames(before, after)
     _remap(m1, renames)
     changes: list[dict[str, Any]] = []
+    # A new role anyone can claim (self-assignable or default at sign-up) is a gain for everybody:
+    # whatever it may do is access handed out without review.
+    open_roles = {
+        r.name for r in (after.auth.roles if after.auth else []) if r.self_assignable or r.is_default
+    }
+    open_before = {
+        renames["roles"].get(r.name, r.name)
+        for r in (before.auth.roles if before.auth else [])
+        if r.self_assignable or r.is_default
+    }
+    # an existing role that anyone can now claim: all it may already do becomes a gain
+    newly_open = {r for r in open_roles - open_before if r in m1.roles}
+
+    def beyond_public(key: tuple[str, str, str, str], a: str | None) -> bool:
+        """A role anyone can claim gains only what the signed-out visitor could not already do."""
+        if a in (None, "no"):
+            return False
+        base = m1.cells.get((key[0], key[1], key[2], PUBLIC))
+        return _NO_ACCESS_RANK.get(a, 0) > _NO_ACCESS_RANK.get(base or "no", 0)
     for key in sorted(set(m1.cells) | set(m2.cells)):
         b, a = m1.cells.get(key), m2.cells.get(key)
-        if b == a:
-            continue
         layer, entity, target, role = key
+        if b == a:
+            if role in newly_open and layer != "row" and beyond_public(key, a):
+                changes.append(
+                    {
+                        "layer": layer,
+                        "entity": entity,
+                        "target": target,
+                        "role": role,
+                        "before": b,
+                        "after": a,
+                        "effect": "gain",
+                    }
+                )
+            continue
         # A cell whose entity or role did not exist on one side is an addition or removal of that
         # entity/role, not a change of an existing rule.
         entity_new = b is None and entity not in m1.entities
@@ -329,7 +360,10 @@ def access_diff(before: Spec, after: Spec) -> dict[str, Any]:
             # a row cell appears/disappears with object access: the object cell tells the story
             continue
         effect = _effect(layer, b, a)
-        if entity_new or role_new:
+        claimable = role_new and not entity_new and role in open_roles and layer != "row"
+        if claimable and beyond_public(key, a):
+            effect = "gain"
+        elif entity_new or role_new:
             effect = "added"
         elif entity_gone or role_gone:
             effect = "removed"

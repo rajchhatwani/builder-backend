@@ -17,6 +17,7 @@ from app.exceptions import AppError
 from app.models.auth_config import ProjectAuthConfig
 from app.models.project import Project
 from app.schemas.auth_config import AuthConfigCreate, AuthConfigUpdate
+from app.services.access_guard import guarded_write
 
 
 def _not_found() -> AppError:
@@ -102,7 +103,7 @@ class AuthConfigService:
 
     async def update(self, project_id: uuid.UUID, data: AuthConfigUpdate) -> ProjectAuthConfig:
         config = await self.get(project_id)
-        updates = data.model_dump(exclude_unset=True)
+        updates = data.model_dump(exclude_unset=True, exclude={"confirm_weakening"})
 
         # Deserialise nested sub-models that arrive as dicts or BaseModel instances
         if "smtp_config" in updates and updates["smtp_config"] is not None:
@@ -115,12 +116,18 @@ class AuthConfigService:
         if "suite" in updates and updates["suite"] is not None:
             updates["suite"] = data.suite.model_dump() if data.suite else None
 
-        for key, value in updates.items():
-            setattr(config, key, value)
+        async def write() -> None:
+            for key, value in updates.items():
+                setattr(config, key, value)
+            # Re-validate cross-field invariants on the merged state
+            self._assert_invariants(config)
 
-        # Re-validate cross-field invariants on the merged state
-        self._assert_invariants(config)
-
+        if updates.get("enabled") is False and config.enabled and not data.confirm_weakening:
+            # switching sign-in off makes every permission rule public: confirm it
+            await guarded_write(self.session, project_id, False, write)
+            await self.session.refresh(config)  # the guard expires the session's objects
+            return config
+        await write()
         await self.session.commit()
         return config
 

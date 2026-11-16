@@ -49,7 +49,9 @@ class ProjectRoleCreate(BaseModel):
 class ProjectRoleUpdate(NoNullPatch):
     """Request body for PATCH /projects/{id}/roles/{name}."""
 
-    not_null = frozenset({"label", "is_default", "self_assignable", "invite_only", "position"})
+    not_null = frozenset(
+        {"label", "is_default", "self_assignable", "invite_only", "position", "confirm_weakening"}
+    )
 
     label: str | None = Field(default=None, min_length=1, max_length=100)
     is_default: bool | None = None
@@ -57,6 +59,8 @@ class ProjectRoleUpdate(NoNullPatch):
     invite_only: bool | None = None
     inherits_from: str | None = Field(default=None, max_length=60)
     position: int | None = Field(default=None, ge=0, le=2_147_483_647)
+    # Required when the change gives some role more access (else 409 access_weakened).
+    confirm_weakening: bool = False
 
 
 class ProjectRoleRead(BaseModel):

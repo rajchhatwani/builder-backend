@@ -20,7 +20,6 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.access_layers import weakens
 from app.exceptions import AppError
 from app.models.entity import Entity
 from app.models.enums import RowRule
@@ -32,6 +31,7 @@ from app.schemas.project_permission import (
     ProjectPermissionBulkUpsert,
     ProjectPermissionUpdate,
 )
+from app.services.access_guard import guarded_write
 
 _T = TypeVar("_T")
 
@@ -127,31 +127,8 @@ class ProjectPermissionService:
     async def _guarded(
         self, project_id: uuid.UUID, confirm: bool, write: Callable[[], Awaitable[_T]]
     ) -> _T:
-        """Run `write` (flush only), refuse with 409 access_weakened if it gives a role more
-        access unless `confirm`, else commit. Same guard as PUT /authorization and spec ops."""
-        if confirm:
-            result = await write()
-            await self.session.commit()
-            return result
-        from app.services.spec_service import SpecService  # late: spec_service imports models
-
-        before = await SpecService(self.session).assemble(project_id)
-        result = await write()
-        await self.session.flush()
-        self.session.expire_all()
-        after = await SpecService(self.session).assemble(project_id)
-        gained = weakens(before, after)
-        if gained:
-            await self.session.rollback()
-            raise AppError(
-                code="access_weakened",
-                message=f"this change gives {len({c['role'] for c in gained})} role(s) more "
-                "access; review POST /access/diff and repeat with confirm_weakening",
-                status_code=409,
-                details=gained[:100],
-            )
-        await self.session.commit()
-        return result
+        """Refuse with 409 access_weakened if `write` gives a role more access unless `confirm`."""
+        return await guarded_write(self.session, project_id, confirm, write)
 
     # ── Public API ────────────────────────────────────────────────────────────
 
@@ -277,7 +254,10 @@ class ProjectPermissionService:
         await self.session.refresh(perm)  # the guard expires the session's objects
         return perm
 
-    async def delete(self, permission_id: uuid.UUID) -> None:
+    async def delete(self, permission_id: uuid.UUID, confirm_weakening: bool = False) -> None:
         perm = await self._get_permission_or_404(permission_id)
-        await self.session.delete(perm)
-        await self.session.commit()
+
+        async def write() -> None:
+            await self.session.delete(perm)
+
+        await self._guarded(perm.project_id, confirm_weakening, write)

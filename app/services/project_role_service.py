@@ -18,6 +18,7 @@ from app.exceptions import AppError
 from app.models.project import Project
 from app.models.project_role import ProjectRole
 from app.schemas.project_role import ProjectRoleCreate, ProjectRoleUpdate
+from app.services.access_guard import guarded_write
 
 
 def _name_conflict() -> AppError:
@@ -165,7 +166,7 @@ class ProjectRoleService:
 
     async def update(self, role_id: uuid.UUID, data: ProjectRoleUpdate) -> ProjectRole:
         role = await self._get_role_or_404(role_id)
-        updates = data.model_dump(exclude_unset=True)
+        updates = data.model_dump(exclude_unset=True, exclude={"confirm_weakening"})
 
         # Guard: if setting is_default=True, ensure no other default exists
         if updates.get("is_default") is True and not role.is_default:
@@ -191,13 +192,16 @@ class ProjectRoleService:
                 )
             await self._assert_no_cycle(role.project_id, role.name, updates["inherits_from"])
 
-        for key, value in updates.items():
-            setattr(role, key, value)
+        async def write() -> None:
+            for key, value in updates.items():
+                setattr(role, key, value)
+
         try:
-            await self.session.commit()
+            await guarded_write(self.session, role.project_id, data.confirm_weakening, write)
         except IntegrityError as exc:
             await self.session.rollback()
             raise _name_conflict() from exc
+        await self.session.refresh(role)  # the guard expires the session's objects
         return role
 
     async def delete(self, role_id: uuid.UUID) -> None:

@@ -2764,6 +2764,11 @@
       ],
       "title": "App Url"
      },
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "deletion_mode": {
       "anyOf": [
        {
@@ -12941,6 +12946,11 @@
    "ProjectRoleUpdate": {
     "description": "Request body for PATCH /projects/{id}/roles/{name}.",
     "properties": {
+     "confirm_weakening": {
+      "default": false,
+      "title": "Confirm Weakening",
+      "type": "boolean"
+     },
      "inherits_from": {
       "anyOf": [
        {
@@ -30458,6 +30468,18 @@
        "format": "uuid",
        "title": "Permission Id",
        "type": "string"
+      }
+     },
+     {
+      "description": "Required when removing the slot gives some role more access (else 409).",
+      "in": "query",
+      "name": "confirm_weakening",
+      "required": false,
+      "schema": {
+       "default": false,
+       "description": "Required when removing the slot gives some role more access (else 409).",
+       "title": "Confirm Weakening",
+       "type": "boolean"
       }
      }
     ],

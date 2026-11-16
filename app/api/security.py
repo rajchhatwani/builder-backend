@@ -448,7 +448,10 @@ def org_forbidden(needed: OrgRole, owner_emails: list[str]) -> AppError:
 
 def require_write_scope(principal: Principal) -> None:
     """Account-level writes (create an org, ...) aren't under `/orgs/{slug}`, so `org_context`
-    doesn't see them: an API token needs the `write` scope for them."""
+    doesn't see them: an API token needs the `write` scope for them, and a token pinned to one
+    project never reaches them."""
+    if principal.via == "api_token" and principal.token_project_id is not None:
+        raise forbidden("this API token is limited to one project", "insufficient_scope")
     if principal.via == "api_token" and not authz.scopes_allow(principal.scopes, authz.SCOPE_WRITE):
         raise forbidden(
             f"this API token lacks the '{authz.SCOPE_WRITE}' scope", "insufficient_scope"

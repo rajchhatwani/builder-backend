@@ -5,7 +5,7 @@ All routes are nested under /projects/{project_id}/auth/... per the plan.
 
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
@@ -260,9 +260,13 @@ async def update_permission(
 )
 async def delete_permission(
     permission_id: uuid.UUID,
+    confirm_weakening: bool = Query(
+        default=False,
+        description="Required when removing the slot gives some role more access (else 409).",
+    ),
     session: AsyncSession = Depends(get_session),
 ) -> None:
-    await ProjectPermissionService(session).delete(permission_id)
+    await ProjectPermissionService(session).delete(permission_id, confirm_weakening)
 
 
 # ── Auth Custom Fields ────────────────────────────────────────────────────────

@@ -148,9 +148,12 @@ class AuthConfigUpdate(NoNullPatch):
             "register_rate_limit",
             "reset_rate_limit",
             "security_headers_enabled",
+            "confirm_weakening",
         }
     )
 
+    # Required when switching sign-in off (every rule becomes public) -- else 409 access_weakened.
+    confirm_weakening: bool = False
     enabled: bool | None = None
     token_store: TokenStore | None = None
     access_token_ttl_minutes: int | None = Field(default=None, ge=1, le=1440)
