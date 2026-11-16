@@ -166,7 +166,7 @@ async def last_gate_report(ctx: ToolContext) -> dict[str, Any]:
     """The gate report of the draft AS IT IS NOW: G0-G8 plus the G9 replay, run live over the run's
     worktree (the same pass the finish check uses; pure static analysis, nothing is executed).
     {} = no draft to check."""
-    if not ctx.worktree or ctx.session is None or not Path(ctx.worktree).is_dir():
+    if not ctx.worktree or ctx.session is None or not Path(ctx.worktree).is_dir():  # noqa: ASYNC240 - sub-ms local stat
         return {}
     from app.services.agent import gates as gate_lib
     from app.services.dependency_policy_service import DependencyPolicyService

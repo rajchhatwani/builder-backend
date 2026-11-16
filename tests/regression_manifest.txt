@@ -309,3 +309,4 @@ tests/unit/test_behavior_block_routes_lint.py
 tests/unit/test_validation_seed_lint.py
 tests/unit/test_async_lint_services.py
 tests/unit/test_async_lint_agent.py
+tests/unit/test_async_lint_read_tools.py
