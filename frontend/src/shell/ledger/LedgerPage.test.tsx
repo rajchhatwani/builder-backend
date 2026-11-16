@@ -110,6 +110,43 @@ describe('LedgerPage', () => {
     expect(qa('ledger-history-row')).toHaveLength(1)
   })
 
+  it('shows an error state (not a crash) when a 2xx answer is not the expected JSON', async () => {
+    const html = () => new Response('<html>x</html>', { status: 200 })
+    const { f } = api((_m, u) => (u.includes('/ledger/accounts') || u.includes('/ledger/balances') || u.includes('/ledger/transactions') ? html() : undefined))
+    await load(f)
+    expect(q('ledger-accounts-error')).not.toBeNull()
+    expect(q('ledger-balances-state-error')).not.toBeNull()
+    expect(q('ledger-transactions-state-error')).not.toBeNull()
+  })
+
+  it('pages through all accounts when the total is above one page', async () => {
+    const mk = (i: number) => ({ id: `x${i}`, code: String(i), name: `A${i}`, kind: 'asset', currency: 'USD', exponent: 2 })
+    const { f, calls } = api((_m, u) => {
+      if (!/\/ledger\/accounts\?/.test(u)) return undefined
+      const off = Number(new URL(u).searchParams.get('offset'))
+      return json({ items: Array.from({ length: off === 0 ? 200 : 5 }, (_x, i) => mk(off + i)), total: 205, limit: 200, offset: off })
+    })
+    await load(f)
+    expect(calls.filter((c) => /\/ledger\/accounts\?/.test(c.url)).map((c) => new URL(c.url).searchParams.get('offset'))).toEqual(['0', '200'])
+    expect(qa('ledger-history-btn')).toHaveLength(205)
+  })
+
+  it('offers Show more when an account has more entries than one page', async () => {
+    const ent = (i: number) => ({ id: `h${i}`, transaction_id: 't1', line_no: 1, currency: 'USD', amount_minor: 1, direction: 'debit', posted_at: '2026-01-01', description: 'd', reverses_id: null })
+    const { f, calls } = api((_m, u) => {
+      if (!u.includes('/entries')) return undefined
+      const off = Number(new URL(u).searchParams.get('offset') ?? 0)
+      return json({ items: off === 0 ? [ent(1), ent(2)] : [ent(3)], total: 3 })
+    })
+    await load(f)
+    await click(qa('ledger-history-btn')[0])
+    expect(qa('ledger-history-row')).toHaveLength(2)
+    await click(q('ledger-history-more'))
+    expect(calls.some((c) => c.url.includes('/entries') && c.url.includes('offset=2'))).toBe(true)
+    expect(qa('ledger-history-row')).toHaveLength(3)
+    expect(q('ledger-history-more')).toBeNull()
+  })
+
   it('shows empty and error states', async () => {
     const { f } = api((m, u) => (u.includes('/ledger/transactions') ? json({ items: [], total: 0, limit: 20, offset: 0 }) : u.includes('/ledger/balances') ? json({ code: 'forbidden', message: 'no', details: [] }, 403) : undefined))
     await load(f)

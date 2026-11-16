@@ -70,11 +70,15 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
   const rid = useId()
   const ackId = useId()
 
+  const entityRef = useRef(entity)
+  entityRef.current = entity
   const reload = useCallback(async () => {
     const mine = ++reqId.current
+    const forEntity = entity
     try {
       const res = await api.listCustomFields(projectId, entity)
-      if (mine === reqId.current) setItems(res.items)
+      // an action started on another entity may finish after the switch: its list must not show under this heading
+      if (mine === reqId.current && forEntity === entityRef.current) setItems(res.items)
     } catch (err) {
       if (mine === reqId.current) setError(msg(err, 'Could not list the custom fields'))
     }
@@ -160,7 +164,7 @@ function Editor({ projectId, entities }: { projectId: string; entities: string[]
     <div className="card">
       <p>
         <label htmlFor={eid}>Entity</label>{' '}
-        <select id={eid} data-testid="cf-entity" value={entity} onChange={(e) => setEntity(e.target.value)}>
+        <select id={eid} data-testid="cf-entity" value={entity} disabled={busy} onChange={(e) => setEntity(e.target.value)}>
           {entities.map((e) => (
             <option key={e} value={e}>
               {e}

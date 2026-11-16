@@ -1,12 +1,14 @@
 import { useState } from 'react'
+import { api } from '../../api/client'
 import { link } from '../../components/Sidebar'
-import { countLine, issueSection, nextStepView, readAuthDismissed, routeFor, writeAuthDismissed } from './homeLogic'
+import { countLine, issueSection, nextStepView, routeFor } from './homeLogic'
 import { useProjectStatus } from './useProjectStatus'
 
 /** Home of the new shell: readiness board powered by GET /projects/{id}/status. */
 export function HomePage({ projectId }: { projectId: string }) {
   const q = useProjectStatus(projectId)
-  const [dismissed, setDismissed] = useState(() => readAuthDismissed(projectId))
+  const [dismissing, setDismissing] = useState(false)
+  const [dismissError, setDismissError] = useState<string | null>(null)
   const status = q.data
 
   return (
@@ -44,7 +46,7 @@ export function HomePage({ projectId }: { projectId: string }) {
           )}
 
           {(() => {
-            const step = nextStepView(status.next_step, dismissed)
+            const step = nextStepView(status.next_step)
             return (
               <section className="card home-next" data-testid="next-step" data-step={step.id} aria-labelledby="next-step-title">
                 <p className="muted small-text">Next step</p>
@@ -57,15 +59,22 @@ export function HomePage({ projectId }: { projectId: string }) {
                   {step.dismissible && (
                     <button
                       className="outline"
+                      disabled={dismissing}
                       onClick={() => {
-                        writeAuthDismissed(projectId, true)
-                        setDismissed(true)
+                        setDismissing(true)
+                        setDismissError(null)
+                        api
+                          .dismissStep(projectId, step.id)
+                          .then(() => q.refetch())
+                          .catch((e: unknown) => setDismissError(e instanceof Error ? e.message : 'Could not skip this step.'))
+                          .finally(() => setDismissing(false))
                       }}
                     >
                       Not now
                     </button>
                   )}
                 </div>
+                {dismissError && <p role="alert" className="field-error">{dismissError}</p>}
               </section>
             )
           })()}

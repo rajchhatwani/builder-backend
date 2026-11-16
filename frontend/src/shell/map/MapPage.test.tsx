@@ -59,6 +59,12 @@ describe('MapPage', () => {
     expect(f).not.toHaveBeenCalled()
   })
 
+  it('shows an error (not a crash) when a 2xx answer is not the expected JSON', async () => {
+    const { f } = api((u) => (u.includes('/geo/geofences') ? new Response('<html>x</html>', { status: 200 }) : undefined))
+    await load(f)
+    expect(q('map-fences-error')).not.toBeNull()
+  })
+
   it('asks for a token, then loads all four feeds with a Bearer header and the box query', async () => {
     const { f, calls } = api()
     await mount(el(f))

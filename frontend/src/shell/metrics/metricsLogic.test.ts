@@ -46,6 +46,10 @@ describe('form <-> body', () => {
 describe('validation hints', () => {
   const ok = { ...emptyMetricForm('Invoice'), key: 'n', label: 'N' }
   it('accepts a plain count', () => expect(validateMetricForm(ok, ENTITIES, false, [])).toEqual([]))
+  it('flags an operator the field type does not support', () => {
+    const f = { ...ok, filters: [{ field: 'invoice_no', op: 'gt', value: 'x' }] }
+    expect(validateMetricForm(f, ENTITIES, false, []).map((p) => p.field)).toEqual(['filter-0'])
+  })
   it('flags key, label, entity', () => {
     expect(validateMetricForm({ ...ok, key: 'Bad Key' }, ENTITIES, false, []).map((p) => p.field)).toEqual(['key'])
     expect(validateMetricForm({ ...ok, label: ' ' }, ENTITIES, false, []).map((p) => p.field)).toEqual(['label'])

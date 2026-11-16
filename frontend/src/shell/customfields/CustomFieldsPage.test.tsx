@@ -80,6 +80,20 @@ describe('CustomFieldsPage', () => {
     expect(q('[data-testid=cf-error]')?.textContent).toContain('nope')
   })
 
+  it('keeps the entity fixed while an action is in flight', async () => {
+    m.spec.mockResolvedValue({ entities: [{ name: 'Contact', fields: [] }, { name: 'Deal', fields: [] }] })
+    m.list.mockResolvedValue(page([]))
+    let done: (v: unknown) => void = () => {}
+    m.define.mockImplementation(() => new Promise((res) => { done = res }))
+    await mount()
+    await type(q('input:not([type=checkbox])') as HTMLInputElement, 'score')
+    await click(/Add field/)
+    expect((q('[data-testid=cf-entity]') as HTMLSelectElement).disabled).toBe(true)
+    await act(async () => { done(F) })
+    await flush()
+    expect((q('[data-testid=cf-entity]') as HTMLSelectElement).disabled).toBe(false)
+  })
+
   it('shows an empty state without entities', async () => {
     m.spec.mockResolvedValue({ entities: [] })
     await mount()

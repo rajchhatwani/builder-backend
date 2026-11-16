@@ -82,6 +82,24 @@ export function MachinesPage({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {load.status === 'ready' && load.issues.length > 0 && (
+        <div className="card" style={{ marginBlockEnd: 'var(--space-4)' }}>
+          <div role="alert" data-variant="danger" style={{ marginBlockEnd: 'var(--space-3)' }}>
+            {load.issues.length} {load.issues.length === 1 ? 'problem' : 'problems'} in the behaviour sections.
+          </div>
+          <ul className="issue-list">
+            {load.issues.map((i, n) => (
+              <li key={n}>
+                <span>
+                  {i.message}
+                  <small className="muted"> · {i.path}</small>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {load.status === 'ready' && load.machines.length === 0 && (
         <div className="card empty-hero" data-testid="machines-empty">
           <h2>No state machines yet</h2>
@@ -94,23 +112,6 @@ export function MachinesPage({ projectId }: { projectId: string }) {
 
       {load.status === 'ready' && machine && (
         <>
-          {load.issues.length > 0 && (
-            <div className="card" style={{ marginBlockEnd: 'var(--space-4)' }}>
-              <div role="alert" data-variant="danger" style={{ marginBlockEnd: 'var(--space-3)' }}>
-                {load.issues.length} {load.issues.length === 1 ? 'problem' : 'problems'} in the behaviour sections.
-              </div>
-              <ul className="issue-list">
-                {load.issues.map((i, n) => (
-                  <li key={n}>
-                    <span>
-                      {i.message}
-                      <small className="muted"> · {i.path}</small>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
           <div className="machines-grid">
             <nav aria-label="State machines" className="card machines-list">
               <ul>

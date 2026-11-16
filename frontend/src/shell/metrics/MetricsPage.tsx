@@ -205,7 +205,20 @@ function MetricFormView({ projectId, entities, takenKeys, editingKey, initial, o
   const problems = validateMetricForm(form, entities, editingKey !== null, takenKeys)
   const hint = (field: string) => (showHints ? problems.filter((p) => p.field === field).map((p) => p.message).join(' ') : '')
   const set = (patch: Partial<MetricForm>) => setForm((f) => ({ ...f, ...patch }))
-  const setFilter = (i: number, patch: Partial<MetricForm['filters'][number]>) => setForm((f) => ({ ...f, filters: f.filters.map((x, j) => (j === i ? { ...x, ...patch } : x)) }))
+  const setFilter = (i: number, patch: Partial<MetricForm['filters'][number]>) =>
+    setForm((f) => ({
+      ...f,
+      filters: f.filters.map((x, j) => {
+        if (j !== i) return x
+        const next = { ...x, ...patch }
+        // a new field may not support the old operator (gt on a string): fall back to "is"
+        if (patch.field !== undefined && patch.op === undefined) {
+          const t = entity?.fields.find((y) => y.name === next.field)?.type ?? 'string'
+          if (!opsFor(t).some((o) => o.id === next.op)) next.op = 'eq'
+        }
+        return next
+      }),
+    }))
   const fieldChoices = fieldsForAgg(entity, form.agg)
 
   const save = async () => {
@@ -353,7 +366,7 @@ function ReportsTab({ projectId, metrics, reports, onChanged }: { projectId: str
           ))}
         </ul>
       )}
-      {open && <ReportDetail projectId={projectId} report={open} metrics={metrics} />}
+      {open && <ReportDetail key={`${open.id}:${open.updated_at}`} projectId={projectId} report={open} metrics={metrics} />}
     </>
   )
 }
@@ -441,20 +454,26 @@ function ReportDetail({ projectId, report, metrics }: { projectId: string; repor
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  const seq = useRef(0)
   const loadAll = useCallback(async () => {
+    const mine = ++seq.current
+    const fresh = () => seq.current === mine
     setLive({ status: 'loading' })
     setRunsError(null)
     await Promise.all([
       api.getReportValue(projectId, report.id)
-        .then((value) => setLive({ status: 'ready', value }))
-        .catch((err: unknown) => setLive({ status: 'error', message: errorMessage(err, 'Could not compute this report') })),
+        .then((value) => { if (fresh()) setLive({ status: 'ready', value }) })
+        .catch((err: unknown) => { if (fresh()) setLive({ status: 'error', message: errorMessage(err, 'Could not compute this report') }) }),
       api.listReportRuns(projectId, report.id)
-        .then((p) => setRuns(p.items))
-        .catch((err: unknown) => setRunsError(errorMessage(err, 'Could not load the run history'))),
+        .then((p) => { if (fresh()) setRuns(p.items) })
+        .catch((err: unknown) => { if (fresh()) setRunsError(errorMessage(err, 'Could not load the run history')) }),
     ])
   }, [projectId, report.id])
 
-  useEffect(() => { void loadAll() }, [loadAll])
+  useEffect(() => {
+    void loadAll()
+    return () => { seq.current++ }
+  }, [loadAll])
 
   const runNow = async () => {
     setBusy(true)

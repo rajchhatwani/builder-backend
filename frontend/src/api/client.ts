@@ -357,6 +357,11 @@ export const api = {
   getStateMachines: (projectId: string) =>
     request<StateMachinesRead>(`/projects/${projectId}/behavior/state-machines`),
   getProjectStatus: (projectId: string) => request<ProjectStatus>(`/projects/${projectId}/status`),
+  /** Skip an optional next step (stored per project on the server); returns the new board. */
+  dismissStep: (projectId: string, step: string) =>
+    request<ProjectStatus>(`/projects/${projectId}/status/dismiss`, { method: 'POST', body: json({ step }) }),
+  undoDismissStep: (projectId: string, step: string) =>
+    request<ProjectStatus>(`/projects/${projectId}/status/dismiss/${encodeURIComponent(step)}`, { method: 'DELETE' }),
   /** Read-only live check of a guard expression; `signal` cancels a stale request. */
   checkExpression: (projectId: string, entity: string, expression: string, signal?: AbortSignal) =>
     request<ExpressionCheckRead>(`/projects/${projectId}/behavior/expressions/check`, {

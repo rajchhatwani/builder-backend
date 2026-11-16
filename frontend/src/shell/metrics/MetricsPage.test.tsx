@@ -112,6 +112,23 @@ describe('MetricsPage metrics tab', () => {
     })
   })
 
+  it('resets the operator to "is" when the filter field changes to a type without it', async () => {
+    await mount()
+    await click(/New metric/)
+    await click(/Add filter/)
+    await choose(q('[aria-label="Filter 1 field"]') as HTMLSelectElement, 'amount')
+    await choose(q('[aria-label="Filter 1 operator"]') as HTMLSelectElement, 'gt')
+    await choose(q('[aria-label="Filter 1 field"]') as HTMLSelectElement, 'invoice_no')
+    expect((q('[aria-label="Filter 1 operator"]') as HTMLSelectElement).value).toBe('eq')
+    m.createMetric.mockResolvedValue(COUNT)
+    await choose(q('#m-agg') as HTMLSelectElement, 'count')
+    await type(q('#m-key') as HTMLInputElement, 'n2')
+    await type(q('#m-label') as HTMLInputElement, 'N2')
+    await type(q('[aria-label="Filter 1 value"]') as HTMLInputElement, 'A')
+    await click(/Create metric/)
+    expect(m.createMetric.mock.calls[0][1].filter).toEqual([{ field: 'invoice_no', op: 'eq', value: 'A' }])
+  })
+
   it('blocks a bad form with hints and sends nothing', async () => {
     await mount()
     await click(/New metric/)
@@ -173,6 +190,30 @@ describe('MetricsPage reports tab', () => {
     const second = q('[data-testid=report-value-total]')!.textContent
     expect(first).toBe('12,345,678,901,234,567,890.123456789 USD')
     expect(second).toBe(first)
+  })
+
+  it('ignores a late answer for the previously opened report', async () => {
+    let lateA: (v: unknown) => void = () => {}
+    m.getReportValue.mockImplementation((_p: string, id: string) =>
+      id === 'r1' ? new Promise((res) => { lateA = res }) : Promise.resolve({ report_id: id, computed_at: '', values: { total: { value: '5' } } }))
+    await openReports()
+    await click(/Open report Weekly/)
+    await click(/Open report Board pack/)
+    await act(async () => { lateA({ report_id: 'r1', computed_at: '', values: { total: { value: '999' }, n: { value: 7 } } }) })
+    await flush()
+    expect(q('[data-testid=report-value-total]')!.textContent).toBe('5 USD')
+  })
+
+  it('reloads the open report values after it is edited to add a metric', async () => {
+    const edited = { ...R2, metric_keys: ['total', 'n'], updated_at: '2026-11-10T00:00:00Z' }
+    m.updateReport.mockImplementation(async () => { m.listReports.mockResolvedValue({ items: [R1, edited], total: 2 }); return edited })
+    await openReports()
+    await click(/Open report Board pack/)
+    m.getReportValue.mockClear()
+    await click(/Edit report Board pack/)
+    await check(host.querySelectorAll('fieldset input[type=checkbox]')[1] as HTMLInputElement)
+    await click(/Save report/)
+    expect(m.getReportValue).toHaveBeenCalled()
   })
 
   it('creates a report from a preset schedule and picked metrics', async () => {

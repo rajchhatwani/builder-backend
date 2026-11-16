@@ -10,6 +10,12 @@ const PAGE = 20
 type Page<T> = { items: T[]; total: number }
 type Load<T> = { s: 'idle' } | { s: 'loading' } | { s: 'error'; m: string } | { s: 'ok'; v: T }
 
+const isPage = (j: unknown): j is Page<unknown> => !!j && typeof j === 'object' && Array.isArray((j as { items?: unknown }).items)
+const isBalances = (j: unknown): boolean => isPage(j) && Array.isArray((j as { totals?: unknown }).totals)
+const UNEXPECTED = 'The ledger API answered with something unexpected. Check that this is the generated project API.'
+const ACCOUNT_PAGE = 200
+const HISTORY_PAGE = 50
+
 const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 
 /** Ledger explorer for a generated project's money ledger (packs.money.ledger). Talks to the preview/runtime origin with a
@@ -47,12 +53,13 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
 
   useEffect(() => { setActive(''); setToken(''); setAccounts({ s: 'idle' }); setBalances({ s: 'idle' }); setTxs({ s: 'idle' }); setHist(null); setPage(0) }, [projectId])
 
-  const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean) => {
+  const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean, valid: (j: unknown) => boolean = isPage) => {
     set({ s: 'loading' })
     try {
       const r = await call('GET', path)
       if (off()) return
-      set(r.status >= 200 && r.status < 300 ? { s: 'ok', v: r.json as T } : { s: 'error', m: ledgerErrorMessage(r.status, r.json) })
+      const good = r.status >= 200 && r.status < 300
+      set(good ? (valid(r.json) ? { s: 'ok', v: r.json as T } : { s: 'error', m: UNEXPECTED }) : { s: 'error', m: ledgerErrorMessage(r.status, r.json) })
     } catch (e) { if (!off()) set({ s: 'error', m: msg(e, 'Could not reach the ledger API') }) }
   }, [call])
 
@@ -60,10 +67,28 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
     if (!active) return
     let dead = false
     const off = () => dead
-    void get<Page<Account>>('/ledger/accounts?limit=200', (l) => setAccounts((prev) => (l.s === 'ok' ? { s: 'ok', v: l.v.items } : l.s === 'loading' && prev.s === 'ok' ? prev : l)), off)
-    void get<Balances>('/ledger/balances', setBalances, off)
+    const off0 = off
+    const setAcc = (l: Load<Account[]>) => setAccounts((prev) => (l.s === 'loading' && prev.s === 'ok' ? prev : l))
+    void (async () => {
+      setAcc({ s: 'loading' })
+      try {
+        const all: Account[] = []
+        for (let off = 0; off < 100 * ACCOUNT_PAGE; off += ACCOUNT_PAGE) {
+          const r = await call('GET', `/ledger/accounts?limit=${ACCOUNT_PAGE}&offset=${off}`)
+          if (off0()) return
+          if (r.status < 200 || r.status >= 300) { setAcc({ s: 'error', m: ledgerErrorMessage(r.status, r.json) }); return }
+          if (!isPage(r.json)) { setAcc({ s: 'error', m: UNEXPECTED }); return }
+          const items = r.json.items as Account[]
+          all.push(...items)
+          const total = typeof r.json.total === 'number' ? r.json.total : all.length
+          if (items.length === 0 || all.length >= total) break
+        }
+        setAcc({ s: 'ok', v: all })
+      } catch (e) { if (!off0()) setAcc({ s: 'error', m: msg(e, 'Could not reach the ledger API') }) }
+    })()
+    void get<Balances>('/ledger/balances', setBalances, off, isBalances)
     return () => { dead = true }
-  }, [active, refresh, get])
+  }, [active, refresh, get, call])
 
   useEffect(() => {
     if (!active) return
@@ -77,8 +102,24 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   async function showHistory(a: Account) {
     setHist({ account: a, load: { s: 'loading' } })
     let dead = false
-    await get<Page<AccountEntry>>(`/ledger/accounts/${encodeURIComponent(a.id)}/entries?limit=50`, (l) => { if (!dead) setHist((h) => (h && h.account.id === a.id ? { account: a, load: l } : h)) }, () => dead)
+    await get<Page<AccountEntry>>(`/ledger/accounts/${encodeURIComponent(a.id)}/entries?limit=${HISTORY_PAGE}`, (l) => { if (!dead) setHist((h) => (h && h.account.id === a.id ? { account: a, load: l } : h)) }, () => dead)
     dead = true
+  }
+
+  async function moreHistory() {
+    const h = hist
+    if (!h || h.load.s !== 'ok') return
+    const have = h.load.v
+    try {
+      const r = await call('GET', `/ledger/accounts/${encodeURIComponent(h.account.id)}/entries?limit=${HISTORY_PAGE}&offset=${have.items.length}`)
+      const good = r.status >= 200 && r.status < 300 && isPage(r.json)
+      setHist((cur) => {
+        if (!cur || cur.account.id !== h.account.id || cur.load.s !== 'ok') return cur
+        if (!good) return { account: cur.account, load: { s: 'error', m: r.status >= 200 && r.status < 300 ? UNEXPECTED : ledgerErrorMessage(r.status, r.json) } }
+        const more = r.json as Page<AccountEntry>
+        return { account: cur.account, load: { s: 'ok', v: { items: [...cur.load.v.items, ...more.items], total: more.total ?? cur.load.v.total } } }
+      })
+    } catch (e) { setHist((cur) => (cur && cur.account.id === h.account.id ? { account: cur.account, load: { s: 'error', m: msg(e, 'Could not reach the ledger API') } } : cur)) }
   }
 
   async function reverse(t: Transaction) {
@@ -152,6 +193,12 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
                         </tr>
                       ))}</tbody>
                     </table>
+                    {v.items.length < v.total && (
+                      <p data-testid="ledger-history-more-wrap">
+                        Showing {v.items.length} of {v.total} entries.{' '}
+                        <button type="button" className="ghost small" data-testid="ledger-history-more" onClick={() => void moreHistory()}>Show more</button>
+                      </p>
+                    )}
                   </div>
                 )}
               </State>

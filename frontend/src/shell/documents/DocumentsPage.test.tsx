@@ -80,6 +80,19 @@ describe('DocumentsPage', () => {
     expect(calls.at(-1)!.url).toContain('offset=20')
     expect(q('documents-range')!.textContent).toBe('21 to 40 of 45')
   })
+  it('steps back to the last non-empty page when the current last page emptied', async () => {
+    let shrunk = false
+    const { f, calls } = api((m, url) => {
+      if (m === 'GET' && /\/ai\/documents\?/.test(url) && url.includes('offset=20') && shrunk) return json({ items: [], total: 20, limit: 20, offset: 20 })
+      return undefined
+    }, [DOC(), D2], 45)
+    await load(f)
+    shrunk = true
+    await click(q('documents-next'))
+    expect(calls.at(-1)!.url).toContain('offset=0')
+    expect(q('document-row-d1')).not.toBeNull()
+    expect(q('documents-prev')).not.toBeNull()
+  })
   it('roving focus: one tab stop, arrows move it', async () => {
     await load(api().f)
     const r1 = q('document-row-d1')!, r2 = q('document-row-d2')!

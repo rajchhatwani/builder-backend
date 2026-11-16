@@ -134,6 +134,7 @@ export function validateMetricForm(form: MetricForm, entities: SpecEntity[], edi
   form.filters.forEach((f, i) => {
     if (!f.field) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: choose a field.` })
     else if (f.value.trim() === '') out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: enter a value.` })
+    else if (!opsFor(entity.fields.find((x) => x.name === f.field)?.type ?? '').some((o) => o.id === f.op)) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: this operator does not work with ${f.field}.` })
     else if (f.op !== 'in') {
       const t = entity.fields.find((x) => x.name === f.field)?.type ?? ''
       if (NUMERIC.has(t) && !/^[+-]?\d+(\.\d+)?$/.test(f.value.trim())) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: ${f.field} is a number.` })

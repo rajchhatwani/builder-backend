@@ -1587,6 +1587,7 @@ export interface NextStep {
   title: string
   reason: string
   section: string
+  dismissed?: boolean
 }
 
 export interface ProjectStatus {
@@ -1595,6 +1596,8 @@ export interface ProjectStatus {
   counts: Record<string, number>
   sections: StatusSection[]
   next_step: NextStep
+  /** Optional steps the project skipped (POST /status/dismiss); never next_step. */
+  dismissed_steps?: NextStep[]
 }
 
 // ── Build > Rules expression checker (F1-3; shapes in app/schemas/behavior.py) ──

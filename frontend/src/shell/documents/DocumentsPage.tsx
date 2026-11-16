@@ -79,6 +79,11 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
   const items = list.s === 'ok' ? list.v.items : []
   const total = list.s === 'ok' ? list.v.total ?? items.length : 0
   const pg = pageInfo(total, LIMIT, offset)
+  // The last page emptied (its only item was approved or rejected): step back instead of stranding the user without a pager.
+  const strandedOffset = list.s === 'ok' && items.length === 0 && offset > 0 ? Math.max(0, (Math.ceil(total / LIMIT) - 1) * LIMIT) : null
+  useEffect(() => {
+    if (strandedOffset !== null && strandedOffset < offset) { setOffset(strandedOffset); setSelId(null); setRowFocus(0) }
+  }, [strandedOffset, offset])
   const doc = detail.s === 'ok' ? detail.v : null
   const reviewable = !!doc && isReviewable(String(doc.status)) && canReview
 

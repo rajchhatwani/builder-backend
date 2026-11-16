@@ -63,12 +63,9 @@ const TITLES: Record<string, { title: string; action: string }> = {
   generate: { title: 'Generate your backend', action: 'Generate' },
 }
 
-/** Exactly one step. consider_auth has no backend skip state: when the user said "Not now", the next
- *  step is Generate (the backend only suggests sign-in once nothing blocks generating). */
-export function nextStepView(step: NextStep, authDismissed: boolean): NextStepView {
-  if (step.id === 'consider_auth' && authDismissed) {
-    return { id: 'generate', ...TITLES.generate, reason: 'You can add sign-in later. Download a complete API with tests and Docker setup.', section: 'generate', dismissible: false }
-  }
+/** Exactly one step. "Not now" is stored by the backend (POST /status/dismiss), which then answers
+ *  Generate as the next step, so the view needs no local skip state. */
+export function nextStepView(step: NextStep): NextStepView {
   const t = TITLES[step.id] ?? { title: step.title, action: 'Open' }
   return { id: step.id, title: t.title, action: t.action, reason: step.reason, section: routeFor(step.section), dismissible: step.id === 'consider_auth' }
 }
@@ -90,24 +87,4 @@ export function countLine(counts: Record<string, number>, key: string): string |
   if (!row || counts[key] === undefined) return null
   const n = counts[key]
   return `${n} ${n === 1 ? row[1] : row[2]}`
-}
-
-const skipKey = (projectId: string) => `home.skipAuth.${projectId}`
-
-export function readAuthDismissed(projectId: string, storage?: Pick<Storage, 'getItem'>): boolean {
-  try {
-    return (storage ?? window.localStorage).getItem(skipKey(projectId)) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function writeAuthDismissed(projectId: string, value: boolean, storage?: Pick<Storage, 'setItem' | 'removeItem'>): void {
-  try {
-    const s = storage ?? window.localStorage
-    if (value) s.setItem(skipKey(projectId), '1')
-    else s.removeItem(skipKey(projectId))
-  } catch {
-    /* private window or blocked storage: the dismissal just lasts until reload */
-  }
 }

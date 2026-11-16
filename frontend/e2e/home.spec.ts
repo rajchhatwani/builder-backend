@@ -99,13 +99,12 @@ test('home: empty project asks for an entity, sign-in can be set aside with "Not
   await expect(next).toHaveAttribute('data-step', 'generate')
   await expect(next.getByRole('link', { name: 'Generate' })).toHaveAttribute('href', `#/p/${id}/generate`)
   await expect(page.getByTestId('next-step')).toHaveCount(1)
-  expect(await page.evaluate((pid) => localStorage.getItem(`home.skipAuth.${pid}`), id)).toBe('1')
 
-  // survives a reload; another project is not affected
+  // stored by the backend (no localStorage key)
+  expect(await page.evaluate((pid) => localStorage.getItem(`home.skipAuth.${pid}`), id)).toBeNull()
   await page.reload()
   await expect(page.getByTestId('next-step')).toHaveAttribute('data-step', 'generate')
-  // the dismissal is keyed by project id: the same browser, a project id never dismissed, still gets the suggestion
-  expect(await page.evaluate(() => localStorage.getItem('home.skipAuth.00000000-0000-4000-8000-000000000000'))).toBeNull()
+  expect((await (await api.get(`/projects/${id}/status`)).json()).dismissed_steps.map((x: { id: string }) => x.id)).toEqual(['consider_auth'])
 })
 
 test('home: loading error shows a message and Try again recovers', async ({ page, request }) => {

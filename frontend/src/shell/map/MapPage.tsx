@@ -7,6 +7,7 @@ import {
   type Assignment, type Bounds, type Geofence, type Place, type Position,
 } from './mapLogic'
 
+const isPage = (j: unknown): boolean => !!j && typeof j === 'object' && Array.isArray((j as { items?: unknown }).items)
 type Page<T> = { items: T[]; total?: number; truncated?: boolean }
 type Load<T> = { s: 'idle' } | { s: 'loading' } | { s: 'off' } | { s: 'error'; m: string } | { s: 'ok'; v: T }
 
@@ -50,7 +51,10 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
     try {
       const r = await call(path)
       if (off()) return
-      if (r.status >= 200 && r.status < 300) set({ s: 'ok', v: r.json as T })
+      if (r.status >= 200 && r.status < 300) {
+        if (isPage(r.json)) set({ s: 'ok', v: r.json as T })
+        else set({ s: 'error', m: 'The project API answered with something unexpected. Check that this is the generated project API.' })
+      }
       else if (r.status === 404) set({ s: 'off' }) // block not declared in this project's spec
       else set({ s: 'error', m: geoErrorMessage(r.status, r.json) })
     } catch (e) { if (!off()) set({ s: 'error', m: msg(e, 'Could not reach the project API') }) }
