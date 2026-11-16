@@ -340,3 +340,4 @@ tests/api/test_access_confirm_paths.py
 tests/unit/test_audit_b1_003_nul_json.py
 tests/unit/test_audit_b1_007_deploy.py
 tests/unit/test_audit_b1_008_deploy_gate_doc.py
+tests/unit/test_audit_b1_009.py

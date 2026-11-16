@@ -3,6 +3,8 @@ totals and limits."""
 # ruff: noqa: F811
 
 import io
+import json
+import re
 from collections.abc import AsyncIterator
 
 import pytest
@@ -12,6 +14,7 @@ from pypdf import PdfReader
 from app.auth.service import effective_roles
 from app.documents.data import TEMPLATES
 from app.main import app
+from tests import _factories
 from tests._auth_support import ALL_ROLES, authed_client, outbox, sign_in  # noqa: F401
 
 UNBOUND = [t for t in TEMPLATES.values() if t["entity"] is None]
@@ -27,6 +30,12 @@ async def http_client(outbox) -> AsyncIterator[AsyncClient]:  # noqa: ANN001, F8
 
 def text_of(pdf: bytes) -> str:
     return "\n".join(page.extract_text() for page in PdfReader(io.BytesIO(pdf)).pages)
+
+
+def template_prints_data(template: dict) -> bool:  # noqa: ANN001
+    """True when the template reads one of the keys the markup test sends."""
+    body = json.dumps(template["template"])
+    return any("{" "{" + key in body for key in ("number", "title", "name", "recipient", "subject", "event"))
 
 
 def allowed_for(template: dict) -> list[str]:  # noqa: ANN001
@@ -93,7 +102,9 @@ async def test_data_can_never_inject_markup(
     assert response.status_code == 200, response.text
     assert response.content.startswith(b"%PDF")
     text = text_of(response.content)
-    assert "<b>" not in text.replace("<b>bold</b>", "")  # shown as text when used, never interpreted
+    if not template_prints_data(template):
+        pytest.skip("this template prints none of the keys the test sends")
+    assert "<b>bold</b>" in text  # shown literally, never interpreted (an interpreted <b> would vanish)
 
 
 @pytest.mark.parametrize("template", COMPUTED, ids=lambda t: t["id"])
@@ -142,3 +153,32 @@ async def test_ticket_summary_is_rendered_through_the_Ticket_access_rules(
         headers = await sign_in(http_client, "doc@example.com", roles=allowed_for(template)[:1], n=1)
         # a record that does not exist (or is outside the caller's rows) is a 404, never a PDF
         assert (await http_client.post(url, json={}, headers=headers)).status_code == 404
+
+
+async def test_ticket_summary_prints_the_stored_record_and_extra_cannot_override_it(
+    authed_client: AsyncClient,
+) -> None:
+    template = TEMPLATES["ticket_summary"]
+    record = await _factories.make_tickets(authed_client)
+    fields = re.findall(r"{" "{\\s*row\\.(\\w+)", json.dumps(template["template"]))
+    shown = [
+        (f, record[f])
+        for f in fields
+        if isinstance(record.get(f), str) and 3 <= len(record[f]) <= 30 and " " not in record[f]
+    ]
+    if not shown:
+        pytest.skip("no short text field of the record is printed by this template")
+    url = f"/documents/{template['id']}/records/{record['id']}"
+    response = await authed_client.post(url, json={})
+    assert response.status_code == 200, response.text
+    text = text_of(response.content)
+    for field, value in shown:
+        assert value in text, field  # the stored row is what gets printed
+    hostile = {f: "SHADOWED" for f, _ in shown} | {"row": {f: "SHADOWED" for f, _ in shown}}
+    response = await authed_client.post(url, json={"extra": hostile})
+    assert response.status_code == 200, response.text
+    text = text_of(response.content)
+    for _field, value in shown:
+        assert value in text  # extra never shadows the row
+    if "extra." not in json.dumps(template["template"]):
+        assert "SHADOWED" not in text  # and the template does not print it at all

@@ -8,6 +8,7 @@ import sqlalchemy as sa
 from pydantic import BaseModel
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from app.events import config
 from app.events.models import DELIVERED, FAILED, PENDING, HandledEvent, OutboxEvent
@@ -98,7 +99,8 @@ async def purge_delivered(
     session: AsyncSession, retention_days: int | None = None, now: _dt.datetime | None = None
 ) -> int:
     """Delete delivered events older than the retention, and consumer markers older than TWICE the
-    retention that no pending / failed event still needs. Failed events stay.
+    retention that no pending / failed event still needs. Failed events stay, and so does the
+    newest event of each record (its seq is the high-water mark for the record's next event).
 
     A marker is the idempotency record of a delivery that may be retried (a parked event can be
     requeued long after it first ran), so it outlives the events it guards: it is dropped only when it
@@ -106,9 +108,22 @@ async def purge_delivered(
     event is delivered or already gone. Returns the number of events removed."""
     days = retention_days if retention_days is not None else config.retention_days()
     cutoff = (now or utcnow()) - _dt.timedelta(days=days)
+    # The newest event of each record stays (until the record is deleted): it is the high-water mark
+    # `_next_seq` counts from, so a record edited after all its events were purged does not restart at 1.
+    newest = aliased(OutboxEvent)
+    is_mark = sa.and_(
+        OutboxEvent.seq
+        == sa.select(sa.func.max(newest.seq))
+        .where(
+            newest.aggregate_type == OutboxEvent.aggregate_type,
+            newest.aggregate_id == OutboxEvent.aggregate_id,
+        )
+        .scalar_subquery(),
+        ~OutboxEvent.event_type.like("%.deleted"),
+    )
     removed = await session.execute(
         sa.delete(OutboxEvent).where(
-            OutboxEvent.status == DELIVERED, OutboxEvent.delivered_at < cutoff
+            OutboxEvent.status == DELIVERED, OutboxEvent.delivered_at < cutoff, ~is_mark
         )
     )
     marker_cutoff = (now or utcnow()) - _dt.timedelta(days=2 * days)

@@ -6,9 +6,11 @@ commit. An error here rolls the write back (fail closed). Only the fields listed
 definitions.ENTITIES are ever read, so nothing else can reach an event."""
 
 import copy
+from contextvars import ContextVar
 from typing import Any
 
 import sqlalchemy as sa
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import async_object_session
 
 from app.core.errors import NotFoundError
@@ -17,6 +19,16 @@ from app.events import definitions, outbox
 from app.events.types import EVENT_TYPES
 
 _BEFORE = "_events_before"
+# While an entity hook flushes, the state-log listener parks its `.transitioned` events here so the
+# hook can write `.created` / `.updated` FIRST (seq order: the entity event, then the automatic moves).
+_DEFERRED: ContextVar[list[tuple[str, str, Any, BaseModel, Any]] | None] = ContextVar(
+    "_events_deferred", default=None
+)
+
+
+async def _write_deferred(session: Any, deferred: list[tuple[str, str, Any, BaseModel, Any]]) -> None:
+    for name, entity, record_id, payload, tenant in deferred:
+        await outbox.add_event(session, name, entity, record_id, payload, tenant)
 
 
 def _snapshot(item: Any, names: tuple[str, ...]) -> dict[str, Any]:
@@ -74,23 +86,30 @@ def hooks_for(entity: str) -> dict[str, tuple[Hook, ...]]:
             await outbox.add_event(session, f"{prefix}.deleted", entity, item.id, payload, tenant)
             return
         # Settle first (automatic transitions are applied in memory), then read the stored values.
-        await session.flush()
+        # The transition events the flush produces wait until the entity's own event is written.
+        deferred: list[tuple[str, str, Any, BaseModel, Any]] = []
+        token = _DEFERRED.set(deferred)
+        try:
+            await session.flush()
+        finally:
+            _DEFERRED.reset(token)
         await session.refresh(item, attribute_names=list(names))
         data = _snapshot(item, names)
         tenant = _tenant(entity, item)
         if ctx.op == "create":
             payload = EVENT_TYPES[f"{prefix}.created"](data=data)
             await outbox.add_event(session, f"{prefix}.created", entity, item.id, payload, tenant)
+            await _write_deferred(session, deferred)
             return
         before_state = getattr(ctx, _BEFORE, None)
         if before_state is None:
             raise RuntimeError("cannot write the event: no snapshot of the record before the change")
         old = before_state[0]
         changed = [n for n in names if n != "updated_at" and old[n] != data[n]]
-        if not changed:
-            return  # an update that changes nothing announces nothing
-        payload = EVENT_TYPES[f"{prefix}.updated"](data=data, changed=changed)
-        await outbox.add_event(session, f"{prefix}.updated", entity, item.id, payload, tenant)
+        if changed:  # an update that changes nothing announces nothing
+            payload = EVENT_TYPES[f"{prefix}.updated"](data=data, changed=changed)
+            await outbox.add_event(session, f"{prefix}.updated", entity, item.id, payload, tenant)
+        await _write_deferred(session, deferred)
 
     return {"before_save": (remember,), "after_save": (record,)}
 

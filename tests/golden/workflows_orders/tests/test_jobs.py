@@ -3,6 +3,7 @@ re-delivered, schedules fire once. They run against the real database; time is i
 
 import asyncio
 import datetime as dt
+import types
 import uuid
 from collections.abc import Iterator
 
@@ -147,10 +148,23 @@ async def test_a_job_can_wait_for_its_run_at() -> None:
 
 async def test_scheduling_and_leases_use_the_database_clock_not_the_host_clock(monkeypatch: pytest.MonkeyPatch) -> None:
     """A host whose clock is a day ahead must not change when a job is due or when its lease ends."""
-    skewed = _now() + dt.timedelta(days=1)
-    for module in (queue, scheduler):  # a host-clock helper, if one ever comes back, is skewed here
-        if hasattr(module, "utcnow"):
-            monkeypatch.setattr(module, "utcnow", lambda: skewed)
+    skew = dt.timedelta(days=1)
+
+    class SkewedDatetime(dt.datetime):
+        @classmethod
+        def now(cls, tz: dt.tzinfo | None = None) -> "SkewedDatetime":  # type: ignore[override]
+            return cls.fromtimestamp((dt.datetime.now(tz) + skew).timestamp(), tz)
+
+        @classmethod
+        def utcnow(cls) -> "SkewedDatetime":  # type: ignore[override]
+            return cls.fromtimestamp((dt.datetime.now(dt.UTC) + skew).timestamp(), dt.UTC)
+
+    skewed = types.SimpleNamespace(**{k: getattr(dt, k) for k in dir(dt) if not k.startswith("__")})
+    skewed.datetime = SkewedDatetime
+    for module in (queue, scheduler):  # every host-clock read in these modules now runs a day ahead
+        monkeypatch.setattr(module, "_dt", skewed)
+    is_skewed = queue._dt.datetime.now(dt.UTC) - _now() > dt.timedelta(hours=23)
+    assert is_skewed, "the skew must be active, or this test proves nothing"
     job_id = await _add()
     claimed = await queue.claim(session_factory, [QUEUE], "w")  # no injected time: the database decides
     assert claimed is not None and claimed.id == job_id

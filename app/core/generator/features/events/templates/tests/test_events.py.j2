@@ -197,6 +197,18 @@ async def test_a_create_writes_its_event_in_the_same_transaction(http: AsyncClie
 {% endif %}
 
 
+async def test_an_entity_event_precedes_its_auto_transition_events(http: AsyncClient) -> None:
+    """An automatic move made by a create/update is announced AFTER `.created` / `.updated`."""
+    record = await _create(http)
+    await _change(http, record)
+    by_seq = sorted((r for r in await _all() if str(r.aggregate_id) == record["id"]), key=lambda r: r.seq)
+    assert by_seq[0].event_type == f"{PREFIX}.created", [r.event_type for r in by_seq]
+    kinds = [r.event_type for r in by_seq]
+    for i, kind in enumerate(kinds):
+        if kind.endswith(".transitioned") and i > 0:
+            assert kinds[i - 1].rsplit(".", 1)[-1] in {"created", "updated", "transitioned"}, kinds
+
+
 async def test_updates_and_deletes_follow_in_order_and_a_no_op_update_says_nothing(
     http: AsyncClient,
 ) -> None:
@@ -377,6 +389,20 @@ async def test_delivered_events_are_purged_after_the_retention(http: AsyncClient
         assert await outbox.purge_delivered(session, retention_days=14) == 1
     left = await _all()
     assert sorted(r.status for r in left) == [DELIVERED, FAILED]  # recent and parked events stay
+
+
+async def test_seq_never_restarts_after_a_purge(http: AsyncClient) -> None:
+    record = await _create(http)
+    await relay.deliver_one(session_factory, Recorder())
+    old = dt.datetime.now(dt.UTC) - dt.timedelta(days=20)
+    async with session_factory() as session:
+        await session.execute(sa.update(OutboxEvent).values(delivered_at=old))
+        await session.commit()
+    async with session_factory() as session:
+        await outbox.purge_delivered(session, retention_days=14)
+    await _change(http, record)
+    seqs = sorted(r.seq for r in await _all() if str(r.aggregate_id) == record["id"])
+    assert seqs[-1] == 2 and 1 not in seqs[1:], seqs  # the new event continues after the purged one
 
 
 async def test_handled_markers_outlive_the_retention_while_their_event_may_still_be_retried(
