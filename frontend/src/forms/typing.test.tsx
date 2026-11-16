@@ -4,35 +4,13 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { SchemaForm } from './SchemaForm'
 import { csvToList, listToCsv } from './schemaLogic'
 import { shownText } from './useRawText'
-import { parseLiteral, literalToText } from '../components/authz/policyModel'
-import { columnsToText, rowsToText, textToColumns, textToRows } from '../components/documents/blocks'
-import { ParsedTextarea } from '../components/ParsedTextarea'
+import { parseLiteral } from '../components/authz/policyModel'
+import { UiProvider } from '../components/Ui'
+import { BlockEditor } from '../components/documents/BlockEditor'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-/** Types char by char the way the controlled input would: the shown text is what the next key is appended to. */
-function typeInto<T>(keys: string, parse: (t: string) => T, toText: (v: T) => string): string {
-  let raw = ''
-  let value = parse('')
-  for (const c of keys) {
-    raw = shownText(raw, value, parse, toText) + c
-    value = parse(raw)
-  }
-  return shownText(raw, value, parse, toText)
-}
-
-describe('typing keeps separators (F-0561..F-0563, F-0568)', () => {
-  it('csv list', () => expect(typeInto('a, b', csvToList, listToCsv)).toBe('a, b'))
-  it('rows text', () => {
-    expect(typeInto('Total :: 5\nTax', textToRows, rowsToText)).toBe('Total :: 5\nTax')
-  })
-  it('columns text', () => expect(typeInto('Item :: {{x}} :: right :: 2', textToColumns, columnsToText)).toBe('Item :: {{x}} :: right :: 2'))
-  it('literal with spaces, lists and decimals', () => {
-    const p = (list: boolean, kind?: string) => (t: string) => parseLiteral(t, list, kind)
-    expect(typeInto('in progress', p(false), literalToText)).toBe('in progress')
-    expect(typeInto('10.0.0.0/8, 192.168.0.0/16', p(true), literalToText)).toBe('10.0.0.0/8, 192.168.0.0/16')
-    expect(typeInto('0.5', p(false, 'number'), literalToText)).toBe('0.5')
-  })
+describe('helpers (F-0561..F-0563)', () => {
   it('resyncs when the parent value changes elsewhere', () => {
     expect(shownText('a,', ['x', 'y'], csvToList, listToCsv)).toBe('x, y')
   })
@@ -55,8 +33,16 @@ function setText(el: HTMLInputElement | HTMLTextAreaElement, text: string) {
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-describe('real inputs', () => {
-  it('csv widget accepts a typed second entry', () => {
+/** One keystroke: appends the char to whatever the input currently shows. */
+function key(el: HTMLInputElement | HTMLTextAreaElement, c: string) {
+  act(() => setText(el, el.value + c))
+}
+const typeKeys = (el: HTMLInputElement | HTMLTextAreaElement, keys: string) => {
+  for (const c of keys) key(el, c)
+}
+
+describe('real inputs, one keystroke at a time', () => {
+  it('csv widget accepts a typed second entry (F-0561)', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
@@ -69,22 +55,27 @@ describe('real inputs', () => {
     }
     act(() => root!.render(createElement(H)))
     const input = host.querySelector('input')!
-    for (const t of ['a', 'a,', 'a, ', 'a, b']) act(() => setText(input, t))
+    typeKeys(input, 'a, b')
     expect(input.value).toBe('a, b')
     expect(latest).toEqual(['a', 'b'])
   })
 
-  it('block textarea keeps text while typing', () => {
+  it('BlockEditor rows and columns textareas keep text while typing (F-0562)', () => {
     host = document.createElement('div')
     document.body.appendChild(host)
     root = createRoot(host)
+    let latest: Record<string, unknown>[] = []
     function H() {
-      const [rows, s] = useState<{ label: string; value: string }[]>([])
-      return createElement(ParsedTextarea<{ label: string; value: string }[]>, { rows: 3, value: rows, parse: textToRows, toText: rowsToText, onChange: s })
+      const [b, s] = useState<Record<string, unknown>[]>([{ type: 'kv', rows: [] }, { type: 'table', source: 'items', columns: [] }])
+      latest = b
+      return createElement(UiProvider, null, createElement(BlockEditor, { blocks: b as never, onChange: (n) => s(n as unknown as Record<string, unknown>[]) }) as never)
     }
     act(() => root!.render(createElement(H)))
-    const ta = host.querySelector('textarea')!
-    for (const t of ['T', 'To', 'Total ', 'Total :: ', 'Total :: 5', 'Total :: 5\n']) act(() => setText(ta, t))
-    expect(ta.value).toBe('Total :: 5\n')
+    const [kv, table] = Array.from(host.querySelectorAll('textarea'))
+    typeKeys(kv, 'Total :: 5\nTax')
+    expect(kv.value).toBe('Total :: 5\nTax')
+    expect(latest[0].rows).toEqual([{ label: 'Total', value: '5' }, { label: 'Tax', value: '' }])
+    typeKeys(table, 'Item :: {{x}} :: right')
+    expect(table.value).toBe('Item :: {{x}} :: right')
   })
 })

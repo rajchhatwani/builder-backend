@@ -39,8 +39,15 @@ describe('ConditionEditor', () => {
   it('a typed list keeps its commas (F-0563)', async () => {
     const r = await render({ all: [{ left: { resource: 'status' }, op: 'in', right: { literal: [] } }] })
     const input = () => r.host.querySelector('input[aria-label="Value"]') as HTMLInputElement
-    for (const t of ['a', 'a,', 'a, ', 'a, b']) await setInput(input(), t)
+    for (const c of 'a, b') await setInput(input(), input().value + c)
     expect(input().value).toBe('a, b')
     expect(r.get().all[0].right).toEqual({ literal: ['a', 'b'] })
+  })
+  it('a typed phrase keeps its spaces (F-0563)', async () => {
+    const r = await render({ all: [{ left: { resource: 'status' }, op: 'eq', right: { literal: '' } }] })
+    const input = () => r.host.querySelector('input[aria-label="Value"]') as HTMLInputElement
+    for (const c of 'in progress') await setInput(input(), input().value + c)
+    expect(input().value).toBe('in progress')
+    expect(r.get().all[0].right).toEqual({ literal: 'in progress' })
   })
 })
