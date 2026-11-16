@@ -8,6 +8,7 @@ WEIGHT_LOAD = {{ w_load }}
 WEIGHT_RATING = {{ w_rating }}
 MAX_DISTANCE_M = {{ max_distance }}  # a candidate farther away than this is not eligible
 MAX_LOAD = {{ max_load }}  # a candidate with this many open jobs (or more) is not eligible
+POSITION_MAX_AGE_SECONDS = 900  # a stored /location position older than this is not used to rank a candidate
 OFFER_TTL_SECONDS = {{ ttl }}
 MAX_CANDIDATES = 200
 MAX_BATCH_REQUESTS = 100

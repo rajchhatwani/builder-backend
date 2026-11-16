@@ -343,3 +343,4 @@ tests/unit/test_audit_b1_008_deploy_gate_doc.py
 tests/unit/test_audit_b1_009.py
 tests/unit/test_audit_b1_011.py
 tests/unit/test_audit_b1_012.py
+tests/unit/test_operations_input_guards.py

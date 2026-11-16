@@ -46,6 +46,10 @@ async def report(session: AsyncSession, user: _t.Any, body: _s.PositionIn) -> tu
         raise AppError("future_timestamp", "recorded_at is more than 5 minutes in the future", 422)
     existing = await _current(session, tn, body.subject_id)
     if existing is None:
+        # serialise new-subject creation per tenant so the count below cannot be raced past MAX_SUBJECTS
+        await session.execute(_sa.select(_sa.func.pg_advisory_xact_lock(_sa.func.hashtext(f"location_subjects:{tn}"))))
+        existing = await _current(session, tn, body.subject_id)
+    if existing is None:
         total = (await session.execute(scoped(_sa.select(_sa.func.count()).select_from(LocationPosition), LocationPosition, tn))).scalar_one()
         if total >= _config.MAX_SUBJECTS:
             raise AppError("limit_reached", f"at most {_config.MAX_SUBJECTS} subjects", 422)

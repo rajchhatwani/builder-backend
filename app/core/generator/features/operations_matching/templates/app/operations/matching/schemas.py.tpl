@@ -10,13 +10,14 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 from app.operations.matching import config as _config
 from app.operations.points import Point, resolve
 
+NO_NUL_PATTERN = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
 Status = _t.Literal["offered", "accepted", "rejected", "expired"]
 
 
 class CandidateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    id: str = Field(min_length=1, max_length=128)
+    id: str = Field(min_length=1, max_length=128, pattern=NO_NUL_PATTERN)
     lat_micro: StrictInt | None = None
     lng_micro: StrictInt | None = None
     lat: Decimal | None = None
@@ -75,7 +76,7 @@ class RankOut(BaseModel):
 
 
 class AssignIn(RankIn):
-    request_ref: str = Field(min_length=1, max_length=128)
+    request_ref: str = Field(min_length=1, max_length=128, pattern=NO_NUL_PATTERN)
 
 
 class AssignmentOut(BaseModel):
@@ -94,7 +95,7 @@ class AssignmentOut(BaseModel):
 class BatchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    request_ref: str = Field(min_length=1, max_length=128)
+    request_ref: str = Field(min_length=1, max_length=128, pattern=NO_NUL_PATTERN)
     point: Point
 
 

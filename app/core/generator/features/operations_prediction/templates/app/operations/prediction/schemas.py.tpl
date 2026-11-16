@@ -15,7 +15,7 @@ class PredictIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: str = Field(min_length=1, max_length=32, pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]*$")
-    subject_ref: str = Field(min_length=1, max_length=128)
+    subject_ref: str = Field(min_length=1, max_length=128, pattern=r"^[^\x00]*$")
     features: dict[str, StrictInt | StrictStr | StrictBool] = Field(default_factory=dict)
 
     @field_validator("features")
@@ -26,6 +26,8 @@ class PredictIn(BaseModel):
         for key, item in value.items():
             if not 1 <= len(key) <= 64:
                 raise ValueError("a feature name is 1..64 characters")
+            if "\x00" in key or (isinstance(item, str) and "\x00" in item):
+                raise ValueError("a feature name or text feature cannot contain a NUL character")
             if isinstance(item, str) and len(item) > 256:
                 raise ValueError("a text feature is at most 256 characters")
             if isinstance(item, int) and not isinstance(item, bool) and abs(item) > LIMIT:

@@ -8,6 +8,7 @@ WEIGHT_LOAD = 300
 WEIGHT_RATING = 100
 MAX_DISTANCE_M = 20000  # a candidate farther away than this is not eligible
 MAX_LOAD = 5  # a candidate with this many open jobs (or more) is not eligible
+POSITION_MAX_AGE_SECONDS = 900  # a stored /location position older than this is not used to rank a candidate
 OFFER_TTL_SECONDS = 300
 MAX_CANDIDATES = 200
 MAX_BATCH_REQUESTS = 100

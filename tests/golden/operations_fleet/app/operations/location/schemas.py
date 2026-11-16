@@ -9,11 +9,13 @@ from pydantic import BaseModel, Field, StrictInt
 from app.operations.points import Point, PointOut
 
 SEQ_MAX = 2**62
+NO_NUL_PATTERN = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
+SUBJECT_ID_PATTERN = r"^[^/\x00]+$"  # no "/" or NUL: the id is one path segment of GET /positions/{subject_id}
 
 
 class PositionIn(Point):
-    subject_id: str = Field(min_length=1, max_length=128)
-    subject_kind: str | None = Field(default=None, max_length=32)
+    subject_id: str = Field(min_length=1, max_length=128, pattern=SUBJECT_ID_PATTERN)
+    subject_kind: str | None = Field(default=None, max_length=32, pattern=NO_NUL_PATTERN)
     seq: StrictInt = Field(ge=0, le=SEQ_MAX)
     recorded_at: dt.datetime | None = None
 

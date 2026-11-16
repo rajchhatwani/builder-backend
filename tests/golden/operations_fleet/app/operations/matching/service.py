@@ -44,13 +44,19 @@ def assignment_out(row: MatchAssignment) -> _s.AssignmentOut:
 async def _candidates(session: AsyncSession, tn: Tenant, given: _t.Sequence[_s.CandidateIn]) -> list[_sc.Candidate]:
     """Candidates with coordinates; one without takes its latest /location position (when that block exists)."""
     found: dict[str, tuple[int, int]] = {}
+    stale: set[str] = set()
     missing = [c.id for c in given if c.micro is None]
     if missing:
         stmt = scoped(_sa.select(LocationPosition).where(LocationPosition.subject_id.in_(missing)), LocationPosition, tn)
-        found = {r.subject_id: (r.lat_micro, r.lng_micro) for r in (await session.execute(stmt)).scalars()}
+        oldest = _now() - timedelta(seconds=_config.POSITION_MAX_AGE_SECONDS)
+        rows = list((await session.execute(stmt)).scalars())
+        stale = {r.subject_id for r in rows if r.updated_at < oldest}
+        found = {r.subject_id: (r.lat_micro, r.lng_micro) for r in rows if r.subject_id not in stale}
     out = []
     for c in given:
         micro = c.micro or found.get(c.id)
+        if micro is None and c.id in stale:
+            raise AppError("stale_position", f"candidate {c.id!r} last reported its position over {_config.POSITION_MAX_AGE_SECONDS}s ago", 422, [{"candidate_id": c.id}])
         if micro is None:
             raise AppError("candidate_without_location", f"candidate {c.id!r} has no coordinates and no known position", 422, [{"candidate_id": c.id}])
         out.append(_sc.Candidate(c.id, micro[0], micro[1], c.load, c.rating_milli))
