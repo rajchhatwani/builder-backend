@@ -607,6 +607,8 @@ async def test_promotion_with_a_hash_mismatch_is_refused_and_nothing_goes_live(c
     assert any("promotion_hash_mismatch" in str(s["output"]) for s in await _steps(client, pid, rid))
     assert _main_file(ws_settings, pid, "app/custom/hooks/h1.py") is None and _main_file(ws_settings, pid, "tests/custom/test_h1.py") is None
     assert "Item" not in str((await client.get(f"/projects/{pid}/entities")).json())  # and the spec was not applied either
+    # B1-031 (F-0274): a still-running run holds its workspace; end it so the draft can be discarded
+    assert (await client.post(f"/projects/{pid}/agent/runs/{rid}/cancel")).status_code == 200
 
 
 async def test_denied_final_review_promotes_nothing(client: AsyncClient, ws_settings: Settings) -> None:

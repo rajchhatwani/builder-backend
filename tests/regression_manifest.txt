@@ -327,3 +327,4 @@ tests/unit/test_audit_b1_026.py
 tests/api/test_audit_b1_027.py
 tests/api/test_audit_b1_028.py
 tests/api/test_audit_b1_029.py
+tests/api/test_audit_b1_031.py

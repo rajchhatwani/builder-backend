@@ -74,3 +74,8 @@ def test_signed_but_non_json_body_is_rejected() -> None:
     body = b"not json"
     with pytest.raises(WebhookSignatureError):
         verify_webhook(body, f"t={NOW},v1={_sig('whsec_a', body=body)}", ["whsec_a"], now=NOW)
+
+
+def test_unicode_digit_timestamp_is_a_signature_error_not_a_value_error() -> None:
+    with pytest.raises(WebhookSignatureError):
+        verify_webhook(b"{}", "t=²,v1=" + "a" * 64, ["s"], now=NOW)

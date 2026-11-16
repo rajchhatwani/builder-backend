@@ -27,6 +27,7 @@ from app.core.generator import InvalidSpecError, generate
 from app.core.generator.zones import zone_for
 from app.core.spec_models import Spec, spec_hash
 from app.exceptions import AppError
+from app.models.agent import AiRun
 from app.models.project import Project
 from app.models.spec_op import SpecOp
 from app.models.workspace import Workspace, WorkspaceCheckpoint
@@ -37,6 +38,10 @@ from app.services.usage_service import UsageService
 log = logging.getLogger(__name__)
 ACTIVE_STATES = ("active", "rolled_back")
 BUSY_STATES = ("creating", "checkpointing", "rolling_back")
+RUN_BUSY_STATES = ("planning", "running", "awaiting_approval", "gating", "applying")  # AiRun states
+# a run parked on an approval does not execute: rollback/discard stay possible (the approval is
+# bound to a content hash and fails closed if the files change)
+RUN_EXECUTING_STATES = ("planning", "running", "gating", "applying")
 COUNTED_STATES = (*ACTIVE_STATES, *BUSY_STATES)
 BUSY_STALE = timedelta(minutes=10)  # a crashed worker's busy marker can be re-claimed after this
 _DB_IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]{0,62}")
@@ -104,6 +109,9 @@ class WorkspaceService:
         return self._root() / str(project_id) / "repo"
 
     async def _git(self, cwd: Path, *args: str) -> str:
+        return (await self._git_bytes(cwd, *args)).decode().strip()
+
+    async def _git_bytes(self, cwd: Path, *args: str) -> bytes:
         env = {
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
             "HOME": str(self._root()),
@@ -131,7 +139,7 @@ class WorkspaceService:
             # stderr carries host paths: log it, never return it.
             log.error("git %s failed: %s", args[0], err.decode(errors="replace")[:500])
             raise AppError("workspace_git_failed", "workspace git operation failed", 500)
-        return out.decode().strip()
+        return out
 
     async def _admin(self, *statements: _Stmt) -> None:
         """Run DDL on the preview server in autocommit (CREATE/DROP DATABASE).
@@ -293,6 +301,7 @@ class WorkspaceService:
     ) -> tuple[str, Path, str]:
         """Lock the workspace row briefly, mark it busy and commit. Returns the previous state,
         worktree path and preview DB name. A stale busy marker (crashed worker) can be taken."""
+        await self._lock_project_row(project_id)  # same order as file writes: project, then workspace
         ws = await self._get(project_id, ws_id, lock=True)
         stale = datetime.now(UTC) - ws.updated_at > BUSY_STALE
         if ws.state in BUSY_STATES and not stale:
@@ -302,10 +311,26 @@ class WorkspaceService:
         prev = "active" if ws.state in BUSY_STATES else ws.state
         if not ws.worktree_path or not ws.preview_db_name:
             raise AppError("workspace_discarded", "workspace is discarded", 409)
+        await self._refuse_if_run_active(ws_id)
         wt, db = Path(ws.worktree_path), ws.preview_db_name
         ws.state = busy
         await self.session.commit()
         return prev, wt, db
+
+    async def _lock_project_row(self, project_id: uuid.UUID) -> None:
+        await self.session.execute(select(Project.id).where(Project.id == project_id).with_for_update())
+
+    async def _refuse_if_run_active(self, ws_id: uuid.UUID) -> None:
+        """F-0274: an agent run owns the worktree/DB while it is planning..applying (the project row
+        lock is held by the caller, so a run cannot start between this check and the state change)."""
+        busy = (
+            await self.session.execute(
+                select(AiRun.id).where(AiRun.workspace_id == ws_id, AiRun.state.in_(RUN_EXECUTING_STATES)).limit(1)
+            )
+        ).first()
+        if busy is not None:
+            await self.session.rollback()
+            raise AppError("workspace_busy", "an agent run is using this workspace", 409)
 
     async def _release(
         self, project_id: uuid.UUID, ws_id: uuid.UUID, state: str, **fields: int
@@ -408,9 +433,19 @@ class WorkspaceService:
                     )
                 ).scalars()
             )
-            await self._cleanup(project_id, wt, branch, db, [x for x in snaps if x])
+            wt_ok, failed = await self._cleanup(project_id, wt, branch, db, [x for x in snaps if x])
             gone = await self._get(project_id, ws_id, lock=True)
-            await self.session.delete(gone)
+            if failed or not wt_ok:
+                # F-0273: keep the row (as discard() does) so a retried discard / cleanup_incomplete
+                # can still drop what could not be dropped now.
+                log.error("failed create of workspace %s left resources behind", ws_id)
+                gone.state = "discarded"
+                if db not in failed:
+                    gone.preview_db_name = None
+                if wt_ok:
+                    gone.worktree_path = None
+            else:
+                await self.session.delete(gone)
             await self._release_gauge(project_id)
             await self.session.commit()
             raise
@@ -460,13 +495,28 @@ class WorkspaceService:
                     raise AppError("promotion_refused", "a promoted file is not valid UTF-8", 409) from exc
             if base_branch:
                 await self._refuse_if_base_changed(repo, base_branch, files)
-            for rel in rels:
-                self._write_generated(repo, rel, decoded[rel])
-            await self._git(repo, "add", "--", *rels)
-            if not await self._git(repo, "status", "--porcelain", "--", *rels):
-                return None
-            await self._git(repo, "commit", "-q", "-m", message[:200], "--", *rels)
-            return await self._git(repo, "rev-parse", "HEAD")
+            try:
+                for rel in rels:
+                    self._write_generated(repo, rel, decoded[rel])
+                await self._git(repo, "add", "--", *rels)
+                if not await self._git(repo, "status", "--porcelain", "--", *rels):
+                    return None
+                await self._git(repo, "commit", "-q", "-m", message[:200], "--", *rels)
+                return await self._git(repo, "rev-parse", "HEAD")
+            except BaseException:
+                await asyncio.shield(self._restore_main(repo, rels))  # F-0275: never leave main dirty
+                raise
+
+    async def _restore_main(self, repo: Path, rels: list[str]) -> None:
+        for rel in rels:
+            try:
+                if await self._blob(repo, "HEAD", rel):
+                    await self._git(repo, "checkout", "-q", "HEAD", "--", rel)
+                else:  # new in this promotion: untrack and remove
+                    await self._git(repo, "rm", "-q", "--cached", "--ignore-unmatch", "--", rel)
+                    (repo / rel).unlink(missing_ok=True)
+            except Exception:
+                log.warning("could not restore %s on main", rel)
 
     async def _blob(self, repo: Path, rev: str, rel: str) -> str | None:
         try:
@@ -528,12 +578,12 @@ class WorkspaceService:
         for rel in (await self._git(repo, "ls-tree", "-r", "--name-only", "main")).splitlines()[:500]:
             if zone_for(rel) != "custom":
                 continue
-            path = repo / rel
-            if path.is_symlink() or not path.is_file() or path.stat().st_size > 256 * 1024:
-                continue
             try:
-                out[rel] = path.read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+                if int(await self._git(repo, "cat-file", "-s", f"main:{rel}")) > 256 * 1024:
+                    continue
+                raw = await self._git_bytes(repo, "show", f"main:{rel}")  # committed, not the working tree
+                out[rel] = raw.decode("utf-8")
+            except (AppError, ValueError):
                 continue
         return out
 
@@ -543,7 +593,7 @@ class WorkspaceService:
         generated file is overwritten, not kept. `spec` is the run's draft spec (H2); default the live one.
         Returns the number of files written."""
         ws = await self._get(project_id, ws_id)
-        if ws.state != "active" or not ws.worktree_path:
+        if ws.state not in ACTIVE_STATES or not ws.worktree_path:
             raise AppError("workspace_inactive", "the workspace is not active", 409)
         files = generate(spec if spec is not None else await SpecService(self.session).assemble(project_id))
         try:
@@ -708,9 +758,12 @@ class WorkspaceService:
 
     async def discard(self, project_id: uuid.UUID, ws_id: uuid.UUID) -> WorkspaceRead:
         self._root()
+        await self._lock_project_row(project_id)
         ws = await self._get(project_id, ws_id, lock=True)
         if ws.state in BUSY_STATES and datetime.now(UTC) - ws.updated_at <= BUSY_STALE:
             raise AppError("workspace_busy", "another operation is running on this workspace", 409)
+        if ws.state != "discarded":
+            await self._refuse_if_run_active(ws_id)
         if ws.state == "discarded" and ws.preview_db_name is None and ws.worktree_path is None:
             return await self.read(project_id, ws_id)
         if ws.state != "discarded":  # a retried cleanup must not release the gauge twice

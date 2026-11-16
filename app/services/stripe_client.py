@@ -206,7 +206,7 @@ def _parse_signature_header(header: str) -> tuple[int, list[str]]:
     signatures: list[str] = []
     for part in parts:
         key, _, value = part.strip().partition("=")
-        if key == "t" and value.isdigit() and len(value) <= 12:
+        if key == "t" and value.isascii() and value.isdigit() and len(value) <= 12:
             timestamp = int(value)
         elif key == "v1" and _V1_RE.fullmatch(value):
             signatures.append(value.lower())

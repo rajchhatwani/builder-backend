@@ -155,7 +155,7 @@ class StripeWebhookService:
             # bought again). One Stripe Subscription per org (§10): only the live one counts.
             await self._record(event, org_id, created, "other_subscription")
             return WebhookResult("other_subscription", org_id)
-        if created < await self._newest_applied(org_id):
+        if created < await self._newest_applied(org_id, event_type):
             await self._record(event, org_id, created, "stale")
             return WebhookResult("stale", org_id)
 
@@ -314,13 +314,19 @@ class StripeWebhookService:
         )
         return found.first() is not None
 
-    async def _newest_applied(self, org_id: uuid.UUID) -> int:
+    async def _newest_applied(self, org_id: uuid.UUID, event_type: str) -> int:
+        """Newest applied event of the same ordering family. Stripe orders nothing across object
+        kinds: a checkout (created T1) must not make an older subscription snapshot 'stale'.
+        Subscription and invoice events both drive `status`, so they share one clock."""
+        checkout = event_type.startswith("checkout.")
+        kind = AuditLog.detail["event_type"].as_string().like("checkout.%")
         newest = (
             await self.db.execute(
                 select(func.max(AuditLog.detail["event_created"].as_integer())).where(
                     AuditLog.action == AUDIT_ACTION,
                     AuditLog.organization_id == org_id,
                     AuditLog.detail["outcome"].as_string() == "applied",
+                    kind if checkout else ~kind,
                 )
             )
         ).scalar_one_or_none()

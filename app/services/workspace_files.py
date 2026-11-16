@@ -9,6 +9,7 @@ import hashlib
 import os
 import stat
 import uuid
+from datetime import UTC, datetime
 from pathlib import Path
 
 from sqlalchemy import select
@@ -29,10 +30,9 @@ from app.schemas.workspace_files import (
 )
 from app.services import audit_service
 from app.services.dependency_policy_service import is_dependency_manifest
-from app.services.workspace_service import WorkspaceService
+from app.services.workspace_service import ACTIVE_STATES, RUN_BUSY_STATES, WorkspaceService
 
 # every state in which an agent run may still read or change the worktree (S2-013)
-_BUSY_STATES = ("planning", "running", "awaiting_approval", "gating", "applying")
 
 
 def _bad_path() -> AppError:
@@ -181,6 +181,8 @@ def _write_sync(wt: Path, rel: str, content: str, expected: str) -> str:
     finally:
         os.close(dirfd)
 
+_BUSY_STATES = RUN_BUSY_STATES  # kept name for callers/tests
+
 
 class WorkspaceFileService:
     def __init__(self, session: AsyncSession) -> None:
@@ -189,7 +191,7 @@ class WorkspaceFileService:
 
     async def _worktree(self, project_id: uuid.UUID, ws_id: uuid.UUID, lock: bool = False) -> Path:
         ws: Workspace = await self._ws._get(project_id, ws_id, lock=lock)
-        if ws.state != "active" or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
+        if ws.state not in ACTIVE_STATES or not ws.worktree_path or not Path(ws.worktree_path).is_dir():  # noqa: ASYNC240 - sub-ms local stat
             raise AppError("workspace_inactive", "the workspace is not active", 409)
         return Path(ws.worktree_path)
 
@@ -233,13 +235,15 @@ class WorkspaceFileService:
         busy = (
             await self.session.execute(
                 select(AiRun.id)
-                .where(AiRun.workspace_id == ws_id, AiRun.state.in_(_BUSY_STATES))
+                .where(AiRun.workspace_id == ws_id, AiRun.state.in_(RUN_BUSY_STATES))
                 .limit(1)
             )
         ).first()
         if busy is not None:
             raise AppError("workspace_busy", "an agent run is using this workspace", 409)
         sha = await asyncio.to_thread(_write_sync, wt, path, content, expected_sha256)
+        ws_row = await self._ws._get(project_id, ws_id)
+        ws_row.updated_at = datetime.now(UTC)  # F-0269: a file edit is activity (idle TTL sweep)
         await audit_service.record(
             self.session,
             action="workspace.file.write",
