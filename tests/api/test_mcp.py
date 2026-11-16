@@ -848,3 +848,29 @@ async def test_mcp_refuses_a_locked_org(
         with pytest.raises(AppError) as exc:
             await McpService(db).get_project_spec(await _principal(user), project_id)
     assert exc.value.status_code == 423 and exc.value.code == "org_deletion_pending"
+
+
+async def test_auth_rejects_user_who_must_change_password(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    created = await client.post(
+        "/account/tokens", json={"name": "mcpmustchange", "scopes": ["mcp:read"]}
+    )
+    raw = created.json()["token"]
+    async with session_factory() as db:
+        stmt = select(ApiToken).where(ApiToken.name == "mcpmustchange")
+        token = (await db.execute(stmt)).scalar_one()
+        user = await db.get(PlatformUser, token.user_id)
+        assert user is not None
+        user.must_change_password = True
+        await db.commit()
+
+    async with session_factory() as db:
+        with pytest.raises(AppError) as exc:
+            await mcp_api._auth(
+                _FakeCtx({"authorization": f"Bearer {raw}"}),
+                db,
+                authz.SCOPE_MCP_READ,
+            )
+    assert exc.value.status_code == 403
+    assert exc.value.code == "password_change_required"
