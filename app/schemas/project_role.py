@@ -14,7 +14,7 @@ _ROLE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 def _validate_role_name(value: str) -> str:
-    if not _ROLE_NAME_RE.match(value):
+    if not _ROLE_NAME_RE.fullmatch(value):
         raise ValueError(
             "role name must start with a lowercase letter and contain only "
             "lowercase letters, digits, and underscores"

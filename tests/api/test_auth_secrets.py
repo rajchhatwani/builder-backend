@@ -220,3 +220,29 @@ async def test_missing_secret_key_fails_loudly_instead_of_storing_plaintext(
         assert response.status_code == 500
     status = await client.get(f"/projects/{project_id}/auth/secrets/status")
     assert status.json()["smtp"]["configured"] is False
+
+
+async def test_explicit_null_group_clears_stored_secrets(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """Audit F-0223: sending {"smtp": null} clears that group; omitted groups stay."""
+    project_id = await make_project(client)
+    await make_auth(client, project_id)
+    await client.put(
+        f"/projects/{project_id}/auth/secrets",
+        json={"smtp": SMTP_SECRET, "twilio": TWILIO_SECRET},
+    )
+
+    response = await client.put(f"/projects/{project_id}/auth/secrets", json={"smtp": None})
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["smtp"] == {"configured": False, "username_set": False}
+    async with session_factory() as session:
+        row = (
+            await session.execute(
+                select(ProjectAuthSecrets).where(ProjectAuthSecrets.project_id == uuid.UUID(project_id))
+            )
+        ).scalar_one()
+        assert row.smtp_password is None and row.smtp_username is None
+        assert row.twilio_auth_token is not None

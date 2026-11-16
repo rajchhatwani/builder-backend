@@ -25,7 +25,7 @@ class OrganizationCreate(BaseModel):
     @field_validator("slug")
     @classmethod
     def validate_slug(cls, value: str | None) -> str | None:
-        if value is not None and not _SLUG_RE.match(value):
+        if value is not None and not _SLUG_RE.fullmatch(value):
             raise ValueError(
                 "slug must be lowercase letters, digits and hyphens, starting with a letter"
             )

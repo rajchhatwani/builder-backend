@@ -92,25 +92,39 @@ class AuthSecretsService:
         row = await self._get_or_create_secrets_row(project_id)
 
         # ── SMTP ──────────────────────────────────────────────────────────────
+        sent = data.model_fields_set
         if data.smtp is not None:
             row.smtp_username = encrypt(data.smtp.username)
             row.smtp_password = encrypt(data.smtp.password)
+        elif "smtp" in sent:  # explicit null clears the group
+            row.smtp_username = None
+            row.smtp_password = None
 
         # ── Twilio ────────────────────────────────────────────────────────────
         if data.twilio is not None:
             row.twilio_account_sid = encrypt(data.twilio.account_sid)
             row.twilio_auth_token = encrypt(data.twilio.auth_token)
+        elif "twilio" in sent:
+            row.twilio_account_sid = None
+            row.twilio_auth_token = None
 
         # ── Vonage ────────────────────────────────────────────────────────────
         if data.vonage is not None:
             row.vonage_api_key = encrypt(data.vonage.api_key)
             row.vonage_api_secret = encrypt(data.vonage.api_secret)
+        elif "vonage" in sent:
+            row.vonage_api_key = None
+            row.vonage_api_secret = None
 
         # ── AWS SNS ───────────────────────────────────────────────────────────
         if data.aws_sns is not None:
             row.aws_access_key_id = encrypt(data.aws_sns.access_key_id)
             row.aws_secret_access_key = encrypt(data.aws_sns.secret_access_key)
             row.aws_region = encrypt(data.aws_sns.region)
+        elif "aws_sns" in sent:
+            row.aws_access_key_id = None
+            row.aws_secret_access_key = None
+            row.aws_region = None
 
         try:
             await self.session.commit()

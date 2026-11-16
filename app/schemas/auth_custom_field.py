@@ -65,7 +65,7 @@ class AuthCustomFieldCreate(BaseModel):
     @field_validator("name")
     @classmethod
     def validate_name(cls, v: str) -> str:
-        if not _NAME_RE.match(v):
+        if not _NAME_RE.fullmatch(v):
             raise ValueError(
                 "name must start with a lowercase letter and contain only "
                 "lowercase letters, digits, and underscores"
