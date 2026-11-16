@@ -361,6 +361,19 @@ async def test_the_customer_side_can_end_the_session(
     assert any(a.action == "impersonation.ended" for a in await _audit(session_factory))
 
 
+async def test_a_temp_password_user_view_can_still_be_inspected_and_ended(  # F-0916
+    world: World, session_factory: Factory
+) -> None:
+    async with session_factory() as db:
+        user = await db.get(PlatformUser, world.owner.user.id)  # type: ignore[attr-defined]
+        assert user is not None
+        user.must_change_password = True
+        await db.commit()
+    viewer, _ = await world.view_as()
+    assert (await viewer.get("/account/impersonation")).status_code == 200
+    assert (await viewer.post("/account/impersonation/end")).status_code == 204
+
+
 async def test_the_operator_can_end_it_and_the_list_shows_it(world: World) -> None:
     viewer, body = await world.view_as()
     listed = await world.ops.get("/admin/impersonation/sessions")

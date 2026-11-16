@@ -174,10 +174,12 @@ async def current_principal(
     """A customer-surface credential: a session token or an API token. A "view as" token gets
     through only to the few routes listed in IMPERSONATION_OPEN_ROUTES (default deny)."""
     route = request.scope.get("route")
-    if (request.method.upper(), getattr(route, "path", request.url.path)) != (
-        "GET",
-        "/account/me",
-    ):
+    if principal.impersonation is None and (
+        request.method.upper(),
+        getattr(route, "path", request.url.path),
+    ) != ("GET", "/account/me"):
+        # a "view as" token is limited to IMPERSONATION_OPEN_ROUTES below, so the viewed
+        # person's temporary password must not stop the operator inspecting or ending it
         refuse_temporary_password(principal)
     if principal.impersonation is not None:
         route = request.scope.get("route")
