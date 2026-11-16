@@ -372,6 +372,7 @@ async def get_scim(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> ScimConfigRead:
+    _session_only(ctx)
     return await config_read(ScimService(db, settings), ctx.org.id)
 
 

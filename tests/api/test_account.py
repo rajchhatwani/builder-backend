@@ -389,6 +389,22 @@ async def test_must_change_password_blocks_everything_but_the_change(
     assert (await anon_client.get("/projects", headers=new_headers)).status_code == 200
 
 
+async def test_must_change_password_also_blocks_org_routes(
+    anon_client: AsyncClient, make_user: MakeUser
+) -> None:
+    """F-0147: current_principal and org_context refuse a temporary password too."""
+    user = await make_user("temp2@example.com", must_change_password=True)
+    headers = bearer_for(user)
+    for path in ("/orgs", "/account/me/default-organization"):
+        method = anon_client.put if "default" in path else anon_client.get
+        kwargs = {"json": {"organization_id": None}} if "default" in path else {}
+        r = await method(path, headers=headers, **kwargs)
+        assert r.status_code == 403 and r.json()["code"] == "password_change_required", path
+    r = await anon_client.get("/orgs/nope/members", headers=headers)
+    assert r.status_code == 403 and r.json()["code"] == "password_change_required"
+    assert (await anon_client.get("/account/me", headers=headers)).status_code == 200
+
+
 # -- API tokens --------------------------------------------------------------------------
 
 

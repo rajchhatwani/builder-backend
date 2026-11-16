@@ -261,3 +261,18 @@ async def test_the_strictest_org_policy_wins(
             await s.execute(select(Organization).where(Organization.slug == "acme"))
         ).scalar_one()
         assert acme.session_ttl_hours == 24
+
+
+async def test_create_project_in_mfa_org_needs_an_mfa_session(
+    client: AsyncClient, client_for: ClientFor
+) -> None:
+    """F-0148: POST /projects into an org that requires MFA is refused for a password session."""
+    org_id = await _acme(client)
+    bob = await client_for("bob@example.com")
+    await _join(client, bob)
+    await _require_mfa(client)
+    r = await bob.post("/projects", json={"name": "S", "organization_id": org_id})
+    assert r.status_code == 403 and r.json()["code"] == "org_mfa_required"
+    _mfa_session(bob, ["pwd", "otp"])
+    r = await bob.post("/projects", json={"name": "S", "organization_id": org_id})
+    assert r.status_code == 201, r.text

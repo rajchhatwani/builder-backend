@@ -30,7 +30,8 @@ async def reject_nul_characters(request: Request) -> None:
         raise _refuse()
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     if content_type == "multipart/form-data":
-        # D-1: only the intake route takes multipart (and the server parses it there anyway). Parsing
+        # D-1: only the intake route takes multipart (and the server parses it there anyway; the import
+        # upload route checks its own text fields and filename). Parsing
         # a multipart body of any other route here would spool up to 13 MB before auth for nothing.
         if not is_intake(request.method, request.url.path):
             return

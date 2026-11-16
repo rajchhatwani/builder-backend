@@ -60,6 +60,10 @@ async def upload(
     principal: Principal = Depends(current_principal),
     db: AsyncSession = Depends(get_session),
 ) -> ImportPreview:
+    # The app-wide NUL guard does not parse /imports multipart (D-1), and Postgres text cannot
+    # hold U+0000: the filename and text fields are checked here, the file bytes may hold NULs.
+    if any("\x00" in (v or "") for v in (file.filename, entity, mapping)):
+        raise AppError("validation_error", "NUL characters are not allowed in request input", 422)
     data = await file.read(di.MAX_BYTES + 1)  # never buffer more than the cap allows
     if len(data) > di.MAX_BYTES:
         raise AppError("import_too_large", f"the file is larger than {di.MAX_BYTES} bytes", 413)

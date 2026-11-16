@@ -329,6 +329,7 @@ async def get_sso(
     db: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
 ) -> SsoConfigRead:
+    _session_only(ctx)
     return await _config_read(SsoService(db, settings), ctx.org)
 
 
@@ -470,4 +471,5 @@ async def check_sso(
     settings: Settings = Depends(get_settings),
 ) -> SsoCheckRead:
     """What would stop SSO working (plan, domain, certificate expiry, OIDC discovery/JWKS)."""
+    _session_only(ctx)
     return check_read(await SsoService(db, settings).check(ctx.org))

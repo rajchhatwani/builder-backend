@@ -70,6 +70,9 @@ class McpService:
         self, principal: Principal, project_id: uuid.UUID
     ) -> ProjectMember:
         """Return member row if user is a member with mcp_enabled=True, else raise."""
+        pin = principal.token_project_id
+        if pin is not None and pin != project_id:
+            raise AppError(code="not_found", message="project not found", status_code=404)
         member = await self.db.get(ProjectMember, (project_id, principal.user.id))
         if member is None:
             raise AppError(code="not_found", message="project not found", status_code=404)

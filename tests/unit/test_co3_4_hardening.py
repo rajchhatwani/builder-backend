@@ -67,6 +67,13 @@ def test_only_spec_writes_are_matched() -> None:
     assert not is_spec_write("POST", "/projects/abc/entities")
 
 
+def test_spec_ops_posts_are_size_capped_too() -> None:
+    """F-0149: POST /spec/ops (set_section) must not bypass the spec-write cap."""
+    for tail in ("ops", "restore", "undo", "redo"):
+        assert is_spec_write("POST", f"/projects/abc/spec/{tail}")
+    assert not is_spec_write("GET", "/projects/abc/spec/ops")
+
+
 def test_oversize_chunked_spec_write_is_413_without_content_length() -> None:
     app = SpecWriteLimit(_echo_app(), max_bytes=100)
     status, body = asyncio.run(_call(app, "PUT", "/projects/p/spec", [b"x" * 60, b"x" * 60]))
@@ -125,3 +132,27 @@ def test_workflow_engine_template_refuses_nul_and_settles_a_cancel_while_waiting
     assert re.search(r"elif row\.status == RUNNING and row\.lease_token is None", engine)
     router = (FEATURES / "workflows/templates/app/workflows/router.py.tpl").read_text()
     assert "/runs/{run_id}/resume-undo" in router and "_no_nul" in router
+
+
+async def test_preview_log_slot_frees_when_the_stream_never_starts(monkeypatch) -> None:  # noqa: ANN001
+    """F-0150: the open-stream slot is released by a background task, not only by the generator."""
+    import types
+    import uuid as _uuid
+
+    from app.api import previews as api
+
+    pid = _uuid.uuid4()
+
+    async def fake_gate(preview_id, request):  # noqa: ANN001, ANN202
+        return types.SimpleNamespace(id=pid)
+
+    monkeypatch.setattr(api, "_gate", fake_gate)
+    monkeypatch.setattr(api.ps, "get_sandbox", lambda settings: object())
+    api._open_streams.clear()
+    resp = await api.preview_logs(pid, types.SimpleNamespace())  # type: ignore[arg-type]
+    assert api._open_streams[pid] == 1
+    assert resp.background is not None
+    await resp.background()  # the generator was never iterated
+    assert api._open_streams.get(pid, 0) == 0
+    await resp.background()  # idempotent
+    assert api._open_streams.get(pid, 0) == 0

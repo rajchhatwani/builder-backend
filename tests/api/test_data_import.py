@@ -190,3 +190,23 @@ async def test_commit_is_metered_and_refused_over_quota(client: AsyncClient) -> 
     assert c.status_code == 429 and "quota_exceeded" in c.text, c.text
     recs = (await client.get(f"/projects/{pid}/imports/records?entity=Contact")).json()
     assert recs["total"] == 0
+
+
+async def test_nul_in_upload_filename_or_fields_is_422(client: AsyncClient) -> None:
+    """F-0151: the multipart guard skips /imports, so the route itself refuses NUL text."""
+    pid = await project_with_contact(client)
+    boundary = "bnd"
+
+    def body(filename: str, entity: str) -> bytes:
+        return (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="entity"\r\n\r\n{entity}\r\n'
+            f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+            f"Content-Type: text/csv\r\n\r\n"
+        ).encode() + CSV + f"\r\n--{boundary}--\r\n".encode()
+
+    headers = {"content-type": f"multipart/form-data; boundary={boundary}"}
+    for filename, entity in (("a\x00.csv", "Contact"), ("a.csv", "Con\x00tact")):
+        r = await client.post(
+            f"/projects/{pid}/imports", content=body(filename, entity), headers=headers
+        )
+        assert r.status_code == 422, r.text

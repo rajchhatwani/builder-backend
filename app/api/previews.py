@@ -27,6 +27,7 @@ import httpx
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.background import BackgroundTask
 
 from app.api.deps import require_verified_email
 from app.api.security import client_ip, current_principal
@@ -295,19 +296,32 @@ async def preview_logs(preview_id: uuid.UUID, request: Request) -> StreamingResp
     if _open_streams.get(p.id, 0) >= MAX_LOG_STREAMS:
         raise AppError("too_many_streams", "too many open log streams for this preview", 429)
     _open_streams[p.id] = _open_streams.get(p.id, 0) + 1
-    box = ps.get_sandbox(settings)
+    released = False
 
-    async def stream() -> AsyncIterator[str]:
-        try:
-            async for chunk in _stream_logs(request, box, preview_id, settings):
-                yield chunk
-        finally:
+    def release() -> None:
+        nonlocal released
+        if not released:
+            released = True
             _open_streams[p.id] = max(0, _open_streams.get(p.id, 1) - 1)
 
-    return StreamingResponse(
-        stream(), media_type="text/event-stream",
-        headers={**PREVIEW_HEADERS, "X-Preview-Id": str(p.id)},
-    )  # fmt: skip
+    try:
+        box = ps.get_sandbox(settings)
+
+        async def stream() -> AsyncIterator[str]:
+            try:
+                async for chunk in _stream_logs(request, box, preview_id, settings):
+                    yield chunk
+            finally:
+                release()
+
+        return StreamingResponse(
+            stream(), media_type="text/event-stream",
+            headers={**PREVIEW_HEADERS, "X-Preview-Id": str(p.id)},
+            background=BackgroundTask(release),  # also runs when the generator never started
+        )  # fmt: skip
+    except BaseException:
+        release()
+        raise
 
 
 async def _stream_logs(

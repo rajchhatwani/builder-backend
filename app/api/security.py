@@ -162,11 +162,23 @@ async def acting_principal(request: Request, db: AsyncSession = Depends(get_sess
     return await _principal(request, db, TokenAudience.app)
 
 
+def refuse_temporary_password(principal: Principal) -> None:
+    """A temporary (admin-set) password may only be replaced: every other route is refused."""
+    if principal.user.must_change_password:
+        raise forbidden("choose a new password before continuing", "password_change_required")
+
+
 async def current_principal(
     request: Request, principal: Principal = Depends(acting_principal)
 ) -> Principal:
     """A customer-surface credential: a session token or an API token. A "view as" token gets
     through only to the few routes listed in IMPERSONATION_OPEN_ROUTES (default deny)."""
+    route = request.scope.get("route")
+    if (request.method.upper(), getattr(route, "path", request.url.path)) != (
+        "GET",
+        "/account/me",
+    ):
+        refuse_temporary_password(principal)
     if principal.impersonation is not None:
         route = request.scope.get("route")
         template: str = getattr(route, "path", request.url.path)
@@ -454,6 +466,7 @@ async def org_context(
     route = request.scope.get("route")
     template: str = getattr(route, "path", request.url.path)
     method = request.method.upper()
+    refuse_temporary_password(principal)
     needed = authz.required_org_role(method, template)
     if needed is None:
         log.error("unlisted_org_route_refused", method=method, route=template)

@@ -267,6 +267,26 @@ async def test_pinned_token_still_sees_its_own_project(
     assert spec["project"]["name"] == "Shop"
 
 
+async def test_pinned_token_cannot_reach_other_project_tools(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """F-0145: a token pinned to A gets 404 on B for read and write tools."""
+    user: PlatformUser = client.user  # type: ignore[attr-defined]
+    a = uuid.UUID(await make_project(client, "A"))
+    b = uuid.UUID(await make_project(client, "B"))
+    await _set_owner_mcp(session_factory, a, user.id, True)
+    await _set_owner_mcp(session_factory, b, user.id, True)
+    scopes = (authz.SCOPE_MCP_READ, authz.SCOPE_MCP_WRITE)
+    async with session_factory() as db:
+        p = await _principal(user, scopes=scopes, pinned=a)
+        with pytest.raises(AppError) as exc:
+            await McpService(db).get_project_spec(p, b)
+        assert exc.value.status_code == 404
+        with pytest.raises(AppError) as exc:
+            await McpService(db).create_entity(p, b, name="Leak")
+        assert exc.value.status_code == 404
+
+
 # ── read tools return expected shapes ───────────────────────────────────────────────────
 
 

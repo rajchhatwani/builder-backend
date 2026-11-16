@@ -233,6 +233,24 @@ async def test_api_tokens_cannot_change_sso(client: AsyncClient, session_factory
     assert r.json()["code"] == "session_required"
 
 
+async def test_api_tokens_cannot_read_sso_or_scim_or_run_the_check(
+    client: AsyncClient, session_factory: Factory
+) -> None:
+    """F-0152: the "session only" contract also covers the outbound check and the reads."""
+    await business_org(client, session_factory)
+    token = (
+        await client.post("/account/tokens", json={"name": "ci", "scopes": ["read", "write"]})
+    ).json()["token"]
+    headers = {"Authorization": f"Bearer {token}"}
+    for method, path in (
+        ("POST", "/orgs/acme/sso/check"),
+        ("GET", "/orgs/acme/sso"),
+        ("GET", "/orgs/acme/scim"),
+    ):
+        r = await client.request(method, path, headers=headers)
+        assert r.status_code == 403 and r.json()["code"] == "session_required", path
+
+
 # -- domains --------------------------------------------------------------------------------
 
 

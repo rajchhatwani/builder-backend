@@ -100,6 +100,12 @@ async def _auth(ctx: Any, db: AsyncSession, required_scope: str) -> Principal:
             message="Invalid, expired or revoked API token",
             status_code=401,
         )
+    if principal.user.must_change_password:
+        raise AppError(
+            code="password_change_required",
+            message="choose a new password before continuing",
+            status_code=403,
+        )
     if not authz.scopes_allow(principal.scopes, required_scope):
         raise AppError(
             code="insufficient_scope",

@@ -164,3 +164,17 @@ async def test_review_queue_paging_over_100_rows(client: AsyncClient) -> None:
     assert allrows["total"] == 131 and len(allrows["items"]) == 131
     acc = (await client.get(f"/projects/{pid}/imports/{bid}/rows?status=accepted")).json()
     assert acc["total"] == 1
+
+
+async def test_search_simulation_is_refused_for_viewers(client: AsyncClient, client_for: ClientFor) -> None:
+    """F-0146: a viewer cannot search AS another role/user/tenant to read guarded fields."""
+    pid, _, viewer, editor = await _setup(client, client_for)
+    base = {"entity": "Person", "q": "a"}
+    plain = await viewer.get(f"/projects/{pid}/search", params=base)
+    assert plain.status_code == 200
+    assert all("salary" not in h.get("record", h) for h in plain.json().get("hits", []))
+    for extra in ({"as_role": "owner"}, {"as_user": "u1"}, {"as_tenant": "t1"}):
+        r = await viewer.get(f"/projects/{pid}/search", params={**base, **extra})
+        assert r.status_code == 403, extra
+    ok = await editor.get(f"/projects/{pid}/search", params={**base, "as_role": "owner"})
+    assert ok.status_code == 200

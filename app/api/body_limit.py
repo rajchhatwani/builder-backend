@@ -14,6 +14,7 @@ from app.core.data_import import MAX_BYTES as IMPORT_FILE_MAX_BYTES
 _SPEC_WRITE = re.compile(
     r"^/projects/[^/]+/(spec|behavior/[^/]+|authorization|observability|deployment|documents)/?$"
 )
+_SPEC_OPS_WRITE = re.compile(r"^/projects/[^/]+/spec/(ops|restore|undo|redo)/?$")
 
 
 _INTAKE = re.compile(r"^/projects/[^/]+/requirements/intake/?$")
@@ -33,7 +34,10 @@ def is_intake(method: str, path: str) -> bool:
 
 
 def is_spec_write(method: str, path: str) -> bool:
-    return method.upper() == "PUT" and _SPEC_WRITE.match(path) is not None
+    m = method.upper()
+    if m == "POST":  # set_section & co. change the spec like PUT does (F-0149)
+        return _SPEC_OPS_WRITE.match(path) is not None
+    return m == "PUT" and _SPEC_WRITE.match(path) is not None
 
 
 class SpecWriteLimit:

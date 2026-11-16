@@ -5,9 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import Pagination, pagination
-from app.api.security import guard
+from app.api.security import guard, org_mfa_required
 from app.db import get_session
-from app.models.platform import Organization
+from app.models.platform import Organization, OrganizationMember
 from app.schemas.common import Page
 from app.schemas.project import ProjectCreate, ProjectRead, ProjectUpdate
 from app.services.access_service import Principal
@@ -22,6 +22,18 @@ async def create_project(
     principal: Principal = Depends(guard),
     session: AsyncSession = Depends(get_session),
 ) -> ProjectRead:
+    # The org's MFA policy covers creating into it, like every /orgs and project route (§4.4).
+    target_org_id = body.organization_id or principal.user.default_organization_id
+    if target_org_id is not None:
+        target_org = await session.get(Organization, target_org_id)
+        is_member = await session.get(OrganizationMember, (target_org_id, principal.user.id))
+        if (
+            target_org is not None
+            and is_member is not None  # a stranger gets the plain 403 from the service
+            and target_org.require_mfa
+            and not principal.mfa_satisfied
+        ):
+            raise org_mfa_required(target_org, principal)
     project = await ProjectService(session).create(
         body, principal.user, organization_id=body.organization_id
     )
