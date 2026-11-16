@@ -47,16 +47,24 @@ export function DataModelPanel({ projectId, entities, relations, loading, onChan
       danger: true,
     })
     if (!ok) return
-    await api.deleteEntity(entity.id)
-    toast(`Deleted "${entity.name}".`)
-    onChanged()
+    try {
+      await api.deleteEntity(entity.id)
+      toast(`Deleted "${entity.name}".`)
+      onChanged()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : `Could not delete "${entity.name}".`, 'danger')
+    }
   }
 
   async function deleteRelation(relation: Relation) {
     const ok = await confirm({ title: 'Remove this relation?', confirmLabel: 'Remove', danger: true })
     if (!ok) return
-    await api.deleteRelation(relation.id)
-    onChanged()
+    try {
+      await api.deleteRelation(relation.id)
+      onChanged()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not remove the relation.', 'danger')
+    }
   }
 
   return (

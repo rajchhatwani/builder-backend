@@ -50,10 +50,13 @@ export function EntityDetail({ entity, onChanged }: EntityDetailProps) {
 
   async function handleDelete(field: Field) {
     if (!(await confirm({ title: `Delete field "${field.name}"?`, confirmLabel: 'Delete', danger: true }))) return
-    api.deleteField(field.id).then(() => {
+    try {
+      await api.deleteField(field.id)
       loadFields()
       onChanged()
-    })
+    } catch (err) {
+      toast(err instanceof Error ? err.message : `Could not delete "${field.name}".`, 'danger')
+    }
   }
 
   const columns = useMemo<ColumnDef<Field>[]>(

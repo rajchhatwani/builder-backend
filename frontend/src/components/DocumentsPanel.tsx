@@ -7,8 +7,13 @@ import { useUi } from './Ui'
 
 const ID_RE = /^[a-z][a-z0-9_]{0,39}$/
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').replace(/^[^a-z]+/, '').slice(0, 40)
+}
+
+/** While typing: same as slugify but a trailing '_' stays, so 'my_invoice' can be typed. Finished on blur/save. */
+export function slugifyLive(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^[^a-z]+/, '').slice(0, 40)
 }
 
 function Preview({ projectId, template, compute, initialData }: { projectId: string; template: DocTemplateData; compute: string | null; initialData: string }) {
@@ -134,7 +139,7 @@ export function DocumentsPanel({ projectId, onChanged }: { projectId: string; on
     setSaving(true)
     setError(null)
     try {
-      const saved = await api.putDocuments(projectId, { ...form, expected_version: settings.version })
+      const saved = await api.putDocuments(projectId, { ...form, templates: form.templates.map((t) => ({ ...t, id: slugify(t.id) })), expected_version: settings.version })
       setSettings(saved)
       setForm(saved)
       setIssues((await api.documentsIssues(projectId)).issues)
@@ -252,7 +257,8 @@ export function DocumentsPanel({ projectId, onChanged }: { projectId: string; on
                 Name in the URL
                 <input
                   value={current.id}
-                  onChange={(e) => setTemplate(editing, { ...current, id: slugify(e.target.value) })}
+                  onChange={(e) => setTemplate(editing, { ...current, id: slugifyLive(e.target.value) })}
+                  onBlur={(e) => setTemplate(editing, { ...current, id: slugify(e.target.value) })}
                   aria-invalid={!ID_RE.test(current.id)}
                 />
               </label>
@@ -319,7 +325,7 @@ export function DocumentsPanel({ projectId, onChanged }: { projectId: string; on
             <BlockEditor blocks={current.template.blocks as Block[]} onChange={(blocks) => setTemplate(editing, { ...current, template: { ...current.template, blocks } })} />
 
             <h4>Preview</h4>
-            <Preview key={current.id + (sample ? 's' : 'n')} projectId={projectId} template={current.template as DocTemplateData} compute={current.compute} initialData={JSON.stringify(sample ?? {}, null, 2)} />
+            <Preview key={`${editing}${sample ? 's' : 'n'}`} projectId={projectId} template={current.template as DocTemplateData} compute={current.compute} initialData={JSON.stringify(sample ?? {}, null, 2)} />
           </div>
         )}
 

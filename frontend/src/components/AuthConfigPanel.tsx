@@ -167,12 +167,16 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
     }
   }
 
+  // Built-in sign-in sends mail for magic links, verification and invitations.
+  const smtpShown = keycloak || emailMagicLinkEnabled || emailVerificationRequired || inviteOnly
+  const smtpRequired = keycloak ? emailVerificationRequired : smtpShown
+
   async function handleSave(event: FormEvent) {
     event.preventDefault()
     setSaving(true)
     setMessage(null)
 
-    const smtpNeeded = keycloak ? smtpHost.trim() !== '' : emailMagicLinkEnabled
+    const smtpNeeded = keycloak ? smtpHost.trim() !== '' : smtpShown
     const smtpConfig: SmtpConfig | null = smtpNeeded
       ? {
           host: smtpHost,
@@ -372,7 +376,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
       <details open className="auth-section">
         <summary>Email &amp; SMTP</summary>
         <div className="auth-section-body">
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBlockEnd: emailMagicLinkEnabled || keycloak ? 'var(--space-4)' : 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', marginBlockEnd: smtpShown ? 'var(--space-4)' : 0 }}>
             {!keycloak && (
               <label>
                 <input
@@ -393,7 +397,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
             </label>
           </div>
 
-          {(emailMagicLinkEnabled || keycloak) && (
+          {smtpShown && (
             <fieldset style={{ marginBlockStart: 'var(--space-4)' }}>
               <legend>{keycloak ? 'SMTP settings (Keycloak sends the emails)' : 'SMTP Settings'}</legend>
               <div className="field-grid">
@@ -401,7 +405,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                   SMTP host
                   <input
                     type="text"
-                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
+                    required={smtpRequired}
                     placeholder="smtp.example.com"
                     value={smtpHost}
                     onChange={(e) => setSmtpHost(e.target.value)}
@@ -413,7 +417,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                     type="number"
                     min={1}
                     max={65535}
-                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
+                    required={smtpRequired}
                     value={smtpPort}
                     onChange={(e) => setSmtpPort(Number(e.target.value))}
                   />
@@ -422,7 +426,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                   From email
                   <input
                     type="email"
-                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
+                    required={smtpRequired}
                     placeholder="noreply@example.com"
                     value={smtpFromEmail}
                     onChange={(e) => setSmtpFromEmail(e.target.value)}
@@ -432,7 +436,7 @@ export function AuthConfigPanel({ projectId }: AuthConfigPanelProps) {
                   From name
                   <input
                     type="text"
-                    required={keycloak ? emailVerificationRequired : emailMagicLinkEnabled}
+                    required={smtpRequired}
                     placeholder="App Notifications"
                     value={smtpFromName}
                     onChange={(e) => setSmtpFromName(e.target.value)}

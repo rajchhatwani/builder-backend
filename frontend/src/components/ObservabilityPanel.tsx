@@ -44,6 +44,12 @@ const COLLECTED: { what: string; how: string }[] = [
 ]
 
 /** OpenTelemetry for the generated service: what is collected, how much, and what is kept out. */
+/** Mirrors app/core/observability.py recommended_sample_ratio (200 spans/s budget, 4 spans per request). */
+export function recommendedSampleRatio(rps: number | null): number {
+  if (rps === null || !Number.isFinite(rps) || rps <= 0) return 1
+  return Math.max(0.01, Math.min(1, Math.floor((200 / (rps * 4)) * 100) / 100))
+}
+
 export function ObservabilityPanel({ projectId, onChanged }: { projectId: string; onChanged: () => void }) {
   const { toast } = useUi()
   const [settings, setSettings] = useState<ObservabilitySettings | null>(null)
@@ -116,6 +122,7 @@ export function ObservabilityPanel({ projectId, onChanged }: { projectId: string
 
   const ratio = Number(form.sampleRatio)
   const rps = form.expectedRps.trim() === '' ? null : Number(form.expectedRps)
+  const recommended = recommendedSampleRatio(rps)
   const never = settings.version === 0
 
   return (
@@ -204,9 +211,9 @@ export function ObservabilityPanel({ projectId, onChanged }: { projectId: string
             <p className="muted small-text">
               {rps !== null && rps > 0 ? (
                 <>
-                  At about {rps} requests per second, keeping <strong>{settings.recommended_sample_ratio}</strong> of traces holds a small
+                  At about {rps} requests per second, keeping <strong>{recommended}</strong> of traces holds a small
                   collector near 200 spans per second (rule of thumb: 4 spans per request).{' '}
-                  {Number.isFinite(ratio) && ratio > settings.recommended_sample_ratio && (
+                  {Number.isFinite(ratio) && ratio > recommended && (
                     <strong>Your setting of {ratio} is higher than that.</strong>
                   )}
                 </>

@@ -1,6 +1,6 @@
-import { useState, useEffect, type FormEvent } from 'react'
+import { useState, useEffect, useRef, type FormEvent } from 'react'
 import { api, ApiError } from '../api/client'
-import type { Entity, ProjectRole, AuthOperation, RowRule, PermissionEntry } from '../api/types'
+import type { Entity, ProjectRole, AuthOperation, RowRule, PermissionEntry, ProjectPermission } from '../api/types'
 import { Modal } from './Modal'
 import { useUi } from './Ui'
 
@@ -17,6 +17,8 @@ interface PermissionsPanelProps {
 export function PermissionsPanel({ projectId, entities, roles, keycloak = false }: PermissionsPanelProps) {
   const { confirm } = useUi()
   const [permissions, setPermissions] = useState<Record<string, PermissionEntry>>({})
+  // id of the saved row behind each matrix cell (needed to delete a cleared cell)
+  const savedIds = useRef<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -42,8 +44,10 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
       .then((items) => {
         if (cancelled) return
         const map: Record<string, PermissionEntry> = {}
+        const ids: Record<string, string> = {}
         for (const p of items) {
           const key = `${p.entity_id}:${p.operation}`
+          ids[key] = p.id
           map[key] = {
             entity_id: p.entity_id,
             operation: p.operation,
@@ -53,6 +57,7 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
             custom_filter_value: p.custom_filter_value ?? null,
           }
         }
+        savedIds.current = ids
         setPermissions(map)
         setLoading(false)
       })
@@ -130,33 +135,44 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
       (entry) => (entry.roles && entry.roles.length > 0) || Boolean(entry.row_rule),
     )
 
-    if (entries.length === 0) {
+    const keptKeys = new Set(entries.map((e) => `${e.entity_id}:${e.operation}`))
+    // A cleared cell is simply absent from the bulk payload (bulk upsert never deletes), so delete it.
+    const clearedKeys = Object.keys(savedIds.current).filter((k) => !keptKeys.has(k))
+
+    if (entries.length === 0 && clearedKeys.length === 0) {
       setError('No permissions configured to save. Assign at least one role or row rule first.')
       setSaving(false)
       return
     }
 
     try {
-      let updated
-      try {
-        updated = await api.bulkUpsertPermissions(projectId, entries)
-      } catch (err) {
-        if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
-        const ok = await confirm({
-          title: 'This gives some roles more access',
-          message: `${err.message}. Save anyway?`,
-          confirmLabel: 'Save anyway',
-          danger: true,
-        })
-        if (!ok) {
-          setSaving(false)
-          return
+      let updated: ProjectPermission[] | null = null
+      if (entries.length > 0) {
+        try {
+          updated = await api.bulkUpsertPermissions(projectId, entries)
+        } catch (err) {
+          if (!(err instanceof ApiError) || err.code !== 'access_weakened') throw err
+          const ok = await confirm({
+            title: 'This gives some roles more access',
+            message: `${err.message}. Save anyway?`,
+            confirmLabel: 'Save anyway',
+            danger: true,
+          })
+          if (!ok) {
+            setSaving(false)
+            return
+          }
+          updated = await api.bulkUpsertPermissions(projectId, entries, true)
         }
-        updated = await api.bulkUpsertPermissions(projectId, entries, true)
       }
+      for (const k of clearedKeys) await api.deletePermission(savedIds.current[k])
+      // Reload so the matrix and the saved ids match the server (also after deletions).
+      const fresh = clearedKeys.length > 0 ? await api.listAllPermissions(projectId) : (updated ?? [])
       const map: Record<string, PermissionEntry> = {}
-      for (const p of updated) {
+      const ids: Record<string, string> = clearedKeys.length > 0 ? {} : { ...savedIds.current }
+      for (const p of fresh) {
         const key = `${p.entity_id}:${p.operation}`
+        ids[key] = p.id
         map[key] = {
           entity_id: p.entity_id,
           operation: p.operation,
@@ -166,6 +182,7 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
           custom_filter_value: p.custom_filter_value ?? null,
         }
       }
+      savedIds.current = ids
       setPermissions(map)
       setSuccess('Permissions saved successfully.')
     } catch (err) {

@@ -112,7 +112,7 @@ function formFrom(config: KeycloakConfig): Form {
   }
 }
 
-function toWrite(form: Form): KeycloakWrite {
+export function toWrite(form: Form): KeycloakWrite {
   return {
     mode: form.mode,
     realm: nullIfBlank(form.realm),
@@ -127,7 +127,21 @@ function toWrite(form: Form): KeycloakWrite {
     session_idle_minutes: Number(form.sessionIdleMinutes),
     session_max_hours: Number(form.sessionMaxHours),
     audit_retention_days: Number(form.auditRetentionDays),
-    identity_providers: form.mode === 'own' ? form.providers : [],
+    identity_providers:
+      form.mode === 'own'
+        ? form.providers.map((p) => ({
+            ...p,
+            display_name: nullIfBlank(p.display_name),
+            client_id: p.client_id.trim(),
+            tenant_id: nullIfBlank(p.tenant_id),
+            hosted_domain: nullIfBlank(p.hosted_domain),
+            issuer: nullIfBlank(p.issuer),
+            authorization_url: nullIfBlank(p.authorization_url),
+            token_url: nullIfBlank(p.token_url),
+            jwks_url: nullIfBlank(p.jwks_url),
+            userinfo_url: nullIfBlank(p.userinfo_url),
+          }))
+        : [],
     source_project_id: form.mode === 'shared' ? nullIfBlank(form.sourceProjectId) : null,
   }
 }

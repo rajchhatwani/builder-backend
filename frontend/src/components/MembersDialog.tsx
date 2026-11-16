@@ -36,21 +36,22 @@ export function MembersDialog({ open, projectId, projectName, onClose }: Members
 
   const iAmOwner = members.some((m) => m.user_id === me.id && m.role === 'owner')
 
-  async function guarded(action: () => Promise<unknown>, done: string) {
+  async function guarded(action: () => Promise<unknown>, done: string): Promise<boolean> {
     setError(null)
     try {
       await action()
       toast(done)
       await load()
+      return true
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Can't reach the server.")
+      return false
     }
   }
 
   async function add(event: FormEvent) {
     event.preventDefault()
-    await guarded(() => api.addMember(projectId, email, role), 'Member added.')
-    setEmail('')
+    if (await guarded(() => api.addMember(projectId, email, role), 'Member added.')) setEmail('')
   }
 
   async function remove(member: Member) {
@@ -65,7 +66,7 @@ export function MembersDialog({ open, projectId, projectName, onClose }: Members
 
   return (
     <Modal open={open} onClose={onClose}>
-      <form method="dialog" onSubmit={(e) => e.preventDefault()}>
+      <form method="dialog" onSubmit={add}>
         <header>
           <h3>People with access to {projectName}</h3>
           <p>They need an account on this platform first.</p>
@@ -158,7 +159,7 @@ export function MembersDialog({ open, projectId, projectName, onClose }: Members
                 </select>
               </label>
               <div>
-                <button type="button" onClick={add} disabled={!email}>
+                <button type="submit" disabled={!email}>
                   Add
                 </button>
               </div>

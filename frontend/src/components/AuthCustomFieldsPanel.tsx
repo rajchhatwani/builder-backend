@@ -36,7 +36,7 @@ function toNumberOrNull(text: string): number | null {
 }
 
 export function AuthCustomFieldsPanel({ projectId, keycloak = false }: AuthCustomFieldsPanelProps) {
-  const { confirm } = useUi()
+  const { confirm, toast } = useUi()
   const [fields, setFields] = useState<AuthCustomField[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -121,7 +121,12 @@ export function AuthCustomFieldsPanel({ projectId, keycloak = false }: AuthCusto
 
   async function handleDelete(field: AuthCustomField) {
     if (!(await confirm({ title: `Delete field "${field.name}"?`, confirmLabel: 'Delete', danger: true }))) return
-    api.deleteAuthCustomField(field.id).then(load)
+    try {
+      await api.deleteAuthCustomField(field.id)
+      await load()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : `Could not delete "${field.name}".`, 'danger')
+    }
   }
 
   async function handleSubmit(event: FormEvent) {

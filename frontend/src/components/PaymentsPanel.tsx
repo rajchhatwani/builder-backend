@@ -63,6 +63,14 @@ const PROFILES: { id: PaymentsProfile; label: string; help: string }[] = [
   { id: 'large', label: 'Large', help: 'About 1,200 a minute' },
 ]
 
+/** Switching provider drops currencies the new provider cannot charge and re-picks the fixed currency. */
+export function withProvider<T extends { currencies: string[]; currency: string }>(f: T, provider: PaymentProvider): T {
+  const allowed = provider === 'razorpay' ? RAZORPAY_CURRENCIES : ALL_CURRENCIES
+  const currencies = f.currencies.filter((c) => allowed.includes(c))
+  const currency = allowed.includes(f.currency) ? f.currency : (currencies[0] ?? allowed[0])
+  return { ...f, provider, currencies, currency }
+}
+
 interface Form {
   provider: PaymentProvider
   entity: string
@@ -481,7 +489,7 @@ export function PaymentsPanel({ project, entities, roles, authEnabled, issues, o
           <div className="choice-grid">
             {(Object.keys(PROVIDERS) as PaymentProvider[]).map((id) => (
               <label key={id} className="choice" data-selected={form.provider === id ? 'true' : undefined}>
-                <input type="radio" name="provider" checked={form.provider === id} onChange={() => set('provider', id)} />
+                <input type="radio" name="provider" checked={form.provider === id} onChange={() => setForm((f) => withProvider(f, id))} />
                 <strong>{PROVIDERS[id].title}</strong>
                 <span className="muted">{PROVIDERS[id].help}</span>
               </label>
