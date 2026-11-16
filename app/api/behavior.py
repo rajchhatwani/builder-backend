@@ -157,7 +157,7 @@ def _block_routes() -> None:
     for key, (cls, what) in names.items():
         read, write = getattr(bs, cls + "Read"), getattr(bs, cls + "Write")
 
-        def make(key: str = key, read: type = read, write: type = write) -> None:
+        def make(key: str = key, what: str = what, read: type = read, write: type = write) -> None:
             async def get_block(
                 project_id: uuid.UUID, session: AsyncSession = Depends(get_session)
             ) -> Any:
