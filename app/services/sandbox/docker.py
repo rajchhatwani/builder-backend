@@ -9,12 +9,14 @@ read-only code directory. The docker socket is never mounted and `--privileged` 
 
 import asyncio
 import contextlib
+import datetime as dt
 import json
 import os
 import re
 import time
 import uuid
 from collections.abc import Collection
+from pathlib import Path
 
 from app.config import Settings, get_settings
 from app.services.sandbox import subnets
@@ -26,6 +28,8 @@ from app.services.sandbox.base import (
     LABEL_ID,
     MAX_OUTPUT_BYTES,
     RESERVED_ENV,
+    RESERVED_ENV_PREFIXES,
+    RESERVED_ENV_SUFFIXES,
     Limits,
     ReapResult,
     RunResult,
@@ -44,7 +48,7 @@ _NET_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,62}$")
 _BAD_NETS = frozenset({"host", "none", "bridge", "default", "ingress", "docker_gwbridge"})
 _BAD_TMPFS = ("/proc", "/dev", "/sys", "/workspace", "/tmp", "/etc", "/run")  # noqa: S108
 MAX_EXTRA_TMPFS_BYTES = 1024**3
-_USER_RE = re.compile(r"^\d{1,10}(:\d{1,10})?$")
+_USER_RE = re.compile(r"\d{1,10}(:\d{1,10})?")
 # What the docker CLI may inherit. DOCKER_* only for a process that talks to docker itself (the
 # runner, or local/test); a process going through the runner never builds a CLI env at all.
 _CLI_ENV_KEYS = ("PATH", "HOME", "XDG_RUNTIME_DIR")
@@ -71,7 +75,7 @@ def _validate(spec: SandboxSpec, allowed_images: Collection[str] | None = None) 
     allowed = get_settings().sandbox_images if allowed_images is None else allowed_images
     if spec.image not in allowed:
         raise SandboxError("image is not on the sandbox allowlist")
-    if not _USER_RE.match(spec.user) or spec.user.split(":")[0] in ("0", "root"):
+    if not _USER_RE.fullmatch(spec.user) or any(int(p) == 0 for p in spec.user.split(":")):
         raise SandboxError("sandbox user must be a non-root numeric uid[:gid]")
     if spec.network is not None and (
         not _NET_RE.match(spec.network) or spec.network.lower() in _BAD_NETS
@@ -82,7 +86,8 @@ def _validate(spec: SandboxSpec, allowed_images: Collection[str] | None = None) 
             not ENV_RE.match(k)
             or k in RESERVED_ENV
             or k in _ENV_NAMES_NEVER_FROM_CALLERS
-            or k.startswith(("DOCKER_", "BB_SANDBOX"))
+            or k.startswith(("DOCKER_", "BB_SANDBOX", *RESERVED_ENV_PREFIXES))
+            or k.endswith(RESERVED_ENV_SUFFIXES)
         ):
             raise SandboxError(f"environment variable name not allowed: {k!r}")
     for host, ip in spec.extra_hosts.items():
@@ -204,6 +209,8 @@ class DockerSandbox(Sandbox):
         # or test. An unset environment (which defaults to "local") never qualifies (S2-006).
         self._allow_runc = s.environment_explicit and s.environment in ("local", "test")
         self._runtime_ok = False
+        root = s.runner_mount_root
+        self._mount_root = Path(root).resolve() if root else None
         self.images = frozenset(s.sandbox_images)
         self.subnet_prefix = s.sandbox_subnet_prefix
         self.subnet_pool = subnets.parse_pool(s.sandbox_subnet_pool, s.sandbox_subnet_prefix)
@@ -337,13 +344,33 @@ class DockerSandbox(Sandbox):
             if created_net:
                 await self._docker("network", "rm", net)
             raise SandboxError(f"could not start sandbox: {err.strip()[:200]}")
+        if spec.code_dir is not None and self._mount_root is not None:
+            await self._verify_mounts(spec.sandbox_id)
         return spec.sandbox_id
 
-    async def _state(self, sandbox_id: str) -> dict[str, object] | None:
+    async def _verify_mounts(self, sandbox_id: str) -> None:
+        """The mount root can be writable by the (less trusted) API: docker resolved the bind source
+        at mount time, so re-check what it actually mounted and tear down anything outside the root."""
+        name = name_for(sandbox_id)
         rc, out, _ = await self._docker(
+            "inspect", "--format", '{{range .Mounts}}{{.Source}}{{"\\n"}}{{end}}', name
+        )
+        sources = [x for x in out.splitlines() if x.strip()]
+        ok = rc == 0 and bool(sources) and all(
+            Path(x).resolve().is_relative_to(self._mount_root or Path("/nonexistent"))
+            for x in sources
+        )
+        if not ok:
+            await self.destroy(sandbox_id)
+            raise SandboxError("sandbox mount source is outside the allowed mount root")
+
+    async def _state(self, sandbox_id: str, strict: bool = False) -> dict[str, object] | None:
+        rc, out, err = await self._docker(
             "inspect", "--format", "{{json .State}}", name_for(sandbox_id)
         )
         if rc != 0:
+            if strict and "no such" not in err.lower():
+                raise SandboxError("docker could not report the sandbox state")
             return None
         try:
             state: dict[str, object] = json.loads(out)
@@ -359,7 +386,7 @@ class DockerSandbox(Sandbox):
         return out + err if rc == 0 else ""
 
     async def is_running(self, sandbox_id: str) -> bool:
-        state = await self._state(sandbox_id)
+        state = await self._state(sandbox_id, strict=True)
         return bool(state and state.get("Running"))
 
     async def ip_of(self, sandbox_id: str, network: str) -> str | None:
@@ -452,6 +479,12 @@ class DockerSandbox(Sandbox):
             cid, _, rest = line.partition("|")
             state, _, expires = rest.partition("|")
             expired = expires.isdigit() and int(expires) <= t
+            if not expired and state in ("exited", "dead"):
+                # A one-shot run that just exited is still being read by run(): give it a grace.
+                rcf, fin, _ = await self._docker("inspect", "--format", "{{.State.FinishedAt}}", cid)
+                finished = _parse_ts(fin) if rcf == 0 else None
+                if finished is None or t - finished < REAP_GRACE_SECONDS:
+                    continue
             if expired or state in ("exited", "dead"):
                 await self._docker("rm", "-f", "-v", cid)
                 result.containers.append(cid)
@@ -463,16 +496,38 @@ class DockerSandbox(Sandbox):
         if rc == 0:
             for line in out.splitlines():
                 nid, _, expires = line.partition("|")
-                rc2, members, _ = await self._docker(
-                    "network", "inspect", nid, "--format", "{{len .Containers}}"
+                rc2, info, _ = await self._docker(
+                    "network", "inspect", nid, "--format", "{{len .Containers}}|{{.Created}}"
                 )
-                empty = rc2 == 0 and members.strip() == "0"
+                members, _, created = info.strip().partition("|")
+                born = _parse_ts(created)
+                # A network made moments ago is waiting for its container's `docker run`.
+                empty = (
+                    rc2 == 0 and members == "0" and born is not None
+                    and t - born >= REAP_GRACE_SECONDS
+                )
                 expired = expires.isdigit() and int(expires) <= t
                 if empty or expired:
                     rc3, _, _ = await self._docker("network", "rm", nid)
                     if rc3 == 0:
                         result.networks.append(nid)
         return result
+
+
+REAP_GRACE_SECONDS = 60
+
+
+def _parse_ts(raw: str) -> float | None:
+    """Docker RFC3339 timestamp (nanosecond precision) -> epoch seconds; None if unparseable."""
+    m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d:\d\d)", raw.strip())
+    if not m:
+        return None
+    frac = (m.group(2) or "")[:7]
+    tz = "+00:00" if m.group(3) == "Z" else m.group(3)
+    try:
+        return dt.datetime.fromisoformat(m.group(1) + frac + tz).timestamp()
+    except ValueError:
+        return None
 
 
 async def _read_capped(stream: asyncio.StreamReader | None, cap: int) -> str:

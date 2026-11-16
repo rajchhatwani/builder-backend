@@ -204,3 +204,52 @@ def test_shared_preview_network_owner_and_tmpfs_uid() -> None:
     for bad in ({"network_owner": "not hex!"}, {"tmpfs_uid": 0}, {"tmpfs_uid": 70000}):
         with pytest.raises(SandboxError):
             args(spec(**bad))
+
+
+# -- audit B1-025 -------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "name", ["LD_AUDIT", "LD_DEBUG", "GCONV_PATH", "GODEBUG", "HTTPS_PROXY", "ALL_PROXY",
+             "SSL_CERT_FILE", "OTEL_EXPORTER_X", "NLSPATH", "LOCPATH", "HOSTALIASES"]
+)
+def test_cli_behaviour_env_names_refused(name: str) -> None:  # F-0226
+    with pytest.raises(SandboxError):
+        args(spec(env={name: "x"}))
+
+
+@pytest.mark.parametrize("user", ["00", "00:00", "10001:0", "10001:00", "0000:5", "10001:10001\n"])
+def test_root_user_forms_refused(user: str) -> None:  # F-0227
+    with pytest.raises(SandboxError):
+        args(spec(user=user))
+
+
+def test_normal_user_and_env_still_accepted() -> None:
+    a = args(spec(user="10001", env={"PYTHONUNBUFFERED": "1", "DATABASE_URL": "x"}))
+    assert "10001" in a
+
+
+async def test_reap_spares_young_empty_network_and_young_exited_container() -> None:  # F-0229
+    box = DockerSandbox(Settings(environment="test"), runner_process=True)
+    removed: list[tuple[str, ...]] = []
+
+    async def fake(*a: str, **_: object) -> tuple[int, str, str]:
+        if a[0] == "ps":
+            return 0, "c-young|exited|\nc-old|exited|\n", ""
+        if a[:2] == ("network", "ls"):
+            return 0, "n-young|\nn-old|\n", ""
+        if a[:2] == ("network", "inspect"):
+            created = "2026-11-16T10:00:00.123456789Z" if a[2] == "n-old" else "2026-11-16T11:59:59.5Z"
+            return 0, f"0|{created}", ""
+        if a[0] == "inspect":
+            fin = "2026-11-16T10:00:00Z" if a[-1] == "c-old" else "2026-11-16T11:59:59.9Z"
+            return 0, fin, ""
+        removed.append(a)
+        return 0, "", ""
+
+    box._docker = fake  # type: ignore[method-assign]
+    import datetime as dt
+
+    now = dt.datetime(2026, 11, 16, 12, 0, 0, tzinfo=dt.UTC).timestamp()
+    res = await box.reap(now)
+    assert res.containers == ["c-old"] and res.networks == ["n-old"]

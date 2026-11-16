@@ -24,6 +24,10 @@ from app.services.sandbox.base import (
 _DEFAULT_TIMEOUT = 120.0
 
 
+class SandboxNotFound(SandboxError):
+    """The runner answered 404: that sandbox does not exist."""
+
+
 class RemoteSandbox(Sandbox):
     def __init__(
         self,
@@ -61,7 +65,8 @@ class RemoteSandbox(Sandbox):
             data = {}
         if r.status_code != 200 or not isinstance(data, dict):
             msg = data.get("error") if isinstance(data, dict) else None
-            raise SandboxError(f"sandbox runner refused ({r.status_code}): {str(msg)[:200]}")
+            exc = SandboxNotFound if r.status_code == 404 else SandboxError
+            raise exc(f"sandbox runner refused ({r.status_code}): {str(msg)[:200]}")
         return data
 
     @staticmethod
@@ -102,8 +107,8 @@ class RemoteSandbox(Sandbox):
     async def is_running(self, sandbox_id: str) -> bool:
         try:
             return bool((await self._call("state", {"sandbox_id": sandbox_id}))["running"])
-        except SandboxError:
-            return False
+        except SandboxNotFound:
+            return False  # any other failure (runner/docker outage) propagates: unknown != stopped
 
     async def ip_of(self, sandbox_id: str, network: str) -> str | None:
         try:

@@ -17,9 +17,11 @@ DOCKER_CONFIG or DOCKER_CONTEXT. Request bodies (which carry container env value
 """
 
 import argparse
+import contextlib
 import hmac
 import json
 import os
+import socket
 import sys
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -66,9 +68,11 @@ class RunnerCore:
 
     async def _labelled(self, sandbox_id: str) -> bool:
         """True when a container of that name exists AND carries our label."""
-        rc, out, _ = await self.box._docker(
+        rc, out, err = await self.box._docker(
             "inspect", "--format", '{{index .Config.Labels "' + LABEL + '"}}', name_for(sandbox_id)
         )
+        if rc != 0 and "no such" not in err.lower():
+            raise SandboxError("docker is unavailable")
         return rc == 0 and out.strip() == "1"
 
     async def _require_labelled(self, sandbox_id: str) -> None:
@@ -210,6 +214,21 @@ def create_app(
     return app
 
 
+def bind_private_uds(path: str) -> socket.socket:
+    """Bind the runner socket with mode 0600 BEFORE uvicorn sees it (uvicorn would chmod a socket
+    it binds itself to 0666)."""
+    with contextlib.suppress(FileNotFoundError):
+        os.unlink(path)
+    old = os.umask(0o177)
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.bind(path)
+    finally:
+        os.umask(old)
+    os.chmod(path, 0o600)
+    return sock
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m app.services.sandbox.runner")
     ap.add_argument("--uds", help="unix socket path (mode 0600)")
@@ -227,8 +246,9 @@ def main(argv: list[str] | None = None) -> int:
     import uvicorn
 
     if a.uds:
-        os.umask(0o077)
-        uvicorn.run(app, uds=a.uds, access_log=False, log_level="warning")
+        sock = bind_private_uds(a.uds)
+        server = uvicorn.Server(uvicorn.Config(app, access_log=False, log_level="warning"))
+        server.run(sockets=[sock])
     else:
         uvicorn.run(app, host=a.host, port=a.port, access_log=False, log_level="warning")
     return 0

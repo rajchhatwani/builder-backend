@@ -21,7 +21,14 @@ MAX_OUTPUT_BYTES = 64 * 1024
 ID_RE = re.compile(r"^[a-f0-9]{8,32}$")
 ENV_RE = re.compile(r"^[A-Z_][A-Z0-9_]{0,63}$")
 # Env names that would change how the docker CLI itself behaves (we pass values via its env).
-RESERVED_ENV = frozenset({"PATH", "HOME", "LD_PRELOAD", "LD_LIBRARY_PATH", "TMPDIR", "USER"})
+RESERVED_ENV = frozenset(
+    {"PATH", "HOME", "LD_PRELOAD", "LD_LIBRARY_PATH", "TMPDIR", "USER", "GCONV_PATH", "NLSPATH",
+     "LOCPATH", "HOSTALIASES", "RES_OPTIONS", "LOCALDOMAIN", "TZDIR", "GODEBUG"}
+)
+# Values travel in the docker CLI's own environment, so names that make the loader / Go runtime /
+# TLS / proxy layer of that process misbehave are refused by prefix and suffix.
+RESERVED_ENV_PREFIXES = ("LD_", "GCONV", "GODEBUG", "GOMAXPROCS", "SSL_", "OTEL_", "MALLOC_")
+RESERVED_ENV_SUFFIXES = ("_PROXY",)
 _SIZE_RE = re.compile(r"^(\d{1,6})([kmg]?)$")
 _UNITS = {"": 1, "k": 1024, "m": 1024**2, "g": 1024**3}
 LABEL = "bb.sandbox"

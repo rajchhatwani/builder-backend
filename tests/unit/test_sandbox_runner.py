@@ -56,6 +56,9 @@ if a[:1] == ["inspect"]:
     fmt = a[a.index("--format") + 1]
     if "json .State" in fmt: done(0, '{{"Running": true, "ExitCode": 0}}')
     if "IPAddress" in fmt: done(0, "10.9.0.2\n")
+    if ".Mounts" in fmt:
+        src = st.get("mount_source") or [x for x in c["args"] if x.startswith("type=bind")][0].split("source=")[1].split(",")[0]
+        done(0, src + "\n")
     done(0, c["labels"].get("bb.sandbox", "") + "\n")
 if a[:1] == ["rm"]:
     st["containers"].pop(a[-1], None); done()
@@ -307,3 +310,58 @@ def test_docker_env_names_are_not_forwardable_by_callers() -> None:
     for name in ("DOCKER_HOST", "DOCKER_CONFIG", "DOCKER_CONTEXT", "HOME"):
         with pytest.raises(SandboxError):
             _validate(SandboxSpec(image="python:3.12-slim", sandbox_id=ID, env={name: "x"}))
+
+
+# -- audit B1-025 -------------------------------------------------------------------------------
+
+
+async def test_mount_source_outside_root_after_start_is_destroyed(rig: Rig) -> None:  # F-0228
+    rig.state.write_text(json.dumps({"containers": {}, "networks": {}, "calls": [], "mount_source": "/"}))
+    box = DockerSandbox(rig.settings, runner_process=True)
+    with pytest.raises(SandboxError, match="mount"):
+        await box.start(SandboxSpec(image="python:3.12-slim", sandbox_id=ID, code_dir=rig.root / "code"))
+    assert "bbsbx-" + ID not in rig.st()["containers"]
+
+
+async def test_remote_is_running_raises_on_outage_false_on_404(rig: Rig) -> None:  # F-0230
+    def down(_r: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("down")
+
+    def err503(_r: httpx.Request) -> httpx.Response:
+        return httpx.Response(503, json={"error": "busy"})
+
+    def gone(_r: httpx.Request) -> httpx.Response:
+        return httpx.Response(404, json={"error": "no such sandbox"})
+
+    for handler in (down, err503):
+        box = RemoteSandbox(rig.api_settings, transport=httpx.MockTransport(handler))
+        with pytest.raises(SandboxError):
+            await box.is_running(ID)
+    assert await RemoteSandbox(rig.api_settings, transport=httpx.MockTransport(gone)).is_running(ID) is False
+
+
+async def test_docker_is_running_raises_when_docker_fails_not_no_such(tmp_path: Path) -> None:  # F-0230
+    box = DockerSandbox(Settings(environment="test"), runner_process=True)
+
+    async def broken(*_a: str, **_k: object) -> tuple[int, str, str]:
+        return 1, "", "Cannot connect to the Docker daemon"
+
+    async def missing(*_a: str, **_k: object) -> tuple[int, str, str]:
+        return 1, "", "Error: No such object: bbsbx-x"
+
+    box._docker = broken  # type: ignore[method-assign]
+    with pytest.raises(SandboxError):
+        await box.is_running(ID)
+    box._docker = missing  # type: ignore[method-assign]
+    assert await box.is_running(ID) is False
+
+
+def test_runner_uds_socket_is_0600(tmp_path: Path) -> None:  # F-0231
+    from app.services.sandbox.runner import bind_private_uds
+
+    path = tmp_path / "r.sock"
+    sock = bind_private_uds(str(path))
+    try:
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+    finally:
+        sock.close()
