@@ -18,13 +18,20 @@ export function CoverageTab({ projectId, version }: { projectId: string; version
   useEffect(() => {
     setCoverage(null)
     setPicked(null)
+    let cancelled = false
     api
       .authorizationCoverage(projectId)
       .then((c) => {
+        if (cancelled) return
         setCoverage(c)
         setError(null)
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not build the coverage matrix.'))
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not build the coverage matrix.')
+      })
+    return () => {
+      cancelled = true
+    }
   }, [projectId, version])
 
   if (error) {

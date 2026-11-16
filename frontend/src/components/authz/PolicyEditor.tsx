@@ -53,6 +53,7 @@ export function PolicyEditor({ settings, catalogue, onSave }: PolicyEditorProps)
     setSaving(false)
     if (message) {
       setError(message)
+      setFormError(message)
       return false
     }
     setError(null)
@@ -86,8 +87,6 @@ export function PolicyEditor({ settings, catalogue, onSave }: PolicyEditorProps)
     if (await persist(policies, attachments)) {
       setEditing(null)
       toast(pbac && isNew ? 'Policy saved. Attach it to a role below so it takes effect.' : 'Policy saved.')
-    } else {
-      setFormError('The server refused the change. See the message above the list.')
     }
   }
 
