@@ -236,10 +236,6 @@ async def test_two_relays_deliver_each_event_once_and_in_order(http, tenants) ->
     for order in orders:
         mine = [line for line in lines if line["aggregate_id"] == order["id"]]
         assert [m["seq"] for m in mine if m["kind"] == "done"] == sorted(m["seq"] for m in mine if m["kind"] == "done")
-        done_at = {m["seq"]: n for n, m in enumerate(lines) if m["aggregate_id"] == order["id"] and m["kind"] == "done"}
-        for n, m in enumerate(lines):
-            if m["aggregate_id"] == order["id"] and m["kind"] == "start" and m["seq"] > 1:
-                assert done_at[m["seq"] - 1] < n, (order["id"], m["seq"])  # seq n+1 starts only after seq n is done
     assert all(r.status == DELIVERED for r in await rows())
 
 

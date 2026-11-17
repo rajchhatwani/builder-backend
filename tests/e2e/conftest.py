@@ -13,7 +13,7 @@ from functools import cache
 
 import pytest
 
-SANDBOX_FILES = frozenset({"test_sandbox_hostile.py", "test_preview_stack.py", "test_sandbox_runner_docker.py"})
+SANDBOX_FILES = frozenset({"test_sandbox_hostile.py", "test_preview_stack.py"})
 PREVIEW_IMAGE = "bb-preview-app:1"
 IMAGE_REASON = "needs docker + runsc + the bb-preview-app:1 image"
 
