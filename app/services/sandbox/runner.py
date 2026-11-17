@@ -69,7 +69,7 @@ class RunnerCore:
     async def _labelled(self, sandbox_id: str) -> bool:
         """True when a container of that name exists AND carries our label."""
         rc, out, err = await self.box._docker(
-            "inspect", "--format", '{{index .Config.Labels "' + LABEL + '"}}', name_for(sandbox_id)
+            "inspect", "--type", "container", "--format", '{{index .Config.Labels "' + LABEL + '"}}', name_for(sandbox_id)
         )
         if rc != 0 and "no such" not in err.lower():
             raise SandboxError("docker is unavailable")

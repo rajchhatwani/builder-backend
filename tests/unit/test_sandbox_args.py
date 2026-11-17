@@ -253,3 +253,47 @@ async def test_reap_spares_young_empty_network_and_young_exited_container() -> N
     now = dt.datetime(2026, 11, 16, 12, 0, 0, tzinfo=dt.UTC).timestamp()
     res = await box.reap(now)
     assert res.containers == ["c-old"] and res.networks == ["n-old"]
+
+
+async def test_reap_removes_old_empty_network_with_real_docker_created_shape() -> None:  # F-0950
+    box = DockerSandbox(Settings(environment="test"), runner_process=True)
+    removed: list[tuple[str, ...]] = []
+
+    async def fake(*a: str, **_: object) -> tuple[int, str, str]:
+        if a[0] == "ps":
+            return 0, "", ""
+        if a[:2] == ("network", "ls"):
+            return 0, "n-old|\n", ""
+        if a[:2] == ("network", "inspect"):
+            fmt = a[-1]
+            if "json .Created" in fmt:  # real docker: JSON-quoted RFC3339
+                return 0, '0|"2026-11-16T10:00:00.678868047+05:30"\n', ""
+            return 0, "0|2026-11-16 10:00:00.678868047 +0530 IST\n", ""  # go time.String()
+        removed.append(a)
+        return 0, "", ""
+
+    box._docker = fake  # type: ignore[method-assign]
+    import datetime as dt
+
+    now = dt.datetime(2026, 11, 16, 12, 0, 0, tzinfo=dt.UTC).timestamp()
+    res = await box.reap(now)
+    assert res.networks == ["n-old"]
+
+
+async def test_inspect_calls_are_container_typed() -> None:  # F-0951
+    box = DockerSandbox(Settings(environment="test"), runner_process=True)
+    calls: list[tuple[str, ...]] = []
+
+    async def fake(*a: str, **_: object) -> tuple[int, str, str]:
+        calls.append(a)
+        if a[0] == "inspect" and "--type" not in a:  # would resolve to the same-named network
+            return 1, "", "template parsing error: map has no entry for key State"
+        return 1, "", "Error: No such container: bbsbx-x"
+
+    box._docker = fake  # type: ignore[method-assign]
+    assert await box.is_running("aaaabbbbccccdddd") is False
+    assert await box.ip_of("aaaabbbbccccdddd", "net1") is None
+    with pytest.raises(SandboxError):
+        await box._verify_mounts("aaaabbbbccccdddd")
+    inspects = [c for c in calls if c[0] == "inspect"]
+    assert inspects and all(c[1:3] == ("--type", "container") for c in inspects)

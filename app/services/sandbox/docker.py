@@ -353,7 +353,7 @@ class DockerSandbox(Sandbox):
         at mount time, so re-check what it actually mounted and tear down anything outside the root."""
         name = name_for(sandbox_id)
         rc, out, _ = await self._docker(
-            "inspect", "--format", '{{range .Mounts}}{{.Source}}{{"\\n"}}{{end}}', name
+            "inspect", "--type", "container", "--format", '{{range .Mounts}}{{.Source}}{{"\\n"}}{{end}}', name
         )
         sources = [x for x in out.splitlines() if x.strip()]
         ok = rc == 0 and bool(sources) and all(
@@ -366,7 +366,7 @@ class DockerSandbox(Sandbox):
 
     async def _state(self, sandbox_id: str, strict: bool = False) -> dict[str, object] | None:
         rc, out, err = await self._docker(
-            "inspect", "--format", "{{json .State}}", name_for(sandbox_id)
+            "inspect", "--type", "container", "--format", "{{json .State}}", name_for(sandbox_id)
         )
         if rc != 0:
             if strict and "no such" not in err.lower():
@@ -394,7 +394,8 @@ class DockerSandbox(Sandbox):
         if not _NET_RE.match(network):
             raise SandboxError("invalid network name")
         rc, out, _ = await self._docker(
-            "inspect", "--format", f'{{{{(index .NetworkSettings.Networks "{network}").IPAddress}}}}',
+            "inspect", "--type", "container", "--format",
+            f'{{{{(index .NetworkSettings.Networks "{network}").IPAddress}}}}',
             name_for(sandbox_id),
         )  # fmt: skip
         ip = out.strip()
@@ -497,7 +498,7 @@ class DockerSandbox(Sandbox):
             for line in out.splitlines():
                 nid, _, expires = line.partition("|")
                 rc2, info, _ = await self._docker(
-                    "network", "inspect", nid, "--format", "{{len .Containers}}|{{.Created}}"
+                    "network", "inspect", nid, "--format", "{{len .Containers}}|{{json .Created}}"
                 )
                 members, _, created = info.strip().partition("|")
                 born = _parse_ts(created)
@@ -519,7 +520,7 @@ REAP_GRACE_SECONDS = 60
 
 def _parse_ts(raw: str) -> float | None:
     """Docker RFC3339 timestamp (nanosecond precision) -> epoch seconds; None if unparseable."""
-    m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d:\d\d)", raw.strip())
+    m = re.match(r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(\.\d+)?(Z|[+-]\d\d:\d\d)", raw.strip().strip('"'))
     if not m:
         return None
     frac = (m.group(2) or "")[:7]

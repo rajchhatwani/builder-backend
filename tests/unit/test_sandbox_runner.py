@@ -365,3 +365,20 @@ def test_runner_uds_socket_is_0600(tmp_path: Path) -> None:  # F-0231
         assert stat.S_IMODE(path.stat().st_mode) == 0o600
     finally:
         sock.close()
+
+
+async def test_runner_labelled_uses_container_type_inspect() -> None:  # F-0951
+    box = DockerSandbox(Settings(environment="test"), runner_process=True)
+    seen: list[tuple[str, ...]] = []
+
+    async def fake(*a: str, **_k: object) -> tuple[int, str, str]:
+        seen.append(a)
+        if "--type" not in a:
+            return 1, "", "template parsing error: map has no entry for key Config"
+        return 1, "", "Error: No such container: x"
+
+    box._docker = fake  # type: ignore[method-assign]
+    core = RunnerCore.__new__(RunnerCore)
+    core.box = box
+    assert await core._labelled(ID) is False
+    assert seen[0][1:3] == ("--type", "container")
