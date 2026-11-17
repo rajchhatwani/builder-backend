@@ -22,6 +22,7 @@ from app.core.validation_packs import (
 )
 from app.core.validation_payments import payments_active
 from app.core.validation_providers import providers_active
+from app.core.validation_realtime import metrics_active, realtime_active
 from app.core.validation_runtime import runtime_config_active
 from app.core.validation_storage import storage_active
 from app.core.validation_webhooks import webhooks_active
@@ -47,6 +48,8 @@ MODULE_PREFIXES: dict[str, Callable[[Spec], bool]] = {
     "notifications": notifications_active,
     "workflows": workflows_active,
     "config": runtime_config_active,
+    "metrics": metrics_active,
+    "realtime": realtime_active,
 }
 
 
