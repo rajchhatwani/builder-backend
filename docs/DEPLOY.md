@@ -10,7 +10,8 @@ pulled by your server. Secrets live only in `/opt/builder/.env` on the server.
 2. A deploy user in the `docker` group, and an SSH key pair for the workflow (public key in `authorized_keys`).
 3. `mkdir -p /opt/builder && cd /opt/builder`, then:
    - copy `.env.example` to `.env`, fill it in (`openssl rand -hex 32` for each secret), `chmod 600 .env`
-   - `printf 'k1 %s\n' "$(openssl rand -base64 32)" > keys.txt && chmod 600 keys.txt`
+   - `printf 'k1 %s\n' "$(openssl rand -base64 32)" > keys.txt && sudo chown 10001 keys.txt && sudo chmod 400 keys.txt`
+     (the containers run as user 10001, so the file must belong to that user)
      (data-at-rest key file; back it up, losing it loses stored credentials)
 4. GitHub: create environments `beta` (and `production`, with required reviewers). In each set
    variables `BB_DOMAIN`, `DEPLOY_HOST`, `DEPLOY_USER`, optional `DEPLOY_PATH`, and secrets `DEPLOY_SSH_KEY`

@@ -31,6 +31,8 @@ fi
 dc up -d --wait postgres keycloak-db
 dc --profile tools run --rm migrate
 dc --profile tools run --rm db-role
+# row-level security ON for every org table (idempotent); the API refuses to start in production without it
+dc --profile tools run --rm db-role /app/.venv/bin/python -m app.core.rls enable --yes
 dc up -d --remove-orphans --wait
 echo "$TAG" > .current-tag
 echo "$previous" > .previous-tag
