@@ -90,10 +90,10 @@
     "tests/test__health.py": "generated",
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
+    "tests/test_entity_ledgers.py": "generated",
+    "tests/test_entity_notes.py": "generated",
     "tests/test_identity.py": "generated",
     "tests/test_invitations.py": "generated",
-    "tests/test_ledgers.py": "generated",
-    "tests/test_notes.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tenancy.py": "generated"
   }

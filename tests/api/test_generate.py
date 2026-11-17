@@ -23,7 +23,7 @@ async def test_preview_lists_files_without_recording_history(client: AsyncClient
     paths = [f["path"] for f in body["files"]]
     assert paths == sorted(paths)
     assert {"app/main.py", "alembic/versions/0001_initial.py", "docker-compose.yml"} <= set(paths)
-    assert "tests/test_posts.py" in paths
+    assert "tests/test_entity_posts.py" in paths
     assert body["total_files"] == len(paths)
     assert body["total_size"] == sum(f["size"] for f in body["files"])
     assert body["spec_hash"] == spec_hash(spec)

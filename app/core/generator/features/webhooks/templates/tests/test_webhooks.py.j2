@@ -17,7 +17,7 @@ from app.db import session_factory
 from app.events.bus import Event
 from app.jobs import definitions as job_defs
 from app.jobs import worker
-from app.webhooks import definitions, delivery, egress, fanout, handlers, signing, ssrf
+from app.webhooks import definitions, delivery, egress, fanout, handlers, maintenance, signing, ssrf
 from app.webhooks.models import Attempt, Delivery, Endpoint, InboundSeen, Subscription
 from tests._auth_support import outbox, sign_in, sign_in_plain  # noqa: F401
 from tests._webhooks_support import FakeNet, net  # noqa: F401
@@ -316,11 +316,15 @@ async def test_only_the_admin_role_may_use_the_webhook_api(client: AsyncClient, 
         assert (await client.put(f"/webhooks/inbound/{INBOUND or 'x'}/secret", json={"value": "x" * 20}, headers=headers)).status_code == status
 
 
+{% if event %}
 async def test_unsafe_urls_and_unlisted_events_are_refused_when_subscribing(client: AsyncClient, outbox, net: FakeNet) -> None:  # noqa: ANN001, F811
     admin = await sign_in(client, "admin@example.com", roles=[ADMIN])
     for url in ("https://127.0.0.1/", "https://169.254.169.254/", "http://hooks.example.com/", "https://u:p@hooks.example.com/", "https://2130706433/", "file:///etc/passwd"):
         response = await client.post("/webhooks/subscriptions", json={"url": url, "event_types": [EVENT]}, headers=admin)
         assert response.status_code == 422 and response.json()["code"] == "url_not_allowed", url
+    for description in ("a\x00b", "line\nbreak"):
+        response = await client.post("/webhooks/subscriptions", json={"url": URL, "event_types": [EVENT], "description": description}, headers=admin)
+        assert response.status_code == 422, description
     for events in (["order.nonsense"], [EVENT, "customer.deleted_everything"]):
         response = await client.post("/webhooks/subscriptions", json={"url": URL, "event_types": events}, headers=admin)
         assert response.status_code == 422, events
@@ -564,6 +568,45 @@ async def test_a_subscription_without_its_secret_fails_closed(client: AsyncClien
     assert (await _deliveries())[0].last_error == "no_secret" and net.requests == []
 
 
+async def test_maintenance_purges_only_old_finished_deliveries_and_old_incoming_ids(client: AsyncClient, outbox, net: FakeNet, monkeypatch: pytest.MonkeyPatch) -> None:  # noqa: ANN001, F811
+    _web(net)
+    monkeypatch.delenv("WEBHOOKS_LOG_RETENTION_DAYS", raising=False)
+    admin = await sign_in(client, "admin@example.com", roles=[ADMIN])
+    sub = await _create(client, admin)
+    await _announce(sub["id"])
+    await _announce(sub["id"])
+    assert await _drain() == 2
+    old, new = await _deliveries()
+    await _sql(f"UPDATE wh_deliveries SET finished_at = now() - interval '31 days' WHERE id = '{old.id}'")
+    await _sql(f"UPDATE wh_deliveries SET finished_at = now() - interval '29 days' WHERE id = '{new.id}'")
+    await _sql(f"INSERT INTO wh_attempts (id, delivery_id, attempt, outcome, duration_ms, created_at) VALUES (gen_random_uuid(), '{new.id}', 9, 'x', 0, now())")
+{% if inbound %}
+    window = definitions.INBOUND[INBOUND]["dedupe_days"]
+    nil = uuid.UUID(int=0)
+    for delivery_id, age in (("old", window + 1), ("inside", window - 1)):
+        await _sql(f"INSERT INTO wh_inbound (tenant_id, endpoint, delivery_id, received_at) VALUES ('{nil}', '{INBOUND}', '{delivery_id}', now() - interval '{age} days')")
+{% endif %}
+    async with session_factory() as session:
+        removed = await maintenance.purge(session)
+    assert removed[0] == 1
+    assert [d.id for d in await _deliveries()] == [new.id]
+    assert len(await _attempts()) >= 1 and all(a.delivery_id == new.id for a in await _attempts())
+{% if inbound %}
+    assert removed[1] == 1
+    async with session_factory() as session:
+        left = (await session.execute(sa.select(InboundSeen.delivery_id))).scalars().all()
+    assert list(left) == ["inside"]  # an id still inside its replay window is kept
+{% endif %}
+
+
+async def test_maintenance_refuses_a_retention_that_is_not_a_number(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("WEBHOOKS_LOG_RETENTION_DAYS", "thirty")
+    async with session_factory() as session:
+        with pytest.raises(RuntimeError, match="WEBHOOKS_LOG_RETENTION_DAYS"):
+            await maintenance.purge(session)
+
+
+{% endif %}
 # --- incoming -------------------------------------------------------------------------------------------
 {% if inbound %}
 

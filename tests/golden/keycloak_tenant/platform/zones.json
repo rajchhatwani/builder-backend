@@ -74,8 +74,8 @@
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
     "tests/test_custom_fields.py": "generated",
-    "tests/test_customers.py": "generated",
-    "tests/test_deals.py": "generated",
+    "tests/test_entity_customers.py": "generated",
+    "tests/test_entity_deals.py": "generated",
     "tests/test_identity.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tenancy.py": "generated"

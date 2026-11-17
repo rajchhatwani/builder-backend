@@ -223,6 +223,12 @@ async def resume_undo(
     ).scalar_one_or_none()
     if row is None or row.status != COMPENSATION_FAILED:
         return row
+    # the old failed record would win the (run, step, phase) key and show the step as failed after a good retry
+    await session.execute(
+        sa.delete(StepRecord).where(
+            StepRecord.run_id == run_id, StepRecord.phase == COMPENSATE, StepRecord.status == "failed"
+        )
+    )
     row.status = COMPENSATING
     row.attempt = 0
     row.finished_at = None

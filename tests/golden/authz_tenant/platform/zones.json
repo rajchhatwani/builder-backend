@@ -80,11 +80,11 @@
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
     "tests/test_authz.py": "generated",
+    "tests/test_entity_labels.py": "generated",
+    "tests/test_entity_tasks.py": "generated",
     "tests/test_identity.py": "generated",
     "tests/test_invitations.py": "generated",
-    "tests/test_labels.py": "generated",
     "tests/test_provider_lock.py": "generated",
-    "tests/test_tasks.py": "generated",
     "tests/test_tenancy.py": "generated"
   }
 }

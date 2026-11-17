@@ -96,10 +96,10 @@
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
     "tests/test_change_history.py": "generated",
+    "tests/test_entity_notes.py": "generated",
+    "tests/test_entity_tickets.py": "generated",
     "tests/test_identity.py": "generated",
-    "tests/test_notes.py": "generated",
     "tests/test_provider_lock.py": "generated",
-    "tests/test_state_machines.py": "generated",
-    "tests/test_tickets.py": "generated"
+    "tests/test_state_machines.py": "generated"
   }
 }

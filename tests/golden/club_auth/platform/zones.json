@@ -70,9 +70,9 @@
     "tests/conftest.py": "generated",
     "tests/test__health.py": "generated",
     "tests/test_auth.py": "generated",
+    "tests/test_entity_posts.py": "generated",
     "tests/test_identity.py": "generated",
     "tests/test_invitations.py": "generated",
-    "tests/test_posts.py": "generated",
     "tests/test_provider_lock.py": "generated"
   }
 }

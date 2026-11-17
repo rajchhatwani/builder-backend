@@ -255,9 +255,27 @@ async def test_a_failed_undo_can_be_resumed_and_then_finishes(monkeypatch: pytes
     assert resumed is not None and resumed.status == COMPENSATING and resumed.finished_at is None
     done = await _pump(run.id)
     assert done.status == COMPENSATED
+    undo = [r for r in await _records(run.id) if r.step == NAMES[-2] and r.phase == "compensate"]
+    assert [r.status for r in undo] == ["succeeded"]  # the old failed record does not outlive a good retry
     async with session_factory() as session:  # a run that is not in compensation_failed is left as it is
         again = await engine.resume_undo(session, run.id, None)
     assert again is not None and again.status == COMPENSATED
+
+
+async def test_purge_finished_removes_only_old_finished_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    Calls(monkeypatch)
+    old = await _pump(await _start())
+    recent = await _pump(await _start())
+    waiting = await _start()
+    days = config.retention_days()
+    await _sql("UPDATE wf_runs SET finished_at = :at WHERE id = :id", at=_now() - dt.timedelta(days=days + 1), id=old.id)
+    await _sql("UPDATE wf_runs SET finished_at = :at WHERE id = :id", at=_now() - dt.timedelta(days=days - 1), id=recent.id)
+    async with session_factory() as session:
+        removed = await engine.purge_finished(session)
+    assert removed == 1
+    async with session_factory() as session:
+        left = {r for r in (await session.execute(sa.select(Run.id))).scalars()}
+    assert left == {recent.id, waiting}
 
 
 async def test_cancelling_a_run_waiting_for_a_retry_ends_cancelled_not_running(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -450,6 +468,33 @@ async def test_the_api_is_default_deny(client: AsyncClient, outbox, monkeypatch:
     assert (await client.post("/workflows/nope/runs", json={}, headers=owner)).status_code == 404
     assert (await client.post(f"/workflows/{WF}/runs", json={"input": {}, "extra": 1}, headers=owner)).status_code == 422
     assert (await client.post(f"/workflows/{WF}/runs", json={"input": {"b": "x" * (config.MAX_INPUT_BYTES + 1)}}, headers=owner)).status_code == 422
+async def test_the_api_resumes_a_failed_undo_only_for_its_owner_and_only_in_that_state(
+    client: AsyncClient, outbox, monkeypatch: pytest.MonkeyPatch  # noqa: ANN001, F811
+) -> None:
+    if len(NAMES) < 2:
+        pytest.skip("needs two steps")
+    calls = Calls(monkeypatch)
+    _fast_retry(monkeypatch, WF)
+    monkeypatch.setitem(definitions.WORKFLOWS[WF], "on_failure", "compensate")
+    calls.fail[NAMES[-1]] = 99
+    calls.fail_undo.add(NAMES[-2])
+    owner = await sign_in(client, "wf-resume@example.com", roles=["admin"])
+    outsider = await sign_in(client, "wf-resume-out@example.com", roles=[])
+    started = (await client.post(f"/workflows/{WF}/runs", json={}, headers=owner)).json()
+    run_id = uuid.UUID(started["id"])
+    assert (await _pump(run_id)).status == COMPENSATION_FAILED
+    path = f"/workflows/runs/{run_id}/resume-undo"
+    assert (await client.post(path, headers=outsider)).status_code == 404
+    assert (await client.post(path)).status_code == 401
+    assert (await _run(run_id)).status == COMPENSATION_FAILED  # the refused calls changed nothing
+    calls.fail_undo.clear()
+    resumed = await client.post(path, headers=owner)
+    assert resumed.status_code == 202 and resumed.json()["status"] == COMPENSATING
+    assert (await _pump(run_id)).status == COMPENSATED
+    assert (await client.post(path, headers=owner)).status_code == 409  # no longer in compensation_failed
+    assert (await client.post(f"/workflows/runs/{uuid.uuid4()}/resume-undo", headers=owner)).status_code == 404
+
+
 
 
 async def test_a_tenant_never_sees_starts_or_cancels_another_tenants_runs(

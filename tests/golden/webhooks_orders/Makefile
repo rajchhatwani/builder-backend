@@ -1,4 +1,4 @@
-.PHONY: up down test lint
+.PHONY: up down test lint webhooks-maintenance
 up:
 	docker compose up --build
 
@@ -11,3 +11,8 @@ test:
 
 lint:
 	ruff check .
+
+# Housekeeping for webhooks: deletes old delivery logs (WEBHOOKS_LOG_RETENTION_DAYS, default 30) and old incoming ids.
+# Run it daily (cron).
+webhooks-maintenance:
+	docker compose run --rm api python -m app.webhooks.maintenance

@@ -63,7 +63,7 @@
     "tests/_prepare_db.py": "generated",
     "tests/conftest.py": "generated",
     "tests/test__health.py": "generated",
-    "tests/test_invoices.py": "generated",
+    "tests/test_entity_invoices.py": "generated",
     "tests/test_jobs.py": "generated"
   }
 }
