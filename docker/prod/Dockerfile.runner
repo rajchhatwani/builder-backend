@@ -1,0 +1,20 @@
+# The narrow sandbox runner: the ONLY container that holds docker.sock. It exposes a closed list of
+# operations (labelled bb.sandbox containers, allow-listed images, mounts under BB_DATA only) behind a
+# bearer token and listens on 127.0.0.1 only. Build from the repo root:
+#   docker build -f docker/prod/Dockerfile.runner -t builder-runner .
+FROM python:3.12-slim
+ENV PYTHONUNBUFFERED=1 UV_NO_DEV=1 UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT=/app/.venv UV_CACHE_DIR=/tmp/uv-cache
+ARG DOCKER_VERSION=27.3.1
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl \
+ && arch="$(uname -m)" \
+ && curl -fsSL "https://download.docker.com/linux/static/stable/${arch}/docker-${DOCKER_VERSION}.tgz" \
+    | tar -xz --strip-components=1 -C /usr/local/bin docker/docker \
+ && apt-get purge -y curl && apt-get autoremove -y && rm -rf /var/lib/apt/lists/* \
+ && pip install --no-cache-dir uv
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+RUN uv sync --frozen --no-dev
+COPY app ./app
+# Runs as root on purpose: reading docker.sock is its whole job, and it never serves anything but
+# token-checked, validated sandbox operations on loopback.
+CMD ["/app/.venv/bin/python", "-m", "app.services.sandbox.runner", "--host", "127.0.0.1", "--port", "8790"]

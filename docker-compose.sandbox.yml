@@ -1,0 +1,64 @@
+# Overlay that adds previews and the builder-agent sandbox. deploy.sh includes it when SANDBOX_ENABLED=true in .env:
+#   docker compose -f docker-compose.yml -f docker-compose.sandbox.yml ...
+# The API reaches sandbox containers by their (internal-network) IPs, so API, scheduler, runner and the
+# edge proxy run on the HOST network here; everything listens on 127.0.0.1 except the proxy's 80/443.
+# Host prerequisites (once, as root): gVisor `runsc` registered with Docker, `scripts/sandbox_firewall.sh
+# apply --yes`, Docker address pools not overlapping 172.30.0.0/16. See docs/DEPLOY.md.
+# Needs Docker Compose >= 2.24 (`!reset`).
+x-sandbox-env: &sandbox_env
+  BUILDER_DATABASE_URL: postgresql+asyncpg://builder_app:${APP_DB_PASSWORD}@127.0.0.1:5432/builder
+  BUILDER_SANDBOX_RUNNER_URL: http://127.0.0.1:8790
+  BUILDER_SANDBOX_RUNNER_TOKEN: ${BB_RUNNER_TOKEN:?set BB_RUNNER_TOKEN (>= 32 chars)}
+  BUILDER_SANDBOX_RUNTIME: ${BB_SANDBOX_RUNTIME:-runsc}
+  BUILDER_PREVIEW_ROOT: ${BB_DATA:?set BB_DATA}/previews
+  BUILDER_WORKSPACE_ROOT: ${BB_DATA}/ws
+  # Server that hosts each preview's own database (needs CREATEDB). The owner role is used; a dedicated
+  # CREATEDB-only role is the stricter choice.
+  BUILDER_WORKSPACE_DB_ADMIN_URL: postgresql+asyncpg://builder:${POSTGRES_PASSWORD}@127.0.0.1:5432/builder
+  BUILDER_PREVIEW_SCHEDULER_ENABLED: "true"
+
+services:
+  postgres:
+    ports: ["127.0.0.1:5432:5432"]
+
+  keycloak:
+    ports: ["127.0.0.1:8080:8080"]
+
+  runner:
+    image: ${BB_IMAGE_PREFIX:?}/builder-runner:${BB_TAG:-latest}
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${BB_DATA}:${BB_DATA}   # same absolute path on the host and in the container
+    environment:
+      BB_RUNNER_TOKEN: ${BB_RUNNER_TOKEN:?set BB_RUNNER_TOKEN (>= 32 chars)}
+      BUILDER_ENVIRONMENT: production
+      BUILDER_RUNNER_MOUNT_ROOT: ${BB_DATA}
+      BUILDER_SANDBOX_RUNTIME: ${BB_SANDBOX_RUNTIME:-runsc}
+
+  api:
+    network_mode: host
+    depends_on:
+      runner: { condition: service_started }
+    volumes:
+      - ${BB_DATA}:${BB_DATA}
+    environment: *sandbox_env
+    # host network: never listen on a public interface; the proxy is the only way in
+    command: ["/app/.venv/bin/uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"]
+
+  scheduler:
+    network_mode: host
+    volumes:
+      - ${BB_DATA}:${BB_DATA}
+    environment: *sandbox_env
+
+  web:
+    network_mode: host
+    ports: !reset []
+    environment:
+      API_UPSTREAM: 127.0.0.1:8000
+      KC_UPSTREAM: 127.0.0.1:8080
+      PREVIEW_DOMAIN: ${PREVIEW_DOMAIN:?set PREVIEW_DOMAIN}
+    volumes:
+      - ./preview.caddy:/etc/caddy/sites/preview.caddy:ro

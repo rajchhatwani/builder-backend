@@ -1,0 +1,63 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_call:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend (ruff, mypy, unit, api)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: builder
+          POSTGRES_PASSWORD: builder
+          POSTGRES_DB: builder_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U builder -d builder_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # An empty, disposable database: the api tests skip testcontainers when this is set.
+      TEST_DATABASE_URL: postgresql+asyncpg://builder:builder@localhost:5432/builder_test
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check app tests --select E,W,F --ignore E501
+      - run: uv run mypy app
+      - run: uv run pytest tests/unit -q -p no:cacheprovider
+      - run: uv run pytest tests/api -q -p no:cacheprovider
+
+  frontend:
+    name: Frontend (types, unit, build)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc -b
+      - run: npm run test --silent
+      - run: npm run build

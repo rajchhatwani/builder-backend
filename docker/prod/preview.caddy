@@ -1,0 +1,21 @@
+# Preview origin (must differ from the dashboard origin): only /previews/*. Mounted into the web
+# container by docker-compose.sandbox.yml. The API's CORS preflight does not allow the X-Preview-Token
+# header the Workbench sends cross-origin, so this proxy answers the preflight for the dashboard origin.
+{$PREVIEW_DOMAIN} {
+	encode zstd gzip
+	@preflight method OPTIONS
+	handle @preflight {
+		header Access-Control-Allow-Origin "https://{$BB_DOMAIN}"
+		header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS"
+		header Access-Control-Allow-Headers "X-Preview-Token, Content-Type, Accept, Authorization"
+		header Access-Control-Max-Age "600"
+		header Vary "Origin"
+		respond 204
+	}
+	handle /previews/* {
+		reverse_proxy {$API_UPSTREAM:api:8000}
+	}
+	handle {
+		respond "not found" 404
+	}
+}

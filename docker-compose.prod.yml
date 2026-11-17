@@ -1,0 +1,147 @@
+# Beta / production stack. Deployed by .github/workflows/deploy.yml (copied to the server as
+# docker-compose.yml next to a server-only .env; see deploy/prod/.env.example and docs/DEPLOY.md).
+# NOT in this stack yet: the sandbox runner (previews, builder-agent workspaces). It needs host
+# setup (gVisor, firewall) first: see docs/DEPLOY.md "Previews and the agent sandbox".
+name: bb
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: builder
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: builder
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U builder -d builder"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot jobs as the OWNER role (never the API): `docker compose run --rm migrate` and `... db-role`.
+  migrate:
+    image: ${BB_IMAGE_PREFIX:?}/builder-api:${BB_TAG:-latest}
+    profiles: ["tools"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment: &owner_env
+      BUILDER_ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      BUILDER_DATABASE_URL: postgresql+asyncpg://builder:${POSTGRES_PASSWORD}@postgres:5432/builder
+      BUILDER_MIGRATIONS_DATABASE_URL: postgresql+asyncpg://builder:${POSTGRES_PASSWORD}@postgres:5432/builder
+      BUILDER_KEY_PROVIDER: file
+      BUILDER_KEY_PROVIDER_FILE: /run/keys/keys.txt
+    volumes:
+      - ./keys.txt:/run/keys/keys.txt:ro
+    command: ["/app/.venv/bin/alembic", "upgrade", "head"]
+
+  db-role:
+    image: ${BB_IMAGE_PREFIX:?}/builder-api:${BB_TAG:-latest}
+    profiles: ["tools"]
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      <<: *owner_env
+      BUILDER_APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD (>= 12 chars)}
+    volumes:
+      - ./keys.txt:/run/keys/keys.txt:ro
+    command: ["/app/.venv/bin/python", "-m", "app.core.rls", "create-app-role"]
+
+  api:
+    image: ${BB_IMAGE_PREFIX:?}/builder-api:${BB_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment: &api_env
+      BUILDER_ENVIRONMENT: production
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      # The API runs as the least-privilege role created by `db-role` (no superuser, no BYPASSRLS).
+      BUILDER_DATABASE_URL: postgresql+asyncpg://builder_app:${APP_DB_PASSWORD}@postgres:5432/builder
+      BUILDER_KEY_PROVIDER: file
+      BUILDER_KEY_PROVIDER_FILE: /run/keys/keys.txt
+      BUILDER_PUBLIC_APP_URL: https://${BB_DOMAIN:?set BB_DOMAIN}
+      BUILDER_PUBLIC_API_URL: https://${BB_DOMAIN}
+      BUILDER_CORS_ORIGINS: '["https://${BB_DOMAIN}"]'
+      BUILDER_TRUST_PROXY_HEADERS: "true"
+      BUILDER_SIGNUP_MODE: ${BB_SIGNUP_MODE:-closed}
+      BUILDER_ADMIN_MFA_REQUIRED: ${BB_ADMIN_MFA_REQUIRED:-true}
+      BUILDER_BOOTSTRAP_ADMIN_EMAIL: ${BB_BOOTSTRAP_ADMIN_EMAIL:-}
+      BUILDER_BOOTSTRAP_ADMIN_PASSWORD: ${BB_BOOTSTRAP_ADMIN_PASSWORD:-}
+      BUILDER_SMTP_HOST: ${BB_SMTP_HOST:-}
+      BUILDER_SMTP_PORT: ${BB_SMTP_PORT:-587}
+      BUILDER_SMTP_USERNAME: ${BB_SMTP_USERNAME:-}
+      BUILDER_SMTP_PASSWORD: ${BB_SMTP_PASSWORD:-}
+      BUILDER_SMTP_FROM: ${BB_SMTP_FROM:-}
+      BUILDER_SMTP_STARTTLS: "true"
+      BUILDER_AI_API_KEY: ${BB_AI_API_KEY:-}
+      BUILDER_AI_PLATFORM_KEY_ORGS: ${BB_AI_PLATFORM_KEY_ORGS:-[]}
+    volumes:
+      - ./keys.txt:/run/keys/keys.txt:ro
+
+  scheduler:
+    image: ${BB_IMAGE_PREFIX:?}/builder-api:${BB_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment: *api_env
+    volumes:
+      - ./keys.txt:/run/keys/keys.txt:ro
+    command: ["/app/.venv/bin/python", "-m", "app.jobs.scheduler"]
+
+  keycloak-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD:?set KC_DB_PASSWORD}
+      POSTGRES_DB: keycloak
+    volumes:
+      - kcdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Keycloak you host and manage. Reached only through the edge proxy at https://$KC_DOMAIN.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.3
+    restart: unless-stopped
+    depends_on:
+      keycloak-db: { condition: service_healthy }
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KC_HOSTNAME: https://${KC_DOMAIN:?set KC_DOMAIN}
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_ADMIN_USER:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD:?set KC_ADMIN_PASSWORD}
+    command: ["start"]
+
+  web:
+    image: ${BB_IMAGE_PREFIX:?}/builder-web:${BB_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      api: { condition: service_healthy }
+    environment:
+      BB_DOMAIN: ${BB_DOMAIN}
+      KC_DOMAIN: ${KC_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  kcdata:
+  caddy_data:
+  caddy_config:

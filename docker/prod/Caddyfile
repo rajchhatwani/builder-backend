@@ -1,0 +1,32 @@
+# Edge proxy for the beta/production stack: automatic HTTPS (Let's Encrypt), the dashboard's static
+# files, and one origin for dashboard + API (the refresh cookie is SameSite=Strict).
+{
+	email {$ACME_EMAIL}
+}
+
+{$BB_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	@static {
+		path / /assets/* /favicon.svg /index.html
+	}
+	handle @static {
+		root * /srv
+		file_server
+	}
+	handle {
+		reverse_proxy {$API_UPSTREAM:api:8000}
+	}
+}
+
+# Keycloak (identity provider you host). Remove this block if you do not run it.
+{$KC_DOMAIN} {
+	reverse_proxy {$KC_UPSTREAM:keycloak:8080}
+}
+
+# Extra sites (the preview origin is added here by docker-compose.sandbox.yml).
+import /etc/caddy/sites/*.caddy
