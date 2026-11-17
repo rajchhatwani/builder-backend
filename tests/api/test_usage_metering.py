@@ -42,12 +42,18 @@ async def _consume(factory: Factory, org: uuid.UUID, metric: str, n: int = 1, **
         return used
 
 
-async def _count(factory: Factory, org: uuid.UUID, outcome: str, metric: str = "previews.started") -> int:
+async def _count(
+    factory: Factory, org: uuid.UUID, outcome: str, metric: str = "previews.started"
+) -> int:
     async with factory() as s:
-        q = select(func.count()).select_from(UsageEvent).where(
-            UsageEvent.organization_id == org,
-            UsageEvent.metric == metric,
-            UsageEvent.outcome == outcome,
+        q = (
+            select(func.count())
+            .select_from(UsageEvent)
+            .where(
+                UsageEvent.organization_id == org,
+                UsageEvent.metric == metric,
+                UsageEvent.outcome == outcome,
+            )
         )
         return int((await s.execute(q)).scalar_one())
 
@@ -63,7 +69,9 @@ async def test_call_past_the_quota_is_refused_and_recorded(
         await _consume(session_factory, org, "previews.started")
     assert exc.value.code == "quota_exceeded" and exc.value.status_code == 429
     d = exc.value.details[0]
-    assert d["metric"] == "previews.started" and d["limit"] == 3 and d["used"] == 3 and d["period_end"]
+    assert (
+        d["metric"] == "previews.started" and d["limit"] == 3 and d["used"] == 3 and d["period_end"]
+    )
     assert await _count(session_factory, org, "granted") == 3
     assert await _count(session_factory, org, "refused") == 1  # survives the refusal
     body = (await client.get(f"/orgs/{slug}/usage")).json()
@@ -148,14 +156,19 @@ async def test_idempotency_key_counts_once(client: AsyncClient, session_factory:
 async def test_parallel_same_key_counts_once(client: AsyncClient, session_factory: Factory) -> None:
     org, _ = await _org(client)
     await asyncio.gather(
-        *[_consume(session_factory, org, "previews.started", idempotency_key="same") for _ in range(6)]
+        *[
+            _consume(session_factory, org, "previews.started", idempotency_key="same")
+            for _ in range(6)
+        ]
     )
     async with session_factory() as s:
         used = await UsageService(s).consume(org, "previews.started", idempotency_key="same")
     assert used == 1 and await _count(session_factory, org, "granted") == 1
 
 
-async def test_a_rolled_back_caller_is_not_charged(client: AsyncClient, session_factory: Factory) -> None:
+async def test_a_rolled_back_caller_is_not_charged(
+    client: AsyncClient, session_factory: Factory
+) -> None:
     org, _ = await _org(client)
     async with session_factory() as s:
         await UsageService(s).consume(org, "previews.started")
@@ -163,7 +176,9 @@ async def test_a_rolled_back_caller_is_not_charged(client: AsyncClient, session_
     assert await _consume(session_factory, org, "previews.started") == 1
 
 
-async def test_period_counter_resets_with_the_period(client: AsyncClient, session_factory: Factory) -> None:
+async def test_period_counter_resets_with_the_period(
+    client: AsyncClient, session_factory: Factory
+) -> None:
     org, slug = await _org(client)
     await _limit(client, slug, "previews.started", 1)
     day1 = datetime(2026, 11, 9, 10, tzinfo=UTC)
@@ -172,11 +187,16 @@ async def test_period_counter_resets_with_the_period(client: AsyncClient, sessio
         await s.commit()
         with pytest.raises(AppError):
             await UsageService(s, now=day1 + timedelta(hours=1)).consume(org, "previews.started")
-        assert await UsageService(s, now=day1 + timedelta(days=1)).consume(org, "previews.started") == 1
+        assert (
+            await UsageService(s, now=day1 + timedelta(days=1)).consume(org, "previews.started")
+            == 1
+        )
         await s.commit()
 
 
-async def test_gauge_release_never_goes_below_zero(client: AsyncClient, session_factory: Factory) -> None:
+async def test_gauge_release_never_goes_below_zero(
+    client: AsyncClient, session_factory: Factory
+) -> None:
     org, _ = await _org(client)
     await _consume(session_factory, org, "workspaces.active")
     async with session_factory() as s:
@@ -203,27 +223,39 @@ async def test_limit_override_owner_ok_member_forbidden(
 ) -> None:
     _, slug = await _org(client)
     bob = await client_for("bob@example.com")
-    inv = await client.post(f"/orgs/{slug}/invitations", json={"email": "bob@example.com", "role": "member"})
+    inv = await client.post(
+        f"/orgs/{slug}/invitations", json={"email": "bob@example.com", "role": "member"}
+    )
     await bob.post("/orgs/invitations/accept", json={"token": inv.json()["token"]})
     r = await client.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": 7})
     assert r.status_code == 200
     m = {x["metric"]: x for x in r.json()["metrics"]}
     assert m["imports.batches"]["limit"] == 7
-    assert (await bob.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": 99})).status_code == 403
+    assert (
+        await bob.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": 99})
+    ).status_code == 403
     assert (await bob.get(f"/orgs/{slug}/usage")).status_code == 200  # any member reads
     assert (await bob.get(f"/orgs/{slug}/usage/events")).status_code == 200
-    cleared = await client.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": None})
+    cleared = await client.put(
+        f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": None}
+    )
     assert {x["metric"]: x for x in cleared.json()["metrics"]}["imports.batches"]["limit"] is None
-    assert (await client.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": -1})).status_code == 422
+    assert (
+        await client.put(f"/orgs/{slug}/usage/limits/imports.batches", json={"limit_value": -1})
+    ).status_code == 422
 
 
-async def test_other_orgs_cannot_read_usage(client: AsyncClient, client_for: ClientFor, session_factory: Factory) -> None:
+async def test_other_orgs_cannot_read_usage(
+    client: AsyncClient, client_for: ClientFor, session_factory: Factory
+) -> None:
     org, slug = await _org(client)
     await _consume(session_factory, org, "previews.started")
     eve = await client_for("eve@example.com")
     assert (await eve.get(f"/orgs/{slug}/usage")).status_code == 404
     assert (await eve.get(f"/orgs/{slug}/usage/events")).status_code == 404
-    assert (await eve.put(f"/orgs/{slug}/usage/limits/imports.rows", json={"limit_value": 1})).status_code == 404
+    assert (
+        await eve.put(f"/orgs/{slug}/usage/limits/imports.rows", json={"limit_value": 1})
+    ).status_code == 404
 
 
 # -- FX-8: workspaces ---------------------------------------------------------------------------
@@ -256,7 +288,7 @@ needs_git = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 
 @needs_git
 async def test_workspace_quota_refuses_at_limit_and_delete_releases(
-    client: AsyncClient, ws_settings: Settings
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None
 ) -> None:
     _, slug = await _personal(client)
     await _limit(client, slug, "workspaces.active", 1)
@@ -282,7 +314,7 @@ async def test_workspace_quota_refuses_at_limit_and_delete_releases(
 
 @needs_git
 async def test_idle_ttl_sweep_removes_only_idle_workspaces(
-    client: AsyncClient, ws_settings: Settings, session_factory: Factory
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None, session_factory: Factory
 ) -> None:
     _, slug = await _personal(client)
     pid = await make_project(client)
@@ -302,15 +334,16 @@ async def test_idle_ttl_sweep_removes_only_idle_workspaces(
         )
     assert done == [uuid.UUID(old["id"])]
     async with session_factory() as s:
-        states = {
-            str(w.id): w.state for w in (await s.execute(select(Workspace))).scalars()
-        }
+        states = {str(w.id): w.state for w in (await s.execute(select(Workspace))).scalars()}
     assert states[old["id"]] == "discarded" and states[fresh["id"]] == "active"
     assert await _gauge(client, slug) == 1
     async with session_factory() as s:  # a second sweep finds nothing
-        assert await workspace_service.expire_idle_workspaces(
-            s, datetime.now(UTC), timedelta(days=14), ws_settings
-        ) == []
+        assert (
+            await workspace_service.expire_idle_workspaces(
+                s, datetime.now(UTC), timedelta(days=14), ws_settings
+            )
+            == []
+        )
 
 
 # -- CP-4F3 WP-B: bounded refusals, gauge reconcile, scheduled sweep ----------------------------
@@ -334,7 +367,7 @@ async def test_a_refusal_storm_is_bounded_but_still_counted(
 
 @needs_git
 async def test_deleting_a_project_leaves_the_gauge_equal_to_the_real_count(
-    client: AsyncClient, ws_settings: Settings, session_factory: Factory
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None, session_factory: Factory
 ) -> None:
     from app.services.usage_service import reconcile_gauges
 
@@ -342,15 +375,21 @@ async def test_deleting_a_project_leaves_the_gauge_equal_to_the_real_count(
     doomed, kept = await make_project(client, "Doomed"), await make_project(client, "Kept")
     for pid, n in ((doomed, 2), (kept, 1)):
         for i in range(n):
-            assert (await client.post(f"/projects/{pid}/workspaces", json={"name": f"w{i}"})).status_code == 201
+            assert (
+                await client.post(f"/projects/{pid}/workspaces", json={"name": f"w{i}"})
+            ).status_code == 201
     assert await _gauge(client, slug) == 3
     assert (await client.delete(f"/projects/{doomed}")).status_code in (200, 204)
     async with session_factory() as s:
-        real = (await s.execute(text("SELECT count(*) FROM workspaces WHERE state = 'active'"))).scalar_one()
+        real = (
+            await s.execute(text("SELECT count(*) FROM workspaces WHERE state = 'active'"))
+        ).scalar_one()
     assert real == 1 and await _gauge(client, slug) == 1
     # drift from any other cause is healed by the reconcile (and only the reconcile changes it)
     async with session_factory() as s:
-        await s.execute(text("UPDATE usage_counters SET used = 7 WHERE metric = 'workspaces.active'"))
+        await s.execute(
+            text("UPDATE usage_counters SET used = 7 WHERE metric = 'workspaces.active'")
+        )
         await s.commit()
     async with session_factory() as s:
         assert await reconcile_gauges(s) == 1
@@ -363,6 +402,7 @@ async def test_deleting_a_project_leaves_the_gauge_equal_to_the_real_count(
 async def test_idle_sweep_job_expires_once_and_is_idempotent(
     client: AsyncClient,
     ws_settings: Settings,
+    discard_workspaces: None,
     session_factory: Factory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -392,19 +432,29 @@ async def test_combined_scheduler_runs_every_job_and_survives_a_failing_one(
     from app.jobs import scheduler
 
     calls: list[str] = []
+    beats: list[tuple[str, bool, str | None]] = []
 
     async def ok() -> int:
-        calls.append("ok")
+        calls.append("a")
         return 0
 
     async def boom() -> int:
-        calls.append("boom")
+        calls.append("b")
         raise RuntimeError("x")
 
+    async def beat(
+        job: str, ok_: bool, error: str | None = None, interval: int | None = None
+    ) -> None:
+        beats.append((job, ok_, error))
+
     monkeypatch.setattr(scheduler, "jobs", lambda: [("a", ok, 1), ("b", boom, 1)])
+    monkeypatch.setattr(scheduler, "record_heartbeat", beat)
     stop = asyncio.Event()
     task = asyncio.create_task(scheduler.run(stop))
-    await asyncio.sleep(0.2)
+    await asyncio.sleep(1.5)  # first tick at 0 s, the retry at 1 s
     stop.set()
     await task
-    assert sorted(calls) == ["boom", "ok"]
+    assert calls.count("a") >= 2 and calls.count("b") >= 2  # the failing job is retried
+    assert ("a", True, None) in beats
+    assert ("b", False, "RuntimeError") in beats
+    assert not any(j == "a" and not ok_ for j, ok_, _ in beats)

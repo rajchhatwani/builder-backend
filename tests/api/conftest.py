@@ -307,3 +307,29 @@ def totp_clock(monkeypatch: pytest.MonkeyPatch) -> TotpClock:
     clock = TotpClock()
     monkeypatch.setattr(totp, "time", SimpleNamespace(time=clock.time))
     return clock
+
+
+@pytest.fixture
+async def discard_workspaces(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> AsyncGenerator[None, None]:
+    """Discard every still-active workspace after the test so no bbws_/bbcp_/bbwr_ database,
+    role or worktree outlives it on the shared server (opt in with a module-level autouse)."""
+    yield
+    from sqlalchemy import select as _select
+
+    from app.models.workspace import Workspace
+
+    async with session_factory() as s:
+        rows = (
+            await s.execute(
+                _select(Workspace.project_id, Workspace.id).where(
+                    (Workspace.state != "discarded") | Workspace.preview_db_name.is_not(None)
+                )
+            )
+        ).all()
+    for project_id, ws_id in rows:
+        r = await client.delete(f"/projects/{project_id}/workspaces/{ws_id}")
+        assert r.status_code in (200, 204, 403, 404, 503), (
+            f"workspace cleanup failed: {r.status_code}"
+        )

@@ -12,8 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import platform_security as sec
 from app.models.enums import PlatformRole
-from app.models.platform import AuditLog, OrganizationMember, PlatformUser
-from app.models.sso import SsoConnection
+from app.models.platform import AuditLog, PlatformUser
 from app.services import oidc
 from tests.api.conftest import ClientFor
 from tests.api.test_sso_config import (
@@ -211,9 +210,12 @@ async def test_test_tickets_are_bound_to_the_org_and_expire(
     ticket = urllib.parse.parse_qs(
         urllib.parse.urlsplit((await alice.post("/orgs/acme/sso/test")).json()["login_url"]).query
     )["test"][0]
-    # Another org's login does not accept it.
+    # Another (existing, SSO-configured) org's login does not accept it.
+    await business_org(alice, session_factory, "beta")
+    await verified_domain(alice, dns, "beta.test", "beta")
+    assert (await alice.put("/orgs/beta/sso", json=saml_config())).status_code == 200
     other = await anon_client.get("/sso/beta/login", params={"test": ticket})
-    assert "sso_error=" in other.headers["location"]
+    assert other.headers["location"].endswith("sso_error=invalid_test_ticket")
     # A forged or expired ticket is refused.
     claims = sec.decode_jwt(ticket, audience="builder-sso-test")
     claims["exp"] = int((datetime.now(UTC) - timedelta(minutes=5)).timestamp())
@@ -341,7 +343,10 @@ async def test_operator_member_list_shows_2fa(
     rows = (await root.get(f"/admin/organizations/{org}/members")).json()
     assert rows[0]["mfa_enabled"] is False
     async with session_factory() as s:
-        member = (await s.execute(select(OrganizationMember))).scalars().first()
-        assert member is not None
-    async with session_factory() as s:
-        assert (await s.execute(select(SsoConnection))).scalars().first() is None
+        user = (
+            await s.execute(select(PlatformUser).where(PlatformUser.email == "primary@example.com"))
+        ).scalar_one()
+        user.totp_enabled_at = datetime.now(UTC)
+        await s.commit()
+    rows = (await root.get(f"/admin/organizations/{org}/members")).json()
+    assert rows[0]["mfa_enabled"] is True

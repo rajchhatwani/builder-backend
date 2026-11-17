@@ -1,5 +1,7 @@
 """Review F-002: an API token never performs destructive or owner-level org actions."""
 
+import re
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 
@@ -22,23 +24,35 @@ def test_session_only_routes_are_all_listed_org_routes() -> None:
     assert set(authz.ORG_ROUTE_ROLES) >= authz.ORG_ROUTES_SESSION_ONLY
 
 
-@pytest.mark.parametrize(
-    ("method", "path", "body"),
-    [
-        ("DELETE", "/orgs/tok-co", None),
-        ("POST", "/orgs/tok-co/deletion/cancel", None),
-        ("PATCH", "/orgs/tok-co/members/00000000-0000-0000-0000-000000000000", {"role": "admin"}),
-        ("DELETE", "/orgs/tok-co/members/00000000-0000-0000-0000-000000000000", None),
-        ("POST", "/orgs/tok-co/transfer", {"user_id": "00000000-0000-0000-0000-000000000000"}),
-        ("POST", "/orgs/tok-co/billing/checkout", {"plan_id": "team"}),
-        ("POST", "/orgs/tok-co/billing/portal", None),
-        (
-            "POST",
-            "/orgs/tok-co/projects/00000000-0000-0000-0000-000000000000/transfer",
-            {"organization_slug": "x"},
-        ),
-    ],
-)
+_SESSION_ONLY_CASES: list[tuple[str, str, dict | None]] = [
+    ("DELETE", "/orgs/tok-co", None),
+    ("POST", "/orgs/tok-co/deletion/cancel", None),
+    ("PATCH", "/orgs/tok-co/members/00000000-0000-0000-0000-000000000000", {"role": "admin"}),
+    ("DELETE", "/orgs/tok-co/members/00000000-0000-0000-0000-000000000000", None),
+    ("POST", "/orgs/tok-co/transfer", {"user_id": "00000000-0000-0000-0000-000000000000"}),
+    ("POST", "/orgs/tok-co/billing/checkout", {"plan_id": "team"}),
+    ("POST", "/orgs/tok-co/billing/portal", None),
+    ("PUT", "/orgs/tok-co/ai/settings", {"api_key": "x" * 20}),
+    ("GET", "/orgs/tok-co/export", None),
+    (
+        "POST",
+        "/orgs/tok-co/projects/00000000-0000-0000-0000-000000000000/transfer",
+        {"organization_slug": "x"},
+    ),
+]
+
+
+def test_every_session_only_route_has_a_refusal_case() -> None:
+    covered = {(m, re.sub(r"/orgs/tok-co", "/orgs/{slug}", p)) for m, p, _ in _SESSION_ONLY_CASES}
+    covered = {(m, re.sub(r"/[0-9a-f-]{36}", lambda x: "/{ID}", p)) for m, p in covered}
+    wanted = {
+        (m, re.sub(r"/\{(user_id|project_id)\}", "/{ID}", p))
+        for m, p in authz.ORG_ROUTES_SESSION_ONLY
+    }
+    assert wanted <= covered, wanted - covered
+
+
+@pytest.mark.parametrize(("method", "path", "body"), _SESSION_ONLY_CASES)
 async def test_write_token_is_refused_on_session_only_routes(
     client_for: ClientFor, method: str, path: str, body: dict | None
 ) -> None:

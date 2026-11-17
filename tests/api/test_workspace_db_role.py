@@ -12,7 +12,7 @@ from app.config import Settings
 from app.services import workspace_service
 from app.services.workspace_service import WorkspaceService
 from tests.api._auth_helpers import make_project
-from tests.api.test_workspaces import _pg_dsn
+from tests.api.test_workspaces import _db_names, _pg_dsn
 
 pytestmark = pytest.mark.skipif(shutil.which("git") is None, reason="needs git")
 PW = "a1" * 16  # test-only password (hex, as the real generator produces)
@@ -28,7 +28,9 @@ async def _roles(url: str) -> set[str]:
 
 async def test_role_reaches_only_its_own_database(tmp_path: Path, database_url: str) -> None:
     s = Settings(
-        environment="test", workspace_root=str(tmp_path), workspace_db_admin_url=SecretStr(database_url)
+        environment="test",
+        workspace_root=str(tmp_path),
+        workspace_db_admin_url=SecretStr(database_url),
     )
     svc = WorkspaceService(None, s)  # type: ignore[arg-type]
     a, b = "bbws_" + "a" * 32, "bbws_" + "b" * 32
@@ -70,9 +72,10 @@ async def test_role_reaches_only_its_own_database(tmp_path: Path, database_url: 
         # PUBLIC may no longer connect to the workspace database either
         conn = await asyncpg.connect(_pg_dsn(database_url, a))
         try:
-            assert await conn.fetchval(
-                "SELECT has_database_privilege('public', $1, 'CONNECT')", a
-            ) is False
+            assert (
+                await conn.fetchval("SELECT has_database_privilege('public', $1, 'CONNECT')", a)
+                is False
+            )
         finally:
             await conn.close()
 
@@ -92,7 +95,9 @@ async def test_create_makes_a_role_discard_and_failed_create_drop_it(
     client: AsyncClient, monkeypatch: pytest.MonkeyPatch, tmp_path: Path, database_url: str
 ) -> None:
     s = Settings(
-        environment="test", workspace_root=str(tmp_path / "ws"), workspace_db_admin_url=SecretStr(database_url)
+        environment="test",
+        workspace_root=str(tmp_path / "ws"),
+        workspace_db_admin_url=SecretStr(database_url),
     )
     monkeypatch.setattr(workspace_service, "get_settings", lambda: s)
     pid = await make_project(client)
@@ -113,8 +118,14 @@ async def test_create_makes_a_role_discard_and_failed_create_drop_it(
 
     monkeypatch.setattr(WorkspaceService, "_take_checkpoint", boom)
     before = await _roles(database_url)
+    dbs_before = await _db_names(database_url)
     with pytest.raises(RuntimeError, match="checkpoint failed"):
         await client.post(base, json={"name": "fails"})
     assert {x for x in await _roles(database_url) if x.startswith("bbwr_")} == {
         x for x in before if x.startswith("bbwr_")
     }
+    # ...nor a bbws_/bbcp_ database
+    leaked = {
+        d for d in await _db_names(database_url) - dbs_before if d.startswith(("bbws_", "bbcp_"))
+    }
+    assert not leaked

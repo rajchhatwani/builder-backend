@@ -47,7 +47,7 @@ async def test_unconfigured_workspaces_answer_503(client: AsyncClient) -> None:
 
 
 async def test_rollback_restores_code_spec_ref_and_data(
-    client: AsyncClient, ws_settings: Settings, database_url: str
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None, database_url: str
 ) -> None:
     pid = await make_project(client)
     await make_entity(client, pid)
@@ -116,7 +116,7 @@ async def test_rollback_restores_code_spec_ref_and_data(
 
 
 async def test_checkpoint_after_discard_is_refused(
-    client: AsyncClient, ws_settings: Settings
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None
 ) -> None:
     pid = await make_project(client)
     await make_entity(client, pid)
@@ -132,7 +132,7 @@ async def test_checkpoint_after_discard_is_refused(
 
 
 async def test_roles_and_isolation(
-    client: AsyncClient, client_for: ClientFor, ws_settings: Settings
+    client: AsyncClient, client_for: ClientFor, ws_settings: Settings, discard_workspaces: None
 ) -> None:
     pid = await make_project(client)
     await make_entity(client, pid)
@@ -173,7 +173,7 @@ def _wt(s: Settings, pid: str, ws: dict) -> Path:
 
 
 async def test_quotas_workspace_checkpoint_disk_db(
-    client: AsyncClient, ws_settings: Settings
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None
 ) -> None:
     pid, base, ws = await _mk(client)
     ws_settings.workspace_max_active_per_project = 1
@@ -195,7 +195,9 @@ async def test_quotas_workspace_checkpoint_disk_db(
     assert (await client.post(f"{base}/{ws['id']}/checkpoints", json={})).status_code == 201
 
 
-async def test_symlinks_and_git_files_refused(client: AsyncClient, ws_settings: Settings) -> None:
+async def test_symlinks_and_git_files_refused(
+    client: AsyncClient, ws_settings: Settings, discard_workspaces: None
+) -> None:
     pid, base, ws = await _mk(client)
     wt = _wt(ws_settings, pid, ws)
     (wt / "link").symlink_to("/etc/passwd")
@@ -210,7 +212,11 @@ async def test_symlinks_and_git_files_refused(client: AsyncClient, ws_settings: 
 
 
 async def test_project_lock_not_held_during_create(
-    client: AsyncClient, ws_settings: Settings, monkeypatch: pytest.MonkeyPatch, session_factory
+    client: AsyncClient,
+    ws_settings: Settings,
+    discard_workspaces: None,
+    monkeypatch: pytest.MonkeyPatch,
+    session_factory,
 ) -> None:
     from sqlalchemy import text
 
@@ -251,7 +257,11 @@ async def test_git_stderr_not_returned(ws_settings: Settings, tmp_path: Path) ->
 
 
 async def test_discard_reports_partial_cleanup_and_can_retry(
-    client: AsyncClient, ws_settings: Settings, monkeypatch: pytest.MonkeyPatch, database_url: str
+    client: AsyncClient,
+    ws_settings: Settings,
+    discard_workspaces: None,
+    monkeypatch: pytest.MonkeyPatch,
+    database_url: str,
 ) -> None:
     pid, base, ws = await _mk(client)
     orig = workspace_service.WorkspaceService._admin
@@ -275,7 +285,11 @@ async def test_discard_reports_partial_cleanup_and_can_retry(
 
 
 async def test_failed_rollback_changes_nothing(
-    client: AsyncClient, ws_settings: Settings, monkeypatch: pytest.MonkeyPatch, database_url: str
+    client: AsyncClient,
+    ws_settings: Settings,
+    discard_workspaces: None,
+    monkeypatch: pytest.MonkeyPatch,
+    database_url: str,
 ) -> None:
     pid, base, ws = await _mk(client)
     db = f"bbws_{ws['id'].replace('-', '')}"
