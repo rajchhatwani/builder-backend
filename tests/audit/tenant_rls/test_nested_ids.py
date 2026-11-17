@@ -4,10 +4,8 @@ workspace/preview/import/report/... id, either under the victim's project or und
 import re
 
 import pytest
-from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.main import app
 from tests.api._auth_helpers import make_project
 from tests.api._routes import all_routes
 from tests.api.conftest import ClientFor
@@ -113,7 +111,6 @@ async def test_victim_nested_ids_under_attackers_own_project(
 async def test_victim_rows_untouched_after_attacks(
     client_for: ClientFor, session_factory: async_sessionmaker  # type: ignore[type-arg]
 ) -> None:
-    from sqlalchemy import select
 
     from app.models.agent import AiApproval, AiRun
     from app.models.dependency_policy import DependencyRequest

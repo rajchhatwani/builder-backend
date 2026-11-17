@@ -1,3 +1,4 @@
+# ruff: noqa: F811 - imported pytest fixtures are re-declared as test params
 """Shared/rate-limiter keys: one tenant's traffic must not consume another tenant's budget, and a
 caller must not choose which bucket it lands in."""
 

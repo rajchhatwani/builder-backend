@@ -5,13 +5,10 @@ import asyncio
 import re
 import uuid
 
-import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from app.core import platform_authz as authz
-from app.models.platform import AuditLog
 from app.models.project import Project
 from app.models.enums import OrgRole
 from tests.api._auth_helpers import make_entity, make_project

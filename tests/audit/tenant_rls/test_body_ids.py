@@ -3,7 +3,6 @@ body names the victim's object."""
 
 import uuid
 
-from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from tests.api._auth_helpers import make_entity, make_project

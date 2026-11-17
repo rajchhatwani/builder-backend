@@ -1,8 +1,8 @@
+# ruff: noqa: F811 - imported pytest fixtures are re-declared as test params
 """SCIM / SSO edge cases: the IdP's bearer is the only credential, so it must not grant more than a
 member row, setup routes must refuse API tokens, and hostile directory input must not escalate."""
 
 import asyncio
-import uuid
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.main import app
 from app.models.enums import OrgRole
-from app.models.platform import OrganizationMember, PlatformUser
+from app.models.platform import PlatformUser
 from tests.api.conftest import ClientFor
 from tests.api.test_scim import (  # noqa: F401 - `dns` is a fixture
     SCIM,

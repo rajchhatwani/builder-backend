@@ -281,7 +281,7 @@ async def test_unknown_hidden_and_identity_filters_never_widen_or_leak(http, peo
     async with session_factory() as s:
         s2_id = (await s.execute(sa.select(AuthUser.id).where(AuthUser.email == "s2@example.com"))).scalar_one()
     bad = []
-    for q in (f"cost_basis=55", "sort=cost_basis", "sort=-cost_basis", f"created_by_id={s2_id}", f"id={theirs['id']}",
+    for q in ("cost_basis=55", "sort=cost_basis", "sort=-cost_basis", f"created_by_id={s2_id}", f"id={theirs['id']}",
               "sort=created_by_id", "sort=nonexistent", "category=theirs", "category=theirs&category=mine", "q=theirs",
               "category[ne]=x", "category__ne=x", "category=%", "limit=1&category=theirs"):
         r = await http.get(f"/expenses?{q}", headers=s1)
