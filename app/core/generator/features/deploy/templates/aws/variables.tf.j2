@@ -29,6 +29,12 @@ variable "image" {
   }
 }
 
+variable "wait_for_steady_state" {
+  description = "Wait for the service to be healthy. The pipeline sets false for the infrastructure step, because the first deployment has no schema yet (migrations run next)."
+  type        = bool
+  default     = true
+}
+
 variable "cpu" {
   description = "Task CPU in millicores (512, 1024, 2048 or 4096: Fargate units)."
   type        = number

@@ -119,6 +119,31 @@ data "aws_iam_policy_document" "trust" {
   }
 }
 
+# The ceiling of every role the pipeline creates for an environment (execution and task roles of the service):
+# only what a running service needs. The deploy role may create or write roles only with this boundary attached.
+locals {
+  boundary_arns = { for e in var.environments : e => "arn:aws:iam::${local.account_id}:policy/deploy-boundary-${var.project}-${e}" }
+}
+
+data "aws_iam_policy_document" "boundary" {
+  statement {
+    sid = "WhatARunningServiceNeeds"
+    actions = [
+      "ecr:GetAuthorizationToken", "ecr:BatchCheckLayerAvailability", "ecr:BatchGetImage", "ecr:GetDownloadUrlForLayer",
+      "logs:CreateLogStream", "logs:PutLogEvents",
+      "secretsmanager:GetSecretValue",
+      "sns:Publish",
+    ]
+    resources = ["*"]
+  }
+}
+
+resource "aws_iam_policy" "boundary" {
+  for_each = toset(var.environments)
+  name     = "deploy-boundary-${var.project}-${each.value}"
+  policy   = data.aws_iam_policy_document.boundary.json
+}
+
 resource "aws_iam_role" "deploy" {
   for_each             = toset(var.environments)
   name                 = "deploy-${var.project}-${each.value}"  # outside the "<project>-*" pattern the policies manage
@@ -155,12 +180,31 @@ data "aws_iam_policy_document" "deploy" {
   statement {
     sid = "RolesOfThisEnvironmentOnly"
     actions = [
-      "iam:CreateRole", "iam:DeleteRole", "iam:GetRole", "iam:UpdateRole", "iam:TagRole", "iam:UntagRole",
-      "iam:PutRolePolicy", "iam:GetRolePolicy", "iam:DeleteRolePolicy",
-      "iam:DetachRolePolicy", "iam:ListRolePolicies", "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
-      "iam:PassRole", "iam:CreateServiceLinkedRole",
+      "iam:GetRole", "iam:UpdateRole", "iam:TagRole", "iam:UntagRole", "iam:DeleteRole",
+      "iam:GetRolePolicy", "iam:DeleteRolePolicy", "iam:DetachRolePolicy",
+      "iam:ListRolePolicies", "iam:ListAttachedRolePolicies", "iam:ListInstanceProfilesForRole",
+      "iam:PassRole",
     ]
-    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-${each.value}-*", "arn:aws:iam::${local.account_id}:role/aws-service-role/*"]
+    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-${each.value}-*"]
+  }
+
+  statement {
+    sid       = "ServiceLinkedRoles"
+    actions   = ["iam:CreateServiceLinkedRole", "iam:GetRole"]
+    resources = ["arn:aws:iam::${local.account_id}:role/aws-service-role/*"]
+  }
+
+  # Creating a role or writing an inline policy is only allowed when the role carries the permissions
+  # boundary of this environment: whatever the pipeline writes into those roles can never exceed it.
+  statement {
+    sid       = "WriteRolesWithTheBoundaryOnly"
+    actions   = ["iam:CreateRole", "iam:PutRolePolicy"]
+    resources = ["arn:aws:iam::${local.account_id}:role/${var.project}-${each.value}-*"]
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PermissionsBoundary"
+      values   = [local.boundary_arns[each.value]]
+    }
   }
 
   # Attaching a managed policy is limited to the one ECS needs: no AdministratorAccess through this role.
@@ -173,6 +217,18 @@ data "aws_iam_policy_document" "deploy" {
       variable = "iam:PolicyARN"
       values   = ["arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"]
     }
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PermissionsBoundary"
+      values   = [local.boundary_arns[each.value]]
+    }
+  }
+
+  statement {
+    sid       = "NeverChangeTheBoundary"
+    effect    = "Deny"
+    actions   = ["iam:DeleteRolePermissionsBoundary", "iam:PutRolePermissionsBoundary", "iam:CreatePolicyVersion", "iam:DeletePolicy"]
+    resources = ["*"]
   }
 
   statement {

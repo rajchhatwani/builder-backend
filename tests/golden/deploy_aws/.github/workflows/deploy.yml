@@ -116,7 +116,7 @@ jobs:
         run: |
           CURRENT="$(terraform output -raw deployed_image 2>/dev/null || true)"
           terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
-            -var "image=${CURRENT:-${REGISTRY_REPO}:${IMAGE_TAG}}"
+            -var "image=${CURRENT:-${REGISTRY_REPO}:${IMAGE_TAG}}" -var "wait_for_steady_state=false"
 
       # Step 2: apply the database migrations with the NEW image before any traffic reaches it. Write
       # migrations so the previous version keeps working against the new schema (add first, remove later).

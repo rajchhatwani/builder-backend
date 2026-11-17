@@ -111,7 +111,7 @@ resource "aws_ecs_service" "app" {
   deployment_maximum_percent         = 200
   health_check_grace_period_seconds  = 60
   propagate_tags                     = "SERVICE"
-  wait_for_steady_state              = true
+  wait_for_steady_state              = var.wait_for_steady_state
 
   # A deployment whose tasks never become healthy is stopped and rolled back to the last good one.
   deployment_circuit_breaker {

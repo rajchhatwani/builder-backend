@@ -9,8 +9,16 @@ data "aws_iam_policy_document" "ecs_assume" {
 }
 
 # Used by ECS itself: pull the image, write logs, read exactly the secrets this service names.
+data "aws_caller_identity" "current" {}
+
+locals {
+  # Created by the bootstrap; the pipeline may only create roles that carry it.
+  permissions_boundary = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:policy/deploy-boundary-${local.name}"
+}
+
 resource "aws_iam_role" "execution" {
-  name               = "${local.name}-execution"
+  name                 = "${local.name}-execution"
+  permissions_boundary = local.permissions_boundary
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
 }
 
@@ -38,7 +46,8 @@ resource "aws_iam_role_policy" "read_secrets" {
 # The identity of the running application. It has no permissions beyond what the project needs: the service
 # talks to its database and to the outside world. Add policies here when it needs another AWS service.
 resource "aws_iam_role" "task" {
-  name               = "${local.name}-task"
+  name                 = "${local.name}-task"
+  permissions_boundary = local.permissions_boundary
   assume_role_policy = data.aws_iam_policy_document.ecs_assume.json
 }
 {% if sns %}
