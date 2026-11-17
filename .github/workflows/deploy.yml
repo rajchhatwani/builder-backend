@@ -139,4 +139,4 @@ jobs:
         run: |
           ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" \
             "cd '$DEPLOY_PATH' && echo '$REGISTRY_TOKEN' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin \
-             && BB_IMAGE_PREFIX='${{ needs.images.outputs.prefix }}' ./deploy.sh '${{ needs.images.outputs.tag }}'"
+             && BB_IMAGE_PREFIX='${{ needs.images.outputs.prefix }}' bash ./deploy.sh '${{ needs.images.outputs.tag }}'"
