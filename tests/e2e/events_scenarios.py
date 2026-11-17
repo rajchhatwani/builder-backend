@@ -191,6 +191,10 @@ async def test_a_committed_write_survives_a_dead_process_and_a_stopped_relay(htt
         await wait_for(lambda: len(done(sink())) == 3)
     seen = done(sink())
     assert [d["type"] for d in seen if d["aggregate_id"] == first["id"]] == ["order.created", "order.transitioned"]
+    for _ in range(100):  # the sink is written before the status commit: wait for the DB to catch up
+        if all(r.status == DELIVERED for r in await rows()):
+            break
+        await asyncio.sleep(0.1)
     assert all(r.status == DELIVERED for r in await rows())
 
 
