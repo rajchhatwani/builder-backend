@@ -244,6 +244,11 @@ class McpService:
             # Respect token pin
             if principal.token_project_id is not None and project.id != principal.token_project_id:
                 continue
+            # Same org rules as every other MCP call: membership, deletion lock, MFA, plan.
+            try:
+                await self._check_org(principal, project.id)
+            except AppError:
+                continue
             projects.append(
                 {
                     "id": str(project.id),
