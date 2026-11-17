@@ -54,11 +54,12 @@ async def test_swept_recovery_runs_as_the_system_actor_and_only_there(
 
         row = PB(project_id=uuid.UUID(pid), version=1, sections={})
         apply_section(row, "hooks", [_fx_hook()])
+        seen.append("applied")  # reached only if apply_section did not raise (the sweeper swallows AppError)
 
     monkeypatch.setattr(RunDriver, "recover", recover)
     provider = ScriptedProvider(lambda n, r: finish(n))
     taken = await sweep_once(session_factory, _deps(session_factory, provider, FakeToolbox()), get_settings())
-    assert taken == [uuid.UUID(rid)] and seen == ["system"]
+    assert taken == [uuid.UUID(rid)] and seen == ["system", "applied"]
     assert ACTOR_ROLE.get() == before  # ... and the role does not leak out of the sweep
     from app.models.behavior_config import ProjectBehavior as PB
     from app.services.behavior_service import apply_section

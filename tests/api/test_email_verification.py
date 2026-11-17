@@ -177,3 +177,28 @@ async def test_no_token_in_the_response_or_the_logs(
     (_, token), = outbox
     out = capfd.readouterr()
     assert token not in r.text and token not in out.out and token not in out.err
+
+
+@pytest.mark.parametrize("smtp_fails", [False, True])
+async def test_real_send_path_never_logs_the_token(
+    anon_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    capfd: pytest.CaptureFixture[str],
+    smtp_fails: bool,
+) -> None:
+    """F-0721: the REAL send_verification/send run; only the SMTP socket is faked."""
+    bodies: list[str] = []
+
+    def fake_smtp(to: str, subject: str, body: str) -> None:
+        bodies.append(body)
+        if smtp_fails:
+            raise OSError("smtp down")
+
+    monkeypatch.setattr(mail_service, "mail_configured", lambda: True)
+    monkeypatch.setattr(mail_service, "_send_sync", fake_smtp)
+    r = await _signup(anon_client, "real@example.com")
+    assert r.status_code == 202
+    assert len(bodies) == 1 and "token=" in bodies[0]  # the real code built the link
+    token = bodies[0].split("token=", 1)[1].split()[0]
+    out = capfd.readouterr()
+    assert token not in r.text and token not in out.out and token not in out.err

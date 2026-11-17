@@ -285,6 +285,15 @@ async def test_pinned_token_cannot_reach_other_project_tools(
         with pytest.raises(AppError) as exc:
             await McpService(db).create_entity(p, b, name="Leak")
         assert exc.value.status_code == 404
+        with pytest.raises(AppError) as exc:
+            await McpService(db).get_data_model(p, b)
+        assert exc.value.status_code == 404
+        gen = await _principal(
+            user, scopes=(*scopes, authz.SCOPE_MCP_GENERATE), pinned=a
+        )
+        with pytest.raises(AppError) as exc:
+            await McpService(db).generate_project(gen, b)
+        assert exc.value.status_code == 404
 
 
 # ── read tools return expected shapes ───────────────────────────────────────────────────

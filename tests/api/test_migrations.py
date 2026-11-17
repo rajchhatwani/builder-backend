@@ -306,8 +306,8 @@ async def test_backfill_puts_project_members_into_the_projects_org(fresh_db: str
         await conn.close()
 
     _alembic(fresh_db, "upgrade", "head")
-    _alembic(fresh_db, "downgrade", "-1")
-    _alembic(fresh_db, "upgrade", "head")  # idempotent
+    _alembic(fresh_db, "downgrade", "b3d7f1a9c5e2")  # just before the backfill c8a4e6b2d9f1
+    _alembic(fresh_db, "upgrade", "head")  # the backfill runs a second time: idempotent
 
     conn = await _connect(fresh_db)
     try:

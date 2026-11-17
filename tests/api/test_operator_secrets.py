@@ -61,8 +61,16 @@ async def _plant(owner: AsyncClient, factory, dns, totp_clock: TotpClock) -> dic
     return canaries
 
 
-def _fill(path: str, ids: dict[str, str]) -> str:
-    return re.sub(r"{(\w+)}", lambda m: ids.get(m.group(1), str(uuid.uuid4())), path)
+def _fill(path: str, ids: dict[str, str], *, strict: bool = False) -> str:
+    """Fill {params}; strict=True fails on an unmapped one instead of walking a random uuid."""
+
+    def one(m: re.Match[str]) -> str:
+        if m.group(1) in ids:
+            return ids[m.group(1)]
+        assert not strict, f"unmapped path parameter {m.group(1)} in {path}"
+        return str(uuid.uuid4())
+
+    return re.sub(r"{(\w+)}", one, path)
 
 
 async def test_no_admin_read_route_shows_a_customer_secret(
@@ -77,7 +85,12 @@ async def test_no_admin_read_route_shows_a_customer_secret(
     ops = await client_for(
         "ops@example.com", PlatformRole.platform_admin, audience=sec.AUDIENCE_ADMIN
     )
-    ids = {"org_id": org, "user_id": str(owner.user.id), "project_id": pid}  # type: ignore[attr-defined]
+    ids = {
+        "org_id": org,
+        "org_id_or_slug": "leaky",  # the slug _plant created: the usage route reads real data
+        "user_id": str(owner.user.id),  # type: ignore[attr-defined]
+        "project_id": pid,
+    }
     # the admin sees the project through its own routes; token ids come from the owner's list
     ids["token_id"] = (await owner.get("/account/tokens")).json()[0]["id"]
 
@@ -85,7 +98,7 @@ async def test_no_admin_read_route_shows_a_customer_secret(
     for route in all_routes():
         if not route.path.startswith("/admin/") or route.method != "GET":
             continue
-        r = await ops.get(_fill(route.path, ids))
+        r = await ops.get(_fill(route.path, ids, strict=True))
         walked += 1
         assert r.status_code < 500, f"GET {route.path} -> {r.status_code}"
         for name, value in planted.items():
