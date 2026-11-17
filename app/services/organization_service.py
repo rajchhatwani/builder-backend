@@ -622,7 +622,16 @@ class OrganizationService:
                 message="only an owner can transfer ownership",
                 status_code=403,
             )
-        await self.lock_owners(organization_id)
+        # Re-check under the owner lock: `src` was read before it, so a concurrent demotion
+        # that committed in between must not be overwritten (F-0962).
+        if from_user_id not in await self.lock_owners(organization_id):
+            await self.db.rollback()
+            raise AppError(
+                code="forbidden",
+                message="only an owner can transfer ownership",
+                status_code=403,
+            )
+        await self.db.refresh(dst)
         src.role = OrgRole.admin
         dst.role = OrgRole.owner
         await self.db.commit()
