@@ -358,3 +358,4 @@ tests/unit/test_audit_b1_015.py
 tests/unit/test_audit_b1_017_storage.py
 tests/unit/test_audit_b1_020_deploy_aws.py
 tests/unit/test_audit_b1_021_pyproject.py
+tests/unit/test_audit_b1_023_scripts.py

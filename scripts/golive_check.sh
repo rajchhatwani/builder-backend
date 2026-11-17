@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Go-live checklist P1-P6 (read-only, no root needed). Prints PASS/FAIL per line; exit 1 on any FAIL.
+# Go-live checklist P1-P6 (read-only; the P2 firewall check needs root, else it is skipped). Prints PASS/FAIL per line; exit 1 on any FAIL.
 # Uses the same BUILDER_* environment as the API. Prints no secret values.
 cd "$(dirname "$0")/.."
 fails=0
@@ -20,8 +20,12 @@ print('runner reachable, runtime ok')") ; res "P1 runner reachable" $? "$(echo "
 if docker info --format '{{json .Runtimes}}' 2>/dev/null | grep -q runsc; then rc=0; d="runsc registered"; else rc=1; d="runsc not registered with docker"; fi
 res "P1 runtime registered" $rc "$d"
 
-d=$(scripts/sandbox_firewall.sh status --yes 2>&1 | tail -1); echo "$d" | grep -q "hooked into" && rc=0 || rc=1
-res "P2 firewall" $rc "$d"
+if [ "$(id -u)" != 0 ]; then
+  echo "SKIP  P2 firewall  needs root (run: sudo scripts/golive_check.sh)"
+else
+  d=$(scripts/sandbox_firewall.sh status --yes 2>&1 | tail -1); echo "$d" | grep -q "hooked into" && rc=0 || rc=1
+  res "P2 firewall" $rc "$d"
+fi
 
 out=$(uv run python -m app.core.rls check-role 2>&1 | tail -1); echo "$out" | grep -q "API role ok" && rc=0 || rc=1
 res "P3/P5 RLS API role" $rc "$out"

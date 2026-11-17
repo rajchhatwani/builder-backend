@@ -25,3 +25,12 @@ budget_alloc() {
   [ "$granted" -lt "$wanted" ] && echo "model budget: $stack asked $wanted, granted $granted (limit $limit shared with other stacks)" >&2
   echo "$granted"
 }
+
+# budget_keep <stack> <wanted>: like budget_alloc, but an existing grant is kept as is (never lowered
+# by a restart), so a cap the owner raised with set-ai-cap stays the grant the other stacks see.
+budget_keep() {
+  local stack="$1" have
+  budget_limit >/dev/null
+  have="$(awk -v s="$stack" '$1==s{print $2}' "$BUDGET_FILE" | head -1)"
+  if [ -n "$have" ]; then echo "$have"; else budget_alloc "$@"; fi
+}

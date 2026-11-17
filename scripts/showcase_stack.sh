@@ -40,7 +40,18 @@ env_up() {
   export BUILDER_AI_PLATFORM_KEY_ORGS="${BUILDER_AI_PLATFORM_KEY_ORGS:-[${SC_ORG_ID:+\"$SC_ORG_ID\"}]}"
 }
 
+pid_alive() { [ -f "$1" ] && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+# (re)start the API with the CURRENT env (the model-key org list is read at process start)
+start_api() {
+  if pid_alive "$DATA/api.pid"; then pkill -P "$(cat "$DATA/api.pid")" 2>/dev/null || true; kill "$(cat "$DATA/api.pid")" 2>/dev/null || true; sleep 1; fi
+  nohup uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$DATA/logs/api.log" 2>&1 & echo $! >"$DATA/api.pid"
+  for _ in $(seq 1 90); do curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && break; sleep 1; done
+}
+
 case "${1:-}" in
+  restart-api)  # run after showcase_seed.py: the org now exists, so the model key can be listed for it
+    env_up; cd "$ROOT"; start_api; curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && echo "api restarted" || { echo "api did not start: $DATA/logs/api.log"; exit 1; } ;;
   start)
     docker start "$PG_NAME" >/dev/null 2>&1 || docker run -d --name "$PG_NAME" -e POSTGRES_USER=builder \
       -e POSTGRES_PASSWORD=builder -e POSTGRES_DB=builder -p "127.0.0.1:${PG_PORT}:5432" \
@@ -49,19 +60,23 @@ case "${1:-}" in
     for _ in $(seq 1 60); do docker exec "$PG_NAME" pg_isready -U builder -d builder >/dev/null 2>&1 && break; sleep 1; done
     env_up; cd "$ROOT"
     uv run alembic upgrade head >"$DATA/logs/alembic.log" 2>&1
-    nohup uv run uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$DATA/logs/api.log" 2>&1 & echo $! >"$DATA/api.pid"
-    for _ in $(seq 1 90); do curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" && break; sleep 1; done
+    start_api
     # S2-008: this database's spend cap is carved out of the shared console limit (SC_AI_CAP, default 1 USD)
     CAP0="$(budget_alloc showcase "${SC_AI_CAP:-1000000}")"
     docker exec "$PG_NAME" psql -U builder -d builder -Atq -c "insert into ai_platform_budget(id,cap_override_micro_usd) values(1,$CAP0) on conflict (id) do update set cap_override_micro_usd=$CAP0" >/dev/null
     curl -fs -o /dev/null "http://127.0.0.1:${API_PORT}/health" || { echo "api did not start: $DATA/logs/api.log"; exit 1; }
     ( cd frontend && VITE_API_BASE_URL="$PUBLIC_API" VITE_PREVIEW_API_ORIGIN="$PREVIEW_ORIGIN" npx vite build --outDir "$DATA/dist" --emptyOutDir >"$DATA/logs/build.log" 2>&1 )
+    pid_alive "$DATA/web.pid" && kill "$(cat "$DATA/web.pid")" 2>/dev/null || true
     ( cd frontend && nohup npx vite preview --outDir "$DATA/dist" --host 127.0.0.1 --port "$WEB_PORT" --strictPort >"$DATA/logs/web.log" 2>&1 & echo $! >"$DATA/web.pid" )
-    echo "showcase stack up: web http://localhost:${WEB_PORT}  api http://localhost:${API_PORT}" ;;
+    echo "showcase stack up: web http://localhost:${WEB_PORT}  api http://localhost:${API_PORT}"
+    echo "first start: after scripts/showcase_seed.py run '$0 restart-api' so the model key is enabled for the showcase org" ;;
   stop)
     for f in api web; do [ -f "$DATA/$f.pid" ] && kill "$(cat "$DATA/$f.pid")" 2>/dev/null || true; rm -f "$DATA/$f.pid"; done
-    for port in "$API_PORT" "$WEB_PORT"; do pid="$(ss -ltnp 2>/dev/null | grep ":${port} " | sed -E 's/.*pid=([0-9]+).*/\1/' | head -1 || true)"; [ -n "$pid" ] && kill "$pid" 2>/dev/null || true; done
+    for port in "$API_PORT" "$WEB_PORT"; do  # lost pid file: only kill a listener that is ours (uvicorn/vite), never another dev server
+      pid="$(ss -ltnp 2>/dev/null | grep ":${port} " | sed -E 's/.*pid=([0-9]+).*/\1/' | head -1 || true)"
+      [ -n "$pid" ] && tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null | grep -qE 'uvicorn|vite' && kill "$pid" 2>/dev/null || true
+    done
     docker stop "$PG_NAME" >/dev/null 2>&1 || true; echo stopped ;;
   status) curl -fs "http://127.0.0.1:${API_PORT}/health" >/dev/null && echo "api up" || echo "api down"; docker ps --filter name="$PG_NAME" --format '{{.Names}} {{.Status}}' ;;
-  *) echo "usage: $0 start|stop|status"; exit 2 ;;
+  *) echo "usage: $0 start|stop|status|restart-api"; exit 2 ;;
 esac

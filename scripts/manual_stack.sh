@@ -62,7 +62,7 @@ cmd_up() {
   dc up -d --build >"$LOGS/up.log" 2>&1 || { tail -30 "$LOGS/up.log"; echo "compose up failed (full log: $LOGS/up.log)"; exit 1; }
   wait_api
   # platform AI budget: only on a fresh counter (never overwrites a cap the owner raised)
-  CAP0="$(budget_alloc manual 2680000)"
+  CAP0="$(budget_keep manual 2680000)"
   psql_ -c "insert into ai_platform_budget(id,spent_micro_usd,cap_override_micro_usd) values(1,1677831,$CAP0) on conflict (id) do update set spent_micro_usd=1677831, cap_override_micro_usd=$CAP0 where ai_platform_budget.spent_micro_usd=0 and ai_platform_budget.cap_override_micro_usd is null" >/dev/null
   # MinIO bucket from STORAGE_* (created from inside the API container, which has the env)
   docker exec -i bbmanual-api python - <<'PY' || echo "WARNING: MinIO bucket creation failed (see troubleshooting: MinIO bucket)"

@@ -543,7 +543,10 @@ def _shop(api: Api, name: str, slug: str, description: str) -> Builder:
                 ("Order", op, ["customer", "staff", "admin"], {"row_rule": "role_scoped"})
                 for op in ("list", "get", "head")
             ],
-            *[("Order", op, ["staff", "admin"], {}) for op in ("create", "replace", "update", "delete")],
+            *[
+                ("Order", op, ["staff", "admin"], {})
+                for op in ("create", "replace", "update", "delete")
+            ],
         ]
     )
     return b
@@ -568,7 +571,12 @@ _PAYMENT_ROLES = {
 
 
 def pay_shop(api: Api) -> Builder:
-    b = _shop(api, "Pay Shop", "pay-shop", "Orders paid with Stripe: refunds, disputes, workers and an audit trail.")
+    b = _shop(
+        api,
+        "Pay Shop",
+        "pay-shop",
+        "Orders paid with Stripe: refunds, disputes, workers and an audit trail.",
+    )
     b.payments(
         provider="stripe",
         payable={**_PAYABLE, "currency": "USD", "currency_field": None},
@@ -589,7 +597,9 @@ def pay_shop(api: Api) -> Builder:
 
 
 def rupee_shop(api: Api) -> Builder:
-    b = _shop(api, "Rupee Shop", "rupee-shop", "Orders paid in rupees with Razorpay, on one small server.")
+    b = _shop(
+        api, "Rupee Shop", "rupee-shop", "Orders paid in rupees with Razorpay, on one small server."
+    )
     b.payments(
         provider="razorpay",
         payable={**_PAYABLE, "currency": "INR", "currency_field": None},
@@ -612,6 +622,21 @@ PROJECTS = {
     "pay-shop": pay_shop,
     "rupee-shop": rupee_shop,
 }
+
+
+def build_or_cleanup(api: Api, slug: str, build: Any) -> Builder:
+    """Run one builder; on failure remove the half-built project so a re-run does not skip it."""
+    try:
+        return build(api)
+    except SystemExit:
+        try:
+            for p in api.get("/projects?limit=200&offset=0")["items"]:
+                if p["slug"] == slug:
+                    api.delete(f"/projects/{p['id']}")
+                    print(f"  build failed: removed the incomplete project {slug}")
+        except SystemExit:
+            print(f"  build failed; could not remove {slug}, re-run with --reset")
+        raise
 
 
 def main() -> int:
@@ -644,7 +669,7 @@ def main() -> int:
                 continue
             api.delete(f"/projects/{existing[slug]['id']}")
             print("  removed the old one")
-        builder = build(api)
+        builder = build_or_cleanup(api, slug, build)
         ok = builder.report() and ok
     print("\nOpen the dashboard (http://localhost:5173) to explore them.")
     return 0 if ok else 1
