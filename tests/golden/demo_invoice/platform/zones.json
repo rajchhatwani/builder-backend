@@ -131,14 +131,14 @@
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
     "tests/test_change_history.py": "generated",
-    "tests/test_entity_invoices.py": "generated",
-    "tests/test_entity_suppliers.py": "generated",
     "tests/test_identity.py": "generated",
+    "tests/test_invoices.py": "generated",
     "tests/test_numbering.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_runtime_config.py": "generated",
     "tests/test_seed.py": "generated",
     "tests/test_state_machine_settings.py": "generated",
-    "tests/test_state_machines.py": "generated"
+    "tests/test_state_machines.py": "generated",
+    "tests/test_suppliers.py": "generated"
   }
 }

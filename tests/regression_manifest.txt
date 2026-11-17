@@ -356,4 +356,3 @@ tests/api/test_audit_b1_009.py
 tests/unit/test_audit_b1_013.py
 tests/unit/test_audit_b1_015.py
 tests/unit/test_audit_b1_017_storage.py
-tests/unit/test_generator_entity_test_names.py

@@ -256,7 +256,7 @@ def test_entity_without_create_gets_a_skipped_smoke_test() -> None:
 
     files = generate(spec)
 
-    assert "pytest.skip(" in files["tests/test_entity_comments.py"]
+    assert "pytest.skip(" in files["tests/test_comments.py"]
     assert "def make_comments" not in files["tests/_factories.py"]
 
 

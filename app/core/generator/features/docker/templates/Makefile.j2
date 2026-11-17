@@ -1,5 +1,5 @@
 {% set test_env = "STORAGE_ACCESS_KEY_ID=unused STORAGE_SECRET_ACCESS_KEY=unused " if storage and minio else "" %}
-.PHONY: up down test lint{% if pay %} worker reconcile{% endif %}{% if storage %} storage-maintenance{% endif %}{% if webhooks %} webhooks-maintenance{% endif %}
+.PHONY: up down test lint{% if pay %} worker reconcile{% endif %}{% if storage %} storage-maintenance{% endif %}
 
 up:
 	docker compose up --build
@@ -36,11 +36,4 @@ reconcile:
 # Run it hourly (cron) and with --rescan daily. See deploy/storage/STORAGE.md.
 storage-maintenance:
 	docker compose run --rm api python -m app.storage.maintenance
-{% endif %}
-{% if webhooks %}
-
-# Housekeeping for webhooks: deletes old delivery logs (WEBHOOKS_LOG_RETENTION_DAYS, default 30) and old incoming ids.
-# Run it daily (cron).
-webhooks-maintenance:
-	docker compose run --rm api python -m app.webhooks.maintenance
 {% endif %}

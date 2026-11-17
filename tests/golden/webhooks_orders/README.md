@@ -138,8 +138,3 @@ that your field names can never shadow them.
 Authorization rules on the entity endpoints, background jobs, caching and webhooks.
 Soft-deleted rows are hidden from the API but still count for unique constraints and their
 relation `on_delete` rules are not applied.
-
-## Webhooks
-
-Delivery logs and the incoming-id ledger grow until they are purged. Run `make webhooks-maintenance` daily (cron). It deletes finished deliveries
-(and their attempts) older than `WEBHOOKS_LOG_RETENTION_DAYS` (default 30, whole days, at least 1) and incoming ids older than each endpoint's dedupe window.

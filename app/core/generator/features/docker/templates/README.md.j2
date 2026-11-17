@@ -472,13 +472,6 @@ An entity field of type `file` holds the id of an uploaded file: upload first, t
 Run `make storage-maintenance` hourly. **`deploy/storage/STORAGE.md`** covers setting up the bucket, credentials, scanner limits, operations and erasure requests;
 `docs/storage-security.md` is the threat model. `make test` runs the upload tests against a stand-in scanner and an in-memory bucket.
 {% endif %}
-{% if webhooks %}
-
-## Webhooks
-
-Delivery logs and the incoming-id ledger grow until they are purged. Run `make webhooks-maintenance` daily (cron). It deletes finished deliveries
-(and their attempts) older than `WEBHOOKS_LOG_RETENTION_DAYS` (default 30, whole days, at least 1) and incoming ids older than each endpoint's dedupe window.
-{% endif %}
 {% if otel %}
 
 ## Observability

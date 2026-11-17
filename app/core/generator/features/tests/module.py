@@ -145,7 +145,7 @@ class TestsModule:
             uploads=any(e.file_fields for e in creatable_entities),
         )
         for entity in project.entities:
-            files[f"tests/test_entity_{entity.table}.py"] = render_template(
+            files[f"tests/test_{entity.table}.py"] = render_template(
                 self._env, "entity_test.py.j2", **self._entity_context(entity, project)
             )
         return files

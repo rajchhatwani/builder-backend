@@ -89,7 +89,6 @@ class DockerModule:
         otel = observability_active(project.spec)
         context = {
             "storage": stor is not None,
-            "webhooks": webhooks_active(project.spec) and project.auth is not None,
             "otel": otel is not None,
             "documents": documents_active(project.spec) is not None and project.auth is not None,
             "otel_db": otel is not None and otel.db_spans,

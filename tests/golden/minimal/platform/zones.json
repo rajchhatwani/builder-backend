@@ -49,6 +49,6 @@
     "tests/_prepare_db.py": "generated",
     "tests/conftest.py": "generated",
     "tests/test__health.py": "generated",
-    "tests/test_entity_notes.py": "generated"
+    "tests/test_notes.py": "generated"
   }
 }

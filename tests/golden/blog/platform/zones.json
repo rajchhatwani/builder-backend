@@ -68,9 +68,9 @@
     "tests/_prepare_db.py": "generated",
     "tests/conftest.py": "generated",
     "tests/test__health.py": "generated",
-    "tests/test_entity_comments.py": "generated",
-    "tests/test_entity_posts.py": "generated",
-    "tests/test_entity_tags.py": "generated",
-    "tests/test_entity_users.py": "generated"
+    "tests/test_comments.py": "generated",
+    "tests/test_posts.py": "generated",
+    "tests/test_tags.py": "generated",
+    "tests/test_users.py": "generated"
   }
 }

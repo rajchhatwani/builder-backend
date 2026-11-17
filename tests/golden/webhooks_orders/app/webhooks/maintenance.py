@@ -1,4 +1,4 @@
-"""Housekeeping (generated): `python -m app.webhooks.maintenance` (run `make webhooks-maintenance` daily).
+"""Housekeeping (generated): `python -m app.webhooks.maintenance` (schedule it with a job or cron).
 
 Deletes finished deliveries (and their attempts) older than WEBHOOKS_LOG_RETENTION_DAYS (default 30) and incoming
 delivery ids older than their endpoint's `dedupe_days` (always far longer than the replay tolerance)."""
@@ -15,19 +15,11 @@ from app.webhooks import definitions
 from app.webhooks.models import Delivery, InboundSeen
 
 
-def _retention_days() -> int:
-    raw = os.environ.get("WEBHOOKS_LOG_RETENTION_DAYS", "30").strip() or "30"
-    try:
-        return max(int(raw), 1)
-    except ValueError:
-        raise RuntimeError(f"WEBHOOKS_LOG_RETENTION_DAYS must be a whole number of days, got {raw!r}") from None
-
-
 async def purge(session: AsyncSession, now: _dt.datetime | None = None) -> tuple[int, int]:
     stamp = now or utcnow()
-    days = _retention_days()
+    days = int(os.environ.get("WEBHOOKS_LOG_RETENTION_DAYS", "30"))
     deliveries = await session.execute(
-        sa.delete(Delivery).where(Delivery.finished_at.is_not(None), Delivery.finished_at < stamp - _dt.timedelta(days=days))
+        sa.delete(Delivery).where(Delivery.finished_at.is_not(None), Delivery.finished_at < stamp - _dt.timedelta(days=max(days, 1)))
     )
     seen = 0
     for name, cfg in definitions.INBOUND.items():

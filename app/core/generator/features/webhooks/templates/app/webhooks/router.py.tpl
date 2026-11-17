@@ -12,7 +12,7 @@ from typing import Any
 import sqlalchemy as sa
 import structlog
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.auth.deps import CurrentPrincipal, require_roles
@@ -48,20 +48,12 @@ def _scope(tenant: uuid.UUID | None) -> sa.ColumnElement[bool]:
     return Subscription.tenant_id.is_(None) if tenant is None else Subscription.tenant_id == tenant
 
 
-def _clean_description(value: str | None) -> str | None:
-    if value is not None and any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
-        raise ValueError("description must not contain control characters")
-    return value
-
-
 class SubscriptionIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     url: str = Field(min_length=1, max_length=ssrf.MAX_URL_LENGTH)
     event_types: list[str] = Field(min_length=1, max_length=len(definitions.EVENTS) or 1)
     description: str = Field(default="", max_length=200)
-
-    _description_ok = field_validator("description")(_clean_description)
 
 
 class SubscriptionPatch(BaseModel):
@@ -70,8 +62,6 @@ class SubscriptionPatch(BaseModel):
     url: str | None = Field(default=None, min_length=1, max_length=ssrf.MAX_URL_LENGTH)
     event_types: list[str] | None = Field(default=None, min_length=1, max_length=len(definitions.EVENTS) or 1)
     description: str | None = Field(default=None, max_length=200)
-
-    _description_ok = field_validator("description")(_clean_description)
 
 
 class SubscriptionOut(BaseModel):
