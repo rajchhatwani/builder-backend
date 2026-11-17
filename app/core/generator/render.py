@@ -13,7 +13,7 @@ from typing import Any
 from jinja2 import FileSystemLoader, StrictUndefined
 from jinja2.sandbox import SandboxedEnvironment
 
-from app.core.generator.context import tuple_literal
+from app.core.generator.context import _ident, tuple_literal
 
 ALIAS_MARKER = "@@ALIAS_IMPORTS@@"
 
@@ -65,6 +65,7 @@ def make_environment(templates_dir: Path) -> SandboxedEnvironment:
         lstrip_blocks=True,
     )
     env.filters["pyrepr"] = pyrepr
+    env.filters["ident"] = _ident
     env.filters["roles_repr"] = roles_repr
     env.filters["tuple_lit"] = tuple_literal
     env.filters["tuple_lit_args"] = lambda names: ", ".join(f'"{n}"' for n in names)

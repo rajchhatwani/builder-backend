@@ -201,38 +201,38 @@ def upgrade() -> None:
 {% for table in owned_tables %}
     op.add_column("{{ table }}", sa.Column("created_by_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
-        "fk_{{ table }}_created_by_id_auth_users",
+        "{{ ('fk_' ~ table ~ '_created_by_id_auth_users') | ident }}",
         "{{ table }}",
         "auth_users",
         ["created_by_id"],
         ["id"],
         ondelete="SET NULL",
     )
-    op.create_index("ix_{{ table }}_created_by_id", "{{ table }}", ["created_by_id"])
+    op.create_index("{{ ('ix_' ~ table ~ '_created_by_id') | ident }}", "{{ table }}", ["created_by_id"])
 {% endfor %}
 {% for table in tenant_tables %}
     op.add_column("{{ table }}", sa.Column("tenant_id", sa.Uuid(), nullable=True))
     op.create_foreign_key(
-        "fk_{{ table }}_tenant_id_auth_tenants",
+        "{{ ('fk_' ~ table ~ '_tenant_id_auth_tenants') | ident }}",
         "{{ table }}",
         "auth_tenants",
         ["tenant_id"],
         ["id"],
         ondelete="RESTRICT",
     )
-    op.create_index("ix_{{ table }}_tenant_id", "{{ table }}", ["tenant_id"])
+    op.create_index("{{ ('ix_' ~ table ~ '_tenant_id') | ident }}", "{{ table }}", ["tenant_id"])
 {% endfor %}
 
 
 def downgrade() -> None:
 {% for table in tenant_tables %}
-    op.drop_index("ix_{{ table }}_tenant_id", table_name="{{ table }}")
-    op.drop_constraint("fk_{{ table }}_tenant_id_auth_tenants", "{{ table }}", type_="foreignkey")
+    op.drop_index("{{ ('ix_' ~ table ~ '_tenant_id') | ident }}", table_name="{{ table }}")
+    op.drop_constraint("{{ ('fk_' ~ table ~ '_tenant_id_auth_tenants') | ident }}", "{{ table }}", type_="foreignkey")
     op.drop_column("{{ table }}", "tenant_id")
 {% endfor %}
 {% for table in owned_tables %}
-    op.drop_index("ix_{{ table }}_created_by_id", table_name="{{ table }}")
-    op.drop_constraint("fk_{{ table }}_created_by_id_auth_users", "{{ table }}", type_="foreignkey")
+    op.drop_index("{{ ('ix_' ~ table ~ '_created_by_id') | ident }}", table_name="{{ table }}")
+    op.drop_constraint("{{ ('fk_' ~ table ~ '_created_by_id_auth_users') | ident }}", "{{ table }}", type_="foreignkey")
     op.drop_column("{{ table }}", "created_by_id")
 {% endfor %}
     op.drop_table("auth_provider_lock")

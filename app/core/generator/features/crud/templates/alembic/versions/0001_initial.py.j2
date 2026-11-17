@@ -27,7 +27,7 @@ def upgrade() -> None:
 {% for line in e.migration_columns %}
         {{ line }}
 {% endfor %}
-        sa.PrimaryKeyConstraint("id", name="pk_{{ e.table }}"),
+        sa.PrimaryKeyConstraint("id", name="{{ ('pk_' ~ e.table) | ident }}"),
 {% for name, column in e.unique_constraints %}
         sa.UniqueConstraint("{{ column }}", name="{{ name }}"),
 {% endfor %}
@@ -36,7 +36,7 @@ def upgrade() -> None:
     op.create_index("{{ name }}", "{{ e.table }}", ["{{ column }}"])
 {% endfor %}
 {% if e.custom %}
-    op.create_index("ix_{{ e.table }}_custom_fields", "{{ e.table }}", ["custom_fields"], postgresql_using="gin")
+    op.create_index("{{ ('ix_' ~ e.table ~ '_custom_fields') | ident }}", "{{ e.table }}", ["custom_fields"], postgresql_using="gin")
 {% endif %}
 {% endfor %}
 {% for j in joins %}
