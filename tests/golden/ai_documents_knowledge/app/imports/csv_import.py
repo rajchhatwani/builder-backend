@@ -295,6 +295,8 @@ def _coerce_value(value: Any, f: SpecField) -> Any:
             parsed = json.loads(value, parse_constant=_reject_constant) if isinstance(value, str) else value
             if _depth(parsed) > 32:
                 raise _Bad("invalid_json", "JSON is nested too deeply")
+            if _has_nul(parsed):
+                raise _Bad("invalid_json", "JSON contains a NUL character")
             json.dumps(parsed, allow_nan=False).encode("utf-8")
         except (ValueError, RecursionError, TypeError) as exc:
             raise _Bad("invalid_json", "not valid JSON") from exc
@@ -309,6 +311,17 @@ def _coerce_value(value: Any, f: SpecField) -> Any:
 
 def _reject_constant(name: str) -> Any:
     raise ValueError(name)
+
+
+def _has_nul(v: Any) -> bool:
+    """A NUL in any string or key: Postgres refuses it in JSONB (depth is already capped)."""
+    if isinstance(v, str):
+        return "\x00" in v
+    if isinstance(v, dict):
+        return any(_has_nul(k) or _has_nul(x) for k, x in v.items())
+    if isinstance(v, list):
+        return any(_has_nul(x) for x in v)
+    return False
 
 
 def _depth(v: Any, d: int = 0) -> int:

@@ -237,3 +237,11 @@ def test_hostile_numbers_and_json_are_rejected_not_crashing() -> None:
         else:
             raise AssertionError("accepted " + bad[:10])
     assert coerce('{"a": [1, 2]}', js) == {"a": [1, 2]}
+
+
+def test_json_field_with_escaped_nul_is_invalid_json() -> None:
+    js = f("json")
+    for bad in ('{"a":"\\u0000x"}', '{"\\u0000k":1}', '["ok",["\\u0000"]]'):
+        with pytest.raises(ValueError, match="invalid_json"):
+            di.coerce(bad, js)
+    assert di.coerce('{"a":"\\\\u0000"}', js) == {"a": "\\u0000"}

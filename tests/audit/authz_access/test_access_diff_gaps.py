@@ -177,3 +177,30 @@ def test_diff_is_deterministic_and_order_independent() -> None:
 
 def test_identical_specs_are_not_a_weakening() -> None:
     assert access_diff(_spec(base()), _spec(base()))["weakens"] is False
+
+
+def test_existing_powerful_role_made_self_assignable_is_a_weakening() -> None:
+    before = base()
+    after = copy.deepcopy(before)
+    next(r for r in after["auth"]["roles"] if r["name"] == "hr")["self_assignable"] = True
+    diff = access_diff(_spec(before), _spec(after))
+    assert diff["weakens"] is True, diff["counts"]
+    assert any(c["role"] == "hr" and c["effect"] == "gain" for c in diff["changes"])
+
+
+def test_existing_role_made_default_is_a_weakening() -> None:
+    before = base()
+    after = copy.deepcopy(before)
+    next(r for r in after["auth"]["roles"] if r["name"] == "hr")["is_default"] = True
+    assert access_diff(_spec(before), _spec(after))["weakens"] is True
+
+
+def test_role_with_no_access_made_self_assignable_is_not_flagged() -> None:
+    before = base()
+    after = copy.deepcopy(before)
+    for p in before["auth"]["permissions"]:
+        p["roles"] = [r for r in p["roles"] if r != "staff"]
+    for p in after["auth"]["permissions"]:
+        p["roles"] = [r for r in p["roles"] if r != "staff"]
+    next(r for r in after["auth"]["roles"] if r["name"] == "staff")["self_assignable"] = True
+    assert access_diff(_spec(before), _spec(after))["changes"] == []

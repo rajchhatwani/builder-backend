@@ -294,3 +294,16 @@ def test_qr_and_signature_and_landscape_render() -> None:
     pdf = eng.render_pdf(template, {"v": "https://example.com/x"})
     page = PdfReader(io.BytesIO(pdf)).pages[0]
     assert float(page.mediabox.width) > float(page.mediabox.height)
+
+
+def test_discount_larger_than_the_line_is_refused() -> None:
+    with pytest.raises(eng.DocumentError):
+        eng.compute_totals({"items": [{"unit_price": 10, "discount": 50}]})
+    assert eng.compute_totals({"items": [{"unit_price": 10, "discount": 10}]})["totals"]["total"] == "0.00"
+
+
+def test_tiny_tax_rate_exponent_does_not_balloon_the_breakdown() -> None:
+    out = eng.compute_totals(
+        {"items": [{"unit_price": 10, "tax_rate": f"{i + 1}E-999990"} for i in range(50)]}
+    )
+    assert sum(len(b["rate"]) for b in out["totals"]["tax_breakdown"]) < 2000

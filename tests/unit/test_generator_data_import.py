@@ -152,3 +152,15 @@ def test_cp5v_search_index_hook_is_on_the_repository_the_import_runs() -> None:
     assert "_search_hooks.attach(" in repo
     assert '"after_commit"' in files["app/search/hooks.py"]
     assert 'run_stage("after_commit", repo.hooks, ctx, fail_closed=False)' in files["app/imports/service.py"]
+
+
+def test_generated_csv_import_rejects_escaped_nul_in_json() -> None:
+    ns: dict[str, object] = {"__name__": "csv_import_under_test"}
+    exec(compile(_spec_files()["app/imports/csv_import.py"], "csv_import.py", "exec"), ns)  # noqa: S102
+    field = ns["SpecField"]("m", "json")
+    try:
+        ns["coerce"]('{"a":"\\u0000x"}', field)
+    except ValueError as exc:
+        assert str(exc) == "invalid_json"
+    else:
+        raise AssertionError("NUL accepted")

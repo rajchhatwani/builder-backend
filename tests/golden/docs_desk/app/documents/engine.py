@@ -245,6 +245,9 @@ def compute_totals(data: Mapping[str, Any], items_path: str = "items") -> dict[s
             )
         if quantity * price > MAX_AMOUNT:
             raise DocumentError("a line total is too large")
+        if discount > quantity * price:
+            raise DocumentError("a discount cannot be larger than its line")
+        rate = rate.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)  # bounds the rate text
         net = (quantity * price - discount).quantize(quantum, rounding=ROUND_HALF_UP)
         subtotal += net
         net_by_rate[rate] = net_by_rate.get(rate, Decimal(0)) + net
