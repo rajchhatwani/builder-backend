@@ -150,7 +150,7 @@ docker compose -f compose.worker.yml up -d
 
 A worker server needs network access to the database and to the payment provider, and nothing
 else. Start with the planned {{ sizing.worker_replicas }} worker replica(s) across your servers
-(`WORKER_REPLICAS` in `.env`) and add more when `GET /payments/ops/status` shows jobs waiting.
+(`WORKER_REPLICAS` in `.env`) and add more when `GET /payments/ops/status` shows jobs waiting{% if multi_tenant %} (that route is single-tenant only; this project is multi-tenant, so watch the queue in the database instead){% endif %}.
 
 {% if p.scale.kubernetes %}
 ### Kubernetes
@@ -223,7 +223,7 @@ headroom, then write the numbers you measured next to the ones above.
 | You see | Meaning | Do |
 |---|---|---|
 | `oldest_due_seconds` growing | Workers are behind or down | Add workers; check their logs |
-| `dead` jobs | A job failed {{ 8 }} times | Read `last_error_code` in `GET /payments/ops/dead-jobs`, fix the cause, retry with `POST /payments/ops/dead-jobs/<id>/retry` |
+| `dead` jobs | A job failed {{ 8 }} times | Read `last_error_code` in `GET /payments/ops/dead-jobs`, fix the cause, retry with `POST /payments/ops/dead-jobs/<id>/retry`{% if multi_tenant %} (single-tenant projects only: here those routes answer 403 because the queue is shared by every tenant, so read and retry dead jobs in the database){% endif %} |
 | `provider_mismatch` in the audit log | The provider reported an amount or currency different from ours | Do not mark anything paid by hand; investigate in the provider dashboard |
 | `duplicate_charge` | A payer was charged twice for one item | Refund the extra payment through the API or the dashboard |
 | `payable_status_conflict` | A payment succeeded but the item was no longer in its waiting state (changed in between) | Decide by hand; the payment is real |

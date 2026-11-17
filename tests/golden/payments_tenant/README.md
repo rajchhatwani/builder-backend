@@ -133,7 +133,7 @@ touch this code**: the payer enters them on the provider's page.
 | `POST /payments/{id}/refunds` | Refund all or part of a payment (send `Idempotency-Key`) |
 | `POST /payments/refunds/{id}/approve`, `.../reject` | The second person's decision |
 | `GET /payments/{id}/refunds`, `GET /payments/{id}/disputes` | Refunds and disputes of a payment |
-| `GET /payments/ops/status`, `/ops/dead-jobs`, `/ops/audit/{id}/verify` | Queue health, failed jobs, audit-trail check |
+| `GET /payments/ops/status`, `/ops/dead-jobs`, `/ops/audit/{id}/verify` | Queue health, failed jobs, audit-trail check (single-tenant projects only; these routes answer 403 here) |
 | `POST /payments/webhooks/stripe` | The provider calls this; not for you. Signature-checked |
 
 Who may do what is set by the roles you chose when configuring payments; an empty list means
