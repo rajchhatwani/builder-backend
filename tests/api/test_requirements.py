@@ -320,3 +320,22 @@ async def test_b1_024_in_flight_claimed_before_limiter_await(
     monkeypatch.setattr(svc._limiter, "attempts", 0)
     assert (await intake(client, pid, prompt="Invoice flow 2")).status_code == 429
     assert uuid.UUID(pid) not in svc._IN_FLIGHT  # released on limiter refusal
+
+
+async def test_intake_refused_when_another_worker_holds_the_project_lock(
+    client: AsyncClient, provider: Any, engine: Any
+) -> None:
+    """F-0945: _IN_FLIGHT is process-local; a lock held on another connection (worker) must 409."""
+    from sqlalchemy import text
+
+    pid = await make_project(client)
+    if engine.dialect.name != "postgresql":
+        pytest.skip("advisory locks need postgresql")
+    async with engine.connect() as other:
+        await other.execute(text("SELECT pg_advisory_lock(hashtextextended(:k, 0))"), {"k": f"intake:{pid}"})
+        try:
+            r = await intake(client, pid, prompt="Invoice flow")
+            assert r.status_code == 409 and r.json()["code"] == "intake_in_progress"
+        finally:
+            await other.execute(text("SELECT pg_advisory_unlock(hashtextextended(:k, 0))"), {"k": f"intake:{pid}"})
+    assert (await intake(client, pid, prompt="Invoice flow")).status_code == 200

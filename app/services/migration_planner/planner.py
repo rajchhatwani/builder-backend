@@ -345,6 +345,12 @@ def _diff_relations(b: _Builder, old: Snapshot, new: Snapshot, replaced: set[str
         o, n = old.rels.get(key), new.rels.get(key)
         ends = {key[0], key[2]}
         if ends & replaced:
+            # FK columns travel with the swapped table; the join table belongs to neither entity
+            swapped_from = key[0] in replaced
+            if o and o.is_join and (swapped_from or not (n and n.is_join)):
+                _rel_remove(b, old, o, new)
+            if n and n.is_join and (swapped_from or not (o and o.is_join)):
+                _rel_add(b, old, new, n)
             continue
         if o and n and o.is_join != n.is_join:
             _rel_remove(b, old, o, new)
@@ -404,6 +410,10 @@ def _rel_add(b: _Builder, old: Snapshot, new: Snapshot, r: Rel) -> None:
 
 def _rel_change(b: _Builder, new: Snapshot, o: Rel, n: Rel) -> None:
     if n.is_join:
+        if o.join_table != n.join_table:
+            b.add("rename", StepKind.rename_table, n.from_entity, n.join_table, n.from_name, Safety.safe,
+                  f"join table of {n.from_entity}.{n.from_name} follows the table rename: {o.join_table} -> {n.join_table}",
+                  sql=f"ALTER TABLE {_q(o.join_table)} RENAME TO {_q(n.join_table)}")
         return
     child, parent = new.tables[n.to_entity], new.tables[n.from_entity]
     col = n.fk_column

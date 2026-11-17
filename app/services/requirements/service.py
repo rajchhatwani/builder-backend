@@ -2,9 +2,10 @@
 
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
 from app.core.ratelimit import SlidingWindowLimiter
@@ -163,7 +164,9 @@ class RequirementsService:
         if project_id in _IN_FLIGHT:
             raise AppError("intake_in_progress", "an intake is already running for this project", 409)
         _IN_FLIGHT.add(project_id)  # claimed before any await: a concurrent intake must see it
+        lock_conn = None
         try:
+            lock_conn = await self._claim_cross_worker(project_id)
             project_wait = await self._limited(f"intake:project:{project_id}", str(project_id), _limiter)
             if project_wait is not None:
                 raise AppError(
@@ -175,7 +178,38 @@ class RequirementsService:
             await self._run_intake(project, user_id, docs, deps)
         finally:
             _IN_FLIGHT.discard(project_id)
+            if lock_conn is not None:
+                await self._release_cross_worker(lock_conn, project_id)
         return await self.get(project_id)
+
+    async def _claim_cross_worker(self, project_id: uuid.UUID) -> Any:
+        """Session advisory lock on a dedicated connection (the intake commits per chunk, so a
+        transaction lock would not last). None when the engine is not PostgreSQL."""
+        bind = self.s.bind
+        if bind is None or bind.dialect.name != "postgresql":
+            return None
+        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(bind)  # AsyncSession.bind is the sync Engine
+        conn = await engine.connect()
+        try:
+            got = (
+                await conn.execute(
+                    text("SELECT pg_try_advisory_lock(hashtextextended(:k, 0))"), {"k": f"intake:{project_id}"}
+                )
+            ).scalar()
+        except BaseException:
+            await conn.close()
+            raise
+        if not got:
+            await conn.close()
+            raise AppError("intake_in_progress", "an intake is already running for this project", 409)
+        return conn
+
+    @staticmethod
+    async def _release_cross_worker(conn: Any, project_id: uuid.UUID) -> None:
+        try:
+            await conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:k, 0))"), {"k": f"intake:{project_id}"})
+        finally:
+            await conn.close()
 
     async def _run_intake(
         self, project: Project, user_id: uuid.UUID, docs: list[rd.ReadDoc], deps: ReaderDeps
