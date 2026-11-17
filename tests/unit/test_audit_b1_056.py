@@ -161,3 +161,11 @@ def test_backchannel_logout_records_unseen_session() -> None:  # F-0291
 def test_delete_account_erases_identity_emails() -> None:  # F-0292
     assert "erase_emails" in _src("keycloak/app/auth/service.py.tpl")
     assert "email_at_link=None" in _src("app/auth/identity.py.tpl")
+
+
+def test_generated_keycloak_tests_cover_unseen_logout_and_email_erase() -> None:  # F-0878
+    gen = _src("keycloak/tests/test_identity.py.j2")
+    unseen = gen.split("async def test_back_channel_logout_before_first_use")[1].split("async def ")[0]
+    assert 'sid="never-seen", sub="bc-early"' in unseen and "== 401" in unseen
+    erase = gen.split("async def test_deleting_the_account_erases")[1].split("async def ")[0]
+    assert 'client.delete("/auth/me"' in erase and "email_at_link is None" in erase

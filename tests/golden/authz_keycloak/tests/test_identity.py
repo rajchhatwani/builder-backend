@@ -197,6 +197,26 @@ async def test_back_channel_logout_ends_the_session_it_names(
     assert live == []
 
 
+async def test_back_channel_logout_before_first_use_of_a_session_refuses_it(
+    client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTH_BACKCHANNEL_LOGOUT_ENABLED", "true")
+    config.get_auth_settings.cache_clear()
+    assert (await client.get("/auth/me", headers=bearer(token(sub="bc-early", sid="seen")))).status_code == 200
+    # The logout for a sid this API has never seen arrives first (with the subject).
+    assert await _post_logout(client, _logout_token(sid="never-seen", sub="bc-early")) == 204
+    assert (await client.get("/auth/me", headers=bearer(token(sub="bc-early", sid="never-seen")))).status_code == 401
+    assert (await client.get("/auth/me", headers=bearer(token(sub="bc-early", sid="seen")))).status_code == 200
+
+
+async def test_deleting_the_account_erases_the_stored_identity_emails(client: AsyncClient) -> None:
+    access = token(sub="erase-me", email="erase@example.com")
+    assert (await client.get("/auth/me", headers=bearer(access))).status_code == 200
+    assert (await client.delete("/auth/me", headers=bearer(access))).status_code == 204
+    rows = [r for r in await _identity_rows() if r.subject == "erase-me"]
+    assert rows and all(r.email_at_link is None for r in rows)
+
+
 @pytest.mark.parametrize(
     "overrides",
     [
