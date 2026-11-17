@@ -22,6 +22,7 @@ def test_with_runsc_present_a_sandbox_skip_is_unexpected() -> None:
     p = _policy()
     assert p.is_unexpected_sandbox_skip("test_sandbox_hostile.py", "needs docker with the runsc runtime", True, True)
     assert p.is_unexpected_sandbox_skip("test_preview_stack.py", "whatever", True, True)
+    assert p.is_unexpected_sandbox_skip("test_sandbox_runner_docker.py", "needs docker with the runsc runtime", True, True)
     assert p.is_unexpected_sandbox_skip(
         "test_preview_stack.py", p.IMAGE_REASON, True, True
     )  # image is there: no excuse
