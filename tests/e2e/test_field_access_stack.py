@@ -25,5 +25,7 @@ def test_the_example_project_behaves_as_specified(
     ok(run(["-m", "tests._prepare_db"], root, url))
     ok(run(["-m", "alembic", "upgrade", "head"], root, url))
     ok(run(["-m", "alembic", "check"], root, url))
+    ok(run(["-m", "alembic", "downgrade", "base"], root, url))  # the migrations are reversible
+    ok(run(["-m", "alembic", "upgrade", "head"], root, url))
     output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider"], root, url))
     assert "passed" in output and "failed" not in output

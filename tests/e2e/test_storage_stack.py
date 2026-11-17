@@ -342,7 +342,7 @@ def test_the_eicar_test_file_is_caught_and_never_reaches_the_bucket(
     response = upload(member, EICAR, name="harmless.txt")
     assert response.status_code == 422
     assert response.json()["code"] == "malware_detected"
-    assert "Eicar" not in response.text  # the detection name stays in the audit trail
+    assert "eicar" not in response.text.lower()  # the detection name stays in the audit trail
     assert stack.objects() == before
     detections = stack.sql(
         "SELECT data->>'detection' FROM stor_audit_log WHERE event = 'upload.rejected' "

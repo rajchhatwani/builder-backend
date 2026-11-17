@@ -29,6 +29,8 @@ def test_policies_are_enforced_by_the_generated_project(
     ok(run(["-m", "tests._prepare_db"], root, url))
     ok(run(["-m", "alembic", "upgrade", "head"], root, url))
     ok(run(["-m", "alembic", "check"], root, url))
+    ok(run(["-m", "alembic", "downgrade", "base"], root, url))  # the migrations are reversible
+    ok(run(["-m", "alembic", "upgrade", "head"], root, url))
     output = ok(run(["-m", "pytest", "-q", "-p", "no:cacheprovider", "-x"], root, url))
     assert "passed" in output and "failed" not in output
     # the generic smoke test is replaced by policy tests, and says why

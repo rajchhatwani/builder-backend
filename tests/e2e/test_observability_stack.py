@@ -181,6 +181,8 @@ service:
     names = [n for n in re.findall(r'"name":"([^"]*)"', trace_text) if "/items" in n]
     assert names and all("{item_id}" in n for n in names), names
     assert "http.server" in metric_text or "http_server" in metric_text
+    # positive control: the query parameter reached the telemetry, and only its value was masked
+    assert "token=[redacted]" in trace_text or "token=%5Bredacted%5D" in trace_text, trace_text[:2000]
     for blob in (trace_text, metric_text):
         assert TOKEN not in blob
         assert BEARER not in blob

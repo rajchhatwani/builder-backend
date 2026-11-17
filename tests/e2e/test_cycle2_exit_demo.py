@@ -298,7 +298,7 @@ async def test_the_erp_webhook_is_retried_with_backoff_then_delivered_and_signed
         secret_box.append(sub["secret"])
         say(f"  admin subscribes {url} (secret shown once: {sub['secret'][:6]}..., version {sub['secret_version']})")
         blocked = await http.post("/webhooks/subscriptions", json={"url": "http://127.0.0.1:%d/x" % port, "event_types": ["invoice.transitioned"]}, headers=people["admin"])
-        assert blocked.status_code >= 400
+        assert blocked.status_code == 422 and blocked.json()["code"] == "url_not_allowed", blocked.text
         say(f"  SSRF guard still on: subscribing the literal address 127.0.0.1 -> HTTP {blocked.status_code}")
 
         await pending_invoice(http, people)  # clerk files + submits: two transitions -> two events

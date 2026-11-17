@@ -23,6 +23,8 @@ def test_a_record_document_follows_the_entity_access_rules(
     )
     ok(run(["-m", "tests._prepare_db"], root, url))
     ok(run(["-m", "alembic", "upgrade", "head"], root, url))
+    ok(run(["-m", "alembic", "downgrade", "base"], root, url))  # the migrations are reversible
+    ok(run(["-m", "alembic", "upgrade", "head"], root, url))
     output = ok(
         run(["-m", "pytest", "-q", "-p", "no:cacheprovider", "tests/test_scenarios.py"], root, url)
     )
