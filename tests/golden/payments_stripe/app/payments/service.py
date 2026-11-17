@@ -54,6 +54,14 @@ def require_role(user: AuthUser, key: str) -> None:
         raise AppError("forbidden", "you do not have permission to do that", 403)
 
 
+def require_ops(user: AuthUser) -> None:
+    """Queue and event health is shared by every tenant (the job and event tables carry no tenant),
+    so in a multi-tenant project these routes are refused: operate them with the database tooling."""
+    require_role(user, "operate")
+    if config.MULTI_TENANT:
+        raise AppError("forbidden", "queue operations are not available per tenant", 403)
+
+
 def tenant_of(user: AuthUser) -> uuid.UUID | None:
     return getattr(user, "tenant_id", None) if config.MULTI_TENANT else None
 

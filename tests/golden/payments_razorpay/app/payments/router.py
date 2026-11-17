@@ -171,7 +171,7 @@ async def list_payment_disputes(payment_id: uuid.UUID, session: SessionDep, user
 
 @router.get("/ops/status", response_model=OpsStatus, summary="Queue and event health")
 async def ops_status(session: SessionDep, user: CurrentUser) -> OpsStatus:
-    service.require_role(user, "operate")
+    service.require_ops(user)
     failed = (
         await session.execute(
             sa.select(sa.func.count()).select_from(WebhookEvent).where(WebhookEvent.status == events.FAILED)
@@ -189,7 +189,7 @@ async def ops_status(session: SessionDep, user: CurrentUser) -> OpsStatus:
 
 @router.get("/ops/dead-jobs", response_model=list[JobRead], summary="Jobs that gave up")
 async def dead_jobs(session: SessionDep, user: CurrentUser) -> list[JobRead]:
-    service.require_role(user, "operate")
+    service.require_ops(user)
     rows = (
         await session.execute(
             sa.select(Job).where(Job.status == jobs.DEAD).order_by(Job.updated_at.desc()).limit(100)
@@ -200,7 +200,7 @@ async def dead_jobs(session: SessionDep, user: CurrentUser) -> list[JobRead]:
 
 @router.post("/ops/dead-jobs/{job_id}/retry", status_code=202, summary="Run a dead job again")
 async def retry_dead_job(job_id: uuid.UUID, session: SessionDep, user: CurrentUser) -> dict[str, bool]:
-    service.require_role(user, "operate")
+    service.require_ops(user)
     ok = await jobs.retry_dead(session, job_id)
     if ok:
         await audit.append(

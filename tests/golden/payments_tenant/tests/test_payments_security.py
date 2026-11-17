@@ -484,7 +484,8 @@ async def test_operators_can_verify_the_trail_and_nobody_else(
         verdict = await http.get(f"/payments/ops/audit/{payment_id}/verify")
         status = await http.get("/payments/ops/status")
     assert verdict.status_code == 200 and verdict.json() == {"intact": True, "first_bad_sequence": None}
-    assert status.status_code == 200 and "queue" in status.json()
+    # the queue is shared by every tenant, so the queue routes are refused here
+    assert status.status_code == 403
     allowed = set(config.ROLES["operate"])
     outsider_roles = [r for r in ('admin', 'manager', 'member') if r not in allowed]
     if outsider_roles:

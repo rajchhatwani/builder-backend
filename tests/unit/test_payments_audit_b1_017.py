@@ -437,6 +437,25 @@ async def test_f0420_overflowing_provider_refund_is_clamped_to_the_check_constra
     assert "refund_over_reserved" in [e for e, _ in service.audit_events]
 
 
+def test_f0425_ops_routes_are_refused_in_multi_tenant_projects(service: Any) -> None:
+    user = types.SimpleNamespace(id=1, roles=["op"])
+    service.require_ops(user)  # single tenant: the operate role is enough
+    service.config.MULTI_TENANT = True
+    with pytest.raises(service.AppError) as caught:
+        service.require_ops(user)  # the queue is shared across tenants: platform-only
+    assert caught.value.status_code == 403
+    service.config.MULTI_TENANT = False
+    with pytest.raises(service.AppError):
+        service.require_ops(types.SimpleNamespace(id=2, roles=["x"]))
+
+
+def test_f0425_ops_router_uses_require_ops() -> None:
+    text = (TPL / "router.py.tpl").read_text(encoding="utf-8")
+    for fn in ("ops_status", "dead_jobs", "retry_dead_job"):
+        body = text.split(f"async def {fn}(")[1].split("\n@router")[0]
+        assert "service.require_ops(user)" in body, fn
+
+
 # --- generated files (F-0423, F-0424) -------------------------------------------------------------
 
 
