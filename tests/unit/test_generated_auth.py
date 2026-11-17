@@ -85,7 +85,7 @@ def test_password_hashing_and_jwt_primitives(twilio: Path) -> None:
     run_script(
         twilio,
         """
-        import base64, json, time
+        import base64, hashlib, hmac, json, time
         from app.auth import security
 
         stored = security.hash_password("pw-one")
@@ -107,7 +107,11 @@ def test_password_hashing_and_jwt_primitives(twilio: Path) -> None:
         header, payload, signature = token.split(".")
         forged_payload = b64({"sub": "2", "exp": time.time() + 60})
         none_alg = b64({"alg": "none", "typ": "JWT"}) + "." + payload + "."
-        hs512 = b64({"alg": "HS512", "typ": "JWT"}) + "." + payload + "." + signature
+        hs512_head = b64({"alg": "HS512", "typ": "JWT"})
+        hs512_sig = base64.urlsafe_b64encode(
+            hmac.new(secret.encode(), f"{hs512_head}.{payload}".encode(), hashlib.sha512).digest()
+        ).rstrip(b"=").decode()
+        hs512 = hs512_head + "." + payload + "." + hs512_sig
         cases = {
             "tampered payload": f"{header}.{forged_payload}.{signature}",
             "alg none": none_alg,
@@ -662,12 +666,13 @@ def test_rs256_signs_with_the_private_key_and_rejects_forgeries(vault: Path) -> 
         pem = security.generate_private_key_pem()
         claims = {"sub": "1", "exp": time.time() + 60}
         token = security.encode_jwt(claims, pem)
-        assert token.split(".")[0] == b64({"alg": "RS256", "typ": "JWT"}) or True
+        raw_header = token.split(".")[0]
+        decoded_header = json.loads(base64.urlsafe_b64decode(raw_header + "=" * (-len(raw_header) % 4)))
+        assert decoded_header["alg"] == "RS256"
         assert security.decode_jwt(token, pem)["sub"] == "1"
 
         header, payload, signature = token.split(".")
         other = security.generate_private_key_pem()
-        public_pem = "-----BEGIN PUBLIC KEY-----"  # anything an attacker could know
         cases = {
             "wrong key": security.encode_jwt(claims, other),
             "tampered payload": ".".join([header, b64({"sub": "2", "exp": 4102444800}), signature]),
@@ -676,7 +681,7 @@ def test_rs256_signs_with_the_private_key_and_rejects_forgeries(vault: Path) -> 
                 b64({"alg": "HS256", "typ": "JWT"}) + "." + payload + "."
                 + base64.urlsafe_b64encode(
                     hmac.new(
-                        public_pem.encode(), f"{header}.{payload}".encode(), hashlib.sha256
+                        pem.encode(), f"{header}.{payload}".encode(), hashlib.sha256
                     ).digest()
                 ).rstrip(b"=").decode()
             ),
