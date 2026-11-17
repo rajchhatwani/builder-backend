@@ -70,6 +70,7 @@ def saml_response_xml(
     now: datetime | None = None,
     not_before: datetime | None = None,
     not_on_or_after: datetime | None = None,
+    confirmation_not_on_or_after: datetime | None = None,
     status: str = "urn:oasis:names:tc:SAML:2.0:status:Success",
     name_id_in_attribute: bool = False,
     first_name: str = "Alice",
@@ -101,7 +102,7 @@ def saml_response_xml(
 <saml:Issuer>{issuer}</saml:Issuer>
 <saml:Subject>{name_id}
 <saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer">
-<saml:SubjectConfirmationData InResponseTo="{in_response_to}" NotOnOrAfter="{_iso(noa)}"
+<saml:SubjectConfirmationData InResponseTo="{in_response_to}" NotOnOrAfter="{_iso(confirmation_not_on_or_after or noa)}"
  Recipient="{recipient or acs_url}"/>
 </saml:SubjectConfirmation></saml:Subject>
 <saml:Conditions NotBefore="{_iso(nb)}" NotOnOrAfter="{_iso(noa)}">

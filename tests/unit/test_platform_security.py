@@ -198,14 +198,26 @@ def test_limiter_blocks_then_recovers() -> None:
     assert limiter.allow("ip")
 
 
-def test_limiter_memory_is_bounded() -> None:
+def test_limiter_blocked_and_reset() -> None:
     now = [0.0]
-    limiter = SlidingWindowLimiter(1, 10, clock=lambda: now[0], max_keys=100)
-    for i in range(100):
+    limiter = SlidingWindowLimiter(2, 60, clock=lambda: now[0])
+    assert limiter.blocked("k") is False
+    limiter.allow("k")
+    limiter.allow("k")
+    assert limiter.blocked("k") is True
+    now[0] = 61
+    assert limiter.blocked("k") is False
+    limiter.allow("k")
+    limiter.reset()
+    assert limiter.retry_after("k") == 0 and not limiter._hits
+
+
+def test_limiter_memory_is_bounded() -> None:
+    limiter = SlidingWindowLimiter(1, 10, clock=lambda: 0.0, max_keys=100)
+    for i in range(150):
         limiter.allow(f"k{i}")
-    now[0] = 100
-    limiter.allow("fresh")
-    assert len(limiter._hits) <= 101
+    assert len(limiter._hits) == 100  # hard cap enforced
+    assert "k0" not in limiter._hits and "k149" in limiter._hits  # least recently used dropped
 
 
 # -- permission tables (decision tables: any change here is a deliberate security change) -----

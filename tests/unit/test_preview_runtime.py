@@ -133,9 +133,11 @@ def test_launch_commands_and_limits() -> None:
 
 
 def test_preview_expiry_arithmetic() -> None:
+    from app.services.preview_service import _expires_at
+
     now = datetime.now(UTC)
-    exp = now + timedelta(days=PreviewLimits().delete_after_days)
-    assert (exp - now).days == 14
+    assert _expires_at(now, PreviewLimits()) - now == timedelta(days=14)
+    assert _expires_at(now, PreviewLimits(delete_after_days=3)) - now == timedelta(days=3)
 
 
 def test_org_override_is_clamped_to_the_platform_default_unless_allowed() -> None:

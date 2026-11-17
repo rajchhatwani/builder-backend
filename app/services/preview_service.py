@@ -64,6 +64,10 @@ TRANSITIONS: dict[str, frozenset[str]] = {
     "killed": frozenset(),
 }
 STARTING_STALE = timedelta(minutes=5)
+
+
+def _expires_at(now: datetime, lim: Effective) -> datetime:
+    return now + timedelta(days=lim.delete_after_days)
 TOUCH_EVERY_SECONDS = 20.0
 _TOKEN_PREFIX = "bbp_"
 
@@ -614,7 +618,7 @@ class PreviewService:
             updated_at=now,
             last_request_at=now,
             state_since=now,
-            expires_at=now + timedelta(days=lim.delete_after_days),
+            expires_at=_expires_at(now, lim),
         )
         self.session.add(p)
         await audit_service.record(

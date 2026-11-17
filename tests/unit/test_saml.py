@@ -164,6 +164,12 @@ def test_expired_assertion_is_refused() -> None:
     assert _reason(sign_assertion(_response(now=past))) == "expired"
 
 
+def test_expired_bearer_confirmation_is_refused_when_conditions_are_valid() -> None:
+    # Conditions stay valid, so only the SubjectConfirmationData NotOnOrAfter check can refuse.
+    past = datetime.now(UTC) - timedelta(hours=1)
+    assert _reason(sign_assertion(_response(confirmation_not_on_or_after=past))) == "expired"
+
+
 def test_not_yet_valid_assertion_is_refused() -> None:
     future = datetime.now(UTC) + timedelta(hours=1)
     assert _reason(sign_assertion(_response(not_before=future))) == "not_yet_valid"

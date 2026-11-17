@@ -177,7 +177,7 @@ async def test_unknown_operation_unknown_field_and_oversize_are_refused(rig: Rig
 async def test_hostile_start_specs_are_rejected_without_running_docker(rig: Rig, extra: dict) -> None:  # type: ignore[type-arg]
     extra = json.loads(json.dumps(extra).replace("__ROOT__", str(rig.root)))
     r = await rig.post("start", spec_body(**extra))
-    assert r.status_code in (404, 422), r.text
+    assert r.status_code == 422, r.text
     assert "run" not in rig.verbs()
 
 
