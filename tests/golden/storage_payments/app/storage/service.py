@@ -73,6 +73,24 @@ def _scanner() -> tuple[str, int, float]:
     return settings.clamd_host, settings.clamd_port, float(settings.storage_scan_timeout_seconds)
 
 
+_DEDUPED_EVENTS = ("upload.denied", "upload.rate_limited")
+
+
+async def _recently_logged(session: AsyncSession, user: AuthUser, event: str) -> bool:
+    found = (
+        await session.execute(
+            sa.select(sa.func.count())
+            .select_from(StorAuditLog)
+            .where(
+                StorAuditLog.chain_key == audit.chain_for(None, user.id),
+                StorAuditLog.event == event,
+                StorAuditLog.at > _now() - timedelta(minutes=1),
+            )
+        )
+    ).scalar_one()
+    return found > 0
+
+
 async def _refuse(
     session: AsyncSession,
     user: AuthUser,
@@ -87,7 +105,13 @@ async def _refuse(
     data: dict[str, object] | None = None,
 ) -> AppError:
     """Record the refusal, then hand back the error to raise. Nothing is rolled back here: a
-    rollback would expire the signed-in user object the caller still holds."""
+    rollback would expire the signed-in user object the caller still holds.
+
+    A denied or rate-limited request is cheap for the caller and permanent for us, so it is written
+    once per user per minute: repeating it adds nothing to the record."""
+    if event in _DEDUPED_EVENTS and await _recently_logged(session, user, event):
+        await session.commit()
+        return AppError(code, message, status)
     await audit.append(
         session,
         event=event,
@@ -131,23 +155,21 @@ async def get_for_operator(session: AsyncSession, user: AuthUser, file_id: uuid.
 # --- upload -----------------------------------------------------------------------------------
 
 
-async def upload(
-    session: AsyncSession,
-    user: AuthUser,
-    file: BinaryIO,
-    *,
-    filename: str | None,
-    declared_type: str | None,
-    shared: bool,
-    info: RequestInfo,
-) -> StorFile:
-    if not access.has_role(user, "upload") or (shared and not access.has_role(user, "share")):
+async def precheck_upload(session: AsyncSession, user: AuthUser, info: RequestInfo) -> None:
+    """The refusals that need no file, run before the request body is read: a user who may not
+    upload (or is over the limit) must not make us receive and spool a whole file first. The
+    transaction ends here, so no pooled connection is held while a slow client sends the body."""
+    if not access.has_role(user, "upload"):
         raise await _refuse(
             session, user, info, event="upload.denied", code="forbidden",
             message="you do not have permission to do that", status=403, outcome=audit.DENIED,
         )
+    await _check_rate(session, user, info)
+    await session.commit()
 
-    # 1. rate limit: attempts of this user in the last hour (accepted or rejected)
+
+async def _check_rate(session: AsyncSession, user: AuthUser, info: RequestInfo) -> None:
+    # Rate limit: attempts of this user in the last hour (accepted or rejected)
     attempts = (
         await session.execute(
             sa.select(sa.func.count())
@@ -164,6 +186,25 @@ async def upload(
             session, user, info, event="upload.rate_limited", code="rate_limited",
             message="too many uploads; try again later", status=429,
         )
+
+
+async def upload(
+    session: AsyncSession,
+    user: AuthUser,
+    file: BinaryIO,
+    *,
+    filename: str | None,
+    declared_type: str | None,
+    shared: bool,
+    info: RequestInfo,
+) -> StorFile:
+    if not access.has_role(user, "upload") or (shared and not access.has_role(user, "share")):
+        raise await _refuse(
+            session, user, info, event="upload.denied", code="forbidden",
+            message="you do not have permission to do that", status=403, outcome=audit.DENIED,
+        )
+    await _check_rate(session, user, info)
+    await session.commit()  # do not hold a pooled connection while the file is measured
 
     # 2. size and hash
     size, digest = await asyncio.to_thread(_measure, file, config.MAX_FILE_BYTES)
@@ -208,6 +249,7 @@ async def upload(
             )
 
     # 5. malware scan, before anything is stored
+    await session.commit()  # the scan can take minutes: do not hold a pooled connection meanwhile
     host, port, timeout = _scanner()
     file.seek(0)
     try:
@@ -472,19 +514,39 @@ async def delete_file(
     await _erase(session, row, actor=user, info=info)
 
 
+async def _restore_status(session: AsyncSession, file_id: uuid.UUID, status: str) -> None:
+    await session.execute(
+        sa.update(StorFile).where(StorFile.id == file_id, StorFile.status == "deleting").values(status=status)
+    )
+    await session.commit()
+
+
 async def _erase(
     session: AsyncSession, row: StorFile, *, actor: AuthUser | None, info: RequestInfo
 ) -> None:
     """Remove the bytes, then blank the name and keep a tombstone (id, hash, size, dates)."""
     locked = (
-        await session.execute(sa.select(StorFile).where(StorFile.id == row.id).with_for_update())
+        await session.execute(
+            sa.select(StorFile)
+            .where(StorFile.id == row.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)  # else the stale, already-loaded status wins
+        )
     ).scalar_one()
     if locked.status not in ("clean", "quarantined", "pending", "deleting"):
         return
     previous = locked.status
+    if previous == "deleting":  # an earlier attempt died half way: a restore must not re-enter it
+        previous = "quarantined" if locked.quarantine_reason else "clean"
     locked.status = "deleting"
     await session.commit()  # new references are refused from here on (they need status clean)
-    if await refs.is_referenced(session, locked.id):
+    try:
+        referenced = await refs.is_referenced(session, locked.id)
+    except Exception:
+        await session.rollback()
+        await _restore_status(session, locked.id, previous)
+        raise
+    if referenced:
         locked.status = previous
         await session.commit()
         if actor is not None:
@@ -537,6 +599,23 @@ async def quarantine(
     return row
 
 
+async def _relock(session: AsyncSession, row: StorFile) -> StorFile | None:
+    """The row, locked and freshly read, if it can still take a status from a finished check.
+    A check streams and scans for seconds without a lock; the file may be deleted meanwhile."""
+    locked = (
+        await session.execute(
+            sa.select(StorFile)
+            .where(StorFile.id == row.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+    ).scalar_one_or_none()
+    if locked is None or locked.status not in ("clean", "quarantined"):
+        await session.rollback()
+        return None
+    return locked
+
+
 async def release(
     session: AsyncSession, user: AuthUser, file_id: uuid.UUID, info: RequestInfo
 ) -> StorFile:
@@ -549,6 +628,11 @@ async def release(
         raise AppError(
             "release_refused", "the file did not pass the checks and stays quarantined", 409
         )
+    locked = await _relock(session, row)
+    if locked is None or locked.status != "quarantined":
+        await session.rollback()
+        raise AppError("invalid_state", "the file is not quarantined", 409)
+    row = locked
     row.status = "clean"
     row.quarantine_reason = None
     await audit.append(
@@ -587,8 +671,13 @@ async def rescan(
         return await _rescan_result(
             session, row, "infected", actor_id, info, {"detection": verdict.signature}
         )
+    engine = await clamav.engine_version(host, port)
+    locked = await _relock(session, row)
+    if locked is None:
+        return "unavailable"
+    row = locked
     row.scanned_at = _now()
-    row.scan_engine = await clamav.engine_version(host, port)
+    row.scan_engine = engine
     await audit.append(
         session, event="file.rescanned", file_id=row.id, actor_id=actor_id,
         tenant_id=row.tenant_id, ip=info.ip, request_id=info.request_id,
@@ -606,6 +695,10 @@ async def _rescan_result(
     info: RequestInfo,
     data: dict[str, object],
 ) -> str:
+    locked = await _relock(session, row)
+    if locked is None:
+        return "unavailable"
+    row = locked
     row.status = "quarantined"
     row.quarantine_reason = verdict
     await audit.append(

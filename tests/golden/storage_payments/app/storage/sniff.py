@@ -56,8 +56,19 @@ _SIGNATURES: tuple[tuple[bytes, str], ...] = (
     (b"\xcf\xfa\xed\xfe", "application/x-mach-binary"),
     (b"#!", "text/x-shellscript"),
 )
-_HTML_RE = re.compile(rb"\s*(?:<!--.*?-->\s*)*<(?:!doctype\s+html|html|head|body|script|iframe)", re.I | re.S)
-_SVG_RE = re.compile(rb"<svg[\s>]", re.I)
+# A comment is matched with a tempered dot, not a lazy `.*?`: nested lazy quantifiers backtrack
+# exponentially on input made of many "<!---->" and would stall the event loop.
+_COMMENTS = rb"(?:<!--(?:(?!-->).)*-->\s*)*"
+_HTML_RE = re.compile(
+    rb"\s*" + _COMMENTS + rb"<(?:!doctype\s+html|html|head|body|script|iframe)", re.I | re.S
+)
+# SVG only counts at the start (after an XML prolog, comments and a doctype), not anywhere in a text.
+_SVG_RE = re.compile(
+    rb"\s*(?:<\?xml[^>]*\?>\s*)?" + _COMMENTS + rb"(?:<!doctype[^>]*>\s*)?" + _COMMENTS + rb"<svg[\s>]",
+    re.I | re.S,
+)
+# Short magic numbers that plain text can start with: they count only when the head is not text.
+_AMBIGUOUS_MAGICS = (b"ID3", b"BZh", b"MZ")
 _XML_RE = re.compile(rb"\s*<\?xml", re.I)
 
 
@@ -90,13 +101,16 @@ def detect(head: bytes) -> Detected:
         return Detected("video/mp4")
     if head.startswith((b"PK\x03\x04", b"PK\x05\x06")):
         return Detected(_zip_flavour(head))
+    as_text = _looks_like_text(head)
     for magic, mime in _SIGNATURES:
         if head.startswith(magic):
+            if as_text and magic in _AMBIGUOUS_MAGICS:
+                break
             return Detected(mime)
-    if _looks_like_text(head):
+    if as_text:
         if _HTML_RE.match(head):
             return Detected("text/html", text=True)
-        if _SVG_RE.search(head):
+        if _SVG_RE.match(head):
             return Detected("image/svg+xml", text=True)
         if _XML_RE.match(head):
             return Detected("application/xml", text=True)

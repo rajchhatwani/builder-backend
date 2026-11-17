@@ -213,18 +213,19 @@ def create_app() -> FastAPI:
 {% if api_edge %}
     install_api_edge(app)  # idempotency, rate limits, API versions: before any router is included
 {% endif %}
+{% if storage %}
+    # Refuses an oversize upload as it arrives, before it is spooled to disk. Added before CORS so
+    # CORS wraps it and the 413 carries the CORS headers.
+    app.add_middleware(
+        UploadSizeLimitMiddleware, path="/files", max_file_bytes=_storage_config.MAX_FILE_BYTES
+    )
+{% endif %}
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
-{% if storage %}
-    # Refuses an oversize upload as it arrives, before it is spooled to disk.
-    app.add_middleware(
-        UploadSizeLimitMiddleware, path="/files", max_file_bytes=_storage_config.MAX_FILE_BYTES
-    )
-{% endif %}
 {% if auth and auth.security_headers_enabled %}
     app.add_middleware(SecurityHeadersMiddleware)
 {% endif %}

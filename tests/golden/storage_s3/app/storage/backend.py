@@ -110,7 +110,11 @@ class S3Backend:
         try:
             chunks = body.iter_chunks(STREAM_CHUNK)
             while True:
-                chunk = await asyncio.to_thread(next, chunks, None)
+                try:
+                    chunk = await asyncio.to_thread(next, chunks, None)
+                except Exception as exc:  # timeout, reset or short read in the middle of the body
+                    logger.warning("storage_backend_error", error=type(exc).__name__, code="read")
+                    raise BackendUnavailable("the object store did not complete the read") from exc
                 if chunk is None:
                     break
                 yield chunk

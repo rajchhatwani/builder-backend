@@ -94,6 +94,8 @@ async def upload_file(request: Request, session: SessionDep, user: CurrentUser) 
     """Send a multipart form with one `file` part (and optionally `shared=true`). The file is checked,
     scanned for malware and only then stored; the response says what it was found to be."""
     info = request_info(request)
+    # Refuse a caller who may not upload, or is over the limit, before the body is read and spooled.
+    await service.precheck_upload(session, user, info)
     async with request.form(max_files=1, max_fields=3, max_part_size=1024) as form:
         files = form.getlist("file")
         stray = [key for key, value in form.multi_items() if isinstance(value, UploadFile) and key != "file"]

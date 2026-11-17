@@ -58,15 +58,16 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
         dependencies=[Depends(reject_nul_characters)],
     )
+    # Refuses an oversize upload as it arrives, before it is spooled to disk. Added before CORS so
+    # CORS wraps it and the 413 carries the CORS headers.
+    app.add_middleware(
+        UploadSizeLimitMiddleware, path="/files", max_file_bytes=_storage_config.MAX_FILE_BYTES
+    )
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
         allow_methods=["*"],
         allow_headers=["*"],
-    )
-    # Refuses an oversize upload as it arrives, before it is spooled to disk.
-    app.add_middleware(
-        UploadSizeLimitMiddleware, path="/files", max_file_bytes=_storage_config.MAX_FILE_BYTES
     )
     app.add_middleware(SecurityHeadersMiddleware)
     app.add_middleware(RequestIdMiddleware)
