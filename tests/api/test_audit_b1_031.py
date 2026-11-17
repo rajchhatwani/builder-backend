@@ -115,7 +115,9 @@ async def _mk(client: AsyncClient, s: Settings) -> tuple[str, str, dict[str, Any
 
 async def _add_run(factory: Factory, pid: str, ws_id: str, state: str = "running") -> None:
     async with factory() as s:
-        s.add(AiRun(project_id=uuid.UUID(pid), workspace_id=uuid.UUID(ws_id), goal="g", state=state))
+        s.add(
+            AiRun(project_id=uuid.UUID(pid), workspace_id=uuid.UUID(ws_id), goal="g", state=state)
+        )
         await s.commit()
 
 
@@ -131,9 +133,12 @@ async def test_rolled_back_workspace_still_serves_files_and_sync(
     assert rb.status_code == 200 and rb.json()["state"] == "rolled_back", rb.text
     assert (await client.get(f"{base}/files")).status_code == 200
     async with session_factory() as s:
-        assert await WorkspaceService(s, ws_settings).sync_generated(
-            uuid.UUID(pid), uuid.UUID(ws["id"])
-        ) >= 0
+        assert (
+            await WorkspaceService(s, ws_settings).sync_generated(
+                uuid.UUID(pid), uuid.UUID(ws["id"])
+            )
+            >= 0
+        )
 
 
 # -- F-0269: a file write is workspace activity ------------------------------------------------------
@@ -155,7 +160,8 @@ async def test_file_write_touches_updated_at(
         await s.commit()
     sha = hashlib.sha256(b"print('v1')\n").hexdigest()
     r = await client.put(
-        f"{base}/files/content", json={"path": CUSTOM, "content": "print('v2')\n", "expected_sha256": sha}
+        f"{base}/files/content",
+        json={"path": CUSTOM, "content": "print('v2')\n", "expected_sha256": sha},
     )
     assert r.status_code == 200, r.text
     async with session_factory() as s:
@@ -177,7 +183,9 @@ async def test_lifecycle_refused_while_a_run_is_active(
     pid, base, ws, wt = await _mk(client, ws_settings)
     await _add_run(session_factory, pid, ws["id"])
     if op == "rollback":
-        r = await client.post(f"{base}/rollback", json={"checkpoint_id": ws["checkpoints"][0]["id"]})
+        r = await client.post(
+            f"{base}/rollback", json={"checkpoint_id": ws["checkpoints"][0]["id"]}
+        )
     elif op == "checkpoint":
         r = await client.post(f"{base}/checkpoints", json={"label": "x"})
     else:
@@ -185,7 +193,9 @@ async def test_lifecycle_refused_while_a_run_is_active(
     assert r.status_code == 409 and r.json()["code"] == "workspace_busy", r.text
     assert wt.exists()
     async with session_factory() as s:  # the run ended: the workspace is usable again
-        run = (await s.execute(select(AiRun).where(AiRun.workspace_id == uuid.UUID(ws["id"])))).scalar_one()
+        run = (
+            await s.execute(select(AiRun).where(AiRun.workspace_id == uuid.UUID(ws["id"])))
+        ).scalar_one()
         run.state = "applied"
         await s.commit()
 
@@ -217,7 +227,11 @@ async def test_failed_create_keeps_row_when_a_drop_fails(
         with pytest.raises(RuntimeError):
             await client.post(f"/projects/{pid}/workspaces", json={})
     async with session_factory() as s:
-        rows = (await s.execute(select(Workspace).where(Workspace.project_id == uuid.UUID(pid)))).scalars().all()
+        rows = (
+            (await s.execute(select(Workspace).where(Workspace.project_id == uuid.UUID(pid))))
+            .scalars()
+            .all()
+        )
     assert len(rows) == 1 and rows[0].state == "discarded" and rows[0].preview_db_name
 
 
@@ -226,7 +240,10 @@ async def test_failed_create_keeps_row_when_a_drop_fails(
 
 @needs_git
 async def test_promote_failure_restores_main_and_reads_committed(
-    client: AsyncClient, ws_settings: Settings, session_factory: Factory, monkeypatch: pytest.MonkeyPatch
+    client: AsyncClient,
+    ws_settings: Settings,
+    session_factory: Factory,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pid, base, ws, wt = await _mk(client, ws_settings)
     svc = WorkspaceService(session_factory(), ws_settings)
@@ -242,11 +259,17 @@ async def test_promote_failure_restores_main_and_reads_committed(
     with monkeypatch.context() as m:
         m.setattr(WorkspaceService, "_git", flaky)
         with pytest.raises(RuntimeError):
-            await svc.promote_files(p, {"app/custom/a.py": b"A2\n", "app/custom/b.py": b"B\n"}, "second")
+            await svc.promote_files(
+                p, {"app/custom/a.py": b"A2\n", "app/custom/b.py": b"B\n"}, "second"
+            )
     repo = svc._repo(p)
-    status = subprocess.run(["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True).stdout
+    status = subprocess.run(
+        ["git", "status", "--porcelain"], cwd=repo, capture_output=True, text=True
+    ).stdout
     assert status.strip() == ""
-    assert (repo / "app/custom/a.py").read_text() == "A1\n" and not (repo / "app/custom/b.py").exists()
+    assert (repo / "app/custom/a.py").read_text() == "A1\n" and not (
+        repo / "app/custom/b.py"
+    ).exists()
     assert (await svc.promoted_files(p)) == {"app/custom/a.py": "A1\n"}
     # and a retry of the same promotion works (no stale 'no change' verdict)
     assert await svc.promote_files(p, {"app/custom/a.py": b"A2\n"}, "third")
@@ -266,7 +289,57 @@ async def test_subscription_event_older_than_checkout_is_not_dropped(
     chk = event("checkout.session.completed", checkout_completed(org_id), created=t0 + 100)
     assert (await deliver(anon_client, chk)).json()["outcome"] == "applied"
     sub = event(
-        "customer.subscription.updated", subscription_obj(org_id, period_end=1_900_000_123), created=t0
+        "customer.subscription.updated",
+        subscription_obj(org_id, period_end=1_900_000_123),
+        created=t0,
     )
     assert (await deliver(anon_client, sub)).json()["outcome"] == "applied"
     assert (await _sub(session_factory, org_id)).current_period_end is not None
+
+
+async def test_checkout_older_than_a_cancel_does_not_resurrect_the_plan(
+    client: AsyncClient,
+    anon_client: AsyncClient,
+    session_factory: Factory,
+    webhook_configured: None,  # noqa: F811
+) -> None:
+    org_id = await _team_org(client)
+    t0 = 1_800_000_000
+    deleted = event(
+        "customer.subscription.deleted",
+        subscription_obj(org_id, status="canceled"),
+        created=t0 + 100,
+    )
+    assert (await deliver(anon_client, deleted)).json()["outcome"] == "applied"
+    before = await _sub(session_factory, org_id)
+    assert before.status.value == "canceled"
+    plan = before.plan_id
+    late = event("checkout.session.completed", checkout_completed(org_id), created=t0)
+    assert (await deliver(anon_client, late)).json()["outcome"] == "stale"
+    after = await _sub(session_factory, org_id)
+    assert after.status.value == "canceled" and after.plan_id == plan
+    # a genuinely newer purchase (new subscription) still goes through
+    fresh = event(
+        "checkout.session.completed",
+        checkout_completed(org_id, subscription="sub_456"),
+        created=t0 + 200,
+    )
+    assert (await deliver(anon_client, fresh)).json()["outcome"] == "applied"
+
+
+@needs_git
+async def test_awaiting_approval_run_allows_rollback_but_blocks_file_write(
+    client: AsyncClient, ws_settings: Settings, session_factory: Factory
+) -> None:
+    import hashlib
+
+    pid, base, ws, wt = await _mk(client, ws_settings)
+    await _add_run(session_factory, pid, ws["id"], state="awaiting_approval")
+    sha = hashlib.sha256(b"print('v1')\n").hexdigest()
+    w = await client.put(
+        f"{base}/files/content",
+        json={"path": CUSTOM, "content": "print('v2')\n", "expected_sha256": sha},
+    )
+    assert w.status_code == 409 and w.json()["code"] == "workspace_busy", w.text
+    rb = await client.post(f"{base}/rollback", json={"checkpoint_id": ws["checkpoints"][0]["id"]})
+    assert rb.status_code == 200, rb.text

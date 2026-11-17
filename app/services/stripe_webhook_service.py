@@ -155,7 +155,11 @@ class StripeWebhookService:
             # bought again). One Stripe Subscription per org (§10): only the live one counts.
             await self._record(event, org_id, created, "other_subscription")
             return WebhookResult("other_subscription", org_id)
-        if created < await self._newest_applied(org_id, event_type):
+        if created < await self._newest_applied(org_id, event_type) or (
+            event_type == "checkout.session.completed"
+            and self._checkout_predates_cancel(obj, sub)
+            and created < await self._newest_applied(org_id, "customer.subscription.updated")
+        ):
             await self._record(event, org_id, created, "stale")
             return WebhookResult("stale", org_id)
 
@@ -197,6 +201,16 @@ class StripeWebhookService:
             event_sub = obj.get("id")
         live = sub.stripe_subscription_id is not None and sub.status in LIVE_STATUSES
         return bool(live and event_sub and event_sub != sub.stripe_subscription_id)
+
+    @staticmethod
+    def _checkout_predates_cancel(session: dict[str, Any], sub: Subscription) -> bool:
+        """A delayed checkout for the subscription that has since been canceled must not revive it
+        (a checkout for a different, new subscription is how a repurchase arrives)."""
+        return (
+            sub.status is SubscriptionStatus.canceled
+            and sub.stripe_subscription_id is not None
+            and session.get("subscription") == sub.stripe_subscription_id
+        )
 
     def _apply_checkout(self, sub: Subscription, session: dict[str, Any]) -> None:
         if session.get("subscription"):
