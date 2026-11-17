@@ -149,7 +149,13 @@ def test_wrong_audience_is_refused() -> None:
 
 
 def test_wrong_recipient_is_refused() -> None:
+    # Destination stays correct, so only the signed SubjectConfirmationData Recipient check can refuse.
     xml = sign_assertion(_response(recipient="https://api.builder.test/sso/saml/other/acs"))
+    assert _reason(xml) == "wrong_recipient"
+
+
+def test_wrong_destination_is_refused() -> None:
+    xml = sign_assertion(_response(destination="https://api.builder.test/sso/saml/other/acs"))
     assert _reason(xml) == "wrong_recipient"
 
 

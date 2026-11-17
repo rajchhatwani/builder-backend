@@ -66,6 +66,7 @@ def saml_response_xml(
     issuer: str = IDP_ENTITY_ID,
     audience: str | None = None,
     recipient: str | None = None,
+    destination: str | None = None,
     now: datetime | None = None,
     not_before: datetime | None = None,
     not_on_or_after: datetime | None = None,
@@ -93,7 +94,7 @@ def saml_response_xml(
     )
     return f"""<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"
  xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="{rid}" Version="2.0"
- IssueInstant="{_iso(now)}" Destination="{recipient or acs_url}" InResponseTo="{in_response_to}">
+ IssueInstant="{_iso(now)}" Destination="{destination or acs_url}" InResponseTo="{in_response_to}">
 <saml:Issuer>{issuer}</saml:Issuer>
 <samlp:Status><samlp:StatusCode Value="{status}"/></samlp:Status>
 <saml:Assertion ID="{aid}" Version="2.0" IssueInstant="{_iso(now)}">
