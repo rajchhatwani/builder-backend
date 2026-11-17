@@ -154,7 +154,7 @@ async def test_field_update_conflict_duplicate_name(client: AsyncClient) -> None
 # ===========================================================================
 
 
-async def test_relation_create_missing_from_entity_404(client: AsyncClient) -> None:
+async def test_relation_create_missing_from_entity_400(client: AsyncClient) -> None:
     pid = await _project(client, "RelMissing")
     r = await client.post(
         f"/projects/{pid}/relations",
@@ -163,9 +163,11 @@ async def test_relation_create_missing_from_entity_404(client: AsyncClient) -> N
             "from_entity_id": str(uuid.uuid4()),
             "to_entity_id": str(uuid.uuid4()),
             "from_name": "owner",
+            "to_name": "items",
         },
     )
-    assert r.status_code in (404, 422)
+    assert r.status_code == 400
+    assert r.json()["code"] == "invalid_reference"
 
 
 async def test_relation_update_missing_404(client: AsyncClient) -> None:
@@ -348,22 +350,14 @@ async def test_generation_list_missing_project_404(client: AsyncClient) -> None:
 async def test_generation_download_invalid_spec_422(client: AsyncClient) -> None:
     """A project with validation issues returns 422 (spec_invalid)."""
     pid = await _project(client, "BadSpec")
-    # No entities – but trigger auth which requires entities; just validate first
-    # The spec itself has no auth so generation won't fail on missing entities.
-    # Add auth without any entity to cause a validation issue.
-    await client.put(
-        f"/projects/{pid}/auth",
-        json={
-            "provider": "local",
-            "user_entity": "NonExistentEntity",
-            "registration": {"enabled": True},
-            "password_reset": {"enabled": False},
-        },
-    )
+    from tests.api._auth_helpers import SMTP
+
+    # Magic link is on by default but no app_url is set: the spec has one validation issue.
+    created = await client.post(f"/projects/{pid}/auth", json={"smtp_config": SMTP})
+    assert created.status_code == 201, created.text
     r = await client.get(f"/projects/{pid}/generate/download")
-    # Either 422 (spec_invalid because entity doesn't exist) or 200 (if generator
-    # doesn't validate entities for empty projects). Both are valid states.
-    assert r.status_code in (200, 422)
+    assert r.status_code == 422
+    assert r.json()["code"] == "spec_invalid"
 
 
 async def test_generation_preview_empty_project(client: AsyncClient) -> None:
@@ -372,7 +366,7 @@ async def test_generation_preview_empty_project(client: AsyncClient) -> None:
     assert r.status_code == 200
     body = r.json()
     assert "total_files" in body
-    assert body["total_files"] >= 0
+    assert body["total_files"] > 0
 
 
 # ===========================================================================
@@ -548,7 +542,8 @@ async def test_auth_secrets_lifecycle(client: AsyncClient) -> None:
     assert status2.status_code == 200
     body = status2.json()
     # Response is booleans, not raw credentials
-    assert body.get("smtp") is True or isinstance(body.get("smtp"), dict)
+    assert body["smtp"] == {"configured": True, "username_set": True}
+    assert "s3cret" not in put.text and "s3cret" not in status2.text
 
 
 async def test_auth_secrets_missing_project_404(client: AsyncClient) -> None:
@@ -565,7 +560,9 @@ async def test_authz_get_returns_disabled_by_default(client: AsyncClient) -> Non
     pid = await _project(client, "AuthzDefault")
     r = await client.get(f"/projects/{pid}/authorization")
     assert r.status_code == 200
-    assert r.json()["model"] in ("rbac", "abac", "pbac", None)
+    body = r.json()
+    assert body["model"] == "rbac" and body["version"] == 0  # nothing saved: rbac, no policies
+    assert body["policies"] == [] and body["attachments"] == {}
 
 
 async def test_authz_issues_on_empty_project(client: AsyncClient) -> None:
@@ -757,8 +754,7 @@ async def test_access_service_via_generate_preview(client: AsyncClient) -> None:
     """access_service is exercised when checking project membership during generate."""
     pid = await _project(client, "AccessTest")
     r = await client.post(f"/projects/{pid}/generate/preview")
-    # Empty project generates fine or returns 422 (spec_invalid) – either exercises access
-    assert r.status_code in (200, 422)
+    assert r.status_code == 200
 
 
 async def test_project_not_member_returns_404_on_spec(client: AsyncClient, client_for: object) -> None:
@@ -797,4 +793,4 @@ async def test_admin_audit_log(client: AsyncClient, client_for: object) -> None:
 
 async def test_health_ready(anon_client: AsyncClient) -> None:
     r = await anon_client.get("/ready")
-    assert r.status_code in (200, 503)  # 503 if DB not ready
+    assert r.status_code == 200  # the test DB is live

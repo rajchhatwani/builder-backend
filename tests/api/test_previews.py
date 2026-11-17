@@ -544,9 +544,19 @@ async def test_odd_proxy_paths_are_400_or_stay_inside_the_app(
     c = await _create(client, pid)
     await _wait_state(client, pid, str(c["id"]), "running")
     h = {TOKEN: str(c["token"])}
-    for tail in ("//evil.example/x", "/a%3Fb%23c", "/%2e%2e/admin", "/x%00y", "/a%0d%0ab", "/caf%C3%A9"):
+    expected: dict[str, tuple[int, str | None]] = {  # tail -> (status, upstream target)
+        "//evil.example/x": (200, "//evil.example/x"),
+        "/a%3Fb%23c": (200, "/a%3Fb%23c"),
+        "/%2e%2e/admin": (200, "/%2e%2e/admin"),  # forwarded verbatim, never resolved to /admin
+        "/x%00y": (422, None),
+        "/a%0d%0ab": (404, None),
+        "/caf%C3%A9": (200, "/caf%C3%A9"),
+    }
+    for tail, (status, target) in expected.items():
         r = await anon.get(f"/previews/{c['id']}{tail}", headers=h)
-        assert r.status_code in (200, 400, 404, 422), (tail, r.status_code)
+        assert r.status_code == status, (tail, r.status_code)
+        if target is not None:
+            assert r.json()["target"] == target and r.json()["target"] != "/admin", tail
     ok = await anon.get(f"/previews/{c['id']}/a%3Fb%23c", headers=h)
     assert ok.status_code == 200 and ok.json()["target"] == "/a%3Fb%23c"  # not a query/fragment
     double = await anon.get(f"/previews/{c['id']}//evil.example/x", headers=h)
@@ -682,6 +692,6 @@ async def test_global_and_org_capacity_caps_are_admin_set_and_refuse_with_stable
     org = await admin.put(
         f"/admin/preview-limits/orgs/{uuid.uuid4()}", json={"overrides": {"max_live_total": 1}}
     )
-    assert org.status_code in (404, 422)
+    assert org.status_code == 404 and org.json()["code"] == "not_found"
     for m in made:  # discard the previews
         assert (await client.delete(f"/projects/{pid}/previews/{m['id']}")).status_code in (200, 204)

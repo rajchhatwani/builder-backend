@@ -72,9 +72,10 @@ async def test_clean_or_non_spec_commit_in_a_scope_takes_no_lock(
         assert _locks(seen) == [] and _op_writes(seen) == []
     # the guard's own audit row rides on a mutating request without touching the spec
     with _statements(engine) as seen:
-        r = await client.get(f"/projects/{pid}/spec/ops")
-        assert r.status_code == 200
+        r = await client.post(f"/projects/{pid}/search/reindex")
+        assert r.status_code < 300, r.text
     assert _locks(seen) == []
+    assert _op_writes(seen) == []
 
 
 async def test_a_spec_write_locks_once_at_commit_and_records_one_op(
@@ -136,23 +137,44 @@ async def test_concurrent_rest_and_typed_writers_and_a_cold_cache(client: AsyncC
     assert len((await client.get(f"/projects/{pid}/spec")).json()["entities"]) == 8
 
 
-async def test_a_change_made_behind_the_cache_is_not_mistaken_for_the_cached_state(
-    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
-) -> None:
+async def _sneaky_then_b(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession], *, drop_cache: bool
+) -> list[dict[str, Any]]:
     pid = await make_project(client)
     await make_entity(client, pid, "A")  # cache now holds the spec after op 1
     async with session_factory() as db:  # an unlogged writer (no scope)
         db.add(Entity(project_id=uuid.UUID(pid), name="Sneaky", table_name="sneakies", plural_path="sneakies"))
         await db.commit()
-    # the cache's hash still equals the log's last hash, so it is used: the sneaky row is
-    # then part of this op's diff only if the cache is bypassed. Drop it as another process
-    # would have (its own cache is empty) and the diff must be exactly the new entity.
-    ops_scope._LAST_SPEC.clear()  # noqa: SLF001
+    if drop_cache:  # another process: its own cache is empty
+        ops_scope._LAST_SPEC.clear()  # noqa: SLF001
     await make_entity(client, pid, "B")
     ops = await _ops(client, pid)
     assert [o["seq"] for o in ops] == [1, 2]
+    chained = ops[0]["spec_hash_after"] == ops[1]["spec_hash_before"]
+    assert chained is not drop_cache  # warm: chained; cold: the log shows the outside change
+    assert ops[1]["spec_hash_before"] != ops[1]["spec_hash_after"]
     spec = (await client.get(f"/projects/{pid}/spec")).json()
     assert {e["name"] for e in spec["entities"]} == {"A", "B", "Sneaky"}
+    return ops
+
+
+async def test_a_change_made_behind_a_warm_cache_is_folded_into_the_next_op_not_lost(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    # the cache hash still equals the log's last hash, so it is used as "before": the unlogged
+    # row shows up in op 2's diff (recorded as a whole-spec replace naming both new entities).
+    ops = await _sneaky_then_b(client, session_factory, drop_cache=False)
+    assert ops[1]["op_type"] == "replace_spec"
+    names = {e["name"] for e in ops[1]["payload"]["spec"]["entities"]}
+    assert {"B", "Sneaky"} <= names
+
+
+async def test_a_change_made_behind_a_cold_cache_leaves_op_two_naming_only_the_new_entity(
+    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    ops = await _sneaky_then_b(client, session_factory, drop_cache=True)
+    assert ops[1]["op_type"] == "add_entity"
+    assert ops[1]["payload"]["entity"]["name"] == "B"
 
 
 async def test_rollback_then_commit_in_one_scope_records_exactly_one_op_under_the_lock(
