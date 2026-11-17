@@ -359,3 +359,16 @@ tests/unit/test_audit_b1_017_storage.py
 tests/unit/test_audit_b1_020_deploy_aws.py
 tests/unit/test_audit_b1_021_pyproject.py
 tests/unit/test_audit_b1_023_scripts.py
+tests/audit/authz_access/test_access_api.py
+tests/audit/authz_access/test_access_diff_gaps.py
+tests/audit/authz_access/test_generated_stack.py
+tests/audit/authz_access/test_impersonation_attacks.py
+tests/audit/authz_access/test_scim_sso_attacks.py
+tests/audit/authz_access/test_tokens_sweeps.py
+tests/audit/tenant_rls/test_body_ids.py
+tests/audit/tenant_rls/test_limiter_keys.py
+tests/audit/tenant_rls/test_mcp_and_tokens.py
+tests/audit/tenant_rls/test_nested_ids.py
+tests/audit/tenant_rls/test_org_attacks.py
+tests/audit/tenant_rls/test_preview_isolation.py
+tests/audit/tenant_rls/test_rls_db.py
