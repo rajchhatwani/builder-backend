@@ -1,5 +1,8 @@
 """Per-client sliding-window rate limits for the auth endpoints.
 
+The sign-in group counts failures only (FailureRateLimiter); registration and e-mail / SMS
+requests count every call.
+
 State is kept in process memory: with several workers or replicas each one counts on its own,
 and behind a reverse proxy every client shares the proxy's address unless the server is
 started with proxy headers enabled. Use an edge or Redis based limiter for a hard guarantee.
@@ -8,6 +11,7 @@ started with proxy headers enabled. Use an edge or Redis based limiter for a har
 import re
 import time
 from collections import defaultdict, deque
+from collections.abc import AsyncIterator
 
 from fastapi import Request
 
@@ -24,7 +28,10 @@ def parse_limit(limit: str) -> tuple[int, int]:
     match = _PERIOD_RE.fullmatch(period)
     if not count.isdigit() or match is None:
         raise ValueError(f"invalid rate limit {limit!r}")
-    return int(count), int(match.group(1) or 1) * _UNIT_SECONDS[match.group(2)]
+    limit_count, window = int(count), int(match.group(1) or 1) * _UNIT_SECONDS[match.group(2)]
+    if limit_count < 1 or window < 1:  # '0/hour' locks everyone out, '5/0minutes' never fires
+        raise ValueError(f"invalid rate limit {limit!r}")
+    return limit_count, window
 
 
 class RateLimiter:
@@ -53,6 +60,46 @@ class RateLimiter:
 
     def reset(self) -> None:
         self._hits.clear()
+
+
+class FailureRateLimiter(RateLimiter):
+    """Counts only requests the endpoint rejects with a client error (wrong password, bad or
+    expired token, wrong code), so normal sign-ins and token refreshes never use up the budget.
+    Once a client has `limit` failures inside the window every further call gets 429 until the
+    oldest failure ages out."""
+
+    async def __call__(self, request: Request) -> AsyncIterator[None]:  # type: ignore[override]
+        client = request.client.host if request.client else "unknown"
+        now = time.monotonic()
+        hits = self._hits[client]
+        while hits and now - hits[0] >= self.window:
+            hits.popleft()
+        if len(hits) >= self.count:
+            retry_after = max(1, int(self.window - (now - hits[0])))
+            raise AppError(
+                "rate_limited",
+                f"too many requests; retry in {retry_after} seconds",
+                429,
+            )
+        # Reserve the slot before the endpoint runs, so a concurrent burst is counted too;
+        # give it back unless the endpoint rejects the call with a client error.
+        hits.append(now)
+        try:
+            yield
+        except AppError as exc:
+            if not (400 <= exc.status_code < 500 and exc.status_code != 429):
+                self._release(client, now)
+            raise
+        except BaseException:
+            self._release(client, now)
+            raise
+        else:
+            self._release(client, now)
+
+    def _release(self, client: str, stamp: float) -> None:
+        hits = self._hits.get(client)
+        if hits is not None and stamp in hits:
+            hits.remove(stamp)
 
 
 def reset_all() -> None:

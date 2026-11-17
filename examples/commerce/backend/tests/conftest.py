@@ -24,7 +24,7 @@ def _require_test_database() -> None:
 @pytest.fixture(autouse=True)
 async def _clean_database(_require_test_database: None) -> None:
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE articles, auth_invitations, auth_tenants, auth_users, auth_verification_codes, blogs, cart_lines, carts, collections, collections_products, customer_addresses, customers, discount_usages, discounts, fulfillment_lines, fulfillments, gift_cards, inventory_levels, locations, metafields, order_events, order_lines, orders, pages, product_images, products, products_tags, refund_lines, refunds, reviews, shipping_rates, shipping_zones, stores, tags, tax_rates, transactions, variants, webhooks CASCADE"))
+        await connection.execute(text("TRUNCATE TABLE articles, auth_identities, auth_invitations, auth_sessions, auth_tenants, auth_users, auth_verification_codes, blogs, cart_lines, carts, collections, collections_products, customer_addresses, customers, discount_usages, discounts, fulfillment_lines, fulfillments, gift_cards, inventory_levels, locations, metafields, order_events, order_lines, orders, pages, product_images, products, products_tags, refund_lines, refunds, reviews, shipping_rates, shipping_zones, stores, tags, tax_rates, transactions, variants, webhooks CASCADE"))
 
 
 @pytest.fixture

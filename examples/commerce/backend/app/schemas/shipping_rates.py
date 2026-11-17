@@ -9,8 +9,8 @@ import pydantic as _pd
 
 class ShippingRateCreate(_pd.BaseModel):
     name: str = _pd.Field(max_length=120)
-    price: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
-    min_order_subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    price: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
+    min_order_subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     min_weight: float | None = _pd.Field(default=None, ge=0)
     max_weight: float | None = _pd.Field(default=None, ge=0)
     active: bool | None = _pd.Field(default=True)
@@ -19,8 +19,8 @@ class ShippingRateCreate(_pd.BaseModel):
 
 class ShippingRateUpdate(_pd.BaseModel):
     name: str | None = _pd.Field(default=None, max_length=120)
-    price: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
-    min_order_subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    price: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
+    min_order_subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     min_weight: float | None = _pd.Field(default=None, ge=0)
     max_weight: float | None = _pd.Field(default=None, ge=0)
     active: bool | None = _pd.Field(default=None)

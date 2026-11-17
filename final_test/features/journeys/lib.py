@@ -34,7 +34,7 @@ def signup(email, name="t", pw=None):
 
 def user(tag):
     """fresh account -> (email, token)"""
-    em = f"bbf-{tag}-{RUN}@" + os.environ.get("BBF_DOMAIN", "dumbpotato.com")
+    em = f"bbf-{tag}-{RUN}@" + os.environ.get("BBF_DOMAIN", "example.test")
     c, b, _ = signup(em)
     assert c == 201, (c, b)
     return em, b["access_token"]

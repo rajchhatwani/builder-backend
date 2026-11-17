@@ -6,7 +6,7 @@ api = bb.Api()
 owner_tok = api.customer("owner")
 st, b, _ = api.call("POST", "/orgs/bb-sso/scim/token", {}, token=owner_tok)
 scim = bb.Scim(b["base_url"], b["token"])
-email = "sectest-scimoffboard@dumbpotato.com"
+email = "sectest-scimoffboard@example.test"
 st, body = scim.call("POST", "/Users", {
     "schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"], "userName": email, "active": True,
     "name": {"givenName": "SCIM", "familyName": "Offboard"}, "emails": [{"value": email, "primary": True}],

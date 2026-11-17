@@ -48,14 +48,14 @@ c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations",{"email":me,"role":"member"})
 c,b,h = call(mt,"POST",f"/orgs/invitations/{inv_m['id']}/accept"); rec("J5.26","accept by id for an e-mail-unverified account is refused with email_not_verified (design)",c==403 and b.get("code")=="email_not_verified",f"HTTP {c} {json.dumps(b)[:150]}")
 c,b,h = call(mt,"POST","/orgs/invitations/accept",{"token":inv_m["token"]}); expect("J5.26b","accept by token (proves mailbox ownership)",(c,b,h),[200,201])
 # revoke / expired / resend
-c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations",{"email":"rev-%s@dumbpotato.com"%RUN,"role":"member"}); rv=b
+c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations",{"email":"rev-%s@example.test"%RUN,"role":"member"}); rv=b
 c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations/{rv['id']}/resend"); expect("J5.27","resend invite",(c,b,h),[200,201])
 rec("J5.27b","resend gives new token/url or not (record)",True,"token_changed=%s"%(b.get("token")!=rv.get("token")))
 tok_new=b.get("token")
 c,b,h = call(ot,"DELETE",f"/orgs/{slug}/invitations/{rv['id']}"); expect("J5.28","revoke invite",(c,b,h),[200,204])
 c,b,h = call(ot,"POST","/orgs/invitations/accept",{"token":tok_new or rv["token"]}); expect("J5.29","revoked token refused",(c,b,h),[400,403,404,409,410])
 # --- roles & permissions
-c,b,h = call(mt,"POST",f"/orgs/{slug}/invitations",{"email":"z%s@dumbpotato.com"%RUN,"role":"member"}); expect("J5.30","member cannot invite",(c,b,h),403)
+c,b,h = call(mt,"POST",f"/orgs/{slug}/invitations",{"email":"z%s@example.test"%RUN,"role":"member"}); expect("J5.30","member cannot invite",(c,b,h),403)
 c,b,h = call(mt,"PATCH",f"/orgs/{slug}",{"name":"m"}); expect("J5.31","member cannot rename",(c,b,h),403)
 c,b,h = call(mt,"GET",f"/orgs/{slug}/members"); expect("J5.32","member can list members",(c,b,h),200)
 c,b,h = call(mt,"GET",f"/orgs/{slug}/audit"); rec("J5.33","member audit access",c in(200,403),f"HTTP {c}")
@@ -94,14 +94,14 @@ c,b,h = call(ot,"GET",f"/orgs/{slug}/plan"); usage=b.get("usage"); print("usage"
 # fill seats incl pending: members now owner+admin=2; pending invites count
 res=[]
 for i in range(6):
-    c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations",{"email":f"seat{i}-{RUN}@dumbpotato.com","role":"member"}); res.append((c, "seat" in json.dumps(b).lower()))
+    c,b,h = call(ot,"POST",f"/orgs/{slug}/invitations",{"email":f"seat{i}-{RUN}@example.test","role":"member"}); res.append((c, "seat" in json.dumps(b).lower()))
 n_ok=sum(1 for c,_ in res if c==201)
 rec("J6.10","seats: pending invites count toward 5-seat cap (2 members + pending invites; cap 5 -> 402)",n_ok==2 and res[2][0]==402 and res[3][1],str(res))
 # concurrency for last slot: free one seat then race 4 invites
 c,b,h=call(ot,"GET",f"/orgs/{slug}/invitations"); inv=[i for i in b.get("items",b) if i["status"]=="pending" and i["email"].startswith("seat")]
 assert inv, b
 call(ot,"DELETE",f"/orgs/{slug}/invitations/{inv[0]['id']}")
-def race(i): return call(ot,"POST",f"/orgs/{slug}/invitations",{"email":f"race{i}-{RUN}@dumbpotato.com","role":"member"})[0]
+def race(i): return call(ot,"POST",f"/orgs/{slug}/invitations",{"email":f"race{i}-{RUN}@example.test","role":"member"})[0]
 with cf.ThreadPoolExecutor(6) as ex: codes=list(ex.map(race,range(6)))
 rec("J6.11","race for last seat: exactly one invite succeeds",codes.count(201)==1,str(codes))
 # projects

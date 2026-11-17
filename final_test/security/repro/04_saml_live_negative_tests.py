@@ -8,7 +8,7 @@ import bb
 from sso_fake_idp import idp_keys, attacker_keys, saml_response_xml, sign_assertion, b64, IDP_ENTITY_ID
 
 API = "http://127.0.0.1:8000"
-TUNNEL = "https://cinderous-overfamiliar-sanford.ngrok-free.dev"
+TUNNEL = "https://tunnel.example.test"
 SLUG = "bb-sso"
 ACS_URL = f"{TUNNEL}/sso/saml/{SLUG}/acs"
 
@@ -75,59 +75,59 @@ def case(name, builder, expect):
     return req_id, cj, xml
 
 case("A_valid_signed_assertion",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real), keys),
      "ACCEPTED")
 
 case("B_unsigned",
-     lambda rid: saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real),
      "REFUSED")
 
 case("C_foreign_signed_attacker_key",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-owner@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-owner@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real), attacker_keys()),
      "REFUSED")
 
 case("D_wrong_audience",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real,
         audience="https://not-us.example.test"), keys),
      "REFUSED")
 
 case("E_wrong_recipient",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient="https://evil.example.test/acs"), keys),
      "REFUSED")
 
 case("F_wrong_issuer",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer="https://not-the-real-idp.example.test", recipient=acs_url_real), keys),
      "REFUSED")
 
 now = datetime.now(UTC)
 case("G_expired_assertion",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real,
         now=now - timedelta(hours=1), not_on_or_after=now - timedelta(minutes=50)), keys),
      "REFUSED")
 
 case("H_not_yet_valid",
-     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+     lambda rid: sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
         acs_url=acs_url_real, in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real,
         not_before=now + timedelta(hours=1)), keys),
      "REFUSED")
 
 # I: unsolicited / unmatched InResponseTo (fresh login started, but we ignore its real id)
 _rid_ignored, cj_i = start_login()
-xml_i = sign_assertion(saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id,
+xml_i = sign_assertion(saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id,
     acs_url=acs_url_real, in_response_to="_neverissued1234567890abcdef", issuer=IDP_ENTITY_ID, recipient=acs_url_real), keys)
 st_i, loc_i = post_acs(xml_i, cj_i)
 RESULTS.append({"case": "I_unmatched_in_response_to", "status": st_i, "outcome": classify(loc_i), "location": loc_i[:160], "expect": "REFUSED"})
 
 # J: replay - reuse case A's own login+signed response material by starting a NEW valid one and posting it twice
 rid_j, cj_j = start_login()
-xml_j = sign_assertion(saml_response_xml(email="bb-sso2@dumbpotato.com", sp_entity_id=sp_entity_id,
+xml_j = sign_assertion(saml_response_xml(email="bb-sso2@example.test", sp_entity_id=sp_entity_id,
     acs_url=acs_url_real, in_response_to=rid_j, issuer=IDP_ENTITY_ID, recipient=acs_url_real), keys)
 st_j1, loc_j1 = post_acs(xml_j, cj_j)
 st_j2, loc_j2 = post_acs(xml_j, cj_j)
@@ -136,14 +136,14 @@ RESULTS.append({"case": "J_replay_same_valid_response_twice", "first": {"status"
 
 # K: signature wrapping - forged extra Assertion spliced in before the signed one
 def wrapped(rid):
-    legit = saml_response_xml(email="bb-sso1@dumbpotato.com", sp_entity_id=sp_entity_id, acs_url=acs_url_real,
+    legit = saml_response_xml(email="bb-sso1@example.test", sp_entity_id=sp_entity_id, acs_url=acs_url_real,
                                in_response_to=rid, issuer=IDP_ENTITY_ID, recipient=acs_url_real)
     signed = sign_assertion(legit, keys)
     forged = ('<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_forged1" Version="2.0" '
               f'IssueInstant="{datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")}">'
               f'<saml:Issuer>{IDP_ENTITY_ID}</saml:Issuer>'
               '<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">'
-              'bb-owner@dumbpotato.com</saml:NameID></saml:Subject></saml:Assertion>')
+              'bb-owner@example.test</saml:NameID></saml:Subject></saml:Assertion>')
     marker = "</samlp:Status>"
     idx = signed.index(marker) + len(marker)
     return signed[:idx] + forged + signed[idx:]

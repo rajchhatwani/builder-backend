@@ -11,7 +11,7 @@ class TaxRateCreate(_pd.BaseModel):
     country_code: str = _pd.Field(max_length=2)
     province_code: str | None = _pd.Field(default=None, max_length=10)
     name: str = _pd.Field(max_length=100)
-    rate: _decimal.Decimal = _pd.Field(ge=0, le=1)
+    rate: _decimal.Decimal = _pd.Field(ge=0, le=1, max_digits=18, decimal_places=6)
     includes_shipping: bool | None = _pd.Field(default=False)
 
 
@@ -19,7 +19,7 @@ class TaxRateUpdate(_pd.BaseModel):
     country_code: str | None = _pd.Field(default=None, max_length=2)
     province_code: str | None = _pd.Field(default=None, max_length=10)
     name: str | None = _pd.Field(default=None, max_length=100)
-    rate: _decimal.Decimal | None = _pd.Field(default=None, ge=0, le=1)
+    rate: _decimal.Decimal | None = _pd.Field(default=None, ge=0, le=1, max_digits=18, decimal_places=6)
     includes_shipping: bool | None = _pd.Field(default=None)
 
     @_pd.model_validator(mode="after")

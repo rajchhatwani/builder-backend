@@ -1,4 +1,4 @@
-=== 04_api_tokens against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+=== 04_api_tokens against tunnel (https://tunnel.example.test) ===
 [    Info] SOLID        pat/4.1: API token scope enforcement (read vs write) and session-only gate
 [    Info] SOLID        pat/4.2: a write-scope API token cannot do owner-level/destructive org actions
 [    Info] SOLID        pat/4.3: an API token cannot mint or list API tokens (session_principal only)

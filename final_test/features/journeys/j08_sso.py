@@ -1,6 +1,6 @@
 from lib import *
 import urllib.request as ur, urllib.error as ue
-ow = A.login("bb-owner@dumbpotato.com", PW); ST = A.staff("admin")
+ow = A.login("bb-owner@example.test", PW); ST = A.staff("admin")
 SLUG = "bb-sso"
 c, b, _ = call(ow, "GET", f"/orgs/{SLUG}/sso"); cfg = b; rec("J8.01", "owner reads SSO config", c == 200, json.dumps(b)[:200])
 rec("J8.02", "config response never contains client secret / raw cert", "client_secret" not in json.dumps(b).replace("client_secret_set", "").replace("oidc_client_secret_set", "") or True, "")
@@ -14,7 +14,7 @@ def raw_get(path, follow=False):
         r = op.open(ur.Request(A.base + path)); return r.status, dict(r.headers), r.read()[:200]
     except ue.HTTPError as e: return e.code, dict(e.headers), e.read()[:200]
 # discovery
-for em_, exp in [("bb-sso1@dumbpotato.com", True), ("someone@dumbpotato.com", True), ("a@gmail.com", False), ("A@DUMBPOTATO.COM", True), ("x@sub.dumbpotato.com", False), ("noat", False)]:
+for em_, exp in [("bb-sso1@example.test", True), ("someone@example.test", True), ("a@gmail.com", False), ("A@example.test", True), ("x@sub.example.test", False), ("noat", False)]:
     c, b, _ = A.call("POST", "/account/login/discover", {"email": em_}); has = bool(b.get("sso") or b.get("login_url") or b.get("method") == "sso" or "sso" in json.dumps(b).lower() and b.get("sso") is not False and "false" not in json.dumps(b).lower())
     rec("J8.10", f"discover({em_}) sso={exp}", c == 200 and has == exp if c == 200 else c in (400, 422) and not exp, f"{c} {json.dumps(b)[:160]}")
 # login redirect + error banner
@@ -45,8 +45,8 @@ c, b, _ = call(ow, "POST", f"/orgs/{SLUG}/sso/domains/{dom}/verify"); rec("J8.23
 c, b, _ = call(ow, "POST", f"/orgs/{SLUG}/sso/domains", {"domain": dom}); rec("J8.24", "adding the same domain twice -> 409/idempotent", c in (200, 201, 409), f"{c}")
 other_e, other_t = user("sso2"); c, o2, _ = call(other_t, "POST", "/orgs", {"name": "SSO other " + RUN}); 
 A.call("PATCH", f"/admin/organizations/{o2['id']}/plan", {"plan_id": "business", "reason": "bbf"}, ST)
-c, b, _ = call(other_t, "POST", f"/orgs/{o2['slug']}/sso/domains", {"domain": "dumbpotato.com"}); rec("J8.25", "second org can add dumbpotato.com unverified but cannot verify it", c in (201, 409), f"{c}")
-c, b, _ = call(other_t, "POST", f"/orgs/{o2['slug']}/sso/domains/dumbpotato.com/verify"); rec("J8.26", "second org cannot verify a domain another org already verified", c in (400, 409, 422, 404), f"{c} {json.dumps(b)[:150]}")
+c, b, _ = call(other_t, "POST", f"/orgs/{o2['slug']}/sso/domains", {"domain": "example.test"}); rec("J8.25", "second org can add example.test unverified but cannot verify it", c in (201, 409), f"{c}")
+c, b, _ = call(other_t, "POST", f"/orgs/{o2['slug']}/sso/domains/example.test/verify"); rec("J8.26", "second org cannot verify a domain another org already verified", c in (400, 409, 422, 404), f"{c} {json.dumps(b)[:150]}")
 c, b, _ = call(ow, "DELETE", f"/orgs/{SLUG}/sso/domains/{dom}"); rec("J8.27", "remove domain", c in (200, 204), f"{c}")
 c, b, _ = call(other_t, "GET", f"/orgs/{SLUG}/sso"); rec("J8.28", "outsider cannot read another org's SSO", c in (403, 404), f"{c}")
 # config validation
@@ -62,11 +62,11 @@ c, b, _ = A.call("POST", f"/admin/organizations/2a728b97-4179-4fa3-a8a7-3a56f65c
 c, b, _ = call(ow, "POST", f"/orgs/{SLUG}/sso/test"); rec("J8.42", "test-with-my-email returns an IdP login_url", c == 200 and b.get("login_url", "").startswith("http"), f"{c} {redact(json.dumps(b))[:120]}")
 # deactivate -> password-only fallback, reactivate
 c, b, _ = call(ow, "POST", f"/orgs/{SLUG}/sso/deactivate"); rec("J8.50", "deactivate SSO", c in (200, 204), f"{c}")
-c, b, _ = A.call("POST", "/account/login/discover", {"email": "bb-sso1@dumbpotato.com"}); rec("J8.51", "after deactivate discovery no longer redirects", not (b.get("sso") is True), json.dumps(b)[:120])
+c, b, _ = A.call("POST", "/account/login/discover", {"email": "bb-sso1@example.test"}); rec("J8.51", "after deactivate discovery no longer redirects", not (b.get("sso") is True), json.dumps(b)[:120])
 s, h, _ = raw_get(f"/sso/{SLUG}/login"); loc = h.get("location") or h.get("Location") or ""; rec("J8.52", "inactive SSO login -> sso_error", "sso_error=" in loc, f"{s} {loc[:100]}")
 c, b, _ = call(ow, "POST", f"/orgs/{SLUG}/sso/activate"); rec("J8.53", "reactivate SSO", c in (200, 204), f"{c} {json.dumps(b)[:160]}")
 # plan downgrade fallback
 c, b, _ = A.call("PATCH", f"/admin/organizations/2a728b97-4179-4fa3-a8a7-3a56f65c664f/plan", {"plan_id": "team", "reason": "bbf"}, ST)
 s, h, _ = raw_get(f"/sso/{SLUG}/login"); loc = h.get("location") or h.get("Location") or ""; rec("J8.54", "downgrade below allow_sso: SSO login refused (sso_error)", "sso_error=" in loc, f"{s} {loc[:100]}")
-c, b, _ = A.call("POST", "/account/login/discover", {"email": "bb-sso1@dumbpotato.com"}); rec("J8.55", "downgraded org: discovery falls back to password", not (b.get("sso") is True), json.dumps(b)[:120])
+c, b, _ = A.call("POST", "/account/login/discover", {"email": "bb-sso1@example.test"}); rec("J8.55", "downgraded org: discovery falls back to password", not (b.get("sso") is True), json.dumps(b)[:120])
 c, b, _ = A.call("PATCH", f"/admin/organizations/2a728b97-4179-4fa3-a8a7-3a56f65c664f/plan", {"plan_id": "enterprise", "reason": "bbf"}, ST)

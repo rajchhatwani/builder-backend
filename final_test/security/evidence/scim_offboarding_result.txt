@@ -1,6 +1,6 @@
 Checkpoint: SCIM offboarding, live, 2026-10-29 (org bb-sso, acting as the IdP via bb.Scim)
 
-1. SCIM POST /Users created sectest-scimoffboard@dumbpotato.com (active=true).
+1. SCIM POST /Users created sectest-scimoffboard@example.test (active=true).
    DB check: platform_users.token_version=0, status=active.
    Confirmed a member of bb-sso via GET /orgs/bb-sso/members (owner's session).
 

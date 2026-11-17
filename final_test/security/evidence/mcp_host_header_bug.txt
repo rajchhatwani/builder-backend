@@ -2,7 +2,7 @@ Checkpoint: MCP endpoint reachability through the real public hostname, 2026-10-
 
 A raw POST of a valid MCP `initialize` JSON-RPC request to /mcp/ :
   Host: 127.0.0.1:8000                                  -> 200, normal MCP handshake response
-  Host: cinderous-overfamiliar-sanford.ngrok-free.dev    -> 421 "Invalid Host header"
+  Host: tunnel.example.test    -> 421 "Invalid Host header"
   Host: api.example.com                                  -> 421 "Invalid Host header"
 
 Root cause, traced into the `mcp` SDK (.venv/lib/python3.12/site-packages/mcp/server/mcpserver/server.py):

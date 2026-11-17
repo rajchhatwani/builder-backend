@@ -1,4 +1,4 @@
-=== 05_injection against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
+=== 05_injection against tunnel (https://tunnel.example.test) ===
 [    Info] SOLID        injection/5.1: NUL bytes in path/query/JSON body never reach the database (422, not 500)
 [    Info] SOLID        injection/5.2: oversized and deeply-nested JSON bodies are refused without a 500
 [     Low] NOT_TESTABLE injection/test_request_id_header_injection: test_request_id_header_injection

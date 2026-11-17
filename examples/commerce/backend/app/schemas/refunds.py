@@ -8,7 +8,7 @@ import pydantic as _pd
 
 
 class RefundCreate(_pd.BaseModel):
-    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
+    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
     reason: str | None = _pd.Field(default=None, max_length=255)
     restock: bool | None = _pd.Field(default=False)
     note: str | None = _pd.Field(default=None)
@@ -16,7 +16,7 @@ class RefundCreate(_pd.BaseModel):
 
 
 class RefundUpdate(_pd.BaseModel):
-    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     reason: str | None = _pd.Field(default=None, max_length=255)
     restock: bool | None = _pd.Field(default=None)
     note: str | None = _pd.Field(default=None)

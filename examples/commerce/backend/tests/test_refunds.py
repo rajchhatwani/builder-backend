@@ -37,3 +37,10 @@ async def test_refunds_crud_flow(client: AsyncClient) -> None:
     invalid = await client.post("/refunds", json={})
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "validation_error"
+
+    # A number the column cannot store is a 422, never a 500.
+    too_big = await client.post(
+        "/refunds", json=await _factories.payload_refunds(client, amount=10**30)
+    )
+    assert too_big.status_code == 422, too_big.text
+    assert too_big.json()["code"] == "validation_error"

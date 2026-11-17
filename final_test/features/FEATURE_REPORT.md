@@ -18,7 +18,7 @@ Could not test / not done (reason):
 - Stripe: real Checkout (account precondition above), billing portal, seat-quantity sync to Stripe, `stripe listen/trigger` (CLI present, not driven), test-card declines. Webhook lifecycle tested with signed events.
 - UI: page sweep (all pages, 375/768/1280, light/dark, console/5xx/overflow/back/keyboard) for owner and member only; admin/outsider sweep ran once with a too-short wait and was discarded. Form-level UI journeys (create org, invite, checkout buttons), two tabs, slow network, offline UI states, 402/423/429 message wording in the UI: **not tested**.
 - Operator console in the browser (staff TOTP UI), RLS flag on/off, invite expiry / trial expiry / clock skew (no time control), scheduled-deletion job (only operator "delete now" + grace change tested), kill-DB/Stripe mid-request, Redis/MinIO/Keycloak/OTLP features of generated projects (storage/files endpoints only checked for auth), 5000-row list (300 projects used).
-- My own mistake: an operator `domain release` call released `dumbpotato.com` from `bb-sso` and a config PUT overwrote the OIDC config. Restored from the `configured` snapshot; later runs used a restored DB.
+- My own mistake: an operator `domain release` call released `example.test` from `bb-sso` and a config PUT overwrote the OIDC config. Restored from the `configured` snapshot; later runs used a restored DB.
 
 ## 3. Failures / findings
 ### Environment precondition

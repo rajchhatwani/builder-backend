@@ -1,5 +1,5 @@
 // Dump visible inputs/buttons/headings of a page (for building UI scripts). Usage: node probe.mjs <url> [wait-ms]
-import puppeteer from '/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
+import puppeteer from '/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
 const [url, wait = '2500'] = process.argv.slice(2)
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome-stable', headless: 'new', args: ['--no-sandbox'] })
 const p = await b.newPage()

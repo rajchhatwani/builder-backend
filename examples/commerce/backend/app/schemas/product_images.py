@@ -9,18 +9,18 @@ import pydantic as _pd
 class ProductImageCreate(_pd.BaseModel):
     url: str = _pd.Field(max_length=2000)
     alt: str | None = _pd.Field(default=None, max_length=512)
-    position: int | None = _pd.Field(default=1, ge=1)
-    width: int | None = _pd.Field(default=None, ge=1)
-    height: int | None = _pd.Field(default=None, ge=1)
+    position: int | None = _pd.Field(default=1, ge=1, le=2147483647)
+    width: int | None = _pd.Field(default=None, ge=1, le=2147483647)
+    height: int | None = _pd.Field(default=None, ge=1, le=2147483647)
     product_id: _uuid.UUID
 
 
 class ProductImageUpdate(_pd.BaseModel):
     url: str | None = _pd.Field(default=None, max_length=2000)
     alt: str | None = _pd.Field(default=None, max_length=512)
-    position: int | None = _pd.Field(default=None, ge=1)
-    width: int | None = _pd.Field(default=None, ge=1)
-    height: int | None = _pd.Field(default=None, ge=1)
+    position: int | None = _pd.Field(default=None, ge=1, le=2147483647)
+    width: int | None = _pd.Field(default=None, ge=1, le=2147483647)
+    height: int | None = _pd.Field(default=None, ge=1, le=2147483647)
     product_id: _uuid.UUID | None = None
 
     @_pd.model_validator(mode="after")

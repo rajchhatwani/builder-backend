@@ -13,6 +13,6 @@ rec("J1.32","lockout response has Retry-After or human message", c in(429,423) a
 # register rate limit
 codes=[]
 for i in range(25):
-    c,_,_ = A.call("POST","/account/register",{"email":f"bbf-rl{i}-{RUN}@dumbpotato.com","password":PW,"name":"r"}); codes.append(c)
+    c,_,_ = A.call("POST","/account/register",{"email":f"bbf-rl{i}-{RUN}@example.test","password":PW,"name":"r"}); codes.append(c)
 rec("J1.33","register burst eventually 429",429 in codes,str(codes))
 

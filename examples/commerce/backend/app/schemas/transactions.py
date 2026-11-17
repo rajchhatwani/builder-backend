@@ -10,7 +10,7 @@ import pydantic as _pd
 class TransactionCreate(_pd.BaseModel):
     kind: _t.Literal['authorization', 'capture', 'sale', 'void', 'refund']
     status: _t.Literal['pending', 'success', 'failure', 'error']
-    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
+    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
     currency: str = _pd.Field(max_length=3)
     gateway: str | None = _pd.Field(default=None, max_length=60)
     reference: str | None = _pd.Field(default=None, max_length=120)
@@ -22,7 +22,7 @@ class TransactionCreate(_pd.BaseModel):
 class TransactionUpdate(_pd.BaseModel):
     kind: _t.Literal['authorization', 'capture', 'sale', 'void', 'refund'] | None = _pd.Field(default=None)
     status: _t.Literal['pending', 'success', 'failure', 'error'] | None = _pd.Field(default=None)
-    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     currency: str | None = _pd.Field(default=None, max_length=3)
     gateway: str | None = _pd.Field(default=None, max_length=60)
     reference: str | None = _pd.Field(default=None, max_length=120)

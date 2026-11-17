@@ -3,7 +3,7 @@
 Final report. All 14 attack-matrix categories plus three extra deliverables from the original
 brief: a full, non-vacuous route enumeration, a dependency audit, and a mutation-testing pass in
 a scratch copy. Target: the production-mode stack behind the ngrok tunnel
-(`https://cinderous-overfamiliar-sanford.ngrok-free.dev`), with specific exceptions noted per
+(`https://tunnel.example.test`), with specific exceptions noted per
 finding (local/Mailpit stack for mail-dependent checks; a direct connection to the Caddy proxy or
 Postgres container for two checks the tunnel itself couldn't reach). All accounts/orgs/projects
 used are disposable test fixtures created by the repro scripts; no shared fixture (`bb-owner`,
@@ -166,7 +166,7 @@ explicit consent action.
 **setupnotes/13.1 — Password login/signup works on a domain with an active, verified SSO org
 ("enforce SSO" is not built).**
 Live-confirmed: registered a brand-new disposable account at
-`sectest-ssogap-<random>@dumbpotato.com` (bb-sso's real, verified SSO domain) via plain
+`sectest-ssogap-<random>@example.test` (bb-sso's real, verified SSO domain) via plain
 `POST /account/register` → 201; logged in with that password immediately after → 200, full
 session. `platform_auth_service.login()` has no reference anywhere to SSO/domain policy. Matches
 `NOTES_FOR_TEST_SESSIONS.md` item 2 exactly — a known, previously-documented gap, not a new

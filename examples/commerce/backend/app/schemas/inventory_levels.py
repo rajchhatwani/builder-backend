@@ -7,19 +7,19 @@ import pydantic as _pd
 
 
 class InventoryLevelCreate(_pd.BaseModel):
-    available: int = _pd.Field(default=0)
-    on_hand: int | None = _pd.Field(default=0)
-    committed: int | None = _pd.Field(default=0, ge=0)
-    incoming: int | None = _pd.Field(default=0, ge=0)
+    available: int = _pd.Field(default=0, ge=-2147483648, le=2147483647)
+    on_hand: int | None = _pd.Field(default=0, ge=-2147483648, le=2147483647)
+    committed: int | None = _pd.Field(default=0, ge=0, le=2147483647)
+    incoming: int | None = _pd.Field(default=0, ge=0, le=2147483647)
     location_id: _uuid.UUID
     variant_id: _uuid.UUID
 
 
 class InventoryLevelUpdate(_pd.BaseModel):
-    available: int | None = _pd.Field(default=None)
-    on_hand: int | None = _pd.Field(default=None)
-    committed: int | None = _pd.Field(default=None, ge=0)
-    incoming: int | None = _pd.Field(default=None, ge=0)
+    available: int | None = _pd.Field(default=None, ge=-2147483648, le=2147483647)
+    on_hand: int | None = _pd.Field(default=None, ge=-2147483648, le=2147483647)
+    committed: int | None = _pd.Field(default=None, ge=0, le=2147483647)
+    incoming: int | None = _pd.Field(default=None, ge=0, le=2147483647)
     location_id: _uuid.UUID | None = None
     variant_id: _uuid.UUID | None = None
 

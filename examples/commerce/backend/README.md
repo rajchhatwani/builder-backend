@@ -20,6 +20,7 @@ To run without Docker: start a Postgres, copy `.env.example` to `.env`, then
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
+set -a; . ./.env; set +a   # export the file: APP_ENV and the optional feature settings are read from the process environment only
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
@@ -540,6 +541,37 @@ Relations:
 
 Errors always look like `{"code": "...", "message": "...", "details": []}`.
 
+## Search
+
+- `GET /articles/search?q=&limit=` searches `author`, `title` of Article.
+- `GET /collections/search?q=&limit=` searches `handle`, `title` of Collection.
+- `GET /customers/search?q=&limit=` searches `email`, `first_name`, `last_name`, `phone` of Customer.
+- `GET /discounts/search?q=&limit=` searches `code`, `title` of Discount.
+- `GET /locations/search?q=&limit=` searches `name` of Location.
+- `GET /orders/search?q=&limit=` searches `email`, `note` of Order.
+- `GET /products/search?q=&limit=` searches `handle`, `title`, `vendor` of Product.
+- `GET /reviews/search?q=&limit=` searches `body`, `title` of Review.
+- `GET /tags/search?q=&limit=` searches `name` of Tag.
+- `GET /variants/search?q=&limit=` searches `barcode`, `sku`, `title` of Variant.
+
+A search sees exactly the rows the caller may list (roles, tenant, owner / row scope, policy; soft-deleted rows never),
+`total` counts only those rows, and a field the caller may not read is neither searched nor returned. `q` is 1-200
+characters and `limit` at most 100 (default 20). Engine, set with environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `SEARCH_BACKEND` | `fts` (default: Postgres full-text, nothing to run) or `opensearch`. `opensearch-fake` is an in-memory engine for tests and is refused in production. |
+| `SEARCH_OPENSEARCH_URL` | Required with `opensearch`: the app refuses to start without it (no silent fallback). |
+| `SEARCH_OPENSEARCH_API_KEY` | Optional credential sent as `Authorization: ApiKey ...`; never logged. |
+| `SEARCH_OPENSEARCH_INDEX_PREFIX` | Index name prefix (default `app-`). |
+
+With `opensearch`, the index only ranks candidate ids; rows are always re-read from Postgres through the access scope, so an
+out-of-date index cannot show a row the caller may not see. Writes through the API keep the index in step after commit; rows
+created some other way (imports, SQL) are not indexed until they are saved again, or until you rebuild the index:
+`python -m app.search.reindex [--entity NAME]` streams every live row of the searchable entities (in batches of 500) into the
+configured engine, through the same document builder as the write hook (with `fts` it only says there is no index). Run it
+after switching from `fts` to `opensearch`. When the engine is down the search answers 503.
+
 ## Authentication
 
 Accounts, JWT sign-in and the email / mobile flows live in `app/auth/` (routes under `/auth`).
@@ -564,7 +596,7 @@ Send `Authorization: Bearer <access_token>` to authenticated routes. Protect you
 Emailed links point at `http://localhost:3000` (`/verify-email`, `/magic-link`, `/reset-password`, each with `?token=`);
 your frontend should read the token and call the matching API route.
 
-Limits: sign-in 600/minute, registration 600/minute, email / SMS requests 600/minute per client address.
+Limits per client address: failed sign-ins 600/minute (successful ones are not counted), registration 600/minute, email / SMS requests 600/minute.
 They are counted in process memory, so they are per worker.
 
 Access to the CRUD endpoints follows the permissions in your spec (`app/routers/*.py`, see `_ACCESS`

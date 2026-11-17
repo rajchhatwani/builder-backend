@@ -7,7 +7,7 @@ Never print, log or write any password, token, TOTP secret, recovery code, SCIM 
 
 ## 0. Run order and isolation
 Run **session 1 (security) first, then session 2 (features)**, never both at once: they share one ngrok domain
-(`https://cinderous-overfamiliar-sanford.ngrok-free.dev`), one Okta tenant, one Stripe test account and one mailbox.
+(`https://tunnel.example.test`), one Okta tenant, one Stripe test account and one mailbox.
 Start every session with a clean, configured database:
 
 ```
@@ -25,11 +25,11 @@ Other commands: `down`, `down --all`, `logs api|ngrok`, `snapshot NAME` (take on
   (exit 144). `stack.sh` handles process cleanup itself.
 - Your Bash tool times out at 120 s: run long jobs with `run_in_background` and write logs to a file; use `python3 -u`
   (unbuffered) or the output stays empty until the end.
-- Public URL = one origin for app + API (`https://cinderous-overfamiliar-sanford.ngrok-free.dev`). Browser requests to
+- Public URL = one origin for app + API (`https://tunnel.example.test`). Browser requests to
   ngrok's free domain get an interstitial unless they carry the header `ngrok-skip-browser-warning: 1`; send it **only to
   the ngrok host** (it breaks CORS on other origins, e.g. Okta). `curl` needs `-H 'ngrok-skip-browser-warning: 1'`.
 - `docker` works; images pull from the internet. Chrome: `/usr/bin/google-chrome-stable` (headless). Node + puppeteer-core
-  are pre-installed in `~/bb_tools` (import from `/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js`).
+  are pre-installed in `~/bb_tools` (import from `/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js`).
 - **TOTP replay protection (a feature):** the same 6-digit code is refused twice within one 30-second step, so two staff logins
   for the same account in the same window fail with 401. `bb.Api.login` waits for the next step and retries once; do the same in your own scripts.
 - The environment file is `~/final_test.env` (permissions 600). Load it with `final_test/credentials/with_env.py` or the
@@ -38,11 +38,11 @@ Other commands: `down`, `down --all`, `logs api|ngrok`, `snapshot NAME` (take on
 ## 1. What is already configured (in the `configured` snapshot)
 | Item | State |
 |---|---|
-| Platform admin | `raj@dumbpotato.com` (password `BUILDER_BOOTSTRAP_ADMIN_PASSWORD`, TOTP secret `FINAL_TEST_PLATFORM_ADMIN_TOTP_SECRET`) |
-| Platform support | `bb-support@dumbpotato.com` (password `FINAL_TEST_PASSWORD`, TOTP `FINAL_TEST_PLATFORM_SUPPORT_TOTP_SECRET`) |
-| Org `bb-sso` ("BB SSO"), plan enterprise | owner `bb-owner@dumbpotato.com` (password `FINAL_TEST_PASSWORD`); SSO **OIDC active**, JIT on, "trust unverified e-mail" ON (Okta sends no `email_verified`); verified domain `dumbpotato.com`; SCIM enabled, group map `bb-test-admins`→admin |
+| Platform admin | `raj@example.test` (password `BUILDER_BOOTSTRAP_ADMIN_PASSWORD`, TOTP secret `FINAL_TEST_PLATFORM_ADMIN_TOTP_SECRET`) |
+| Platform support | `bb-support@example.test` (password `FINAL_TEST_PASSWORD`, TOTP `FINAL_TEST_PLATFORM_SUPPORT_TOTP_SECRET`) |
+| Org `bb-sso` ("BB SSO"), plan enterprise | owner `bb-owner@example.test` (password `FINAL_TEST_PASSWORD`); SSO **OIDC active**, JIT on, "trust unverified e-mail" ON (Okta sends no `email_verified`); verified domain `example.test`; SCIM enabled, group map `bb-test-admins`→admin |
 | Accounts that exist | `bb-owner`, `bb-sso1` (JIT member), `bb-sso2` (SCIM-created, then deactivated) |
-| Not created yet (your journeys create them) | `bb_individual`, `bb_admin`, `bb_member`, `bb_outsider`, `bb_owner2` @dumbpotato.com (names in `final_test/credentials/TEST_ACCOUNTS.md`; underscores because GoDaddy mailboxes allow no hyphen) |
+| Not created yet (your journeys create them) | `bb_individual`, `bb_admin`, `bb_member`, `bb_outsider`, `bb_owner2` @example.test (names in `final_test/credentials/TEST_ACCOUNTS.md`; underscores because GoDaddy mailboxes allow no hyphen) |
 | Orgs you create | `bb-acme`, `bb-other`, `bb-delete` as in TEST_ACCOUNTS.md (SSO/SCIM work only in `bb-sso`, the only org with a verified domain) |
 
 Customer password for every test account = `FINAL_TEST_PASSWORD`. **Warning:** an SSO sign-in by an existing
@@ -70,10 +70,10 @@ need; restore with `python3 final_test/credentials/set_test_password.py ~/final_
   (signed with the env secret, same format as Stripe) and, if it works for you, the CLI: `~/.stripe/bin/stripe listen
   --forward-to http://127.0.0.1:8000/billing/stripe/webhook`, then `stripe trigger ...`. If the CLI's secret differs from the
   env's, restart the stack with `STACK_SET="BUILDER_STRIPE_WEBHOOK_SECRET=<cli-secret>"` (do not write it to files).
-- **Mail**: the real mailbox `raj@dumbpotato.com` (aliases `bb_*@`). GoDaddy rate-limits and files the app's mail under
+- **Mail**: the real mailbox `raj@example.test` (aliases `bb_*@`). GoDaddy rate-limits and files the app's mail under
   **Spam** (the app sends no `Date`/`Message-ID`: report it). Send **at most ~25 real mails in total**; for bulk runs use
   `MAIL=sink final_test/harness/stack.sh up production`; mail goes to Mailpit (read it with `wait_mail` or `http://127.0.0.1:8025`).
-- **DNS** is at Vercel and you cannot edit it: `dumbpotato.com` is already verified for `bb-sso`. Test the failure paths (an unverified
+- **DNS** is at Vercel and you cannot edit it: `example.test` is already verified for `bb-sso`. Test the failure paths (an unverified
   domain, a wrong TXT, a domain claimed by two orgs) but do not expect to verify a second domain; mark that "not testable".
 - **Keycloak/MinIO/Redis/OTLP** (optional generator features): `docker run` them as needed; defaults are in the env file.
 

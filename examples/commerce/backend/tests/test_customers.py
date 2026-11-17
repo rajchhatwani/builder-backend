@@ -45,6 +45,13 @@ async def test_customers_crud_flow(client: AsyncClient) -> None:
     assert searched.status_code == 200, searched.text
     assert [item["id"] for item in searched.json()["items"]] == [item_id]
 
+    # A number the column cannot store is a 422, never a 500.
+    too_big = await client.post(
+        "/customers", json=await _factories.payload_customers(client, total_spent=10**30)
+    )
+    assert too_big.status_code == 422, too_big.text
+    assert too_big.json()["code"] == "validation_error"
+
     new_value = _factories.sample_customers()["email"]
     patched = await client.patch(f"/customers/{item_id}", json={"email": new_value})
     assert patched.status_code == 200, patched.text

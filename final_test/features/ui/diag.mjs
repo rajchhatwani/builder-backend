@@ -1,4 +1,4 @@
-import puppeteer from '/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
+import puppeteer from '/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
 import fs from 'fs'
 const S = JSON.parse(fs.readFileSync('logs/ui_state.json')); const base = process.argv[2]
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome-stable', headless: 'new', args: ['--no-sandbox'] })

@@ -7,13 +7,13 @@ import pydantic as _pd
 
 
 class FulfillmentLineCreate(_pd.BaseModel):
-    quantity: int = _pd.Field(ge=1)
+    quantity: int = _pd.Field(ge=1, le=2147483647)
     fulfillment_id: _uuid.UUID
     order_line_id: _uuid.UUID
 
 
 class FulfillmentLineUpdate(_pd.BaseModel):
-    quantity: int | None = _pd.Field(default=None, ge=1)
+    quantity: int | None = _pd.Field(default=None, ge=1, le=2147483647)
     fulfillment_id: _uuid.UUID | None = None
     order_line_id: _uuid.UUID | None = None
 

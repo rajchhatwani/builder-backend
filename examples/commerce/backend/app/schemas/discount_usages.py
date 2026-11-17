@@ -8,14 +8,14 @@ import pydantic as _pd
 
 
 class DiscountUsageCreate(_pd.BaseModel):
-    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
+    amount: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
     email: str | None = _pd.Field(default=None, max_length=254)
     discount_id: _uuid.UUID
     order_id: _uuid.UUID
 
 
 class DiscountUsageUpdate(_pd.BaseModel):
-    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    amount: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
     email: str | None = _pd.Field(default=None, max_length=254)
     discount_id: _uuid.UUID | None = None
     order_id: _uuid.UUID | None = None

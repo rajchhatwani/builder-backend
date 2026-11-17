@@ -1,5 +1,6 @@
 """Authentication business logic (generated). Routers stay thin; everything stateful is here."""
 
+import asyncio
 import datetime as dt
 import hmac
 import uuid
@@ -11,13 +12,14 @@ import structlog
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth import config, security
+from app.auth import config, identity, security
 from app.auth.delivery import DeliveryError, Mailer, SmsSender
 from app.auth.models import AuthInvitation, AuthTenant, AuthUser, AuthVerificationCode
 from app.auth.tokens import TokenStore
 from app.core.errors import AppError, ConflictError
 
 logger = structlog.get_logger()
+_DELIVERIES: set[asyncio.Future[None]] = set()
 
 # Purposes of a stored verification code, and the channel that delivers each.
 EMAIL_VERIFY = "email_verify"
@@ -26,6 +28,14 @@ PASSWORD_RESET = "password_reset"
 SMS_LOGIN = "sms_login"
 PHONE_VERIFY = "phone_verify"
 _EMAIL, _SMS = "email", "sms"
+# Columns every AuthUser has; any other column is a custom registration field.
+_CORE_COLUMNS = frozenset(
+    {
+        "id", "email", "phone", "password_hash", "roles", "role_source", "tenant_id", "is_active",
+        "email_verified_at", "phone_verified_at", "last_login_at", "deleted_at",
+        "created_at", "updated_at",
+    }
+)
 
 
 def _now() -> dt.datetime:
@@ -74,7 +84,7 @@ class AuthService:
         user = AuthUser(
             email=email,
             phone=phone,
-            password_hash=security.hash_password(password),
+            password_hash=await security.hash_password_async(password),
             roles=list(dict.fromkeys([*config.DEFAULT_ROLES, *chosen, *invited, *founder_roles])),
             **({"tenant_id": tenant_id} if config.MULTI_TENANT else {}),
             # Following an invitation sent to this address proves the user controls it.
@@ -86,6 +96,15 @@ class AuthService:
             invitation.accepted_at = _now()
         try:
             await self.session.flush()
+            await identity.add_identity(
+                self.session,
+                user.id,
+                issuer=config.ISSUER,
+                subject=str(user.id),
+                provider=config.PROVIDER,
+                email=email,
+                email_verified=user.email_verified_at is not None,
+            )
         except IntegrityError as exc:
             await self.session.rollback()
             raise ConflictError("an account with that email or phone number already exists") from exc
@@ -218,7 +237,7 @@ class AuthService:
         user = await self.by_email(email)
         # Always spend one password hash so unknown accounts take as long as known ones.
         stored = user.password_hash if user is not None else security.DUMMY_PASSWORD_HASH
-        valid = security.verify_password(password, stored)
+        valid = await security.verify_password_async(password, stored)
         if user is None or not valid:
             raise invalid_credentials()
         self._ensure_can_sign_in(user)
@@ -232,9 +251,9 @@ class AuthService:
             raise AppError("account_disabled", "this account is disabled", 403)
 
     async def change_password(self, user: AuthUser, current: str, new: str) -> None:
-        if not security.verify_password(current, user.password_hash):
+        if not await security.verify_password_async(current, user.password_hash):
             raise invalid_credentials()
-        user.password_hash = security.hash_password(new)
+        user.password_hash = await security.hash_password_async(new)
         await self._revoke_all_refresh_tokens(user.id)
         await self.session.commit()
 
@@ -243,8 +262,18 @@ class AuthService:
         if config.HARD_DELETE:
             await self.session.execute(sa.delete(AuthUser).where(AuthUser.id == user.id))
         else:
+            # Tombstone: the address and phone become free to register again, and nothing
+            # that identifies the person or lets anyone sign in as them is kept.
+            user.email = f"deleted+{user.id}@invalid"
+            user.phone = None
+            user.password_hash = "!"  # not a scrypt hash: verify_password() always refuses it
+            user.roles = []
             user.is_active = False
             user.deleted_at = _now()
+            for column in AuthUser.__table__.columns:  # custom registration fields: PII, unique keys
+                if column.name not in _CORE_COLUMNS:
+                    setattr(user, column.name, None)
+            await identity.erase_emails(self.session, user.id)
         await self.session.commit()
 
     # --- tokens -------------------------------------------------------------------
@@ -253,17 +282,24 @@ class AuthService:
         self, user: AuthUser, family_id: uuid.UUID | None = None
     ) -> tuple[str, str, int]:
         ttl = config.ACCESS_TOKEN_TTL_MINUTES * 60
+        family_id = family_id or uuid.uuid4()
+        if not await identity.open_session(
+            self.session, user.id, config.ISSUER, str(family_id)
+        ):
+            raise AppError("invalid_token", "the refresh token is invalid", 401)
         access = security.create_access_token(
             user.id,
             sorted(user.roles),
             key=self.settings.jwt_key,
             ttl_seconds=ttl,
             tenant_id=getattr(user, "tenant_id", None),
+            issuer=config.ISSUER,
+            session_id=str(family_id),
         )
         refresh = security.new_token()
         await self.tokens.add(
             user.id,
-            family_id or uuid.uuid4(),
+            family_id,
             security.hash_secret(refresh),
             _now() + dt.timedelta(days=config.REFRESH_TOKEN_TTL_DAYS),
         )
@@ -273,6 +309,11 @@ class AuthService:
 
     async def refresh(self, raw_token: str) -> tuple[str, str, int]:
         rotation = await self.tokens.rotate(security.hash_secret(raw_token))
+        if rotation.status == "reused" and rotation.family_id is not None:
+            # Replay of a rotated token: the family is revoked, so end its session too.
+            await identity.end_session(
+                self.session, config.ISSUER, str(rotation.family_id), "refresh_reuse"
+            )
         if rotation.status != "ok" or rotation.user_id is None:
             message = "the refresh token has expired" if rotation.status == "expired" else (
                 "the refresh token is invalid"
@@ -284,11 +325,14 @@ class AuthService:
         return await self.issue_tokens(user, family_id=rotation.family_id)
 
     async def logout(self, raw_token: str) -> None:
-        await self.tokens.revoke_family_of(security.hash_secret(raw_token))
+        family_id = await self.tokens.revoke_family_of(security.hash_secret(raw_token))
         await self.session.commit()
+        if family_id is not None:
+            await identity.end_session(self.session, config.ISSUER, str(family_id), "logout")
 
     async def _revoke_all_refresh_tokens(self, user_id: uuid.UUID) -> None:
         await self.tokens.revoke_all(user_id)
+        await identity.end_sessions_of_user(self.session, user_id, "credentials_changed")
 
     # --- verification codes -------------------------------------------------------
 
@@ -403,10 +447,17 @@ class AuthService:
     async def _deliver(self, send: Any, purpose: str) -> None:
         """Delivery problems are logged, never shown: callers must not learn whether an
         address exists, and a mail outage should not turn into a failed sign-up."""
-        try:
-            await send()
-        except (DeliveryError, AppError) as exc:
-            logger.error("auth_delivery_failed", purpose=purpose, error=str(exc))
+        async def run() -> None:
+            try:
+                await send()
+            except (DeliveryError, AppError) as exc:
+                logger.error("auth_delivery_failed", purpose=purpose, error=str(exc))
+
+        # Not awaited: a slow mail server must not make a known address answer slower than an
+        # unknown one. The task is kept referenced until it finishes.
+        task = asyncio.ensure_future(run())
+        _DELIVERIES.add(task)
+        task.add_done_callback(_DELIVERIES.discard)
 
     async def resend_verification(self, email: str, mailer: Mailer) -> None:
         user = await self.by_email(email)
@@ -469,7 +520,7 @@ class AuthService:
         user = await self._verified_phone_user(phone)
         if user is None:
             # Spend comparable work on unknown numbers.
-            security.verify_password(code, security.DUMMY_PASSWORD_HASH)
+            await security.verify_password_async(code, security.DUMMY_PASSWORD_HASH)
             raise invalid_code()
         await self._consume_otp(user, SMS_LOGIN, code)
         await self.session.commit()
@@ -503,10 +554,10 @@ class AuthService:
                 raise AppError("reset_unavailable", "that reset method is not enabled", 400)
             found = await self._verified_phone_user(phone)
             if found is None:
-                security.verify_password(code, security.DUMMY_PASSWORD_HASH)
+                await security.verify_password_async(code, security.DUMMY_PASSWORD_HASH)
                 raise invalid_code()
             await self._consume_otp(found, PASSWORD_RESET, code)
             user = found
-        user.password_hash = security.hash_password(new_password)
+        user.password_hash = await security.hash_password_async(new_password)
         await self._revoke_all_refresh_tokens(user.id)
         await self.session.commit()

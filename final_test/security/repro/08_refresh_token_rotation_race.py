@@ -2,7 +2,7 @@ import sys, json, time, http.cookiejar, urllib.request, urllib.error
 sys.path.insert(0, "/mnt/files/projects/builder-backend/final_test/harness")
 import bb
 
-TUNNEL = "https://cinderous-overfamiliar-sanford.ngrok-free.dev"
+TUNNEL = "https://tunnel.example.test"
 api = bb.Api(base=TUNNEL)
 e = bb.env()
 email = e["FINAL_TEST_MEMBER_EMAIL"]
