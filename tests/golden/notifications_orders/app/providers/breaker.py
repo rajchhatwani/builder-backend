@@ -22,6 +22,7 @@ class CircuitBreaker:
         self._opened_at = 0.0
         self._state = CLOSED
         self._probing = False
+        self._probe_at = 0.0
 
     @property
     def state(self) -> str:
@@ -34,11 +35,18 @@ class CircuitBreaker:
         state = self.state
         if state == CLOSED:
             return True
+        if state == HALF_OPEN and self._probing and self._clock() - self._probe_at >= self.reset_seconds:
+            self._probing = False  # the probe never reported back (cancelled, lost): let another one try
         if state == HALF_OPEN and not self._probing:
             self._state = HALF_OPEN
             self._probing = True
+            self._probe_at = self._clock()
             return True
         return False
+
+    def abandon(self) -> None:
+        """The call that was let through ended without an answer (cancelled): free the probe slot."""
+        self._probing = False
 
     def success(self) -> None:
         self._count = 0

@@ -19,7 +19,7 @@ from app.search.adapters import SearchUnavailable, get_adapter
 MAX_LIMIT = 100
 MAX_Q = 200
 _CANDIDATES_PER_HIT = 5
-_CANDIDATES_MAX = 500
+_CANDIDATES_MAX = 2000
 _SIMPLE = sa.literal_column("'simple'::regconfig")
 _SPACE = sa.literal_column("' '")
 
@@ -41,7 +41,7 @@ async def find(
     repo: Repository[Any], q: str, limit: int, hidden: frozenset[str] = frozenset()
 ) -> tuple[list[Any], int]:
     """(rows, total) for `q`. `total` counts only rows the caller may list (for opensearch: the verified
-    candidates the engine returned, at most 5x limit)."""
+    candidates the engine returned, at most 2000)."""
     q = clean(q)
     limit = max(1, min(limit, MAX_LIMIT))
     fields = tuple(n for n in repo.searchable if n not in hidden)
@@ -79,12 +79,22 @@ async def _indexed(
 ) -> tuple[list[Any], int]:
     adapter = get_adapter()
     assert adapter is not None
-    try:
-        raw = await adapter.query_ids(
-            repo.model.__name__, q, fields, min(limit * _CANDIDATES_PER_HIT, _CANDIDATES_MAX)
-        )
-    except SearchUnavailable as exc:
-        raise AppError("search_unavailable", "the search engine is not available", 503) from exc
+    # The engine ranks over every tenant's documents, so the caller's own hits may sit below the top N.
+    # Ask for more candidates (x4 each round, up to _CANDIDATES_MAX) until a full page survives the scope
+    # or the engine has nothing more to give.
+    size = min(limit * _CANDIDATES_PER_HIT, _CANDIDATES_MAX)
+    while True:
+        try:
+            raw = await adapter.query_ids(repo.model.__name__, q, fields, size)
+        except SearchUnavailable as exc:
+            raise AppError("search_unavailable", "the search engine is not available", 503) from exc
+        rows = await _visible(repo, raw, conditions)
+        if len(rows) >= limit or len(raw) < size or size >= _CANDIDATES_MAX:
+            return rows[:limit], len(rows)
+        size = min(size * 4, _CANDIDATES_MAX)
+
+
+async def _visible(repo: Repository[Any], raw: list[str], conditions: list[Any]) -> list[Any]:
     ids: list[uuid.UUID] = []
     for value in raw:
         try:
@@ -92,12 +102,11 @@ async def _indexed(
         except ValueError:
             continue  # a stale or foreign id is simply not a candidate
     if not ids:
-        return [], 0
+        return []
     stmt = (
         sa.select(repo.model)
         .where(repo._col("id").in_(ids), *conditions)  # the access scope decides, never the index
         .options(*repo._loaders())
     )
     by_id = {row.id: row for row in (await repo.session.execute(stmt)).scalars().all()}
-    rows = [by_id[i] for i in dict.fromkeys(ids) if i in by_id]
-    return rows[:limit], len(rows)
+    return [by_id[i] for i in dict.fromkeys(ids) if i in by_id]

@@ -41,7 +41,11 @@ class Credentials:
 @runtime_checkable
 class ProviderAdapter(Protocol):
     """One provider behind one kind. Implementations map every failure onto app.providers.errors
-    (Retryable / Permanent / AuthFailed / RateLimited) and never put a credential or a body in a message."""
+    (Retryable / Permanent / AuthFailed / RateLimited) and never put a credential or a body in a message.
+
+    `call` may be repeated: after a retryable failure (5xx, timeout) the same request is sent again, up to
+    max_attempts times, so a call must be safe to repeat (or the adapter derives its own idempotency key
+    from the request). The `payments` kind is not repeated after a timeout or a server error."""
 
     kind: str
     name: str

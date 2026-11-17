@@ -25,6 +25,9 @@ from app.providers.errors import (
 )
 from app.providers.schemas import REQUESTS, HealthStatus
 
+# Kinds whose call must not be repeated when the first attempt may have succeeded (a timeout or a lost
+# response): a second charge cannot be told apart from the first. A rate limit is a refusal, so it is retried.
+_NO_AMBIGUOUS_REPEAT = frozenset({"payments"})
 _MAX_WAIT = 30.0
 _BACKOFF_BASE = 0.5
 sleep: Callable[[float], Awaitable[None]] = asyncio.sleep  # tests replace it
@@ -101,6 +104,9 @@ async def call_provider(
         except Exception as exc:  # noqa: BLE001 - an adapter bug: report the class only, never the text
             logsafe.warn("provider_adapter_bug", kind=kind, adapter=adapter.name, error_class=type(exc).__name__)
             error = Permanent("the adapter failed unexpectedly")
+        except BaseException:  # cancelled: the probe reported nothing, free its slot and let it propagate
+            breaker.abandon()
+            raise
         millis = round((time.monotonic() - started) * 1000)
         if error is None:
             breaker.success()
@@ -117,7 +123,8 @@ async def call_provider(
             "provider_call", kind=kind, adapter=adapter.name, tenant=str(tenant_id),
             outcome=error.code, attempt=attempt, ms=millis, request=shape,
         )
-        if error.retryable and attempt < definitions.MAX_ATTEMPTS:
+        repeatable = isinstance(error, RateLimited) or kind not in _NO_AMBIGUOUS_REPEAT
+        if error.retryable and repeatable and attempt < definitions.MAX_ATTEMPTS:
             await sleep(_delay(error, attempt))
             continue
         raise _public(error)

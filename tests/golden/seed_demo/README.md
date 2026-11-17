@@ -18,6 +18,7 @@ To run without Docker: start a Postgres, copy `.env.example` to `.env`, then
 
 ```bash
 pip install -r requirements.txt -r requirements-dev.txt
+set -a; . ./.env; set +a   # export the file: APP_ENV and the optional feature settings are read from the process environment only
 alembic upgrade head
 uvicorn app.main:app --reload
 ```
