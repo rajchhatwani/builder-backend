@@ -348,3 +348,4 @@ tests/unit/test_operations_input_guards.py
 tests/unit/test_operations_router_nul.py
 tests/unit/test_generator_audit_b1_002_names.py
 tests/unit/test_audit_b1_003.py
+tests/unit/test_audit_b1_005_agent_loosening.py

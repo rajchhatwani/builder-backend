@@ -155,7 +155,14 @@ def transition_loosened(before: Mapping[str, Any], after: Mapping[str, Any]) -> 
         return True
     if not before.get("auto") and after.get("auto"):
         return True
-    return bool(before.get("when")) and not after.get("when")
+    if set(after.get("from_states") or []) - set(before.get("from_states") or []):
+        return True  # runs from more states than before
+    # a guard that was there must stay as it is: dropping OR rewriting it (50000 -> 1e9, 'true') raises the limit
+    return bool(before.get("when")) and _squash(before.get("when")) != _squash(after.get("when"))
+
+
+def _squash(expr: Any) -> str:
+    return " ".join(str(expr or "").split())
 
 
 def _transition_access_changed(before: Spec, after: Spec) -> bool:

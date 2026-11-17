@@ -29,6 +29,7 @@ def _patch(monkeypatch: pytest.MonkeyPatch, rows: dict[str, list[dict[str, Any]]
         return rows.get(name, [])
 
     monkeypatch.setattr(spec_tools, "_current_section", section)
+    monkeypatch.setattr(spec_tools, "_base_section", section)  # B1-005: base = draft here
 
     async def apply(*a: Any, **k: Any) -> Any:
         raise AssertionError("must not write the draft")

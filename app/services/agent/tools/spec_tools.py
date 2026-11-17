@@ -16,7 +16,7 @@ from app.services.agent.contract import (
     ToolContext,
     ToolResult,
 )
-from app.services.agent.draft import add_draft_op, run_spec
+from app.services.agent.draft import _base, _run_row, add_draft_op, run_spec
 from app.services.ops.registry import SECTIONS, section_adapter
 
 from ._common import app_error_failure, fail, has_key, refuse
@@ -155,19 +155,33 @@ def _without_transition_roles(item: Any) -> Any:
     return {**item, "transitions": [{k: v for k, v in t.items() if k != "roles"} if isinstance(t, dict) else t for t in trs]}
 
 
+async def _base_section(ctx: ToolContext, section: str) -> list[dict[str, Any]]:
+    """The section as the run's plan was approved on (empty when the run has no base spec)."""
+    found = await _run_row(ctx.session, ctx.run_id, ctx.project_id)
+    base = _base(found[1]) if found else None
+    return [m.model_dump(mode="json") for m in getattr(base, section)] if base is not None else []
+
+
 async def _loosened_transitions(ctx: ToolContext, items: list[dict[str, Any]]) -> list[str]:
-    """`entity.transition` of every EXISTING transition the new items open up (roles changed, auto on, guard dropped)."""
+    """`entity.transition` the new items open up, against the draft AND the approved base (a remove-then-readd
+    in two calls must not hide it): roles changed, auto on, guard dropped/rewritten, or a NEW transition
+    with no roles / auto in a machine that already exists."""
     cur = {str(m.get("entity")): m for m in await _current_section(ctx, "state_machines")}
-    out: list[str] = []
+    base = {str(m.get("entity")): m for m in await _base_section(ctx, "state_machines")}
+    out: set[str] = set()
     for item in items:
-        old = cur.get(str(item.get("entity")))
-        if old is None:
+        ent = str(item.get("entity"))
+        olds = [m for m in (cur.get(ent), base.get(ent)) if m is not None]
+        if not olds:
             continue
-        old_t = {str(t.get("name")): _norm_transition(t) for t in old.get("transitions") or []}
+        old_ts = [{str(t.get("name")): _norm_transition(t) for t in o.get("transitions") or []} for o in olds]
         for t in item.get("transitions") or []:
-            before = old_t.get(str(t.get("name")))
-            if before is not None and transition_loosened(before, _norm_transition(t)):
-                out.append(f"{item.get('entity')}.{t.get('name')}")
+            new_t = _norm_transition(t)
+            known = [ts[str(t.get("name"))] for ts in old_ts if str(t.get("name")) in ts]
+            if any(transition_loosened(b, new_t) for b in known) or (
+                not known and (new_t.get("auto") or not new_t.get("roles"))
+            ):
+                out.add(f"{ent}.{t.get('name')}")
     return sorted(out)
 
 

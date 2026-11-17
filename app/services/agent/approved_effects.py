@@ -81,6 +81,8 @@ async def _d_op(session: AsyncSession, run: AiRun, p: dict[str, Any]) -> tuple[s
             row = next((x for x in spec.auth.permissions if x.entity == entity and x.operation == action), None)
             if row is None:  # no row = already open to every caller; a row would RESTRICT it to one role
                 raise _NoOp("the operation has no permission row, so it is already open; nothing to loosen")
+            if not row.roles:  # an empty-roles row is open to everyone; adding a role would restrict it
+                raise _NoOp("the permission row has no roles, so it is already open; nothing to loosen")
             if role not in row.roles:
                 row.roles.append(role)
         return "replace_spec", {"spec": spec.model_dump(mode="json")}
