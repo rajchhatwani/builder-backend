@@ -146,7 +146,7 @@ resource "aws_iam_policy" "boundary" {
 
 resource "aws_iam_role" "deploy" {
   for_each             = toset(var.environments)
-  name                 = "deploy-${var.project}-${each.value}"  # outside the "<project>-*" pattern the policies manage
+  name                 = "deploy-${var.project}-${each.value}" # outside the "<project>-*" pattern the policies manage
   assume_role_policy   = data.aws_iam_policy_document.trust[each.value].json
   max_session_duration = 3600
 }

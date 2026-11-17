@@ -69,7 +69,7 @@ describe('DocumentsPage', () => {
     expect(q('documents-empty')!.textContent).toMatch(/No documents/)
   })
   it('shows list errors', async () => {
-    await load(api((m, url) => (url.includes('?') ? err(403, 'forbidden') : undefined)).f)
+    await load(api((_m, url) => (url.includes('?') ? err(403, 'forbidden') : undefined)).f)
     expect(q('documents-error')!.textContent).toMatch(/review roles/)
   })
   it('pages with offset', async () => {

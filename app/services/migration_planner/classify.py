@@ -51,7 +51,9 @@ _TEXT_LEN = {"integer": 11, "bigint": 20, "uuid": 36, "boolean": 5, "date": 10}
 
 def _fits_length(old: Col, limit: int) -> bool:
     if old.type == "enum":
-        return bool(old.enum_values) and max(len(v) for v in old.enum_values) <= limit
+        if not old.enum_values:
+            return False
+        return max(len(v) for v in old.enum_values) <= limit
     n = _TEXT_LEN.get(old.type)
     return n is not None and n <= limit
 

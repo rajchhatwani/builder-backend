@@ -587,7 +587,7 @@ async def test_a_nul_in_a_template_or_filter_is_a_422_not_a_500(client: AsyncCli
     draft = {"subject": "" if channel == "sms" else "Hi", "body": "Dear \u0000 {{ " + variables[0] + " }}", "html": False}
     for call in (client.put(url, json=draft, headers=admin), client.post(url + "/preview", json=draft, headers=admin)):
         r = await call
-        assert r.status_code == 422 and r.json()["code"] == "invalid_template", r.text
+        assert r.status_code == 422 and r.json()["code"] in ("invalid_template", "validation_error"), r.text
     r = await client.put(url, json={**draft, "body": "ok", "subject": "a\u0000b" if channel != "sms" else ""}, headers=admin)
     assert r.status_code == 422 if channel != "sms" else r.status_code == 200
     r = await client.get("/notifications/deliveries", params={"type": "a\u0000b"}, headers=admin)

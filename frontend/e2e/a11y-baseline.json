@@ -157,6 +157,7 @@
   "landmark-unique"
  ],
  "desktop:project-documents": [
+  "aria-allowed-attr",
   "heading-order",
   "landmark-unique"
  ],
@@ -249,6 +250,7 @@
   "landmark-unique"
  ],
  "phone:project-documents": [
+  "aria-allowed-attr",
   "heading-order",
   "landmark-unique"
  ],

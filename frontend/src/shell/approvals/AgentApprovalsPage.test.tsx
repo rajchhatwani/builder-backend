@@ -69,7 +69,7 @@ describe('AgentApprovalsPage', () => {
     expect(q('agent-rate-triage')!.textContent).toBe('66.67%'); expect(q('agent-rate-idle')!.textContent).toBe('no outcomes yet')
   })
   it('stats failure does not hide the inbox', async () => {
-    await load(api((m, url) => (url.includes('/stats') ? err(500, 'boom') : undefined)).f)
+    await load(api((_m, url) => (url.includes('/stats') ? err(500, 'boom') : undefined)).f)
     expect(q('agent-stats-error')!.textContent).toMatch(/Statistics unavailable/); expect(q('proposal-p1')).not.toBeNull()
   })
   it('filters by status and offers all statuses', async () => {
@@ -84,11 +84,11 @@ describe('AgentApprovalsPage', () => {
     await load(api(undefined, []).f)
     expect(q('agentapprovals-empty')!.textContent).toMatch(/No proposals/)
     await act(async () => { document.body.innerHTML = '' })
-    await load(api((m, url) => (url.includes('/proposals?') ? err(403, 'forbidden') : undefined)).f)
+    await load(api((_m, url) => (url.includes('/proposals?') ? err(403, 'forbidden') : undefined)).f)
     expect(q('agentapprovals-error')!.textContent).toMatch(/may not do this/)
   })
   it('shows a network failure', async () => {
-    await load(api((m, url) => { if (url.includes('/proposals?')) throw new Error('offline'); return undefined }).f)
+    await load(api((_m, url) => { if (url.includes('/proposals?')) throw new Error('offline'); return undefined }).f)
     expect(q('agentapprovals-error')!.textContent).toBe('offline')
   })
   it('pages with offset', async () => {
@@ -150,7 +150,7 @@ describe('AgentApprovalsPage', () => {
     expect(q('agentapprovals-notice')!.textContent).toBe('create_ticket: handed off to finance.')
   })
   it('shows unknown_role on hand off', async () => {
-    await load(api((m, url) => (url.endsWith('/handoff') ? err(422, 'unknown_role') : undefined)).f)
+    await load(api((_m, url) => (url.endsWith('/handoff') ? err(422, 'unknown_role') : undefined)).f)
     await click(q('handoff-p1')); await setInput(q('agentapprovals-text') as HTMLInputElement, 'nobody'); await click(q('confirm-handoff'))
     expect(q('proposal-error-p1')!.textContent).toMatch(/role does not exist/)
   })
@@ -160,7 +160,7 @@ describe('AgentApprovalsPage', () => {
     expect(posts(calls)[0].url).toMatch(/\/p2\/acknowledge$/); expect(q('agentapprovals-notice')!.textContent).toBe('note: acknowledged.')
   })
   it('surfaces 409 proposal_closed clearly and refreshes the list', async () => {
-    const { f, calls } = api((m, url) => (url.endsWith('/approve') ? err(409, 'proposal_closed') : undefined))
+    const { f, calls } = api((_m, url) => (url.endsWith('/approve') ? err(409, 'proposal_closed') : undefined))
     await load(f)
     const before = calls.filter((c) => c.url.includes('/proposals?')).length
     await click(q('approve-p1'))
@@ -169,7 +169,7 @@ describe('AgentApprovalsPage', () => {
   })
   it('surfaces autonomy_refuses_execution and self_approval_forbidden', async () => {
     for (const [st, code, re] of [[409, 'autonomy_refuses_execution', /suggest-level/], [403, 'self_approval_forbidden', /someone else must approve/], [403, 'forbidden', /may not do this/]] as const) {
-      await load(api((m, url) => (url.endsWith('/approve') ? err(st, code) : undefined)).f); await click(q('approve-p1'))
+      await load(api((_m, url) => (url.endsWith('/approve') ? err(st, code) : undefined)).f); await click(q('approve-p1'))
       expect(q('proposal-error-p1')!.textContent).toMatch(re)
       await act(async () => { document.body.innerHTML = '' })
     }
@@ -186,7 +186,7 @@ describe('AgentApprovalsPage', () => {
     expect(q('agentapprovals-notice')!.textContent).toBe('create_ticket: outcome recorded as worked.')
   })
   it('shows outcome_already_set', async () => {
-    await load(api((m, url) => (url.endsWith('/outcome') ? err(409, 'outcome_already_set') : undefined), [P({ id: 'e1', status: 'executed' })]).f)
+    await load(api((_m, url) => (url.endsWith('/outcome') ? err(409, 'outcome_already_set') : undefined), [P({ id: 'e1', status: 'executed' })]).f)
     await click(q('outcome-neutral-e1'))
     expect(q('proposal-error-e1')!.textContent).toMatch(/already recorded/)
   })
@@ -197,11 +197,11 @@ describe('AgentApprovalsPage', () => {
     await click(q('run-link-p1')); expect(q('run-goal-p1')).toBeNull()
   })
   it('shows a run lookup failure', async () => {
-    await load(api((m, url) => (url.includes('/runs/') ? err(404, 'not_found') : undefined)).f); await click(q('run-link-p1'))
+    await load(api((_m, url) => (url.includes('/runs/') ? err(404, 'not_found') : undefined)).f); await click(q('run-link-p1'))
     expect(q('run-goal-p1')!.textContent).toMatch(/no longer exists/)
   })
   it('has no axe violations (inbox, reject form, run goal, errors)', async () => {
-    const host = await load(api((m, url) => (url.endsWith('/approve') ? err(409, 'proposal_closed') : undefined), [P(), P2, P({ id: 'e1', status: 'executed' })]).f)
+    const host = await load(api((_m, url) => (url.endsWith('/approve') ? err(409, 'proposal_closed') : undefined), [P(), P2, P({ id: 'e1', status: 'executed' })]).f)
     await click(q('run-link-p1')); await click(q('approve-p1')); await click(q('reject-p2'))
     const res = await axe.run(host, { rules: { 'color-contrast': { enabled: false } } })
     expect(res.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.html).join(' ')}`)).toEqual([])

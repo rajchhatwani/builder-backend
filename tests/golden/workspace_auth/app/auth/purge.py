@@ -8,12 +8,14 @@ revoked for `retain_days` it can never be used again, so it is removed. Run it r
 import asyncio
 import datetime as dt
 import sys
+from typing import Any
 
 import sqlalchemy as sa
 import structlog
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.models import AuthInvitation, AuthRefreshToken, AuthSession, AuthVerificationCode
+from app.auth import models as auth_models
+from app.auth.models import AuthInvitation, AuthSession, AuthVerificationCode
 from app.db import session_factory
 
 logger = structlog.get_logger()
@@ -26,15 +28,17 @@ async def purge_expired(
 ) -> dict[str, int]:
     """Delete rows that ended more than `retain_days` ago. Returns the count per table."""
     cutoff = (now or dt.datetime.now(dt.UTC)) - dt.timedelta(days=retain_days)
-    jobs = (
-        (AuthRefreshToken, sa.or_(AuthRefreshToken.expires_at < cutoff, AuthRefreshToken.revoked_at < cutoff)),
+    jobs: list[tuple[Any, Any]] = [
         (
             AuthVerificationCode,
             sa.or_(AuthVerificationCode.expires_at < cutoff, AuthVerificationCode.consumed_at < cutoff),
         ),
         (AuthInvitation, sa.or_(AuthInvitation.expires_at < cutoff, AuthInvitation.accepted_at < cutoff)),
         (AuthSession, AuthSession.revoked_at < cutoff),
-    )
+    ]
+    refresh = getattr(auth_models, "AuthRefreshToken", None)  # absent when refresh tokens live in Redis
+    if refresh is not None:
+        jobs.insert(0, (refresh, sa.or_(refresh.expires_at < cutoff, refresh.revoked_at < cutoff)))
     counts: dict[str, int] = {}
     for model, condition in jobs:
         result = await session.execute(sa.delete(model).where(condition))

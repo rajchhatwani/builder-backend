@@ -195,7 +195,7 @@ class OrgExportService:
         }
 
     async def _audit(self, org_id: uuid.UUID) -> list[dict[str, Any]]:
-        rows = (
+        fetched = (
             await self.db.execute(
                 select(AuditLog)
                 .where(AuditLog.organization_id == org_id)
@@ -204,7 +204,7 @@ class OrgExportService:
             )
         ).scalars()
         # Keep the NEWEST rows; report when older ones were dropped.
-        rows = list(rows)
+        rows = list(fetched)
         self.audit_truncated = len(rows) > AUDIT_LIMIT
         rows = list(reversed(rows[:AUDIT_LIMIT]))
         return [

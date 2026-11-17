@@ -2,9 +2,10 @@
 
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from sqlalchemy import select, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
@@ -188,7 +189,7 @@ class RequirementsService:
         bind = self.s.bind
         if bind is None or bind.dialect.name != "postgresql":
             return None
-        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(bind)  # AsyncSession.bind is the sync Engine
+        engine = bind if isinstance(bind, AsyncEngine) else AsyncEngine(cast(Engine, bind))  # AsyncSession.bind is the sync Engine
         conn = await engine.connect()
         try:
             got = (

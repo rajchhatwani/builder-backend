@@ -27,7 +27,7 @@ export type Segment = { text: string; field?: string }
 export type Highlighted = { segments: Segment[]; fallbacks: { field: string; quote: string; found: boolean }[] }
 
 /** Is the anchor a usable range of `content` whose slice equals the quote? */
-export function anchorValid(a: Anchor | null | undefined, content: string): a is Anchor {
+export function anchorValid(a: Anchor | null | undefined, content: string): boolean {
   return !!a && Number.isInteger(a.start) && Number.isInteger(a.end) && a.start >= 0 && a.end > a.start && a.end <= content.length && content.slice(a.start, a.end) === a.quote
 }
 

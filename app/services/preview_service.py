@@ -45,7 +45,7 @@ from app.models.project import Project
 from app.models.workspace import Workspace
 from app.schemas.preview import PreviewCreated, PreviewRead
 from app.services import audit_service, preview_runtime
-from app.services.preview_limits import Effective, effective, resolve
+from app.services.preview_limits import Effective, PreviewLimits, effective, resolve
 from app.services.sandbox import Sandbox, make_sandbox, reap_expired
 from app.services.spec_service import SpecService
 from app.services.usage_service import UsageService
@@ -66,7 +66,7 @@ TRANSITIONS: dict[str, frozenset[str]] = {
 STARTING_STALE = timedelta(minutes=5)
 
 
-def _expires_at(now: datetime, lim: Effective) -> datetime:
+def _expires_at(now: datetime, lim: PreviewLimits) -> datetime:
     return now + timedelta(days=lim.delete_after_days)
 TOUCH_EVERY_SECONDS = 20.0
 _TOKEN_PREFIX = "bbp_"

@@ -516,12 +516,13 @@ class SsoService:
         # F-0268: the DNS wait ran with no lock; another org may have taken the unproven claim
         # meanwhile. Re-read it locked and only stamp it if it is still this org's same claim.
         token = row.dns_token
-        row = await self.db.get(
+        locked = await self.db.get(
             SsoDomain, row.domain, with_for_update=True, populate_existing=True
         )
-        if row is None or row.organization_id != org.id or row.dns_token != token:
+        if locked is None or locked.organization_id != org.id or locked.dns_token != token:
             await self.db.rollback()
             raise AppError(code="not_found", message="domain not found", status_code=404)
+        row = locked
         if row.verified_at is not None:
             return row
         row.verified_at = _now()

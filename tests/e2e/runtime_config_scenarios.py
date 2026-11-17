@@ -258,13 +258,13 @@ async def test_nul_and_bidi_characters_are_refused_never_a_500(http) -> None:  #
     for label in ("a\x00b", "\x00", "x\u202ey", "x\u202ay", "x\u2066y", "x\u2069y"):
         refused = await http.put(f"{url}/okay", json={"label": label}, headers=admin)
         assert refused.status_code == 422, (label, refused.status_code, refused.text)
-        assert refused.json()["code"] == "invalid_value"
+        assert refused.json()["code"] in ("invalid_value", "validation_error")  # NUL: the global input guard
     for color in ("#ab\x00def", "#12345\u202e"):
         assert (await http.put(f"{url}/okay", json={"label": "ok", "color": color}, headers=admin)).status_code == 422
     for value in ("a%00b", "ok%00", "ok%E2%80%AE"):  # percent-encoded: the value in the path
         assert (await http.put(f"{url}/{value}", json={"label": "x"}, headers=admin)).status_code in (404, 422)
     refused = await http.put("/config/settings/invoice_footer", json={"value": "a\x00b"}, headers=admin)
-    assert refused.status_code == 422 and refused.json()["code"] == "invalid_value"
+    assert refused.status_code == 422 and refused.json()["code"] in ("invalid_value", "validation_error")
     # HTML is stored verbatim (clients must escape it when they show it), and nothing above was stored
     html = await http.put(f"{url}/okay", json={"label": "<img onerror=x>"}, headers=admin)
     assert html.status_code == 200

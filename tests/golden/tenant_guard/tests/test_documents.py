@@ -165,6 +165,7 @@ async def test_employee_card_prints_the_stored_record_and_extra_cannot_override_
         (f, record[f])
         for f in fields
         if isinstance(record.get(f), str) and 3 <= len(record[f]) <= 30 and " " not in record[f]
+        and not re.match(r"\d{4}-\d\d-\d\d", record[f])  # dates/timestamps print formatted, not as stored
     ]
     if not shown:
         pytest.skip("no short text field of the record is printed by this template")

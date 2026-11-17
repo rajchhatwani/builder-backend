@@ -182,7 +182,10 @@ async def test_exec_timeout_kills_sandbox_and_dead_is_normal(box: DockerSandbox)
     await box.destroy(sid)
 
 
-async def test_reaper_removes_expired_and_dead(box: DockerSandbox) -> None:
+async def test_reaper_removes_expired_and_dead(box: DockerSandbox, monkeypatch) -> None:  # noqa: ANN001
+    from app.services.sandbox import docker as docker_module
+
+    monkeypatch.setattr(docker_module, "REAP_GRACE_SECONDS", 1)  # an exited one-shot is kept for a grace period
     live = await box.start(
         SandboxSpec(image=IMAGE, command=["sleep", "300"], limits=Limits(ttl_seconds=3600))
     )

@@ -157,7 +157,7 @@ describe('BookingsPage', () => {
   })
 
   it('cancelling a hold says it is free; a zero fee reads as no fee', async () => {
-    const { f } = api((m, u) => (u.endsWith('/cancel') ? json(bk({ id: 'b2', status: 'cancelled', cancel_fee_minor: 0, fee_currency: 'EUR' })) : undefined))
+    const { f } = api((_m, u) => (u.endsWith('/cancel') ? json(bk({ id: 'b2', status: 'cancelled', cancel_fee_minor: 0, fee_currency: 'EUR' })) : undefined))
     await load(f)
     await click(cell(WED9))
     await click(q('bookings-cancel-btn'))
@@ -198,12 +198,12 @@ describe('BookingsPage', () => {
   })
 
   it('maps hold_expired (410) on confirm and invalid_transition on cancel', async () => {
-    const a = api((m, u) => (u.endsWith('/confirm') ? err(410, 'hold_expired') : undefined))
+    const a = api((_m, u) => (u.endsWith('/confirm') ? err(410, 'hold_expired') : undefined))
     await load(a.f)
     await click(cell(WED9))
     await click(q('bookings-confirm'))
     expect(q('bookings-error')?.textContent).toMatch(/hold expired before it was confirmed/)
-    const b = api((m, u) => (u.endsWith('/cancel') ? err(409, 'invalid_transition') : undefined))
+    const b = api((_m, u) => (u.endsWith('/cancel') ? err(409, 'invalid_transition') : undefined))
     await load(b.f)
     await click(cell(TUE930))
     await click(q('bookings-cancel-btn'))
@@ -269,14 +269,14 @@ describe('BookingsPage', () => {
     const e = api(undefined, [])
     await load(e.f)
     expect(q('bookings-resources-empty')).not.toBeNull()
-    const a = api((m, u) => (u.includes('/availability') ? err(500, 'boom') : undefined))
+    const a = api((_m, u) => (u.includes('/availability') ? err(500, 'boom') : undefined))
     await load(a.f)
     expect(q('bookings-grid-error')?.textContent).toMatch(/answered 500|raw/)
-    const d = api((m, u) => (u.includes('/booking/resources') && !u.includes('/availability') ? err(403, 'forbidden') : undefined))
+    const d = api((_m, u) => (u.includes('/booking/resources') && !u.includes('/availability') ? err(403, 'forbidden') : undefined))
     await load(d.f)
     expect(q('bookings-resources-error')?.textContent).toMatch(/own bookings|role may not/)
     let release: (r: Response) => void = () => undefined
-    const slow = api((m, u) => (u.includes('/availability') ? (new Promise<Response>((r) => { release = r }) as unknown as Response) : undefined))
+    const slow = api((_m, u) => (u.includes('/availability') ? (new Promise<Response>((r) => { release = r }) as unknown as Response) : undefined))
     await load(slow.f)
     expect(q('bookings-loading')).not.toBeNull()
     await act(async () => { release(json({ slots: [] })) })

@@ -83,7 +83,7 @@ describe('LedgerPage', () => {
   })
 
   it('flags books that do not balance', async () => {
-    const { f } = api((m, u) => (u.includes('/ledger/balances') ? json({ ...BAL, totals: [{ currency: 'USD', sum_minor: 5 }] }) : undefined))
+    const { f } = api((_m, u) => (u.includes('/ledger/balances') ? json({ ...BAL, totals: [{ currency: 'USD', sum_minor: 5 }] }) : undefined))
     await load(f)
     expect(q('ledger-balance-check')?.dataset.ok).toBe('false')
     expect(q('ledger-balance-check')?.textContent).toMatch(/do NOT balance/)
@@ -148,7 +148,7 @@ describe('LedgerPage', () => {
   })
 
   it('shows empty and error states', async () => {
-    const { f } = api((m, u) => (u.includes('/ledger/transactions') ? json({ items: [], total: 0, limit: 20, offset: 0 }) : u.includes('/ledger/balances') ? json({ code: 'forbidden', message: 'no', details: [] }, 403) : undefined))
+    const { f } = api((_m, u) => (u.includes('/ledger/transactions') ? json({ items: [], total: 0, limit: 20, offset: 0 }) : u.includes('/ledger/balances') ? json({ code: 'forbidden', message: 'no', details: [] }, 403) : undefined))
     await load(f)
     expect(q('ledger-transactions-state-empty')).not.toBeNull()
     expect(q('ledger-balances-state-error')?.textContent).toMatch(/role may not/)

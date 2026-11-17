@@ -94,7 +94,7 @@ describe('OperationsPage', () => {
 
   it('shows a run failure as an alert', async () => {
     m.adminOperations.mockResolvedValue(OPS)
-    m.adminRunGolive.mockRejectedValue(new ApiError(403, 'forbidden'))
+    m.adminRunGolive.mockRejectedValue(new ApiError(403, { code: 'forbidden', message: 'forbidden', details: [] }))
     await mount()
     await act(async () => { (tid('golive-run') as HTMLElement).click(); await new Promise((r) => setTimeout(r, 0)) })
     expect(tid('golive-error')?.textContent).toContain('Only platform admins')
