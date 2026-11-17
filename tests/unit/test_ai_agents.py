@@ -303,6 +303,7 @@ def gen() -> types.SimpleNamespace:
     class AppError(Exception):
         def __init__(self, code: str, message: str, status: int = 400, details: Any = None) -> None:
             self.code = code
+            self.status = status
 
     module = types.ModuleType("pure")
     module.__dict__.update(
@@ -385,8 +386,9 @@ def test_model_output_parsing(gen: types.SimpleNamespace) -> None:
 
 def test_nul_is_refused_before_the_database(gen: types.SimpleNamespace) -> None:
     gen.m._no_nul("fine", None)
-    with pytest.raises(Exception):  # noqa: B017
+    with pytest.raises(gen.m.AppError) as exc:
         gen.m._no_nul("a\x00b")
+    assert exc.value.code == "validation_error" and exc.value.status == 422
 
 
 def test_the_fake_provider_directive_may_carry_a_json_array_and_stays_off_by_default(gen: types.SimpleNamespace) -> None:

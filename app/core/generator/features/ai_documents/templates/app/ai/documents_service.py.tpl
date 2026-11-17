@@ -66,6 +66,13 @@ def _normal(text: str) -> str:
     return _STRIP.sub("", text).lower()
 
 
+def _supported(value: str, quote: str) -> bool:
+    """The value equals the quote or a whole run of its words (never a fragment of one word: '125' vs '1,250.00')."""
+    want = _normal(value)
+    words = quote.split()
+    return bool(want) and any(_normal("".join(words[i:j])) == want for i in range(len(words)) for j in range(i + 1, len(words) + 1))
+
+
 def _required(kind: str) -> set[str]:
     return {name for name, required in _config.KINDS.get(kind, []) if required}
 
@@ -86,7 +93,7 @@ def parse_field(raw: _t.Any, text: str) -> tuple[str | None, int, tuple[int, int
     assert isinstance(start, int) and isinstance(end, int)
     if not 0 <= start < end <= len(text) or text[start:end] != quote:
         return value, 0, None
-    if not _normal(value) or _normal(value) not in _normal(quote):  # the value must be supported by the text it points at
+    if not _supported(value, quote):  # the value must be the text it points at (or whole words of it)
         return value, 0, None
     return value, confidence, (1 + text.count("\f", 0, start), start, end, quote)
 

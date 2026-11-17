@@ -89,9 +89,42 @@ def test_flag_data_deletion() -> None:
     assert "data_deletion" not in flags(added)
 
 
-def test_flag_data_deletion_soft_delete_off_and_cascade() -> None:
-    before = spec(entities=lambda d: d["entities"][0]["options"].update(soft_delete=True) if "options" in d["entities"][0] else d["entities"][0].update(options={"soft_delete": True}))
+def _soft_delete_item(d: dict[str, Any]) -> None:
+    d["entities"][0].setdefault("options", {})["soft_delete"] = True
+
+
+def _with_relation(on_delete: str | None) -> Spec:
+    def patch(d: dict[str, Any]) -> None:
+        d["entities"].append({"name": "Tag", "table_name": "tags", "plural_path": "tags", "fields": [{"name": "label", "type": "string"}]})
+        if on_delete is not None:
+            d["relations"] = [
+                {"kind": "one_to_many", "from_entity": "Tag", "to_entity": "Item", "from_name": "items", "to_name": "tag", "on_delete": on_delete}
+            ]
+
+    return spec(entities=patch)
+
+
+def test_flag_data_deletion_soft_delete_off() -> None:
+    before = spec(entities=_soft_delete_item)
     assert "data_deletion" in flags(spec(), before=before)
+
+
+def test_flag_data_deletion_relation_removed() -> None:
+    assert "data_deletion" in flags(_with_relation(None), before=_with_relation("restrict"))
+    assert "data_deletion" not in flags(_with_relation("restrict"), before=_with_relation("restrict"))
+
+
+def test_flag_data_deletion_on_delete_to_cascade() -> None:
+    assert "data_deletion" in flags(_with_relation("cascade"), before=_with_relation("restrict"))
+    assert "data_deletion" not in flags(_with_relation("restrict"), before=_with_relation("cascade"))
+
+
+def test_flag_data_deletion_max_length_shrink() -> None:
+    def length(n: int) -> Spec:
+        return spec(entities=lambda d: d["entities"][0]["fields"][0].update(max_length=n))
+
+    assert "data_deletion" in flags(length(10), before=length(50))
+    assert "data_deletion" not in flags(length(50), before=length(10))
 
 
 def test_flag_new_egress() -> None:

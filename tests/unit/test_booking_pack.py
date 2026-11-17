@@ -196,8 +196,9 @@ def test_every_booking_file_parses_and_has_no_float_money() -> None:
         if path.endswith(".py"):
             ast.parse(content, filename=path)
     for path in ("app/booking/service.py", "app/booking/schemas.py", "app/booking/models.py"):
-        text = generate(_spec())[path]
-        assert "float" not in text.replace("floats", "").lower() or "Float" not in text, path
+        tree = ast.parse(generate(_spec())[path])
+        assert not [n for n in ast.walk(tree) if (isinstance(n, ast.Name) and n.id in {"float", "Float"}) or (isinstance(n, ast.Constant) and isinstance(n.value, float))], path
+        assert not [n for n in ast.walk(tree) if isinstance(n, ast.Attribute) and n.attr == "Float"], path
 
 
 # --- the pure generated rules, executed ----------------------------------------------------------------------

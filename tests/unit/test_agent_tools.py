@@ -309,7 +309,9 @@ async def test_removing_planned_hook_is_refused_by_handler(monkeypatch: pytest.M
     monkeypatch.setattr(spec_tools, "_current_hooks", current)
     monkeypatch.setattr(spec_tools, "_current_section", section)
     r = await agent_tools.execute(make_ctx(), "set_section", {"section": "hooks", "items": []})
-    assert not r.ok and (r.needs_plan_extension or r.failures[0].rule_id == "tool_removal")
+    assert not r.ok and r.needs_plan_extension == ("hook", "match_invoice")  # the plan scope answers first
+    r = await spec_tools.set_section(make_ctx(), {"section": "hooks", "items": []})  # the handler alone, scope bypassed
+    assert not r.ok and r.failures[0].rule_id == "tool_removal"
 
 
 # -- S! / E never act ---------------------------------------------------------------------

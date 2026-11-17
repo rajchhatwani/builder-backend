@@ -43,7 +43,7 @@ def _pure(source: str, names: set[str], **ns: Any) -> types.ModuleType:
 def _parse_module(source: str) -> types.ModuleType:
     import re
 
-    return _pure(source, {"parse_field", "_normal"}, _t=__import__("typing"), re=re, _STRIP=re.compile(r"[\s,$\u20ac\u00a3]"))
+    return _pure(source, {"parse_field", "_normal", "_supported"}, _t=__import__("typing"), re=re, _STRIP=re.compile(r"[\s,$\u20ac\u00a3]"))
 
 
 def test_the_fixture_is_valid_and_declares_all_three_ai_blocks() -> None:
@@ -192,9 +192,8 @@ def test_the_value_must_be_supported_by_its_quote() -> None:
     base = {"confidence_bp": 9000, "start": start, "end": start + 8, "quote": "1,250.00"}
     assert mod.parse_field({**base, "value": "1250.00"}, text)[1] == 9000
     assert mod.parse_field({**base, "value": "1 250.00"}, text)[1] == 9000
-    for wrong in ("1250.001", "9999", "125", "1,250.00 and more"):
+    for wrong in ("1250.001", "9999", "125", "1", "50", "1,250.00 and more"):
         v, conf, anchor = mod.parse_field({**base, "value": wrong}, text)
-        if wrong == "125":
-            assert conf == 9000  # a prefix of the quote is still "in" the quote (normalised containment)
-        else:
-            assert (conf, anchor) == (0, None), wrong
+        assert (conf, anchor) == (0, None), wrong  # a fragment of a word of the quote is not support
+    long = {**base, "start": 0, "end": len(text) - 1, "quote": text[:-1]}
+    assert mod.parse_field({**long, "value": "1250.00"}, text)[1] == 9000  # a whole word of a longer quote is fine

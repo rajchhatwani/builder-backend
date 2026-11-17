@@ -257,8 +257,9 @@ def test_utf16_xml_part_is_refused_not_parsed() -> None:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as z:
         z.writestr("word/document.xml", xml.encode("utf-16"))
-    with pytest.raises(AppError):
+    with pytest.raises(AppError) as exc:
         office.docx_text("a.docx", buf.getvalue(), 10_000, 1e18)
+    assert exc.value.status_code == 422 and exc.value.code == "file_invalid"
 
 
 def test_corrupt_zip_member_is_a_422_not_a_500() -> None:
@@ -275,5 +276,6 @@ def test_corrupt_zip_member_is_a_422_not_a_500() -> None:
         z.writestr("word/document.xml", "<a>" + "x" * 5000 + "</a>")
     raw = bytearray(buf.getvalue())
     raw[60:90] = b"\xff" * 30  # damage the deflate stream
-    with pytest.raises(AppError):
+    with pytest.raises(AppError) as exc:
         office.docx_text("a.docx", bytes(raw), 10_000, 1e18)
+    assert exc.value.status_code == 422 and exc.value.code == "file_invalid"

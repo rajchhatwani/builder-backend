@@ -78,12 +78,17 @@ def test_every_evals_file_parses_and_runs_cases_only_through_the_agent_runtime()
 
 
 def _score(passed: int, total: int, pass_bp: int) -> tuple[int, bool]:
-    """The scoring rule of the generated run_suite, lifted from its source (hand-checked below)."""
-    source = _files()["app/ai/evals_service.py"]
-    assert "score = passed_count * 10_000 // total if total else 0" in source
-    assert "passed=score >= _t.cast(int, suite[\"pass_bp\"])" in source
-    score = passed * 10_000 // total if total else 0
-    return score, score >= pass_bp
+    """Run the scoring statements of the generated run_suite (found with ast) on the given counts."""
+    tree = ast.parse(_files()["app/ai/evals_service.py"])
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "run_suite")
+    assign = next(n for n in ast.walk(fn) if isinstance(n, ast.Assign) and isinstance(n.targets[0], ast.Name) and n.targets[0].id == "score")
+    call = next(n for n in ast.walk(fn) if isinstance(n, ast.keyword) and n.arg == "passed")
+    import typing
+
+    ns: dict[str, Any] = {"passed_count": passed, "total": total, "_t": typing, "suite": {"pass_bp": pass_bp}}
+    exec(compile(ast.Module(body=[assign], type_ignores=[]), "score", "exec"), ns)  # noqa: S102
+    verdict = eval(compile(ast.Expression(body=call.value), "passed", "eval"), ns)  # noqa: S307
+    return ns["score"], verdict
 
 
 def test_scoring_is_integer_basis_points() -> None:
@@ -92,5 +97,6 @@ def test_scoring_is_integer_basis_points() -> None:
     assert _score(2, 3, 6667) == (6666, False)
     assert _score(1, 2, 5000) == (5000, True)
     assert _score(0, 4, 0) == (0, True)
+    assert _score(0, 0, 1) == (0, False)  # an empty suite scores 0, it does not divide by zero
     assert _score(4, 4, 10000) == (10000, True)
     assert isinstance(_score(7, 9, 1)[0], int)
