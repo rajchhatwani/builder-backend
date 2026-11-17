@@ -16,7 +16,6 @@ import pytest
 
 from app.config import Settings
 from app.services.sandbox import DockerSandbox, Limits, SandboxSpec
-from app.services.sandbox.docker import REAP_GRACE_SECONDS
 
 IMAGE = "python:3.12-slim"
 
@@ -200,8 +199,7 @@ async def test_reaper_removes_expired_and_dead(box: DockerSandbox) -> None:
         )  # fmt: skip
         return bool(out.stdout.strip())
 
-    # a just-exited one-shot container is kept for REAP_GRACE_SECONDS; reap as of after the grace (live ttl is 3600s)
-    res = await box.reap(now=time.time() + REAP_GRACE_SECONDS + 5)
+    res = await box.reap()
     assert len(res.containers) >= 2
     assert not exists(short) and not exists(dead) and exists(live)
     nets = subprocess.run(
