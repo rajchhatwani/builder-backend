@@ -624,16 +624,14 @@ async def test_the_worker_dead_letters_and_operators_can_retry(client: AsyncClie
     assert await worker.run_once() == 1
     operator = await sign_in(client, "ops@example.com", roles=role("operate"))
     async with client_for(operator) as http:
-        dead = (await http.get("/payments/ops/dead-jobs")).json()
-        assert len(dead) == 1 and dead[0]["type"] == "no_such_job_type"
-        retried = await http.post(f"/payments/ops/dead-jobs/{dead[0]['id']}/retry")
-        assert retried.status_code == 202
-        assert (await http.post(f"/payments/ops/dead-jobs/{uuid.uuid4()}/retry")).status_code == 404
+        # the queue is shared by every tenant, so the dead-job routes are refused here
+        assert (await http.get("/payments/ops/dead-jobs")).status_code == 403
+        assert (await http.post(f"/payments/ops/dead-jobs/{uuid.uuid4()}/retry")).status_code == 403
     async with session_factory() as session:
         recorded = (
             await session.execute(select(AuditLog.event).where(AuditLog.chain_key == audit.SYSTEM_CHAIN))
         ).scalars().all()
-    assert "job_dead" in recorded and "dead_job_retried" in recorded
+    assert "job_dead" in recorded and "dead_job_retried" not in recorded
 
 
 async def test_periodic_jobs_are_enqueued_once_per_time_bucket() -> None:
