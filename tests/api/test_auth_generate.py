@@ -318,7 +318,7 @@ async def test_import_drops_permissions_for_entities_that_no_longer_exist(
     del spec["auth"]
     spec["entities"][0].update(name="Product", table_name="products", plural_path="products")
 
-    put = await client.put(f"/projects/{project_id}/spec", json=spec)
+    put = await client.put(f"/projects/{project_id}/spec?confirm_weakening=true", json=spec)
 
     assert put.status_code == 200, put.text
     assert (await client.get(f"/projects/{project_id}/permissions")).json()["total"] == 0

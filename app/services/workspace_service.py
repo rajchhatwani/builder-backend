@@ -297,7 +297,7 @@ class WorkspaceService:
 
     # -- state claims (short locks; slow work happens with no row lock held) -------------------
     async def _claim(
-        self, project_id: uuid.UUID, ws_id: uuid.UUID, busy: str
+        self, project_id: uuid.UUID, ws_id: uuid.UUID, busy: str, *, by_run: bool = False
     ) -> tuple[str, Path, str]:
         """Lock the workspace row briefly, mark it busy and commit. Returns the previous state,
         worktree path and preview DB name. A stale busy marker (crashed worker) can be taken."""
@@ -311,7 +311,8 @@ class WorkspaceService:
         prev = "active" if ws.state in BUSY_STATES else ws.state
         if not ws.worktree_path or not ws.preview_db_name:
             raise AppError("workspace_discarded", "workspace is discarded", 409)
-        await self._refuse_if_run_active(ws_id)
+        if not by_run:  # the owning run's own automatic checkpoints (B-015) must pass
+            await self._refuse_if_run_active(ws_id)
         wt, db = Path(ws.worktree_path), ws.preview_db_name
         ws.state = busy
         await self.session.commit()
@@ -649,10 +650,10 @@ class WorkspaceService:
         return cp
 
     async def checkpoint(
-        self, project_id: uuid.UUID, ws_id: uuid.UUID, label: str
+        self, project_id: uuid.UUID, ws_id: uuid.UUID, label: str, *, by_run: bool = False
     ) -> CheckpointRead:
         self._root()
-        prev, _, _ = await self._claim(project_id, ws_id, "checkpointing")
+        prev, _, _ = await self._claim(project_id, ws_id, "checkpointing", by_run=by_run)
         try:
             ws = await self._get(project_id, ws_id)
             cp = await self._take_checkpoint(ws, label)

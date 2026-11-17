@@ -800,7 +800,7 @@ class RunDriver:
             from app.services.workspace_service import WorkspaceService
 
             async with self._beat(run_id):
-                cp = await WorkspaceService(self.s).checkpoint(run.project_id, run.workspace_id, label)
+                cp = await WorkspaceService(self.s).checkpoint(run.project_id, run.workspace_id, label, by_run=True)
             out = {"checkpoint": label, "checkpoint_id": str(cp.id)}
         except _Lost:
             raise
