@@ -353,3 +353,4 @@ tests/unit/test_migration_planner_join_rename_b1_006.py
 tests/unit/test_mcp_openapi.py
 tests/api/test_audit_b1_009.py
 tests/unit/test_audit_b1_013.py
+tests/unit/test_audit_b1_015.py

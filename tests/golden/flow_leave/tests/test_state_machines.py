@@ -43,3 +43,19 @@ async def test_leave_requests_unknown_transition_and_record(client: AsyncClient)
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/leave_requests/{uuid.uuid4()}/transitions/manager_approve")
     assert missing.status_code == 404
+
+
+async def test_leave_requests_moves_and_logs(client: AsyncClient) -> None:
+    """A manual move works, is logged after `created`, and the same move again from the wrong state is a 409."""
+    for _ in range(50):  # sample data can trip an automatic transition on create: retry until it did not
+        created = await _factories.make_leave_requests(client)
+        if created["state"] in ('hr_review', 'manager_review', 'requested',):
+            break
+    else:
+        raise AssertionError("no sample record was created in the starting state")
+    base = f"/leave_requests/{created['id']}"
+    moved = await client.post(f"{base}/transitions/cancel")
+    assert moved.status_code == 200, moved.text
+    history = (await client.get(f"{base}/state-history")).json()
+    assert history[0]["transition"] == "created"
+    assert any(h["transition"] == 'cancel' and h["from_state"] is not None for h in history[1:])

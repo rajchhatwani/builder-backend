@@ -5,7 +5,9 @@
 import uuid
 
 {% endif %}
+{% if (routes | selectattr("skip") | list) or (live | selectattr("e.access") | list) %}
 import pytest
+{% endif %}
 {% if live %}
 from httpx import AsyncClient
 
@@ -69,6 +71,30 @@ async def test_{{ e.table }}_unknown_transition_and_record(client: AsyncClient) 
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/{{ e.path }}/{uuid.uuid4()}/transitions/{{ (m.transitions | rejectattr("auto") | map(attribute="name") | list or ["x"])[0] }}")
     assert missing.status_code == 404
+{% if r.happy %}
+{% set h = r.happy %}
+
+
+async def test_{{ e.table }}_moves_and_logs(client: AsyncClient) -> None:
+    """A manual move works, is logged after `created`, and the same move again from the wrong state is a 409."""
+    for _ in range(50):  # sample data can trip an automatic transition on create: retry until it did not
+        created = await _factories.make_{{ e.table }}(client)
+        if created["{{ m.field }}"] in ({{ h["from"] | map("pyrepr") | join(", ") }},):
+            break
+    else:
+        raise AssertionError("no sample record was created in the starting state")
+    base = f"/{{ e.path }}/{created['id']}"
+    moved = await client.post(f"{base}/transitions/{{ h.name }}")
+    assert moved.status_code == 200, moved.text
+    history = (await client.get(f"{base}/state-history")).json()
+    assert history[0]["transition"] == "created"
+    assert any(h["transition"] == {{ h.name | pyrepr }} and h["from_state"] is not None for h in history[1:])
+{% if not h.reopens %}
+    again = await client.post(f"{base}/transitions/{{ h.name }}")
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "invalid_transition"
+{% endif %}
+{% endif %}
 {% endif %}
 {% if r.probe and not r.skip %}
 {% set p = r.probe %}

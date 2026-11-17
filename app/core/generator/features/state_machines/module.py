@@ -105,6 +105,26 @@ def _role_probe(
     }
 
 
+def _happy_path(e: Any, machine: dict[str, Any], project: Any) -> dict[str, Any] | None:
+    """A move the generated tests may always make: out of the initial state, no guard, and either no
+    roles or an entity whose tests sign in as a user who holds every role. None when none qualifies
+    (a guard hook could refuse any move, and the tests cannot know)."""
+    if has_guard_hooks(project.spec):
+        return None
+    for t in machine["transitions"]:
+        if t["auto"] or machine["initial"] not in t["from"] or t["guard"] is not None:
+            continue
+        if t["roles"] and not e.access:
+            continue
+        return {
+            "name": t["name"],
+            "from": t["from"],
+            "to": t["to"],
+            "reopens": t["to"] in t["from"] or any(x["auto"] for x in machine["transitions"]),
+        }
+    return None
+
+
 _GUARD_IMPORT_ANCHOR = "from app.core.errors import AppError, NotFoundError\n"
 _GUARD_CALL_ANCHOR = '        raise AppError("transition_refused", detail, 409)\n'
 
@@ -136,7 +156,7 @@ _SETTINGS_ANCHORS = (
     "def row_values(item: Any) -> dict[str, Any]:\n"
     "    return {c.key: getattr(item, c.key, None) for c in sa.inspect(type(item)).column_attrs}\n",
     '    guard = _GUARDS.get((entity, transition["name"]))\n    if guard is None:\n        return True\n',
-    "    item = locked.scalar_one()\n    state = current_state(entity, item)\n",
+    '    state = current_state(entity, item)\n    if state not in t["from"]:\n',
 )
 _HOOKS_SETTLE_ANCHOR = "        engine.settle(session, entity, item)\n"
 _HOOKS_IMPORT_ANCHOR = "from sqlalchemy.orm import object_session\n"
@@ -221,7 +241,7 @@ def with_settings(engine_source: str, used: list[str]) -> str:
     )
     text = text.replace(
         a_apply,
-        "    item = locked.scalar_one()\n    await prime_settings(session, item)\n    state = current_state(entity, item)\n",
+        "    await prime_settings(session, item)\n" + a_apply,
     )
     return text.rstrip("\n") + "\n" + _SETTINGS_ENGINE_BLOCK.replace("__USED__", repr(sorted(used)))
 
@@ -375,10 +395,12 @@ class StateMachinesModule:
                     "update_ops": update_ops,
                     "probe": _role_probe(e, machines[e.name], project, op) if update_ops else None,
                     "skip": _skip_reason(e, project),
+                    "happy": _happy_path(e, machines[e.name], project),
                 }
             )
         context = {
             "routes": routes,
+            "machines": machines,
             "auth": project.auth is not None,
             "settings_guards": bool(used_settings),
         }

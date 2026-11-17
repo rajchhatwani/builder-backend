@@ -77,6 +77,26 @@ async def _can_{{ u.op }}_{{ e.table }}({% if u.needs_user %}user: CurrentUser{%
     except AppError as refused:
         return refused
 {% endfor %}
+{% if auth and r.update_ops %}
+
+
+async def _update_refused_{{ e.table }}(session: SessionDep, item_id: _uuid.UUID, user: object) -> bool:
+    """True when this caller fails the entity's own update access (roles or row rules) for the record."""
+    try:
+{% for u in r.update_ops %}
+{% if u.needs_user %}
+        if user is None:
+            return True
+        granted = await _ACCESS_{{ e.table }}["{{ u.op }}"](user)
+{% else %}
+        granted = await _ACCESS_{{ e.table }}["{{ u.op }}"]()
+{% endif %}
+        await {{ e.name }}Repository(session, **granted.repo_kwargs).get(item_id)
+{% endfor %}
+    except AppError:
+        return True
+    return False
+{% endif %}
 
 
 def _roles_{{ e.table }}({% if auth %}access: _access.Access{% endif %}) -> set[str]:
@@ -95,7 +115,15 @@ async def list_{{ e.table }}_transitions(
     access: Annotated[_access.Access, Depends(_access_{{ e.table }})],
 {% endif %}
 ) -> list[dict[str, object]]:
+{% if auth and e.guarded %}
+    if "{{ machines[e.name].field }}" in _fx.hidden_read("{{ e.name }}", access.user):
+        raise _fx.forbidden()  # the state (and where it can go) is a field this caller may not read
+{% endif %}
     item = await {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %}).get(item_id)
+{% if auth and r.update_ops %}
+    # A transition with no `roles` needs the entity's update access on POST: say so here too.
+    no_update = await _update_refused_{{ e.table }}(session, item_id, access.user)
+{% endif %}
 {% if settings_guards %}
     await engine.prime_settings(session, item)
 {% endif %}
@@ -105,6 +133,9 @@ async def list_{{ e.table }}_transitions(
         _roles_{{ e.table }}({% if auth %}access{% endif %}),
 {% if e.guarded %}
         mask_guard=bool(_fx.hidden_read("{{ e.name }}", access.user)),
+{% endif %}
+{% if auth and r.update_ops %}
+        no_update=no_update,
 {% endif %}
     )
 
@@ -159,6 +190,10 @@ async def {{ e.table }}_state_history(
     access: Annotated[_access.Access, Depends(_access_{{ e.table }})],
 {% endif %}
 ) -> list[StateChange]:
+{% if auth and e.guarded %}
+    if "{{ machines[e.name].field }}" in _fx.hidden_read("{{ e.name }}", access.user):
+        raise _fx.forbidden()  # the log names the states: a caller who may not read the state may not read it
+{% endif %}
     await {{ e.name }}Repository(session{% if auth %}, **access.repo_kwargs{% endif %}).get(item_id)
     rows = await engine.history(session, "{{ e.name }}", item_id)
     return [StateChange.model_validate(row) for row in rows]

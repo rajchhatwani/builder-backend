@@ -58,6 +58,22 @@ async def _can_update_employees(user: CurrentUser) -> _access.Access | AppError:
         return refused
 
 
+async def _update_refused_employees(session: SessionDep, item_id: _uuid.UUID, user: object) -> bool:
+    """True when this caller fails the entity's own update access (roles or row rules) for the record."""
+    try:
+        if user is None:
+            return True
+        granted = await _ACCESS_employees["replace"](user)
+        await EmployeeRepository(session, **granted.repo_kwargs).get(item_id)
+        if user is None:
+            return True
+        granted = await _ACCESS_employees["update"](user)
+        await EmployeeRepository(session, **granted.repo_kwargs).get(item_id)
+    except AppError:
+        return True
+    return False
+
+
 def _roles_employees(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -68,12 +84,17 @@ async def list_employees_transitions(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_employees)],
 ) -> list[dict[str, object]]:
+    if "status" in _fx.hidden_read("Employee", access.user):
+        raise _fx.forbidden()  # the state (and where it can go) is a field this caller may not read
     item = await EmployeeRepository(session, **access.repo_kwargs).get(item_id)
+    # A transition with no `roles` needs the entity's update access on POST: say so here too.
+    no_update = await _update_refused_employees(session, item_id, access.user)
     return engine.available(
         "Employee",
         item,
         _roles_employees(access),
         mask_guard=bool(_fx.hidden_read("Employee", access.user)),
+        no_update=no_update,
     )
 
 
@@ -115,6 +136,8 @@ async def employees_state_history(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_employees)],
 ) -> list[StateChange]:
+    if "status" in _fx.hidden_read("Employee", access.user):
+        raise _fx.forbidden()  # the log names the states: a caller who may not read the state may not read it
     await EmployeeRepository(session, **access.repo_kwargs).get(item_id)
     rows = await engine.history(session, "Employee", item_id)
     return [StateChange.model_validate(row) for row in rows]

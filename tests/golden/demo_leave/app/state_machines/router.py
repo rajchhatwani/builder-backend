@@ -57,6 +57,22 @@ async def _can_replace_leave_requests(user: CurrentUser) -> _access.Access | App
         return refused
 
 
+async def _update_refused_leave_requests(session: SessionDep, item_id: _uuid.UUID, user: object) -> bool:
+    """True when this caller fails the entity's own update access (roles or row rules) for the record."""
+    try:
+        if user is None:
+            return True
+        granted = await _ACCESS_leave_requests["update"](user)
+        await LeaveRequestRepository(session, **granted.repo_kwargs).get(item_id)
+        if user is None:
+            return True
+        granted = await _ACCESS_leave_requests["replace"](user)
+        await LeaveRequestRepository(session, **granted.repo_kwargs).get(item_id)
+    except AppError:
+        return True
+    return False
+
+
 def _roles_leave_requests(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -68,11 +84,14 @@ async def list_leave_requests_transitions(
     access: Annotated[_access.Access, Depends(_access_leave_requests)],
 ) -> list[dict[str, object]]:
     item = await LeaveRequestRepository(session, **access.repo_kwargs).get(item_id)
+    # A transition with no `roles` needs the entity's update access on POST: say so here too.
+    no_update = await _update_refused_leave_requests(session, item_id, access.user)
     await engine.prime_settings(session, item)
     return engine.available(
         "LeaveRequest",
         item,
         _roles_leave_requests(access),
+        no_update=no_update,
     )
 
 

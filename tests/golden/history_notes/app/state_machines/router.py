@@ -57,6 +57,22 @@ async def _can_replace_tickets(user: CurrentUser) -> _access.Access | AppError:
         return refused
 
 
+async def _update_refused_tickets(session: SessionDep, item_id: _uuid.UUID, user: object) -> bool:
+    """True when this caller fails the entity's own update access (roles or row rules) for the record."""
+    try:
+        if user is None:
+            return True
+        granted = await _ACCESS_tickets["update"](user)
+        await TicketRepository(session, **granted.repo_kwargs).get(item_id)
+        if user is None:
+            return True
+        granted = await _ACCESS_tickets["replace"](user)
+        await TicketRepository(session, **granted.repo_kwargs).get(item_id)
+    except AppError:
+        return True
+    return False
+
+
 def _roles_tickets(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -68,10 +84,13 @@ async def list_tickets_transitions(
     access: Annotated[_access.Access, Depends(_access_tickets)],
 ) -> list[dict[str, object]]:
     item = await TicketRepository(session, **access.repo_kwargs).get(item_id)
+    # A transition with no `roles` needs the entity's update access on POST: say so here too.
+    no_update = await _update_refused_tickets(session, item_id, access.user)
     return engine.available(
         "Ticket",
         item,
         _roles_tickets(access),
+        no_update=no_update,
     )
 
 

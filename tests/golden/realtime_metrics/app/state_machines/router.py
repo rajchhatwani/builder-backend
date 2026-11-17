@@ -58,6 +58,22 @@ async def _can_update_expenses(user: CurrentUser) -> _access.Access | AppError:
         return refused
 
 
+async def _update_refused_expenses(session: SessionDep, item_id: _uuid.UUID, user: object) -> bool:
+    """True when this caller fails the entity's own update access (roles or row rules) for the record."""
+    try:
+        if user is None:
+            return True
+        granted = await _ACCESS_expenses["replace"](user)
+        await ExpenseRepository(session, **granted.repo_kwargs).get(item_id)
+        if user is None:
+            return True
+        granted = await _ACCESS_expenses["update"](user)
+        await ExpenseRepository(session, **granted.repo_kwargs).get(item_id)
+    except AppError:
+        return True
+    return False
+
+
 def _roles_expenses(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -68,12 +84,17 @@ async def list_expenses_transitions(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_expenses)],
 ) -> list[dict[str, object]]:
+    if "status" in _fx.hidden_read("Expense", access.user):
+        raise _fx.forbidden()  # the state (and where it can go) is a field this caller may not read
     item = await ExpenseRepository(session, **access.repo_kwargs).get(item_id)
+    # A transition with no `roles` needs the entity's update access on POST: say so here too.
+    no_update = await _update_refused_expenses(session, item_id, access.user)
     return engine.available(
         "Expense",
         item,
         _roles_expenses(access),
         mask_guard=bool(_fx.hidden_read("Expense", access.user)),
+        no_update=no_update,
     )
 
 
@@ -115,6 +136,8 @@ async def expenses_state_history(
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_expenses)],
 ) -> list[StateChange]:
+    if "status" in _fx.hidden_read("Expense", access.user):
+        raise _fx.forbidden()  # the log names the states: a caller who may not read the state may not read it
     await ExpenseRepository(session, **access.repo_kwargs).get(item_id)
     rows = await engine.history(session, "Expense", item_id)
     return [StateChange.model_validate(row) for row in rows]

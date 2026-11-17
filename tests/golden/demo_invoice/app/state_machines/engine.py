@@ -112,11 +112,13 @@ GENERIC_REASON = "unavailable"
 
 
 def available(
-    entity: str, item: Any, roles: set[str], *, mask_guard: bool = False
+    entity: str, item: Any, roles: set[str], *, mask_guard: bool = False, no_update: bool = False
 ) -> list[dict[str, Any]]:
     """The manual transitions out of the record's current state, and whether the caller may use each.
     `mask_guard`: the caller cannot read some fields of the record, so a refused guard is reported as
-    the generic reason (the answer must not tell them how the hidden values compare)."""
+    the generic reason (the answer must not tell them how the hidden values compare).
+    `no_update`: the caller may not update the record, so a transition with no `roles` (open to whoever
+    may update it) is refused for them as `apply` would refuse it."""
     m = machine(entity)
     state = current_state(entity, item)
     values = row_values(item)
@@ -125,7 +127,7 @@ def available(
         if t["auto"] or state not in t["from"]:
             continue
         reason = None
-        if t["roles"] and not roles & set(t["roles"]):
+        if (t["roles"] and not roles & set(t["roles"])) or (no_update and not t["roles"]):
             reason = "role"
         elif not guard_holds(entity, t, values):
             reason = GENERIC_REASON if mask_guard else "guard"
@@ -157,13 +159,16 @@ async def apply(
     if t["roles"] and not roles & set(t["roles"]):
         raise AppError("forbidden", "you do not have permission to do that", 403)
     session: AsyncSession = repo.session
+    alive = [repo.model.deleted_at.is_(None)] if hasattr(repo.model, "deleted_at") else []
     locked = await session.execute(
         sa.select(repo.model)
-        .where(repo.model.id == item_id)
+        .where(repo.model.id == item_id, *alive)
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    item = locked.scalar_one()
+    item = locked.scalar_one_or_none()
+    if item is None:  # deleted between the read above and the lock
+        raise NotFoundError(f"{entity} {item_id} not found")
     await prime_settings(session, item)
     state = current_state(entity, item)
     if state not in t["from"]:

@@ -44,3 +44,22 @@ async def test_orders_unknown_transition_and_record(client: AsyncClient) -> None
     assert unknown.json()["code"] == "not_found"
     missing = await client.post(f"/orders/{uuid.uuid4()}/transitions/submit")
     assert missing.status_code == 404
+
+
+async def test_orders_moves_and_logs(client: AsyncClient) -> None:
+    """A manual move works, is logged after `created`, and the same move again from the wrong state is a 409."""
+    for _ in range(50):  # sample data can trip an automatic transition on create: retry until it did not
+        created = await _factories.make_orders(client)
+        if created["status"] in ('draft',):
+            break
+    else:
+        raise AssertionError("no sample record was created in the starting state")
+    base = f"/orders/{created['id']}"
+    moved = await client.post(f"{base}/transitions/submit")
+    assert moved.status_code == 200, moved.text
+    history = (await client.get(f"{base}/state-history")).json()
+    assert history[0]["transition"] == "created"
+    assert any(h["transition"] == 'submit' and h["from_state"] is not None for h in history[1:])
+    again = await client.post(f"{base}/transitions/submit")
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "invalid_transition"
