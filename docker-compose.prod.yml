@@ -76,6 +76,10 @@ services:
       BUILDER_SMTP_PASSWORD: ${BB_SMTP_PASSWORD:-}
       BUILDER_SMTP_FROM: ${BB_SMTP_FROM:-}
       BUILDER_SMTP_STARTTLS: "true"
+      # Stripe (test or live keys; empty = billing off). The webhook is POST /billing/stripe/webhook.
+      BUILDER_STRIPE_SECRET_KEY: ${BB_STRIPE_SECRET_KEY:-}
+      BUILDER_STRIPE_WEBHOOK_SECRET: ${BB_STRIPE_WEBHOOK_SECRET:-}
+      BUILDER_STRIPE_PRICE_IDS: ${BB_STRIPE_PRICE_IDS:-{}}
       BUILDER_AI_API_KEY: ${BB_AI_API_KEY:-}
       BUILDER_AI_PLATFORM_KEY_ORGS: ${BB_AI_PLATFORM_KEY_ORGS:-[]}
     volumes:
