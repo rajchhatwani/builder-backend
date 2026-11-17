@@ -4,7 +4,7 @@ sys.path.insert(0, "/mnt/files/projects/builder-backend/final_test/harness")
 from mcp.client.streamable_http import streamable_http_client
 from mcp.client.session import ClientSession
 
-TUNNEL = "https://tunnel.example.test"
+TUNNEL = "https://cinderous-overfamiliar-sanford.ngrok-free.dev"
 MCP_URL = "http://127.0.0.1:8000/mcp/"
 
 with open("/tmp/claude-1000/-mnt-files-projects-builder-backend/93af46a5-8476-4fb5-9045-ae58628efbc7/scratchpad/mcp_tokens2.json") as f:

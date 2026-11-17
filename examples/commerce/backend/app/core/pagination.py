@@ -24,7 +24,7 @@ def page_params(default_limit: int, max_limit: int) -> Callable[..., PageParams]
 
     def dependency(
         limit: Annotated[int, Query(ge=1, le=max_limit)] = default_limit,
-        offset: Annotated[int, Query(ge=0, le=2_147_483_647)] = 0,
+        offset: Annotated[int, Query(ge=0)] = 0,
     ) -> PageParams:
         return PageParams(limit=limit, offset=offset)
 

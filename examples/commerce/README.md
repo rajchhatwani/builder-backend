@@ -8,7 +8,7 @@ data. It exists to be built on (your frontend) and to show where the platform st
 | `blueprint.py` | The model: 32 entities, 32 relations, roles, sign-up fields and the permission matrix |
 | `build_commerce.py` | Creates the project in a running builder through its public API, validates it, saves the result |
 | `spec.json` | The exported spec of the project (the contract the generator renders) |
-| `backend/` | The generated project, ready to run (238 files; its own tests, migrations, Docker setup) |
+| `backend/` | The generated project, ready to run (219 files; its own tests, migrations, Docker setup) |
 | `populate_commerce.py` | Fills the running backend: stores, staff, customers, catalog, orders in every state |
 | `probe_limits.py` | Tries to break it; writes `probe_results.json` |
 | `USERS.md`, `seeded.json` | The seeded accounts (every password is `Demo-pass-2026!`) and ids |

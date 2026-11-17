@@ -1,7 +1,7 @@
 // Sign in through the Builder's SSO discovery and the real Okta page, headless. Usage:
 //   node okta_login.mjs <app-url> <email> <okta-password> [new-password-if-okta-forces-a-change] [screenshot.png]
 // Prints only: which step it reached and the final page headings/URL path (no tokens, no passwords).
-import puppeteer from '/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
+import puppeteer from '/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
 const [app, email, pw, newPw, shot] = process.argv.slice(2)
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome-stable', headless: 'new', args: ['--no-sandbox'] })

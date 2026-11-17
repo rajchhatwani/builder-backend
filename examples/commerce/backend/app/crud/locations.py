@@ -2,7 +2,6 @@
 
 from app.crud import _base as _crud_base
 from app.models.locations import Location
-from app.search import hooks as _search_hooks
 
 
 class LocationRepository(_crud_base.Repository[Location]):
@@ -14,9 +13,3 @@ class LocationRepository(_crud_base.Repository[Location]):
     eager = ("fulfillments", "inventory_levels")
     references = {}
     many_to_many = {}
-
-
-# Keeps the external search index in step (no-op with SEARCH_BACKEND=fts).
-LocationRepository.hooks = _search_hooks.attach(
-    "Location", ("name",), LocationRepository.hooks
-)

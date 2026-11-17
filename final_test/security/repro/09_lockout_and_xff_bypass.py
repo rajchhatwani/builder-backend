@@ -6,7 +6,7 @@ import bb
 api = bb.Api()
 
 def lockout_test():
-    email = "sectest-lockout-demo@example.test"
+    email = "sectest-lockout-demo@dumbpotato.com"
     pw = api.password()
     api.call("POST", "/account/register", {"email": email, "password": pw, "name": "x"})
     for i in range(5):
@@ -15,11 +15,11 @@ def lockout_test():
     print("6th attempt with CORRECT password after 5 failures:", st, b)
 
 def xff_bypass_test():
-    TUNNEL = "https://tunnel.example.test"
+    TUNNEL = "https://cinderous-overfamiliar-sanford.ngrok-free.dev"
     def login_with_xff(fake_ip, n):
         req = urllib.request.Request(
             TUNNEL + "/account/login",
-            json.dumps({"email": f"nouser{n}@example.test", "password": "whatever"}).encode(),
+            json.dumps({"email": f"nouser{n}@dumbpotato.com", "password": "whatever"}).encode(),
             {"Content-Type": "application/json", "ngrok-skip-browser-warning": "1", "X-Forwarded-For": fake_ip},
             method="POST",
         )

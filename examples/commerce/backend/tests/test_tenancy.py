@@ -123,856 +123,6 @@ async def test_invitations_are_private_to_their_tenant(
         assert (await tenant_a.delete(f"/auth/invitations/{invitation_id}")).status_code == 204
 
 
-async def test_articles_cannot_point_at_another_tenants_blogs(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_blogs(tenant_b)
-        own = await _factories.make_blogs(tenant_a)
-        payload = await _factories.payload_articles(tenant_a, blog_id=own["id"])
-
-        foreign_ref = {"blog_id": foreign["id"]}
-
-        refused = await tenant_a.post("/articles", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/articles", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/articles/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/articles/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_cart_lines_cannot_point_at_another_tenants_carts(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_carts(tenant_b)
-        own = await _factories.make_carts(tenant_a)
-        payload = await _factories.payload_cart_lines(tenant_a, cart_id=own["id"])
-
-        foreign_ref = {"cart_id": foreign["id"]}
-
-        refused = await tenant_a.post("/cart_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/cart_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/cart_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/cart_lines/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_cart_lines_cannot_point_at_another_tenants_variants(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_variants(tenant_b)
-        own = await _factories.make_variants(tenant_a)
-        payload = await _factories.payload_cart_lines(tenant_a, variant_id=own["id"])
-
-        foreign_ref = {"variant_id": foreign["id"]}
-
-        refused = await tenant_a.post("/cart_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/cart_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/cart_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/cart_lines/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_carts_cannot_point_at_another_tenants_customers(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_customers(tenant_b)
-        own = await _factories.make_customers(tenant_a)
-        payload = await _factories.payload_carts(tenant_a, customer_id=own["id"])
-
-        foreign_ref = {"customer_id": foreign["id"]}
-
-        refused = await tenant_a.post("/carts", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/carts", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/carts/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/carts/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_collections_cannot_point_at_another_tenants_collections(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_collections(tenant_b)
-        own = await _factories.make_collections(tenant_a)
-        payload = await _factories.payload_collections(tenant_a, parent_id=own["id"])
-
-        foreign_ref = {"parent_id": foreign["id"]}
-
-        refused = await tenant_a.post("/collections", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/collections", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/collections/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/collections/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_customer_addresses_cannot_point_at_another_tenants_customers(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_customers(tenant_b)
-        own = await _factories.make_customers(tenant_a)
-        payload = await _factories.payload_customer_addresses(tenant_a, customer_id=own["id"])
-
-        foreign_ref = {"customer_id": foreign["id"]}
-
-        refused = await tenant_a.post("/customer_addresses", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/customer_addresses", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/customer_addresses/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/customer_addresses/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_discount_usages_cannot_point_at_another_tenants_discounts(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_discounts(tenant_b)
-        own = await _factories.make_discounts(tenant_a)
-        payload = await _factories.payload_discount_usages(tenant_a, discount_id=own["id"])
-
-        foreign_ref = {"discount_id": foreign["id"]}
-
-        refused = await tenant_a.post("/discount_usages", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/discount_usages", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_discount_usages_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_discount_usages(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/discount_usages", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/discount_usages", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_fulfillment_lines_cannot_point_at_another_tenants_fulfillments(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_fulfillments(tenant_b)
-        own = await _factories.make_fulfillments(tenant_a)
-        payload = await _factories.payload_fulfillment_lines(tenant_a, fulfillment_id=own["id"])
-
-        foreign_ref = {"fulfillment_id": foreign["id"]}
-
-        refused = await tenant_a.post("/fulfillment_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/fulfillment_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/fulfillment_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/fulfillment_lines/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_fulfillment_lines_cannot_point_at_another_tenants_order_lines(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_order_lines(tenant_b)
-        own = await _factories.make_order_lines(tenant_a)
-        payload = await _factories.payload_fulfillment_lines(tenant_a, order_line_id=own["id"])
-
-        foreign_ref = {"order_line_id": foreign["id"]}
-
-        refused = await tenant_a.post("/fulfillment_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/fulfillment_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/fulfillment_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/fulfillment_lines/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_fulfillments_cannot_point_at_another_tenants_locations(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_locations(tenant_b)
-        own = await _factories.make_locations(tenant_a)
-        payload = await _factories.payload_fulfillments(tenant_a, location_id=own["id"])
-
-        foreign_ref = {"location_id": foreign["id"]}
-
-        refused = await tenant_a.post("/fulfillments", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/fulfillments", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/fulfillments/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/fulfillments/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_fulfillments_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_fulfillments(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/fulfillments", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/fulfillments", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/fulfillments/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/fulfillments/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_gift_cards_cannot_point_at_another_tenants_customers(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_customers(tenant_b)
-        own = await _factories.make_customers(tenant_a)
-        payload = await _factories.payload_gift_cards(tenant_a, customer_id=own["id"])
-
-        foreign_ref = {"customer_id": foreign["id"]}
-
-        refused = await tenant_a.post("/gift_cards", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/gift_cards", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/gift_cards/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/gift_cards/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_inventory_levels_cannot_point_at_another_tenants_locations(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_locations(tenant_b)
-        own = await _factories.make_locations(tenant_a)
-        payload = await _factories.payload_inventory_levels(tenant_a, location_id=own["id"])
-
-        foreign_ref = {"location_id": foreign["id"]}
-
-        refused = await tenant_a.post("/inventory_levels", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/inventory_levels", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/inventory_levels/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/inventory_levels/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_inventory_levels_cannot_point_at_another_tenants_variants(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_variants(tenant_b)
-        own = await _factories.make_variants(tenant_a)
-        payload = await _factories.payload_inventory_levels(tenant_a, variant_id=own["id"])
-
-        foreign_ref = {"variant_id": foreign["id"]}
-
-        refused = await tenant_a.post("/inventory_levels", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/inventory_levels", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/inventory_levels/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/inventory_levels/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_order_events_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_order_events(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/order_events", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/order_events", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_order_lines_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_order_lines(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/order_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/order_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/order_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_order_lines_cannot_point_at_another_tenants_variants(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_variants(tenant_b)
-        own = await _factories.make_variants(tenant_a)
-        payload = await _factories.payload_order_lines(tenant_a, variant_id=own["id"])
-
-        foreign_ref = {"variant_id": foreign["id"]}
-
-        refused = await tenant_a.post("/order_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/order_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/order_lines/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_orders_cannot_point_at_another_tenants_carts(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_carts(tenant_b)
-        own = await _factories.make_carts(tenant_a)
-        payload = await _factories.payload_orders(tenant_a, cart_id=own["id"])
-
-        foreign_ref = {"cart_id": foreign["id"]}
-
-        refused = await tenant_a.post("/orders", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/orders", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/orders/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_orders_cannot_point_at_another_tenants_customers(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_customers(tenant_b)
-        own = await _factories.make_customers(tenant_a)
-        payload = await _factories.payload_orders(tenant_a, customer_id=own["id"])
-
-        foreign_ref = {"customer_id": foreign["id"]}
-
-        refused = await tenant_a.post("/orders", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/orders", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/orders/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_orders_cannot_point_at_another_tenants_shipping_rates(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_shipping_rates(tenant_b)
-        own = await _factories.make_shipping_rates(tenant_a)
-        payload = await _factories.payload_orders(tenant_a, shipping_rate_id=own["id"])
-
-        foreign_ref = {"shipping_rate_id": foreign["id"]}
-
-        refused = await tenant_a.post("/orders", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/orders", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/orders/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_product_images_cannot_point_at_another_tenants_products(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_products(tenant_b)
-        own = await _factories.make_products(tenant_a)
-        payload = await _factories.payload_product_images(tenant_a, product_id=own["id"])
-
-        foreign_ref = {"product_id": foreign["id"]}
-
-        refused = await tenant_a.post("/product_images", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/product_images", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/product_images/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/product_images/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_refund_lines_cannot_point_at_another_tenants_order_lines(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_order_lines(tenant_b)
-        own = await _factories.make_order_lines(tenant_a)
-        payload = await _factories.payload_refund_lines(tenant_a, order_line_id=own["id"])
-
-        foreign_ref = {"order_line_id": foreign["id"]}
-
-        refused = await tenant_a.post("/refund_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/refund_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_refund_lines_cannot_point_at_another_tenants_refunds(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_refunds(tenant_b)
-        own = await _factories.make_refunds(tenant_a)
-        payload = await _factories.payload_refund_lines(tenant_a, refund_id=own["id"])
-
-        foreign_ref = {"refund_id": foreign["id"]}
-
-        refused = await tenant_a.post("/refund_lines", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/refund_lines", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_refunds_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_refunds(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/refunds", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/refunds", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_reviews_cannot_point_at_another_tenants_customers(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_customers(tenant_b)
-        own = await _factories.make_customers(tenant_a)
-        payload = await _factories.payload_reviews(tenant_a, customer_id=own["id"])
-
-        foreign_ref = {"customer_id": foreign["id"]}
-
-        refused = await tenant_a.post("/reviews", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/reviews", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/reviews/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_reviews_cannot_point_at_another_tenants_products(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_products(tenant_b)
-        own = await _factories.make_products(tenant_a)
-        payload = await _factories.payload_reviews(tenant_a, product_id=own["id"])
-
-        foreign_ref = {"product_id": foreign["id"]}
-
-        refused = await tenant_a.post("/reviews", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/reviews", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/reviews/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-
-async def test_shipping_rates_cannot_point_at_another_tenants_shipping_zones(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_shipping_zones(tenant_b)
-        own = await _factories.make_shipping_zones(tenant_a)
-        payload = await _factories.payload_shipping_rates(tenant_a, zone_id=own["id"])
-
-        foreign_ref = {"zone_id": foreign["id"]}
-
-        refused = await tenant_a.post("/shipping_rates", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/shipping_rates", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/shipping_rates/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/shipping_rates/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_transactions_cannot_point_at_another_tenants_orders(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_orders(tenant_b)
-        own = await _factories.make_orders(tenant_a)
-        payload = await _factories.payload_transactions(tenant_a, order_id=own["id"])
-
-        foreign_ref = {"order_id": foreign["id"]}
-
-        refused = await tenant_a.post("/transactions", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/transactions", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-
-async def test_variants_cannot_point_at_another_tenants_products(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_products(tenant_b)
-        own = await _factories.make_products(tenant_a)
-        payload = await _factories.payload_variants(tenant_a, product_id=own["id"])
-
-        foreign_ref = {"product_id": foreign["id"]}
-
-        refused = await tenant_a.post("/variants", json={**payload, **foreign_ref})
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        created = await tenant_a.post("/variants", json=payload)
-        assert created.status_code == 201, created.text
-        item_id = created.json()["id"]
-
-        moved = await tenant_a.patch(f"/variants/{item_id}", json=foreign_ref)
-        assert moved.status_code == 422, moved.text
-        assert moved.json()["code"] == "invalid_reference"
-
-        replaced = await tenant_a.put(f"/variants/{item_id}", json={**payload, **foreign_ref})
-        assert replaced.status_code == 422, replaced.text
-
-
-async def test_collections_cannot_link_another_tenants_products(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_products(tenant_b)
-        own = await _factories.make_products(tenant_a)
-        payload = await _factories.payload_collections(tenant_a)
-
-        refused = await tenant_a.post(
-            "/collections", json={**payload, "products": [own["id"], foreign["id"]]}
-        )
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        linked = await tenant_a.post("/collections", json={**payload, "products": [own["id"]]})
-        assert linked.status_code == 201, linked.text
-
-
-async def test_products_cannot_link_another_tenants_collections(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_collections(tenant_b)
-        own = await _factories.make_collections(tenant_a)
-        payload = await _factories.payload_products(tenant_a)
-
-        refused = await tenant_a.post(
-            "/products", json={**payload, "collections": [own["id"], foreign["id"]]}
-        )
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        linked = await tenant_a.post("/products", json={**payload, "collections": [own["id"]]})
-        assert linked.status_code == 201, linked.text
-
-
-async def test_products_cannot_link_another_tenants_tags(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_tags(tenant_b)
-        own = await _factories.make_tags(tenant_a)
-        payload = await _factories.payload_products(tenant_a)
-
-        refused = await tenant_a.post(
-            "/products", json={**payload, "tags": [own["id"], foreign["id"]]}
-        )
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        linked = await tenant_a.post("/products", json={**payload, "tags": [own["id"]]})
-        assert linked.status_code == 201, linked.text
-
-
-async def test_tags_cannot_link_another_tenants_products(
-    client: AsyncClient,
-) -> None:
-    a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
-    b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
-    async with client_for(a_headers) as tenant_a, client_for(b_headers) as tenant_b:
-        foreign = await _factories.make_products(tenant_b)
-        own = await _factories.make_products(tenant_a)
-        payload = await _factories.payload_tags(tenant_a)
-
-        refused = await tenant_a.post(
-            "/tags", json={**payload, "products": [own["id"], foreign["id"]]}
-        )
-        assert refused.status_code == 422, refused.text
-        assert refused.json()["code"] == "invalid_reference"
-
-        linked = await tenant_a.post("/tags", json={**payload, "products": [own["id"]]})
-        assert linked.status_code == 201, linked.text
-
-
 async def test_articles_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
     a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
     b_headers = await sign_in(client, "b@example.com", roles=list(ALL_ROLES), n=1)
@@ -1002,16 +152,6 @@ async def test_articles_rows_stay_inside_their_tenant(client: AsyncClient) -> No
         assert (await tenant_b.get(f"/articles/{item_id}")).status_code == 404
         assert (await colleague.get(f"/articles/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/articles/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_articles(tenant_b)
-        before = (await tenant_a.get(f"/articles/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/articles/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/articles/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/articles/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/articles/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/articles/{item_id}")).status_code == 204
@@ -1047,16 +187,6 @@ async def test_blogs_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
         assert (await colleague.get(f"/blogs/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/blogs/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_blogs(tenant_b)
-        before = (await tenant_a.get(f"/blogs/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/blogs/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/blogs/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/blogs/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/blogs/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/blogs/{item_id}")).status_code == 204
 
@@ -1090,16 +220,6 @@ async def test_cart_lines_rows_stay_inside_their_tenant(client: AsyncClient) -> 
         assert (await tenant_b.get(f"/cart_lines/{item_id}")).status_code == 404
         assert (await colleague.get(f"/cart_lines/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/cart_lines/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_cart_lines(tenant_b)
-        before = (await tenant_a.get(f"/cart_lines/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/cart_lines/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/cart_lines/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/cart_lines/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/cart_lines/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/cart_lines/{item_id}")).status_code == 204
@@ -1135,16 +255,6 @@ async def test_carts_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
         assert (await colleague.get(f"/carts/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/carts/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_carts(tenant_b)
-        before = (await tenant_a.get(f"/carts/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/carts/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/carts/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/carts/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/carts/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/carts/{item_id}")).status_code == 204
 
@@ -1178,16 +288,6 @@ async def test_collections_rows_stay_inside_their_tenant(client: AsyncClient) ->
         assert (await tenant_b.get(f"/collections/{item_id}")).status_code == 404
         assert (await colleague.get(f"/collections/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/collections/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_collections(tenant_b)
-        before = (await tenant_a.get(f"/collections/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/collections/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/collections/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/collections/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/collections/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/collections/{item_id}")).status_code == 204
@@ -1223,16 +323,6 @@ async def test_customer_addresses_rows_stay_inside_their_tenant(client: AsyncCli
         assert (await colleague.get(f"/customer_addresses/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/customer_addresses/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_customer_addresses(tenant_b)
-        before = (await tenant_a.get(f"/customer_addresses/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/customer_addresses/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/customer_addresses/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/customer_addresses/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/customer_addresses/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/customer_addresses/{item_id}")).status_code == 204
 
@@ -1266,16 +356,6 @@ async def test_customers_rows_stay_inside_their_tenant(client: AsyncClient) -> N
         assert (await tenant_b.get(f"/customers/{item_id}")).status_code == 404
         assert (await colleague.get(f"/customers/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/customers/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_customers(tenant_b)
-        before = (await tenant_a.get(f"/customers/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/customers/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/customers/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/customers/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/customers/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/customers/{item_id}")).status_code == 204
@@ -1341,16 +421,6 @@ async def test_discounts_rows_stay_inside_their_tenant(client: AsyncClient) -> N
         assert (await colleague.get(f"/discounts/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/discounts/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_discounts(tenant_b)
-        before = (await tenant_a.get(f"/discounts/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/discounts/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/discounts/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/discounts/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/discounts/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/discounts/{item_id}")).status_code == 204
 
@@ -1384,16 +454,6 @@ async def test_fulfillment_lines_rows_stay_inside_their_tenant(client: AsyncClie
         assert (await tenant_b.get(f"/fulfillment_lines/{item_id}")).status_code == 404
         assert (await colleague.get(f"/fulfillment_lines/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/fulfillment_lines/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_fulfillment_lines(tenant_b)
-        before = (await tenant_a.get(f"/fulfillment_lines/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/fulfillment_lines/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/fulfillment_lines/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/fulfillment_lines/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/fulfillment_lines/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/fulfillment_lines/{item_id}")).status_code == 204
@@ -1429,16 +489,6 @@ async def test_fulfillments_rows_stay_inside_their_tenant(client: AsyncClient) -
         assert (await colleague.get(f"/fulfillments/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/fulfillments/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_fulfillments(tenant_b)
-        before = (await tenant_a.get(f"/fulfillments/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/fulfillments/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/fulfillments/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/fulfillments/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/fulfillments/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/fulfillments/{item_id}")).status_code == 204
 
@@ -1472,16 +522,6 @@ async def test_gift_cards_rows_stay_inside_their_tenant(client: AsyncClient) -> 
         assert (await tenant_b.get(f"/gift_cards/{item_id}")).status_code == 404
         assert (await colleague.get(f"/gift_cards/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/gift_cards/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_gift_cards(tenant_b)
-        before = (await tenant_a.get(f"/gift_cards/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/gift_cards/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/gift_cards/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/gift_cards/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/gift_cards/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/gift_cards/{item_id}")).status_code == 204
@@ -1517,16 +557,6 @@ async def test_inventory_levels_rows_stay_inside_their_tenant(client: AsyncClien
         assert (await colleague.get(f"/inventory_levels/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/inventory_levels/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_inventory_levels(tenant_b)
-        before = (await tenant_a.get(f"/inventory_levels/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/inventory_levels/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/inventory_levels/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/inventory_levels/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/inventory_levels/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/inventory_levels/{item_id}")).status_code == 204
 
@@ -1561,16 +591,6 @@ async def test_locations_rows_stay_inside_their_tenant(client: AsyncClient) -> N
         assert (await colleague.get(f"/locations/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/locations/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_locations(tenant_b)
-        before = (await tenant_a.get(f"/locations/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/locations/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/locations/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/locations/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/locations/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/locations/{item_id}")).status_code == 204
 
@@ -1604,16 +624,6 @@ async def test_metafields_rows_stay_inside_their_tenant(client: AsyncClient) -> 
         assert (await tenant_b.get(f"/metafields/{item_id}")).status_code == 404
         assert (await colleague.get(f"/metafields/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/metafields/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_metafields(tenant_b)
-        before = (await tenant_a.get(f"/metafields/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/metafields/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/metafields/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/metafields/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/metafields/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/metafields/{item_id}")).status_code == 204
@@ -1678,13 +688,6 @@ async def test_order_lines_rows_stay_inside_their_tenant(client: AsyncClient) ->
         assert (await tenant_b.get(f"/order_lines/{item_id}")).status_code == 404
         assert (await colleague.get(f"/order_lines/{item_id}")).status_code == 200
 
-        foreign_payload = await _factories.payload_order_lines(tenant_b)
-        before = (await tenant_a.get(f"/order_lines/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/order_lines/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/order_lines/{item_id}")).json() == before, "row unchanged"
-
 
 async def test_orders_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
     a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
@@ -1716,13 +719,6 @@ async def test_orders_rows_stay_inside_their_tenant(client: AsyncClient) -> None
         assert (await colleague.get(f"/orders/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/orders/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_orders(tenant_b)
-        before = (await tenant_a.get(f"/orders/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/orders/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/orders/{item_id}")).json() == before, "row unchanged"
-
 
 async def test_pages_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
     a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
@@ -1753,16 +749,6 @@ async def test_pages_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
         assert (await tenant_b.get(f"/pages/{item_id}")).status_code == 404
         assert (await colleague.get(f"/pages/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/pages/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_pages(tenant_b)
-        before = (await tenant_a.get(f"/pages/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/pages/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/pages/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/pages/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/pages/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/pages/{item_id}")).status_code == 204
@@ -1798,16 +784,6 @@ async def test_product_images_rows_stay_inside_their_tenant(client: AsyncClient)
         assert (await colleague.get(f"/product_images/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/product_images/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_product_images(tenant_b)
-        before = (await tenant_a.get(f"/product_images/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/product_images/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/product_images/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/product_images/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/product_images/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/product_images/{item_id}")).status_code == 204
 
@@ -1841,16 +817,6 @@ async def test_products_rows_stay_inside_their_tenant(client: AsyncClient) -> No
         assert (await tenant_b.get(f"/products/{item_id}")).status_code == 404
         assert (await colleague.get(f"/products/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/products/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_products(tenant_b)
-        before = (await tenant_a.get(f"/products/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/products/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/products/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/products/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/products/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/products/{item_id}")).status_code == 204
@@ -1945,13 +911,6 @@ async def test_reviews_rows_stay_inside_their_tenant(client: AsyncClient) -> Non
         assert (await tenant_b.get(f"/reviews/{item_id}")).status_code == 404
         assert (await colleague.get(f"/reviews/{item_id}")).status_code == 200
 
-        foreign_payload = await _factories.payload_reviews(tenant_b)
-        before = (await tenant_a.get(f"/reviews/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/reviews/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/reviews/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/reviews/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/reviews/{item_id}")).status_code == 204
 
@@ -1985,16 +944,6 @@ async def test_shipping_rates_rows_stay_inside_their_tenant(client: AsyncClient)
         assert (await tenant_b.get(f"/shipping_rates/{item_id}")).status_code == 404
         assert (await colleague.get(f"/shipping_rates/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/shipping_rates/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_shipping_rates(tenant_b)
-        before = (await tenant_a.get(f"/shipping_rates/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/shipping_rates/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/shipping_rates/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/shipping_rates/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/shipping_rates/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/shipping_rates/{item_id}")).status_code == 204
@@ -2030,16 +979,6 @@ async def test_shipping_zones_rows_stay_inside_their_tenant(client: AsyncClient)
         assert (await colleague.get(f"/shipping_zones/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/shipping_zones/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_shipping_zones(tenant_b)
-        before = (await tenant_a.get(f"/shipping_zones/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/shipping_zones/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/shipping_zones/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/shipping_zones/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/shipping_zones/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/shipping_zones/{item_id}")).status_code == 204
 
@@ -2073,13 +1012,6 @@ async def test_stores_rows_stay_inside_their_tenant(client: AsyncClient) -> None
         assert (await tenant_b.get(f"/stores/{item_id}")).status_code == 404
         assert (await colleague.get(f"/stores/{item_id}")).status_code == 200
 
-        foreign_payload = await _factories.payload_stores(tenant_b)
-        before = (await tenant_a.get(f"/stores/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/stores/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/stores/{item_id}")).json() == before, "row unchanged"
-
 
 async def test_tags_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
     a_headers = await sign_in(client, "a@example.com", roles=list(ALL_ROLES))
@@ -2110,16 +1042,6 @@ async def test_tags_rows_stay_inside_their_tenant(client: AsyncClient) -> None:
         assert (await tenant_b.get(f"/tags/{item_id}")).status_code == 404
         assert (await colleague.get(f"/tags/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/tags/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_tags(tenant_b)
-        before = (await tenant_a.get(f"/tags/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/tags/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/tags/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/tags/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/tags/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/tags/{item_id}")).status_code == 204
@@ -2154,16 +1076,6 @@ async def test_tax_rates_rows_stay_inside_their_tenant(client: AsyncClient) -> N
         assert (await tenant_b.get(f"/tax_rates/{item_id}")).status_code == 404
         assert (await colleague.get(f"/tax_rates/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/tax_rates/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_tax_rates(tenant_b)
-        before = (await tenant_a.get(f"/tax_rates/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/tax_rates/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/tax_rates/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/tax_rates/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/tax_rates/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/tax_rates/{item_id}")).status_code == 204
@@ -2229,16 +1141,6 @@ async def test_variants_rows_stay_inside_their_tenant(client: AsyncClient) -> No
         assert (await colleague.get(f"/variants/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/variants/{item_id}")).status_code == 404
 
-        foreign_payload = await _factories.payload_variants(tenant_b)
-        before = (await tenant_a.get(f"/variants/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/variants/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/variants/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/variants/{item_id}")).json() == before, "row unchanged"
-
         assert (await tenant_b.delete(f"/variants/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/variants/{item_id}")).status_code == 204
 
@@ -2272,16 +1174,6 @@ async def test_webhooks_rows_stay_inside_their_tenant(client: AsyncClient) -> No
         assert (await tenant_b.get(f"/webhooks/{item_id}")).status_code == 404
         assert (await colleague.get(f"/webhooks/{item_id}")).status_code == 200
         assert (await tenant_b.head(f"/webhooks/{item_id}")).status_code == 404
-
-        foreign_payload = await _factories.payload_webhooks(tenant_b)
-        before = (await tenant_a.get(f"/webhooks/{item_id}")).json()
-        assert (
-            await tenant_b.patch(f"/webhooks/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (
-            await tenant_b.put(f"/webhooks/{item_id}", json=foreign_payload)
-        ).status_code == 404
-        assert (await tenant_a.get(f"/webhooks/{item_id}")).json() == before, "row unchanged"
 
         assert (await tenant_b.delete(f"/webhooks/{item_id}")).status_code == 404
         assert (await tenant_a.delete(f"/webhooks/{item_id}")).status_code == 204

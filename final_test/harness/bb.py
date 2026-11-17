@@ -6,7 +6,7 @@
     tok = api.customer("owner")             # roles: individual owner admin member outsider  (signs up first if needed)
     tok = api.staff("admin")                # roles: admin support (password + generated TOTP)
     status, body, headers = api.call("GET", "/orgs/bb-sso", token=tok)
-    msg = bb.wait_mail(to="bb_member@example.test", subject="invited", timeout=120)   # real inbox via IMAP
+    msg = bb.wait_mail(to="bb_member@dumbpotato.com", subject="invited", timeout=120)   # real inbox via IMAP
     msg["links"]                            # URLs found in the mail (an invite link carries a live token!)
 
 CLI:   python3 final_test/harness/bb.py roles | totp admin|support | mail --to X --subject Y [--wait 90]

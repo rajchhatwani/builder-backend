@@ -10,24 +10,24 @@ rec("J1.02b","dup register message does not confirm account existence", "already
 c,b,h = A.call("POST","/account/register",{"email":em.upper(),"password":PW,"name":"x"})
 expect("J1.03","e-mail case variant of existing account refused",(c,b,h),[409,400,422])
 for pw,lbl in [("short","short pw"),("a"*300,"300-char pw"),("",'empty pw'),("password","common pw"),("12345678","numeric pw")]:
-    c,b,h = A.call("POST","/account/register",{"email":f"bbf-pw{abs(hash(pw))%999}-{RUN}@example.test","password":pw,"name":"x"})
+    c,b,h = A.call("POST","/account/register",{"email":f"bbf-pw{abs(hash(pw))%999}-{RUN}@dumbpotato.com","password":pw,"name":"x"})
     expect("J1.04","weak/oversized password refused: "+lbl,(c,b,h),[400,422])
-for e in ["notanemail","a@b","@x.com","x@"+"a"*300+".com","","a b@c.com","ünï@example.test","ü@example.test"]:
+for e in ["notanemail","a@b","@x.com","x@"+"a"*300+".com","","a b@c.com","ünï@dumbpotato.com","ü@dumbpotato.com"]:
     c,b,h = A.call("POST","/account/register",{"email":e,"password":PW,"name":"x"})
     rec("J1.05","bad/odd email handled w/o 5xx: %r"%e[:30], c<500, f"HTTP {c}")
-c,b,h = A.call("POST","/account/register",{"email":f"bbf-<script>-{RUN}@example.test","password":PW,"name":"<img src=x onerror=alert(1)>"})
+c,b,h = A.call("POST","/account/register",{"email":f"bbf-<script>-{RUN}@dumbpotato.com","password":PW,"name":"<img src=x onerror=alert(1)>"})
 rec("J1.06","HTML in name accepted or cleanly refused",c in (201,422,400), f"HTTP {c}")
-c,b,h = A.call("POST","/account/register",{"email":f"bbf-nul-{RUN}@example.test","password":PW,"name":"a\u0000b"})
+c,b,h = A.call("POST","/account/register",{"email":f"bbf-nul-{RUN}@dumbpotato.com","password":PW,"name":"a\u0000b"})
 rec("J1.07","NUL char in name -> 4xx not 500",c<500,f"HTTP {c}")
 # login
 c,b,h = A.call("POST","/account/login",{"email":em,"password":PW}); expect("J1.10","login ok",(c,b,h),200)
 c,b,h = A.call("POST","/account/login",{"email":em.upper(),"password":PW}); expect("J1.11","login e-mail case-insensitive",(c,b,h),200)
 c,b,h = A.call("POST","/account/login",{"email":"  "+em+" ","password":PW}); rec("J1.12","login with surrounding whitespace -> 200 or clean 4xx",c in(200,401,422),f"HTTP {c}")
 c,b,h = A.call("POST","/account/login",{"email":em,"password":"wrongwrongwrong"}); expect("J1.13","wrong password 401",(c,b,h),401)
-c2,b2,_ = A.call("POST","/account/login",{"email":"nobody-%s@example.test"%RUN,"password":"wrongwrongwrong"})
+c2,b2,_ = A.call("POST","/account/login",{"email":"nobody-%s@dumbpotato.com"%RUN,"password":"wrongwrongwrong"})
 rec("J1.14","unknown user and wrong password give identical error body",(c,b.get("code"),b.get("message"))==(c2,b2.get("code"),b2.get("message")),f"{b} vs {b2}")
 c,b,h = A.call("POST","/account/login/discover",{"email":em}); rec("J1.15","discover for plain account: no SSO",c==200 and not b.get("sso"),f"{c} {b}")
-c,b,h = A.call("POST","/account/login/discover",{"email":"x@example.test"}); rec("J1.16","discover for SSO-domain email returns sso redirect",c==200 and (b.get("sso") or b.get("method") or "slug" in json.dumps(b) or "bb-sso" in json.dumps(b)),f"{c} {b}")
+c,b,h = A.call("POST","/account/login/discover",{"email":"x@dumbpotato.com"}); rec("J1.16","discover for SSO-domain email returns sso redirect",c==200 and (b.get("sso") or b.get("method") or "slug" in json.dumps(b) or "bb-sso" in json.dumps(b)),f"{c} {b}")
 # refresh / logout via cookie
 import urllib.request, urllib.error
 CK={}

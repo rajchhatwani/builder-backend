@@ -1,6 +1,6 @@
 from lib import *
 from urllib.parse import quote as q
-ow = A.login("bb-owner@example.test", PW); assert ow
+ow = A.login("bb-owner@dumbpotato.com", PW); assert ow
 ST = A.staff("admin")
 c, b, _ = call(ow, "POST", "/orgs/bb-sso/scim/token"); tk = b["token"]
 rec("J9.01", "owner issues SCIM token, shown once, hint afterwards", bool(tk) and "token" not in call(ow, "GET", "/orgs/bb-sso/scim")[1], "")
@@ -12,7 +12,7 @@ c, b = S.call("GET", "/ServiceProviderConfig"); rec("J9.04", "ServiceProviderCon
 for p in ("/ResourceTypes", "/Schemas", "/Users", "/Groups"):
     c, b = S.call("GET", p); rec("J9.05", f"GET {p}", c == 200, f"{c}")
 c, b = S.call("GET", "/Users/not-a-uuid"); rec("J9.06", "unknown/malformed user id 404 not 500", c in (404, 400), f"{c}")
-em = f"scim-{RUN}@example.test"
+em = f"scim-{RUN}@dumbpotato.com"
 body = {"schemas": ["urn:ietf:params:scim:schemas:core:2.0:User"], "userName": em, "name": {"givenName": "Sc", "familyName": "Im"}, "emails": [{"value": em, "primary": True}], "active": True, "externalId": "ext-" + RUN}
 c, u = S.call("POST", "/Users", body); rec("J9.10", "create user 201", c == 201, f"{c} {json.dumps(u)[:200]}"); uid = u.get("id")
 c, u2 = S.call("POST", "/Users", body); rec("J9.11", "duplicate userName 409", c == 409, f"{c}")
@@ -52,7 +52,7 @@ c, b = S.call("PATCH", f"/Users/{uid}", {"schemas": ["urn:ietf:params:scim:api:m
 c, b = S.call("PATCH", f"/Users/{uid}", {"schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations": [{"op": "bogus", "path": "x"}]}); rec("J9.45", "invalid PATCH op 4xx", 400 <= c < 500, f"{c}")
 c, b = S.call("PATCH", f"/Users/{uid}", {"Operations": [{"op": "replace", "path": "userName", "value": "other@gmail.com"}]}); rec("J9.46", "userName change to a foreign domain refused", c in (400, 403, 409, 422), f"{c}")
 # owner can never be touched
-c, b = S.call("GET", '/Users?filter=' + q('userName eq "bb-owner@example.test"')); oid_ = (b.get("Resources") or [{}])[0].get("id")
+c, b = S.call("GET", '/Users?filter=' + q('userName eq "bb-owner@dumbpotato.com"')); oid_ = (b.get("Resources") or [{}])[0].get("id")
 if oid_:
     c, b = S.call("PATCH", f"/Users/{oid_}", {"schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"], "Operations": [{"op": "replace", "path": "active", "value": False}]}); rec("J9.47", "IdP cannot deactivate the org owner", c in (400, 403, 409), f"{c} {json.dumps(b)[:150]}")
     c, b = S.call("DELETE", f"/Users/{oid_}"); rec("J9.48", "IdP cannot delete the org owner", c in (400, 403, 409), f"{c}")

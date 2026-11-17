@@ -4,7 +4,6 @@ from app.crud import _base as _crud_base
 from app.models.customers import Customer
 from app.models.products import Product
 from app.models.reviews import Review
-from app.search import hooks as _search_hooks
 
 
 class ReviewRepository(_crud_base.Repository[Review]):
@@ -16,9 +15,3 @@ class ReviewRepository(_crud_base.Repository[Review]):
     eager = ()
     references = {"customer_id": Customer, "product_id": Product}
     many_to_many = {}
-
-
-# Keeps the external search index in step (no-op with SEARCH_BACKEND=fts).
-ReviewRepository.hooks = _search_hooks.attach(
-    "Review", ("body", "title"), ReviewRepository.hooks
-)

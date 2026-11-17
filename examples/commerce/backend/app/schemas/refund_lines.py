@@ -8,15 +8,15 @@ import pydantic as _pd
 
 
 class RefundLineCreate(_pd.BaseModel):
-    quantity: int = _pd.Field(ge=1, le=2147483647)
-    subtotal: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
+    quantity: int = _pd.Field(ge=1)
+    subtotal: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
     order_line_id: _uuid.UUID
     refund_id: _uuid.UUID
 
 
 class RefundLineUpdate(_pd.BaseModel):
-    quantity: int | None = _pd.Field(default=None, ge=1, le=2147483647)
-    subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
+    quantity: int | None = _pd.Field(default=None, ge=1)
+    subtotal: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
     order_line_id: _uuid.UUID | None = None
     refund_id: _uuid.UUID | None = None
 

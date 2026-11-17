@@ -12,7 +12,7 @@ import fake_oidc_idp
 
 fake_oidc_idp.run()
 
-API = "https://tunnel.example.test"
+API = "https://cinderous-overfamiliar-sanford.ngrok-free.dev"
 SLUG = "bb-sso"
 CLIENT_ID = "test-client-id"
 REDIRECT_URI = f"{API}/sso/oidc/{SLUG}/callback"
@@ -71,7 +71,7 @@ def case(name, make_token, expect):
     RESULTS.append({"case": name, "status": st, "outcome": classify(loc), "location": loc[:160], "expect": expect})
 
 
-EMAIL = "bb-sso1@example.test"
+EMAIL = "bb-sso1@dumbpotato.com"
 
 # A: fully valid
 case(
@@ -135,7 +135,7 @@ def h_token(nonce):
     claims = {
         "iss": fake_oidc_idp.ISSUER, "aud": CLIENT_ID, "sub": "attacker",
         "iat": now, "exp": now + 300, "nonce": nonce,
-        "email": "bb-owner@example.test", "email_verified": True, "name": "Attacker",
+        "email": "bb-owner@dumbpotato.com", "email_verified": True, "name": "Attacker",
     }
     pubkey_pem = keys.cert.public_key().public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo,
@@ -156,7 +156,7 @@ def none_token(nonce):
     claims = {
         "iss": fake_oidc_idp.ISSUER, "aud": CLIENT_ID, "sub": "attacker",
         "iat": now, "exp": now + 300, "nonce": nonce,
-        "email": "bb-owner@example.test", "email_verified": True, "name": "Attacker",
+        "email": "bb-owner@dumbpotato.com", "email_verified": True, "name": "Attacker",
     }
     header = __import__("base64").urlsafe_b64encode(json.dumps({"alg": "none", "typ": "JWT"}).encode()).rstrip(b"=").decode()
     payload = __import__("base64").urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
@@ -167,7 +167,7 @@ case("I_alg_none", none_token, "REFUSED")
 # J: replay -- use the SAME (state, code) pair twice
 state_j, nonce_j, cj_j = start_login()
 code_j = f"code-replay-{int(time.time()*1000)}"
-fake_oidc_idp.CODES[code_j] = make_id_token(client_id=CLIENT_ID, nonce=nonce_j, email="bb-sso2@example.test", keys=keys, issuer=fake_oidc_idp.ISSUER)
+fake_oidc_idp.CODES[code_j] = make_id_token(client_id=CLIENT_ID, nonce=nonce_j, email="bb-sso2@dumbpotato.com", keys=keys, issuer=fake_oidc_idp.ISSUER)
 st1, loc1 = callback(state_j, code_j, cj_j)
 st2, loc2 = callback(state_j, code_j, cj_j)
 RESULTS.append({"case": "J_replay_same_state_and_code", "first": {"status": st1, "outcome": classify(loc1)},

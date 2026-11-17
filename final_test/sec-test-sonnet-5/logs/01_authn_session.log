@@ -1,4 +1,4 @@
-=== 01_authn_session against tunnel (https://tunnel.example.test) ===
+=== 01_authn_session against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
 [    Info] SOLID        authn/1.1: brute force lockout
 [    Info] SOLID        authn/1.2: lockout bucketing by case/unicode email variant
 [    High] CONFIRMED    authn/1.3: client IP trust through the Caddy+ngrok proxy chain (and the per-IP rate limiter it feeds)

@@ -1,4 +1,4 @@
-=== 06_sso_scim against tunnel (https://tunnel.example.test) ===
+=== 06_sso_scim against tunnel (https://cinderous-overfamiliar-sanford.ngrok-free.dev) ===
 [     Low] NOT_TESTABLE sso/test_saml_baseline_and_negatives: test_saml_baseline_and_negatives
 [     Low] NOT_TESTABLE sso/test_saml_signature_wrapping: test_saml_signature_wrapping
 [Critical] CONFIRMED    sso/6.3: SAML XXE/DOCTYPE in the Response is rejected outright

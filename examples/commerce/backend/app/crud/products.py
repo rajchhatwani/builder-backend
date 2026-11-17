@@ -4,7 +4,6 @@ from app.crud import _base as _crud_base
 from app.models.collections import Collection
 from app.models.products import Product
 from app.models.tags import Tag
-from app.search import hooks as _search_hooks
 
 
 class ProductRepository(_crud_base.Repository[Product]):
@@ -16,9 +15,3 @@ class ProductRepository(_crud_base.Repository[Product]):
     eager = ("collections", "images", "reviews", "tags", "variants")
     references = {}
     many_to_many = {"collections": Collection, "tags": Tag}
-
-
-# Keeps the external search index in step (no-op with SEARCH_BACKEND=fts).
-ProductRepository.hooks = _search_hooks.attach(
-    "Product", ("handle", "title", "vendor"), ProductRepository.hooks
-)

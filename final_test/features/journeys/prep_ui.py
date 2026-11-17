@@ -11,6 +11,6 @@ for i in range(3):
     print(c, str(p)[:150]) if c != 201 else None
 pid = p["id"]
 c, e, _ = call(ot, "POST", f"/projects/{pid}/entities", {"name": "Book"}); call(ot, "POST", f"/entities/{e['id']}/fields", {"name": "title", "type": "string", "required": True})
-call(ot, "POST", f"/orgs/{slug}/invitations", {"email": f"pend-{RUN}@example.test", "role": "member"})
+call(ot, "POST", f"/orgs/{slug}/invitations", {"email": f"pend-{RUN}@dumbpotato.com", "role": "member"})
 json.dump({"owner": oe, "admin": ae, "member": me, "outsider": xe, "slug": slug, "oid": oid, "pid": pid, "run": RUN}, open(HERE.parent / "logs" / "ui_state.json", "w"))
 print("ok", slug)

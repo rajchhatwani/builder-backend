@@ -5,7 +5,7 @@ import pkgutil
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app import custom_routers
@@ -14,10 +14,9 @@ from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
 from app.auth.router import router as _auth_router
 from app.config import get_settings
-from app.core.errors import register_exception_handlers, reject_nul_characters
+from app.core.errors import register_exception_handlers
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
-from app.imports.router import router as _imports_router
 from app.routers._health import router as _health_router
 from app.routers.articles import router as articles_router
 from app.routers.blogs import router as blogs_router
@@ -51,15 +50,12 @@ from app.routers.tax_rates import router as tax_rates_router
 from app.routers.transactions import router as transactions_router
 from app.routers.variants import router as variants_router
 from app.routers.webhooks import router as webhooks_router
-from app.search import config as _search_config
-from app.search.router import router as _search_router
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_auth_settings()  # a missing secret stops the app here, with a clear message
     await ensure_provider_lock()  # refuses to start on a database used by another provider
-    _search_config.check_boot()  # an unknown backend, or opensearch without SEARCH_OPENSEARCH_URL, stops the app here
     yield
     await engine.dispose()
 
@@ -77,12 +73,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
     configure_logging(settings.log_level)
 
-    app = FastAPI(
-        title='Commerce',
-        version="0.1.0",
-        lifespan=lifespan,
-        dependencies=[Depends(reject_nul_characters)],
-    )
+    app = FastAPI(title='Commerce', version="0.1.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
@@ -94,8 +85,6 @@ def create_app() -> FastAPI:
     register_exception_handlers(app)
     app.include_router(_health_router)
     app.include_router(_auth_router)
-    app.include_router(_search_router)  # before the entity routers: `/<entity>/search` is not an item id
-    app.include_router(_imports_router)  # before the entity routers: `/<entity>/import` is not an item id
     app.include_router(articles_router)
     app.include_router(blogs_router)
     app.include_router(cart_lines_router)

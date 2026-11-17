@@ -9,8 +9,8 @@ import pydantic as _pd
 
 class GiftCardCreate(_pd.BaseModel):
     code: str = _pd.Field(max_length=32)
-    initial_value: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
-    balance: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0, max_digits=18, decimal_places=6)
+    initial_value: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
+    balance: _decimal.Decimal = _pd.Field(default=_decimal.Decimal('0'), ge=0)
     currency: str = _pd.Field(max_length=3)
     expires_on: _dt.date | None = _pd.Field(default=None)
     disabled: bool | None = _pd.Field(default=False)
@@ -20,8 +20,8 @@ class GiftCardCreate(_pd.BaseModel):
 
 class GiftCardUpdate(_pd.BaseModel):
     code: str | None = _pd.Field(default=None, max_length=32)
-    initial_value: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
-    balance: _decimal.Decimal | None = _pd.Field(default=None, ge=0, max_digits=18, decimal_places=6)
+    initial_value: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
+    balance: _decimal.Decimal | None = _pd.Field(default=None, ge=0)
     currency: str | None = _pd.Field(default=None, max_length=3)
     expires_on: _dt.date | None = _pd.Field(default=None)
     disabled: bool | None = _pd.Field(default=None)

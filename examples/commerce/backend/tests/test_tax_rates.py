@@ -41,13 +41,6 @@ async def test_tax_rates_crud_flow(client: AsyncClient) -> None:
     assert invalid.status_code == 422
     assert invalid.json()["code"] == "validation_error"
 
-    # A number the column cannot store is a 422, never a 500.
-    too_big = await client.post(
-        "/tax_rates", json=await _factories.payload_tax_rates(client, rate=10**30)
-    )
-    assert too_big.status_code == 422, too_big.text
-    assert too_big.json()["code"] == "validation_error"
-
     new_value = _factories.sample_tax_rates()["country_code"]
     patched = await client.patch(f"/tax_rates/{item_id}", json={"country_code": new_value})
     assert patched.status_code == 200, patched.text

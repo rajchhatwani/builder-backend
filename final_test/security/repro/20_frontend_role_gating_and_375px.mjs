@@ -1,10 +1,10 @@
-import puppeteer from '/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
+import puppeteer from '/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
 const EMAIL = process.argv[2]
 const PASSWORD = process.argv[3]
 const b = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome-stable', headless: 'new', args: ['--no-sandbox'] })
 const p = await b.newPage()
 await p.setExtraHTTPHeaders({ 'ngrok-skip-browser-warning': '1' })
-await p.goto('https://tunnel.example.test/#/login', { waitUntil: 'networkidle2', timeout: 45000 })
+await p.goto('https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/login', { waitUntil: 'networkidle2', timeout: 45000 })
 await new Promise(r => setTimeout(r, 1500))
 await p.type('input[type=email]', EMAIL)
 let buttons = await p.$$('button')
@@ -22,7 +22,7 @@ if (pwField) {
 await new Promise(r => setTimeout(r, 2500))
 
 // navigate to the bb-sso org page and look for admin-only controls (SSO/SCIM/Policies tabs, invite button, etc.)
-await p.goto('https://tunnel.example.test/#/org/bb-sso', { waitUntil: 'networkidle2', timeout: 45000 })
+await p.goto('https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/org/bb-sso', { waitUntil: 'networkidle2', timeout: 45000 })
 await new Promise(r => setTimeout(r, 1500))
 const orgPage = await p.evaluate(() => ({
   bodyText: document.body.innerText.slice(0, 1500),
@@ -31,14 +31,14 @@ const orgPage = await p.evaluate(() => ({
 console.log(JSON.stringify(orgPage, null, 1))
 
 // also directly try the SSO settings route as a member (should the UI even render it, and does the API 403/404 it)
-await p.goto('https://tunnel.example.test/#/org/bb-sso/sso', { waitUntil: 'networkidle2', timeout: 45000 })
+await p.goto('https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/org/bb-sso/sso', { waitUntil: 'networkidle2', timeout: 45000 })
 await new Promise(r => setTimeout(r, 1500))
 const ssoPage = await p.evaluate(() => document.body.innerText.slice(0, 500))
 console.log("SSO PAGE AS MEMBER:", JSON.stringify(ssoPage))
 
 // check viewport at 375px width for horizontal overflow
 await p.setViewport({ width: 375, height: 700 })
-await p.goto('https://tunnel.example.test/#/org/bb-sso', { waitUntil: 'networkidle2', timeout: 45000 })
+await p.goto('https://cinderous-overfamiliar-sanford.ngrok-free.dev/#/org/bb-sso', { waitUntil: 'networkidle2', timeout: 45000 })
 await new Promise(r => setTimeout(r, 1500))
 const overflow = await p.evaluate(() => ({
   scrollWidth: document.documentElement.scrollWidth,

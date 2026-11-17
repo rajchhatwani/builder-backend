@@ -2,8 +2,9 @@
 
 Internal FastAPI service that turns a structured spec (entities, fields, relations,
 endpoint options) into a complete, runnable FastAPI project you download as a zip.
-The running API documents itself at `/docs` (hidden outside `local`).
+See `VISION.md` for the long-term product and `PLAN.md` for the Phase 1 build plan.
 
+**Status: M5 (end-to-end proof) written; Phase 1 feature-complete pending a green e2e run.**
 Define a data model through the API (or the UI in `frontend/`), validate it, and download a
 runnable FastAPI project as a zip:
 
@@ -11,7 +12,8 @@ runnable FastAPI project as a zip:
   `POST /projects/{id}/validate`.
 - `POST /projects/{id}/generate/preview`, `GET /projects/{id}/generate/download` (zip, recorded),
   `GET /projects/{id}/generations`, `GET /generations/{id}`.
-- API reference: the interactive OpenAPI docs at `/docs` (or `scripts/dump_openapi.py` for the schema).
+- Postman collection: `postman/backend-builder.postman_collection.json` (start with the
+  "Blog demo" folder and run it in order).
 - UI: `cd frontend && npm install && npm run dev` (talks to `http://localhost:8000`). Open an
   entity to edit fields and API options; the project page validates, previews and downloads.
 
@@ -71,7 +73,8 @@ email / mobile flows, in `app/auth/` with its own migration (`0002_auth.py`) and
 
 A project can use **Keycloak** instead of the built-in auth. The generated backend then issues no
 tokens of its own: it only verifies Keycloak access tokens and applies your roles, permissions and
-row rules, so sign-in, passwords, MFA, social login and user management live in Keycloak.
+row rules, so sign-in, passwords, MFA, social login and user management live in Keycloak. The full
+design, decisions and verification notes are in `KEYCLOAK_PLAN.md`.
 
 - Configure over the API: `PUT/GET /projects/{id}/keycloak` (realm, client ids, redirect URLs,
   password / MFA / session / audit settings, identity providers), `GET .../keycloak/impact?action=`
@@ -101,7 +104,8 @@ row rules, so sign-in, passwords, MFA, social login and user management live in 
 
 A project can take **card payments** through a provider's hosted checkout (Stripe Checkout or Razorpay Payment
 Links). The generated backend gets a payment module, a **separately deployable worker**, and deployment files
-sized for the traffic you expect.
+sized for the traffic you expect. Design, decisions, phases and the verified / unverified list are in
+`PAYMENTS_PLAN.md`.
 
 - Configure over the API: `PUT/GET /projects/{id}/payments` (provider, the entity that is paid for and its amount /
   currency / status fields, currencies, return addresses, roles, refund-approval limit, expected load, security
@@ -131,7 +135,8 @@ sized for the traffic you expect.
 ### File uploads
 
 A project can accept **file uploads of any type** into an S3 bucket or any S3-compatible server (a MinIO you run,
-Ceph, SeaweedFS, Garage). Every file is checked and **scanned for malware (ClamAV) before it is stored**.
+Ceph, SeaweedFS, Garage). Every file is checked and **scanned for malware (ClamAV) before it is stored**. Design,
+research, decisions and the verified / unverified list are in `STORAGE_PLAN.md`.
 
 - Configure over the API: `PUT/GET /projects/{id}/storage` (S3 or MinIO-compatible, bucket, allowed types or any, size
   and quota limits, rate limit, proxy or presigned downloads, roles, audit retention),
@@ -189,7 +194,7 @@ editor with a condition builder and templates, the simulator and the coverage ma
 
 Known limits: no signed-out routes under abac/pbac; conditions cannot look at a parent record's attributes;
 an update must leave the row readable rather than satisfy the update policy a second time; behind a proxy run
-uvicorn with `--proxy-headers` so `client_ip` is the caller's address.
+uvicorn with `--proxy-headers` so `client_ip` is the caller's address (see MASTER_PLAN.md, L15-L20).
 
 ### Observability (OpenTelemetry)
 Optional, per project (dashboard section **Observability**, or the spec's `observability` block). When on, the
@@ -209,7 +214,7 @@ overlay with a collector, Jaeger and Prometheus: `docker compose -f docker-compo
 - Endpoints: `GET/PUT /projects/{id}/observability`, `GET .../observability/issues`.
 
 Known limits: logs are not exported over OTLP (ship stdout JSON; they correlate by trace id); the sampler is head-based;
-only the web process is instrumented (not the payments worker).
+only the web process is instrumented (not the payments worker); see MASTER_PLAN.md L23-L29.
 
 ### CI/CD and cloud deployment (AWS, Azure, Google Cloud)
 Optional, per project (dashboard section **Deploy**, or the spec's `deployment` block). When on, the generated project gets
@@ -235,7 +240,7 @@ one-time `bootstrap/` module, and `docs/DEPLOYMENT.md`.
 Checked in Docker with the real tools: `terraform fmt`, `init` and `validate` against the real provider schemas (aws 6, azurerm 5, google 8)
 for every stack and bootstrap, and `actionlint` for the workflows (`tests/e2e/test_deploy_bundles.py`). **`terraform apply` has not been run
 against a real account.** Not supported yet (validation refuses them): payments, file uploads with malware scanning, Redis token storage, a
-Keycloak server of its own.
+Keycloak server of its own. See MASTER_PLAN.md L30-L38.
 
 ### Tests
 
@@ -249,7 +254,7 @@ uv run pytest tests/e2e             # generated Blog/Library projects booted for
 
 `tests/e2e` needs Docker. `test_generated_project.py` applies the generated migration to a
 Postgres container, checks it for drift and reversibility, and runs the generated project's
-own smoke tests. `test_compose_stack.py` is the end-to-end demo: build Blog through
+own smoke tests. `test_compose_stack.py` is the PLAN.md section 1 demo: build Blog through
 the API, download the zip, `docker compose up --build`, drive the generated API over HTTP and
 run `make test`'s command inside the stack (several minutes; skipped without `docker compose`).
 
@@ -341,7 +346,8 @@ Configuration (all environment variables, see `/admin` -> Settings for the live 
 | `BUILDER_TRUST_PROXY_HEADERS` | `false` | set `true` only behind a proxy that overwrites `X-Forwarded-For` |
 | `BUILDER_MAX_REQUEST_BYTES` | 10 MiB | larger bodies get `413` |
 
-Known limits: in-process rate limiting is per worker (see "Not yet").
+Known limits are tracked in `MASTER_PLAN.md` section 6 (no e-mail verification or e-mailed password
+reset yet, no MFA, in-process rate limiting is per worker).
 
 ## Local development
 
@@ -351,7 +357,7 @@ cp .env.example .env          # adjust BUILDER_DATABASE_URL if not using docker 
 export SECRET_KEY=...         # signs sign-in tokens, encrypts stored credentials; read from the environment
                                # (unset in BUILDER_ENVIRONMENT=local: a temporary key is generated)
 
-uv run ruff check app         # lint (what scripts/gate.sh enforces)
+uv run ruff check .           # lint
 uv run mypy app alembic       # type check
 uv run pytest                 # unit tests (no DB) + API tests (spin up a Postgres
                                # testcontainer automatically -- Docker must be running)
@@ -405,8 +411,10 @@ tests/
 
 ## Not yet
 
-- Platform-level administration is limited to the staff console (`#/admin`); there is no cross-tenant super-admin inside a tenant's own data.
-- Email addresses are unique across all tenants of a generated project.
+- The builder API itself has no authentication (by design for Phase 1 — see `PLAN.md`
+  section 2); only the *generated* projects can have it.
+- Multi-tenancy does not add Postgres row-level security as a second line of defence, there is
+  no super-admin who spans tenants, and email addresses are unique across all tenants.
 - Credentials saved with `PUT /projects/{id}/auth/secrets` are encrypted at rest on the builder
   but nothing in generation uses them (the zip never contains secrets), and the dashboard has no
   form for them. Treat that endpoint as a vault until a use for it, such as sending a test

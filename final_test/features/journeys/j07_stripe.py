@@ -46,7 +46,7 @@ inv = {"customer": CUS, "subscription": SUB, "parent": {"subscription_details": 
 s, b = wh("invoice.payment_failed", inv, timestamp=now - 60); pl = plan(); rec("J7.30", "invoice.payment_failed -> past_due", pl[1] == "past_due", f"{pl[:2]}")
 c, b, _ = call(ot, "GET", f"/orgs/{slug}/plan"); rec("J7.31", "plan payload exposes status for the past_due banner", b["subscription"]["status"] == "past_due", "")
 c, b, _ = call(ot, "POST", "/projects", {"name": "pastdue-" + RUN, "organization_id": oid}); rec("J7.32", "past_due org: creating a project is blocked or allowed (record behaviour)", True, f"HTTP {c} {json.dumps(b)[:150]}")
-c, b, _ = call(ot, "POST", f"/orgs/{slug}/invitations", {"email": f"pd-{RUN}@example.test", "role": "member"}); rec("J7.33", "past_due org: inviting (record behaviour)", True, f"HTTP {c} {json.dumps(b)[:150]}")
+c, b, _ = call(ot, "POST", f"/orgs/{slug}/invitations", {"email": f"pd-{RUN}@dumbpotato.com", "role": "member"}); rec("J7.33", "past_due org: inviting (record behaviour)", True, f"HTTP {c} {json.dumps(b)[:150]}")
 s, b = wh("customer.subscription.updated", dict(bus, status="active"), timestamp=now - 40); pl = plan(); rec("J7.34", "recovery: subscription active again -> active", pl[1] == "active", f"{pl[:2]}")
 s, b = wh("customer.subscription.updated", dict(bus, status="past_due"), timestamp=now - 30); rec("J7.35", "subscription.updated past_due", plan()[1] == "past_due", f"{plan()[:2]}")
 s, b = wh("customer.subscription.updated", dict(bus, status="unpaid"), timestamp=now - 25); rec("J7.36", "status unpaid handled", s == 200, f"{plan()[:2]}")

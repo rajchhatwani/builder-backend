@@ -1,7 +1,6 @@
 """Generic async repository. Entity repositories only declare what is configurable."""
 
 import uuid
-from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any, ClassVar
 
@@ -12,7 +11,6 @@ from sqlalchemy.orm import selectinload
 
 from app.core.errors import AppError, ConflictError, NotFoundError
 from app.core.pagination import PageParams
-from app.crud.lifecycle import Hook, HookContext, run_stage
 from app.models._base import Base
 
 
@@ -28,11 +26,6 @@ class Repository[ModelT: Base]:
     references: ClassVar[dict[str, type[Base]]] = {}
     # payload key -> model of a many_to_many relationship set from a list of ids
     many_to_many: ClassVar[dict[str, type[Base]]] = {}
-    # payload keys that hold the id of an uploaded file, and the check each id must pass
-    file_fields: ClassVar[tuple[str, ...]] = ()
-    file_check: ClassVar[Callable[..., Awaitable[None]] | None] = None
-    # lifecycle hooks: stage (before_save | after_save | after_commit) -> async callables(ctx)
-    hooks: ClassVar[dict[str, tuple[Hook, ...]]] = {}
 
     def __init__(
         self,
@@ -41,9 +34,6 @@ class Repository[ModelT: Base]:
         scope: dict[str, Any] | None = None,
         owner_id: uuid.UUID | None = None,
         tenant_id: uuid.UUID | None = None,
-        caller_tenant_id: uuid.UUID | None = None,
-        caller: Any = None,
-        policy: Any = None,
     ) -> None:
         self.session = session
         # column -> value every read and write is restricted to (row-level access rules)
@@ -52,34 +42,16 @@ class Repository[ModelT: Base]:
         self.owner_id = owner_id
         # recorded as tenant_id on new rows
         self.tenant_id = tenant_id
-        # the caller's tenant: a reference may only point at rows of this tenant (see _inside_tenant)
-        self.caller_tenant_id = caller_tenant_id or tenant_id
-        # the signed-in user making the request (file fields are checked against them)
-        self.caller = caller
-        # abac / pbac: decides which rows are visible and checks what is written
-        self.policy = policy
 
     # --- query building -----------------------------------------------------------
 
     def _col(self, name: str) -> Any:
         return self.model.__table__.c[name]
 
-    def _row_alive(self) -> list[Any]:
-        """Only the soft-delete filter: for re-reading a row this request just wrote and already found
-        under the full scope (a custom_filter scope may no longer match the new values)."""
-        return [self._col("deleted_at").is_(None)] if self.soft_delete else []
-
-    def _target_alive(self, target: type[Base]) -> list[Any]:
-        """A reference / many_to_many target that was soft-deleted does not exist for new links."""
-        column = target.__table__.c.get("deleted_at")
-        return [] if column is None else [column.is_(None)]
-
-    def _alive(self, *, policy: bool = True, deleted: bool = False) -> list[Any]:
+    def _alive(self) -> list[Any]:
         """Conditions every query starts from: not soft-deleted, and inside the access scope."""
-        conditions = [self._col("deleted_at").is_(None)] if self.soft_delete and not deleted else []
+        conditions = [self._col("deleted_at").is_(None)] if self.soft_delete else []
         conditions.extend(self._col(name) == value for name, value in self.scope.items())
-        if policy and self.policy is not None:
-            conditions.extend(self.policy.row_conditions(self._col))
         return conditions
 
     def _loaders(self) -> list[Any]:
@@ -143,15 +115,10 @@ class Repository[ModelT: Base]:
         rows = (await self.session.execute(stmt)).scalars().all()
         return list(rows), total
 
-    async def get(self, item_id: uuid.UUID, *, policy: bool = True, include_deleted: bool = False) -> ModelT:
-        # policy=False: re-read a row this request just wrote. The write was already checked, and the
-        # operation's own row filter may no longer match it (an update that closes a ticket).
+    async def get(self, item_id: uuid.UUID) -> ModelT:
         stmt = (
             sa.select(self.model)
-            .where(
-                self._col("id") == item_id,
-                *(self._alive(deleted=include_deleted) if policy else self._row_alive()),
-            )
+            .where(self._col("id") == item_id, *self._alive())
             .options(*self._loaders())
             .execution_options(populate_existing=True)
         )
@@ -167,26 +134,17 @@ class Repository[ModelT: Base]:
     # --- writes --------------------------------------------------------------------
 
     async def create(self, data: dict[str, Any]) -> ModelT:
-        ctx = self._ctx("create", dict(data))
-        await run_stage("before_save", self.hooks, ctx)
-        values = ctx.values
+        values = dict(data)
         if self.owner_id is not None:
             values["created_by_id"] = self.owner_id
         if self.tenant_id is not None:
             values["tenant_id"] = self.tenant_id
-        ctx.trace.append("guards")
-        if self.policy is not None:
-            self.policy.check_new_row(values)
-        ctx.trace.append("validate")
         related = await self._pop_related(values)
         await self._check_references(values)
-        ctx.trace.append("write")
         item = self.model(**values, **related)
         self.session.add(item)
-        await self._flush()
-        ctx.item = item
-        await self._finish(ctx)
-        return await self.get(item.id, policy=False)  # type: ignore[attr-defined]
+        await self._commit()
+        return await self.get(item.id)  # type: ignore[attr-defined]
 
     async def replace(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
         return await self._apply(item_id, data)
@@ -201,59 +159,21 @@ class Repository[ModelT: Base]:
         item = (await self.session.execute(stmt)).scalars().first()
         if item is None:
             raise NotFoundError(f"{self.model.__name__} {item_id} not found")
-        ctx = self._ctx("delete", {})
-        ctx.item = item
-        await run_stage("before_save", self.hooks, ctx)
-        ctx.trace.extend(("guards", "validate", "write"))
         if self.soft_delete:
             item.deleted_at = datetime.now(UTC)  # type: ignore[attr-defined]
         else:
             await self.session.delete(item)
-        await self._flush()
-        await self._finish(ctx)
+        await self._commit()
 
     async def _apply(self, item_id: uuid.UUID, data: dict[str, Any]) -> ModelT:
         item = await self.get(item_id)
-        ctx = self._ctx("update", dict(data))
-        ctx.item = item
-        await run_stage("before_save", self.hooks, ctx)
-        values = ctx.values
-        ctx.trace.append("guards")
-        if self.policy is not None:
-            before = {c.name: getattr(item, c.name) for c in self.model.__table__.columns}
-            self.policy.check_changed_row({**before, **values})
-        ctx.trace.append("validate")
+        values = dict(data)
         related = await self._pop_related(values)
         await self._check_references(values)
-        ctx.trace.append("write")
         for key, value in {**values, **related}.items():
             setattr(item, key, value)
-        await self._flush()
-        await self._finish(ctx)
-        return await self.get(item_id, policy=False)
-
-    def _ctx(self, op: str, values: dict[str, Any]) -> HookContext:
-        return HookContext(entity=self.model.__name__, op=op, values=values, caller=self.caller)
-
-    async def _finish(self, ctx: HookContext) -> None:
-        """after_save (inside the transaction), commit, after_commit (never fails the request)."""
-        try:
-            await run_stage("after_save", self.hooks, ctx)
-        except Exception:
-            await self.session.rollback()
-            raise
-        ctx.trace.append("commit")
         await self._commit()
-        await run_stage("after_commit", self.hooks, ctx, fail_closed=False)
-
-    async def _flush(self) -> None:
-        try:
-            await self.session.flush()
-        except IntegrityError as exc:
-            await self.session.rollback()
-            raise ConflictError(
-                "the request conflicts with existing data (duplicate value or referenced record)"
-            ) from exc
+        return await self.get(item_id)
 
     async def _commit(self) -> None:
         try:
@@ -264,38 +184,12 @@ class Repository[ModelT: Base]:
                 "the request conflicts with existing data (duplicate value or referenced record)"
             ) from exc
 
-    def _inside_tenant(self, target: type[Base]) -> list[Any]:
-        """Condition that keeps a referenced row inside the caller's tenant.
-
-        A target with a tenant_id column belongs to a tenant, so a parent from another tenant
-        (or any parent when the caller has no tenant) is treated as not existing: same error,
-        so the response does not reveal that the foreign row exists.
-        """
-        column = target.__table__.c.get("tenant_id")
-        if column is None:
-            return []
-        if self.caller_tenant_id is None:
-            return [sa.false()]
-        return [column == self.caller_tenant_id]
-
-    async def _check_files(self, values: dict[str, Any]) -> None:
-        for key in self.file_fields:
-            value = values.get(key)
-            if value is None or self.file_check is None:
-                continue
-            await self.file_check(self.session, value, self.caller, key)
-
     async def _check_references(self, values: dict[str, Any]) -> None:
-        await self._check_files(values)
         for key, target in self.references.items():
             value = values.get(key)
             if value is None:
                 continue
-            stmt = sa.select(target.id).where(  # type: ignore[attr-defined]
-                target.id == value,  # type: ignore[attr-defined]
-                *self._inside_tenant(target),
-                *self._target_alive(target),
-            )
+            stmt = sa.select(target.id).where(target.id == value)  # type: ignore[attr-defined]
             if (await self.session.execute(stmt)).first() is None:
                 raise AppError(
                     "invalid_reference",
@@ -313,11 +207,7 @@ class Repository[ModelT: Base]:
             ids = list(dict.fromkeys(values.pop(key) or []))
             rows: list[Any] = []
             if ids:
-                stmt = sa.select(target).where(
-                    target.id.in_(ids),  # type: ignore[attr-defined]
-                    *self._inside_tenant(target),
-                    *self._target_alive(target),
-                )
+                stmt = sa.select(target).where(target.id.in_(ids))  # type: ignore[attr-defined]
                 by_id = {row.id: row for row in (await self.session.execute(stmt)).scalars()}
                 missing = [str(i) for i in ids if i not in by_id]
                 if missing:

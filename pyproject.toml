@@ -54,7 +54,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-extend-exclude = ["alembic/versions", "tests/golden", "examples/commerce/backend", "final_test", "review", "create_blog.py"]
+extend-exclude = ["alembic/versions", "tests/golden", "examples/commerce/backend"]
 
 [tool.ruff.lint]
 # Mirrors scripts/gate.sh and .pre-commit-config.yaml (E,W,F minus E501); nothing enforces more.

@@ -117,7 +117,7 @@ Eleven cases were POSTed to the live `/sso/saml/bb-sso/acs` endpoint through the
 | H | Valid signature, `NotBefore` an hour in the future | refused | **Refused**, `sso_error=not_yet_valid` |
 | I | Valid signature, but `InResponseTo` fabricated (no real login ever requested it) | refused | **Refused**, `sso_error=invalid_request_state` |
 | J | The *same* valid, signed response (case A's twin) POSTed twice | 1st accepted, 2nd refused | **1st accepted, 2nd refused** `sso_error=invalid_request_state` — the login-request row is consumed atomically on first use |
-| K | A legitimately signed assertion for `bb-sso1`, with a second, forged, *unsigned* `Assertion` claiming `bb-owner@example.test` spliced in as a sibling ahead of it (a signature-wrapping attempt) | refused | **Refused**, `sso_error=multiple_assertions` — the app counts `Assertion` elements before trusting any of them |
+| K | A legitimately signed assertion for `bb-sso1`, with a second, forged, *unsigned* `Assertion` claiming `bb-owner@dumbpotato.com` spliced in as a sibling ahead of it (a signature-wrapping attempt) | refused | **Refused**, `sso_error=multiple_assertions` — the app counts `Assertion` elements before trusting any of them |
 
 **Result: all 11 cases behaved exactly as the code review predicted. No bypass found.** This closes the largest gap flagged in §1/§6 of the original report.
 

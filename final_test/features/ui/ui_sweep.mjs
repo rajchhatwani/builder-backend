@@ -1,6 +1,6 @@
 // UI sweep: sign in as each role through the real login page, visit every page, 3 viewports x light/dark,
 // record console errors, failed requests, horizontal overflow, and save redacted screenshots.
-import puppeteer from '/opt/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
+import puppeteer from '/home/require1/bb_tools/node_modules/puppeteer-core/lib/esm/puppeteer/puppeteer-core.js'
 import fs from 'fs'
 const pw0 = process.env.BBF_PW
 const [stateFile, pwArg, base = 'http://127.0.0.1:8081', outDir = 'evidence', rolesArg = 'owner,admin,member,outsider'] = process.argv.slice(2)

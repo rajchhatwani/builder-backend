@@ -13,14 +13,3 @@ htmlcov/
 final_test.env
 .bb-model-budget
 
-
-# local-only workspace and live-test material (never committed)
-/studio/
-final_test/credentials/
-final_test/run/
-final_test/logs/
-final_test/features/logs/
-.env.*
-!.env.example*
-.showcase-data/
-.claude/

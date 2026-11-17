@@ -16,7 +16,7 @@ async def raw(host_header, base="http://127.0.0.1:8000"):
 
 async def main():
     await raw("127.0.0.1:8000")                                    # works
-    await raw("tunnel.example.test")     # the real public API hostname -- 421
+    await raw("cinderous-overfamiliar-sanford.ngrok-free.dev")     # the real public API hostname -- 421
     await raw("api.example.com")                                    # any other real hostname -- 421
 
 asyncio.run(main())

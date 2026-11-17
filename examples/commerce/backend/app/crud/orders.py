@@ -5,7 +5,6 @@ from app.models.carts import Cart
 from app.models.customers import Customer
 from app.models.orders import Order
 from app.models.shipping_rates import ShippingRate
-from app.search import hooks as _search_hooks
 
 
 class OrderRepository(_crud_base.Repository[Order]):
@@ -17,9 +16,3 @@ class OrderRepository(_crud_base.Repository[Order]):
     eager = ("discount_usages", "events", "fulfillments", "lines", "refunds", "transactions")
     references = {"cart_id": Cart, "customer_id": Customer, "shipping_rate_id": ShippingRate}
     many_to_many = {}
-
-
-# Keeps the external search index in step (no-op with SEARCH_BACKEND=fts).
-OrderRepository.hooks = _search_hooks.attach(
-    "Order", ("email", "note"), OrderRepository.hooks
-)

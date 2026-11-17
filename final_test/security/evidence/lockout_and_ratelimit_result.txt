@@ -1,5 +1,5 @@
 Checkpoint 5a — account lockout, live, 2026-10-29
-  Fresh account sectest-lockout2@example.test, login_max_failures=5, lockout_minutes=15.
+  Fresh account sectest-lockout2@dumbpotato.com, login_max_failures=5, lockout_minutes=15.
   5 wrong-password attempts -> each 401 invalid_credentials.
   6th attempt with the CORRECT password -> still 401 invalid_credentials (same generic message,
   no information leak distinguishing "locked" from "wrong password").
