@@ -13,6 +13,7 @@ from app.schemas.auth_custom_field import AuthCustomFieldUpdate
 from app.schemas.entity import EntityUpdate
 from app.schemas.field import FieldCreate, FieldUpdate
 from app.schemas.project import ProjectUpdate
+from app.schemas.project_permission import ProjectPermissionUpdate
 from app.schemas.project_role import ProjectRoleUpdate
 from app.schemas.relation import RelationUpdate
 
@@ -47,6 +48,10 @@ def test_rate_limit_valid_forms_still_pass(good: str) -> None:
         (AuthCustomFieldUpdate, "label"),
         (RelationUpdate, "on_delete"),
         (ProjectUpdate, "name"),
+        (ProjectPermissionUpdate, "roles"),
+        (ProjectPermissionUpdate, "confirm_weakening"),
+        (ProjectRoleUpdate, "confirm_weakening"),
+        (AuthConfigUpdate, "confirm_weakening"),
     ],
 )
 def test_patch_null_on_not_null_column_is_422(schema: Any, key: str) -> None:
@@ -77,3 +82,39 @@ def test_int_columns_are_bounded() -> None:
     with pytest.raises(ValidationError):
         AiSettingsWrite(monthly_budget_micro_usd=2**70)
     assert FieldUpdate(position=2**31 - 1).position == 2**31 - 1
+
+
+def test_budget_upper_bound_is_int64() -> None:
+    with pytest.raises(ValidationError):
+        AiSettingsWrite(monthly_budget_micro_usd=2**63)
+    assert AiSettingsWrite(monthly_budget_micro_usd=2**63 - 1).monthly_budget_micro_usd == 2**63 - 1
+
+
+def test_not_null_sets_cover_every_non_nullable_column() -> None:
+    from app.models.auth_config import ProjectAuthConfig
+    from app.models.auth_custom_field import AuthCustomField
+    from app.models.entity import Entity
+    from app.models.field import Field
+    from app.models.project import Project
+    from app.models.project_permission import ProjectPermission
+    from app.models.project_role import ProjectRole
+    from app.models.relation import Relation
+
+    pairs = [
+        (AuthConfigUpdate, ProjectAuthConfig),
+        (AuthCustomFieldUpdate, AuthCustomField),
+        (EntityUpdate, Entity),
+        (FieldUpdate, Field),
+        (ProjectUpdate, Project),
+        (ProjectPermissionUpdate, ProjectPermission),
+        (ProjectRoleUpdate, ProjectRole),
+        (RelationUpdate, Relation),
+    ]
+    for schema, model in pairs:
+        cols = model.__table__.columns
+        missing = sorted(
+            n
+            for n in schema.model_fields
+            if n in cols and not cols[n].nullable and n not in schema.not_null
+        )
+        assert not missing, f"{schema.__name__}: add {missing} to not_null"
