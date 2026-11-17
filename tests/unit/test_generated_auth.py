@@ -673,15 +673,16 @@ def test_rs256_signs_with_the_private_key_and_rejects_forgeries(vault: Path) -> 
 
         header, payload, signature = token.split(".")
         other = security.generate_private_key_pem()
+        hs_head = b64({"alg": "HS256", "typ": "JWT"})
         cases = {
             "wrong key": security.encode_jwt(claims, other),
             "tampered payload": ".".join([header, b64({"sub": "2", "exp": 4102444800}), signature]),
             "alg none": b64({"alg": "none", "typ": "JWT"}) + "." + payload + ".",
             "alg HS256 (key confusion)": (
-                b64({"alg": "HS256", "typ": "JWT"}) + "." + payload + "."
+                hs_head + "." + payload + "."
                 + base64.urlsafe_b64encode(
                     hmac.new(
-                        pem.encode(), f"{header}.{payload}".encode(), hashlib.sha256
+                        pem.encode(), f"{hs_head}.{payload}".encode(), hashlib.sha256
                     ).digest()
                 ).rstrip(b"=").decode()
             ),
