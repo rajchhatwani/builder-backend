@@ -1,13 +1,10 @@
-import sys
-import json
-import time
-import urllib.parse
-import urllib.request
-import http.cookiejar
+import sys, json, time, urllib.parse, urllib.request, http.cookiejar, re
+from datetime import datetime, timedelta, UTC
 
 sys.path.insert(0, "/mnt/files/projects/builder-backend")
 sys.path.insert(0, "/mnt/files/projects/builder-backend/tests")
 sys.path.insert(0, "/mnt/files/projects/builder-backend/final_test/harness")
+import bb
 from sso_fake_idp import idp_keys, attacker_keys, id_token as make_id_token, OIDC_KID
 
 sys.path.insert(0, "/tmp/claude-1000/-mnt-files-projects-builder-backend/93af46a5-8476-4fb5-9045-ae58628efbc7/scratchpad")
@@ -129,11 +126,10 @@ case(
 # H: alg confusion -- HS256, "signed" using the RSA public key's PEM text as the HMAC secret
 # (the classic RS256->HS256 downgrade attack: if the verifier ever treated a public key as a
 # valid HMAC secret, this would forge a token for ANY identity without the real private key)
+import jwt as pyjwt
 
 def h_token(nonce):
-    import base64
-    import hashlib
-    import hmac
+    import base64, hmac, hashlib
     from cryptography.hazmat.primitives import serialization
     now = int(time.time())
     claims = {
