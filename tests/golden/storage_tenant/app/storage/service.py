@@ -444,11 +444,20 @@ async def _verified(
     digest = hashlib.sha256(first)
     total = len(first)
     file_id, expected_hash, expected_size = row.id, row.sha256, row.size_bytes
-    yield first
-    async for chunk in rest:
-        digest.update(chunk)
-        total += len(chunk)
-        yield chunk
+    if total <= expected_size:
+        yield first
+        async for chunk in rest:
+            digest.update(chunk)
+            total += len(chunk)
+            if total > expected_size:
+                break
+            yield chunk
+    if total > expected_size:
+        # longer than recorded: record it now, the server would abort the response on the chunk
+        # that exceeds Content-Length and never resume this generator
+        logger.error("storage_integrity_mismatch", file_id=str(file_id))
+        _detach(_record_mismatch(file_id, expected_hash, digest.hexdigest(), total))
+        raise AppError("storage_integrity", "the stored file does not match its record", 502)
     if total == expected_size and digest.hexdigest() == expected_hash:
         return
     logger.error("storage_integrity_mismatch", file_id=str(file_id))
