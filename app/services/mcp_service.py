@@ -60,11 +60,26 @@ def _cap_list(obj: list[Any]) -> list[dict[str, object]]:
     return _cap(obj)  # type: ignore[no-any-return]
 
 
-
-_JSON_TYPES = {
-    "int": "integer", "integer": "integer", "float": "number", "decimal": "number",
-    "bool": "boolean", "boolean": "boolean",
-}
+def _field_schema(f: Any) -> dict[str, object]:
+    """JSON-schema for one field, matching the generated project's types (context.py py_type)."""
+    t = str(f.type).lower()
+    if t in ("integer", "int", "bigint"):
+        return {"type": "integer"}
+    if t in ("float", "decimal"):
+        return {"type": "number"}
+    if t in ("boolean", "bool"):
+        return {"type": "boolean"}
+    if t == "json":
+        return {}
+    if t == "date":
+        return {"type": "string", "format": "date"}
+    if t == "datetime":
+        return {"type": "string", "format": "date-time"}
+    if t in ("uuid", "file"):
+        return {"type": "string", "format": "uuid"}
+    if t == "enum" and getattr(f, "enum_values", None):
+        return {"type": "string", "enum": list(f.enum_values)}
+    return {"type": "string"}
 
 
 def _openapi_from_spec(spec: Any) -> dict[str, object]:
@@ -73,25 +88,43 @@ def _openapi_from_spec(spec: Any) -> dict[str, object]:
     paths: dict[str, object] = {}
     schemas: dict[str, object] = {}
     for e in spec.entities:
-        props = {
-            f.name: {"type": _JSON_TYPES.get(str(f.type).lower(), "string")} for f in e.fields
-        }
+        props = {f.name: _field_schema(f) for f in e.fields}
         required = [f.name for f in e.fields if f.required]
         schemas[e.name] = {"type": "object", "properties": props, "required": required}
         ref = {"$ref": f"#/components/schemas/{e.name}"}
-        ok = {"200": {"description": "OK", "content": {"application/json": {"schema": ref}}}}
+        json_ref = {"content": {"application/json": {"schema": ref}}}
+        ok = {"200": {"description": "OK", **json_ref}}
+        created = {"201": {"description": "Created", **json_ref}}
+        listed = {
+            "200": {
+                "description": "OK",
+                "content": {"application/json": {"schema": {"type": "array", "items": ref}}},
+            }
+        }
+        no_body = {"200": {"description": "OK"}}
+        deleted = {"204": {"description": "No Content"}}
+        body = {"requestBody": {"required": True, "content": {"application/json": {"schema": ref}}}}
         ops = {str(o) for o in e.options.operations} if e.options else set()
         base = "/" + e.plural_path.strip("/")
         coll: dict[str, object] = {}
         item: dict[str, object] = {}
         if "list" in ops:
-            coll["get"] = {"operationId": f"list_{e.name}", "responses": ok}
+            coll["get"] = {"operationId": f"list_{e.name}", "responses": listed}
         if "create" in ops:
-            coll["post"] = {"operationId": f"create_{e.name}", "responses": ok}
-        for op, verb in (("get", "get"), ("replace", "put"), ("update", "patch"),
-                         ("delete", "delete"), ("head", "head")):
+            coll["post"] = {"operationId": f"create_{e.name}", **body, "responses": created}
+        for op, verb, responses, has_body in (
+            ("get", "get", ok, False),
+            ("replace", "put", ok, True),
+            ("update", "patch", ok, True),
+            ("delete", "delete", deleted, False),
+            ("head", "head", no_body, False),
+        ):
             if op in ops:
-                item[verb] = {"operationId": f"{op}_{e.name}", "responses": ok}
+                item[verb] = {
+                    "operationId": f"{op}_{e.name}",
+                    **(body if has_body else {}),
+                    "responses": responses,
+                }
         if coll:
             paths[base] = coll
         if item:

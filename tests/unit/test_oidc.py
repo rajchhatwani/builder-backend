@@ -291,3 +291,21 @@ async def test_outbound_guard_allows_public_https_and_opt_ins() -> None:
     await oidc.check_outbound_url(
         "http://login.example.test/x", allow_private=False, require_https=False
     )
+
+
+async def test_slow_drip_idp_hits_the_total_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    class Drip(httpx.AsyncByteStream):
+        async def __aiter__(self):  # type: ignore[no-untyped-def]
+            for _ in range(1000):
+                await asyncio.sleep(0.05)
+                yield b" "
+
+    monkeypatch.setattr(
+        oidc, "TRANSPORT", httpx.MockTransport(lambda r: httpx.Response(200, stream=Drip()))
+    )
+    monkeypatch.setattr(oidc, "_TOTAL_DEADLINE", 0.2, raising=False)
+    with pytest.raises(oidc.OidcError) as err:
+        await oidc._request("GET", OIDC_DISCOVERY_URL, allow_private=False, require_https=True)
+    assert err.value.reason == "timeout"

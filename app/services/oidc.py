@@ -31,6 +31,7 @@ ALLOWED_ALGORITHMS = frozenset(
 )
 _TIMEOUT = httpx.Timeout(10.0)
 _MAX_BYTES = 512 * 1024
+_TOTAL_DEADLINE = 20.0  # whole request, not per read: a slow-drip IdP must not hold a worker
 LEEWAY_SECONDS = 60
 
 # Tests replace this with an httpx.MockTransport.
@@ -127,6 +128,20 @@ def _is_ip(host: str) -> bool:
 
 
 async def _request(
+    method: str, url: str, *, allow_private: bool, require_https: bool, **kwargs: Any
+) -> httpx.Response:
+    try:
+        return await asyncio.wait_for(
+            _request_inner(
+                method, url, allow_private=allow_private, require_https=require_https, **kwargs
+            ),
+            _TOTAL_DEADLINE,
+        )
+    except TimeoutError as exc:
+        raise OidcError("timeout") from exc
+
+
+async def _request_inner(
     method: str, url: str, *, allow_private: bool, require_https: bool, **kwargs: Any
 ) -> httpx.Response:
     addresses = await check_outbound_url(
