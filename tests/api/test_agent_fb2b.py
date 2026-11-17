@@ -437,7 +437,7 @@ async def test_org_override_api_stores_only_tightening_values(client: AsyncClien
     ok = await client.put("/orgs/pol/ai/settings", json={"approval_policy": {"ttl_hours": 2, "roles": {"B": "owner"}, "separation_of_duties": True}})
     assert ok.status_code == 200, ok.text
     got = (await client.get("/orgs/pol/ai/settings")).json()["approval_policy"]
-    assert got == {"ttl_hours": 2, "ttl_plan_hours": None, "roles": {"B": "owner"}, "auto_plan_small_edit": None, "separation_of_duties": True} or got["ttl_hours"] == 2
+    assert got == {"ttl_hours": 2, "ttl_plan_hours": None, "roles": {"B": "owner"}, "auto_plan_small_edit": None, "separation_of_duties": True}
     for loose in ({"ttl_hours": 500}, {"roles": {"D": "editor"}}, {"auto_plan_small_edit": True}, {"separation_of_duties": False}, {"x": 1}):
         r = await client.put("/orgs/pol/ai/settings", json={"approval_policy": loose})
         assert r.status_code == 422, (loose, r.text)

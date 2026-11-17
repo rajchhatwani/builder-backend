@@ -9,6 +9,7 @@ from typing import Any
 import pytest
 from httpx import AsyncClient
 from pydantic import SecretStr
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.config import Settings, get_settings
@@ -28,10 +29,20 @@ _MADE: list[str] = []
 
 
 @pytest.fixture(autouse=True)
-async def _discard(client: AsyncClient) -> Any:
+async def _discard(client: AsyncClient, session_factory: async_sessionmaker[AsyncSession]) -> Any:
     yield
+    async with session_factory() as db:  # a run the test left executing would make the delete 409
+        await db.execute(
+            update(AiRun)
+            .where(AiRun.state.in_(workspace_service.RUN_EXECUTING_STATES))
+            .values(state="cancelled")
+        )
+        await db.commit()
     while _MADE:
-        await client.delete(_MADE.pop())
+        r = await client.delete(_MADE.pop())
+        assert r.status_code in (200, 204, 404), (
+            f"draft cleanup failed (bbcp_* database may leak): {r.status_code} {r.text}"
+        )
 
 
 class Box:
@@ -44,7 +55,9 @@ class Box:
         return self.text
 
 
-async def _setup(client: AsyncClient, s: AsyncSession, settings: Settings) -> tuple[ToolContext, Path, uuid.UUID]:
+async def _setup(
+    client: AsyncClient, s: AsyncSession, settings: Settings
+) -> tuple[ToolContext, Path, uuid.UUID]:
     pid = uuid.UUID(await make_project(client))
     await make_entity(client, str(pid))
     r = await client.post(f"/projects/{pid}/workspaces", json={})
@@ -72,7 +85,11 @@ async def _setup(client: AsyncClient, s: AsyncSession, settings: Settings) -> tu
 
 @pytest.fixture
 def ws_settings(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, database_url: str) -> Settings:
-    s = Settings(environment="test", workspace_root=str(tmp_path / "ws"), workspace_db_admin_url=SecretStr(database_url))
+    s = Settings(
+        environment="test",
+        workspace_root=str(tmp_path / "ws"),
+        workspace_db_admin_url=SecretStr(database_url),
+    )
     monkeypatch.setattr(workspace_service, "get_settings", lambda: s)
     return s
 
@@ -91,12 +108,17 @@ async def test_read_gate_report_returns_the_real_latest_report(
         assert clean["available"] is True and clean["report"]["gates"]["G8"] == "pass"
         evil = wt / "app/custom/bad.py"
         evil.parent.mkdir(parents=True, exist_ok=True)
-        evil.write_text("import sub" "process\n")
+        evil.write_text("import subprocess\n")
         dirty = (await agent_tools.execute(ctx, "read_gate_report", {})).data
         rep = dirty["report"]
         assert dirty["available"] is True and rep["ok"] is False and rep["gates"]["G8"] == "fail"
-        assert any(f["rule_id"] == "g8.banned_import" and f["location"].startswith("app/custom/bad.py") for f in rep["failures"])
-        assert rep["report_hash"] != clean["report"]["report_hash"]  # it is the latest, not a stored copy
+        assert any(
+            f["rule_id"] == "g8.banned_import" and f["location"].startswith("app/custom/bad.py")
+            for f in rep["failures"]
+        )
+        assert (
+            rep["report_hash"] != clean["report"]["report_hash"]
+        )  # it is the latest, not a stored copy
 
 
 async def test_read_gate_report_without_a_draft_is_typed_unavailable() -> None:
@@ -107,15 +129,24 @@ async def test_read_gate_report_without_a_draft_is_typed_unavailable() -> None:
 
 
 async def test_read_app_logs_real_redacted_tail_or_typed_no_preview(
-    client: AsyncClient, session_factory: async_sessionmaker[AsyncSession], ws_settings: Settings,
+    client: AsyncClient,
+    session_factory: async_sessionmaker[AsyncSession],
+    ws_settings: Settings,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    box = Box("boot ok\nDATABASE_URL=postgresql://app:hunter2pw@db/app\nAuthorization: Bearer abcdefgh12345678\n")
+    box = Box(
+        "boot ok\nDATABASE_URL=postgresql://app:hunter2pw@db/app\nAuthorization: Bearer abcdefgh12345678\n"
+    )
     monkeypatch.setattr(preview_service, "get_sandbox", lambda s=None: box)
     async with session_factory() as s:
         ctx, _, user_id = await _setup(client, s, ws_settings)
         none = await agent_tools.execute(ctx, "read_app_logs", {})
-        assert none.ok and none.data["status"] == "no_preview" and none.data["lines"] == [] and box.asked == []
+        assert (
+            none.ok
+            and none.data["status"] == "no_preview"
+            and none.data["lines"] == []
+            and box.asked == []
+        )
         now = datetime.now(UTC)
         s.add(Preview(
             project_id=ctx.project_id, workspace_id=ctx.workspace_id, created_by=user_id, state="running",

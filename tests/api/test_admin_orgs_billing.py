@@ -3,12 +3,12 @@
 import uuid
 
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core import platform_security as sec
 from app.models.enums import PlatformRole
-from app.models.platform import AuditLog, Subscription
+from app.models.platform import AuditLog, Plan, Subscription
 from tests.api.conftest import ClientFor
 
 Factory = async_sessionmaker[AsyncSession]
@@ -116,12 +116,21 @@ async def test_manual_plan_change_refused_for_stripe_managed_orgs(
 # -- plans tab ------------------------------------------------------------------------------
 
 
-async def test_plan_ids_are_validated(client_for: ClientFor) -> None:
+async def _delete_plan_row(session_factory: Factory, plan_id: str) -> None:
+    async with session_factory() as session:
+        await session.execute(delete(Plan).where(Plan.id == plan_id))
+        await session.commit()
+
+
+async def test_plan_ids_are_validated(client_for: ClientFor, session_factory: Factory) -> None:
     ops = await _admin(client_for)
     body = {"display_name": "X", "monthly_price_usd": 0}
     assert (await ops.put("/admin/plans/Bad Id!", json=body)).status_code == 422
     assert (await ops.put("/admin/plans/" + "a" * 41, json=body)).status_code == 422
-    assert (await ops.put("/admin/plans/startup", json=body)).status_code == 200
+    try:
+        assert (await ops.put("/admin/plans/startup", json=body)).status_code == 200
+    finally:
+        await _delete_plan_row(session_factory, "startup")
 
 
 async def test_plan_edit_audit_records_the_diff(
@@ -131,16 +140,19 @@ async def test_plan_edit_audit_records_the_diff(
     plans = {p["id"]: p for p in (await ops.get("/admin/plans")).json()}
     team = {k: v for k, v in plans["team"].items() if k != "id"}
     team["max_seats"] = 7
-    assert (await ops.put("/admin/plans/team", json=team)).status_code == 200
-    async with session_factory() as session:
-        row = (
-            await session.execute(select(AuditLog).where(AuditLog.action == "admin.plan_update"))
-        ).scalar_one()
-        assert row.detail["changes"] == "max_seats: 5 -> 7"
-        assert "affected_orgs" in row.detail
-    # restore for other tests (plans are shared across the session)
-    team["max_seats"] = 5
-    await ops.put("/admin/plans/team", json=team)
+    try:
+        assert (await ops.put("/admin/plans/team", json=team)).status_code == 200
+        async with session_factory() as session:
+            row = (
+                await session.execute(
+                    select(AuditLog).where(AuditLog.action == "admin.plan_update")
+                )
+            ).scalar_one()
+            assert row.detail["changes"] == "max_seats: 5 -> 7"
+            assert "affected_orgs" in row.detail
+    finally:  # plans are shared across the session: always restore
+        team["max_seats"] = 5
+        await ops.put("/admin/plans/team", json=team)
 
 
 # -- billing tab and insights -----------------------------------------------------------------

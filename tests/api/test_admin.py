@@ -1,5 +1,7 @@
 """The admin console: separate sign-in, role-limited actions, safety rails, privacy line."""
 
+import uuid
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -216,7 +218,7 @@ async def test_safety_rails(client_for: ClientFor) -> None:
     assert r.status_code == 403
 
 
-async def test_an_admin_cannot_remove_the_last_admin_even_by_demoting_themselves(
+async def test_an_admin_cannot_step_down_or_suspend_themselves_even_as_the_last_admin(
     client_for: ClientFor,
 ) -> None:
     first = await admin_client(client_for, "first@example.com")
@@ -224,11 +226,33 @@ async def test_an_admin_cannot_remove_the_last_admin_even_by_demoting_themselves
     assert (
         await first.patch(f"/admin/users/{second.user.id}", json={"platform_role": "customer"})
     ).status_code == 200  # type: ignore[attr-defined]
-    # `second` was demoted, so `first` is the only admin and cannot step down or suspend themselves
-    # (self_change). `last_admin` in AdminService is the second line of defence behind that rule.
-    assert (
-        await first.patch(f"/admin/users/{first.user.id}", json={"status": "suspended"})
-    ).status_code == 409  # type: ignore[attr-defined]
+    # `second` was demoted, so `first` is the only admin and cannot suspend themselves.
+    r = await first.patch(f"/admin/users/{first.user.id}", json={"status": "suspended"})  # type: ignore[attr-defined]
+    assert r.status_code == 409 and r.json()["code"] == "self_change"
+
+
+async def test_last_admin_guard_refuses_suspending_or_demoting_the_only_admin(
+    make_user: MakeUser, session_factory: async_sessionmaker[AsyncSession]
+) -> None:
+    """`last_admin` is reachable only when the actor is not the target (self_change runs first)."""
+    from types import SimpleNamespace
+
+    from app.exceptions import AppError
+    from app.models.enums import AccountStatus
+    from app.services.admin_service import AdminService
+    from app.services.platform_auth_service import RequestInfo
+
+    only = await make_user("only@example.com", ADMIN)
+    actor = SimpleNamespace(user=SimpleNamespace(id=uuid.uuid4(), email="gone@example.com"))
+    for kwargs in (
+        {"status": AccountStatus.suspended, "role": None},
+        {"status": None, "role": PlatformRole.customer},
+    ):
+        async with session_factory() as db:
+            svc = AdminService(db, get_settings())
+            with pytest.raises(AppError) as exc:
+                await svc.update_user(actor, only.id, name=None, info=RequestInfo(), **kwargs)  # type: ignore[arg-type]
+            assert exc.value.code == "last_admin"
 
 
 async def test_list_users_filters_and_paginates(client_for: ClientFor, make_user: MakeUser) -> None:
