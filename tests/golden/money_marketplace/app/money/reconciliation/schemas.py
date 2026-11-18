@@ -129,4 +129,3 @@ class AutoMatchOut(BaseModel):
     new_matches: int
     matched_count: int
     unmatched_line_count: int
-    entries_truncated: bool = False

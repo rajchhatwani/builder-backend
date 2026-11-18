@@ -10,7 +10,6 @@
 * A run is closed once: the summary (integers) is stored with it, lines and matches are frozen by the database.
 """
 
-import asyncio as _asyncio
 import hashlib
 import json
 import typing as _t
@@ -400,12 +399,7 @@ async def _results(session: AsyncSession, tenant: Tenant, run: ReconciliationRun
         unmatched_lines=unmatched_lines,
         unmatched_entries=unmatched_entries,
         entries_truncated=truncated,
-        # a closed run keeps the summary frozen at close; unmatched_entries stay 'as of now'
-        summary=(
-            _s.SummaryOut.model_validate(run.summary)
-            if run.status == "closed" and run.summary
-            else _summary(run, lines, matched, unmatched_lines, unmatched_entries)
-        ),
+        summary=_summary(run, lines, matched, unmatched_lines, unmatched_entries),
     )
 
 
@@ -436,9 +430,8 @@ async def auto_match(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID) ->
     lines = [x for x in (await session.execute(select_lines(run_id))).scalars()]
     already = set((await session.execute(_sa.select(ReconciliationMatch.line_id).where(ReconciliationMatch.run_id == run_id))).scalars())
     open_lines = [x for x in lines if x.id not in already]
-    candidates, truncated = await _candidate_entries(session, tenant, run)
-    pairs = await _asyncio.to_thread(  # CPU-bound: keep the event loop free
-        _matcher.match,
+    candidates, _truncated = await _candidate_entries(session, tenant, run)
+    pairs = _matcher.match(
         [_matcher.Item(str(x.id), x.line_date, x.amount, x.reference, x.line_no) for x in open_lines],
         [_matcher.Item(str(e.id), d, e.amount, t.reference, n) for n, (e, t, d) in enumerate(candidates)],
         _config.TOLERANCE_MINOR,
@@ -470,9 +463,7 @@ async def auto_match(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID) ->
             raise error from exc
         raise
     total = len(already) + len(pairs)
-    return _s.AutoMatchOut(
-        new_matches=len(pairs), matched_count=total, unmatched_line_count=len(lines) - total, entries_truncated=truncated
-    )
+    return _s.AutoMatchOut(new_matches=len(pairs), matched_count=total, unmatched_line_count=len(lines) - total)
 
 
 async def manual_match(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID, body: _s.ManualMatchIn) -> _s.MatchOut:
