@@ -371,6 +371,14 @@ async def test_a_temp_password_user_view_can_still_be_inspected_and_ended(  # F-
         await db.commit()
     viewer, _ = await world.view_as()
     assert (await viewer.get("/account/impersonation")).status_code == 200
+    # every other route stays refused for the temp-password user's view-as token
+    for path in ("/orgs/acme", "/projects"):
+        refused = await viewer.get(path)
+        assert refused.status_code == 403, path
+        assert "password_change_required" in refused.text, path
+    # and the real user's own session is still blocked from the view-as routes
+    own = await world.owner.get("/account/impersonation")
+    assert own.status_code == 403 and "password_change_required" in own.text
     assert (await viewer.post("/account/impersonation/end")).status_code == 204
 
 
