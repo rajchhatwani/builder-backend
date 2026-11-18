@@ -197,6 +197,8 @@ async def purge(session: AsyncSession, *, now: _dt.datetime | None = None) -> in
 
 async def run_forever(factory: SessionFactory, stop: asyncio.Event | None = None) -> None:
     stop = stop or asyncio.Event()
+    poll = config.poll_seconds()  # a bad NOTIFICATIONS_* value fails loudly here, not inside the loop
+    config.lease_seconds()
     last_purge = 0.0
     loop = asyncio.get_running_loop()
     while not stop.is_set():
@@ -212,7 +214,7 @@ async def run_forever(factory: SessionFactory, stop: asyncio.Event | None = None
         except Exception as exc:  # the database may be briefly away
             logger.error("notification_dispatcher_error", error=type(exc).__name__)
         with contextlib.suppress(TimeoutError):
-            await asyncio.wait_for(stop.wait(), config.poll_seconds())
+            await asyncio.wait_for(stop.wait(), poll)
 
 
 def start_dispatcher() -> asyncio.Task[None] | None:
@@ -222,6 +224,8 @@ def start_dispatcher() -> asyncio.Task[None] | None:
     if not config.dispatcher_enabled():
         logger.info("notification_dispatcher_disabled")
         return None
+    config.poll_seconds()  # validate at startup: refuse to boot on a bad value
+    config.lease_seconds()
     return asyncio.create_task(run_forever(session_factory), name="notification-dispatcher")
 
 
@@ -236,6 +240,8 @@ async def stop_dispatcher(task: asyncio.Task[None] | None) -> None:
 async def _main(once: bool) -> None:
     from app.db import engine, session_factory
 
+    config.poll_seconds()
+    config.lease_seconds()
     stop = asyncio.Event()
     try:
         if once:

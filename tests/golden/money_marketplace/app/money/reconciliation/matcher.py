@@ -10,7 +10,7 @@ entry is paired at most once (one-to-one):
 Ties are broken by the entry's order (posting time, then id), so the same input always gives the same pairs.
 Amounts have the same sign on both sides: positive = increases the account's debit balance."""
 
-from bisect import bisect_left, bisect_right
+from bisect import bisect_left, bisect_right, insort
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
@@ -37,25 +37,64 @@ def _distance(a: date, b: date) -> int:
     return abs((a - b).days)
 
 
+class _Pool:
+    """Free entries of one amount (or amount + reference), sorted by (day, order, id): nearest-date lookup is a bisect."""
+
+    def __init__(self) -> None:
+        self.keys: list[tuple[int, int, str]] = []
+        self.items: dict[tuple[int, int, str], Item] = {}
+
+    def add(self, entry: Item) -> None:
+        key = (entry.day.toordinal(), entry.order, entry.id)
+        insort(self.keys, key)
+        self.items[key] = entry
+
+    def remove(self, entry: Item) -> None:
+        key = (entry.day.toordinal(), entry.order, entry.id)
+        del self.keys[bisect_left(self.keys, key)]
+        del self.items[key]
+
+    def nearest(self, day: date) -> Item | None:
+        """The entry nearest in date; equal distance -> the lower order."""
+        if not self.keys:
+            return None
+        target = day.toordinal()
+        pos = bisect_left(self.keys, (target,))
+        best: tuple[int, int, str] | None = None
+        if pos < len(self.keys):
+            best = self.keys[pos]  # first entry on the earliest day >= target (lowest order of that day)
+        if pos > 0:
+            before = self.keys[bisect_left(self.keys, (self.keys[pos - 1][0],))]  # lowest order on the latest earlier day
+            if best is None or (target - before[0], before[1]) < (best[0] - target, best[1]):
+                best = before
+        return self.items[best] if best is not None else None
+
+
 def match(lines: Sequence[Item], entries: Sequence[Item], tolerance: int = 0) -> list[Pair]:
     if isinstance(tolerance, bool) or not isinstance(tolerance, int) or tolerance < 0:
         raise ValueError("tolerance must be a non-negative int")
     used: set[str] = set()
-    by_amount: dict[int, list[Item]] = {}
-    for entry in sorted(entries, key=lambda e: e.order):
-        by_amount.setdefault(entry.amount, []).append(entry)
+    by_amount: dict[int, _Pool] = {}
+    by_reference: dict[tuple[int, str], _Pool] = {}
+    for entry in entries:
+        by_amount.setdefault(entry.amount, _Pool()).add(entry)
+        if entry.reference:
+            by_reference.setdefault((entry.amount, entry.reference), _Pool()).add(entry)
     ordered = sorted(lines, key=lambda x: (x.day, x.order, x.id))
     found: dict[str, Pair] = {}
 
+    def take(entry: Item) -> None:
+        used.add(entry.id)
+        by_amount[entry.amount].remove(entry)
+        if entry.reference:
+            by_reference[(entry.amount, entry.reference)].remove(entry)
+
     def best_exact(line: Item, with_reference: bool) -> Item | None:
-        choices = [
-            e
-            for e in by_amount.get(line.amount, [])
-            if e.id not in used and (not with_reference or (line.reference and e.reference == line.reference))
-        ]
-        if not choices:
-            return None
-        return min(choices, key=lambda e: (_distance(e.day, line.day), e.order))
+        if with_reference:
+            pool = by_reference.get((line.amount, line.reference or ""))
+        else:
+            pool = by_amount.get(line.amount)
+        return pool.nearest(line.day) if pool is not None else None
 
     for method, with_reference in (("exact_reference", True), ("exact", False)):
         for line in ordered:
@@ -65,7 +104,7 @@ def match(lines: Sequence[Item], entries: Sequence[Item], tolerance: int = 0) ->
                 continue
             entry = best_exact(line, with_reference)
             if entry is not None:
-                used.add(entry.id)
+                take(entry)
                 found[line.id] = Pair(line.id, entry.id, method, line.amount - entry.amount)
     if tolerance > 0:
         # entries still free, sorted by amount: each line only looks at the amounts inside [a - tol, a + tol]
