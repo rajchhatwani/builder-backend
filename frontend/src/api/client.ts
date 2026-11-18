@@ -696,7 +696,7 @@ export const api = {
     }
     const disposition = response.headers.get('Content-Disposition') ?? ''
     const match = /filename="([^"]+)"/.exec(disposition)
-    return { blob: await response.blob(), filename: match?.[1] ?? fallbackName, truncated: response.headers.get('X-Export-Truncated') === 'true' }
+    return { blob: await response.blob(), filename: match?.[1] ?? fallbackName }
   },
 
   // ── Auth Config ──────────────────────────────────────────────────────────
@@ -1297,7 +1297,7 @@ async function downloadBlob(path: string, fallbackName: string): Promise<{ blob:
     throw new ApiError(response.status, (await response.json().catch(() => null)) ?? { code: 'bad_response', message: 'Download failed', details: [] })
   }
   const match = /filename="([^"]+)"/.exec(response.headers.get('Content-Disposition') ?? '')
-  return { blob: await response.blob(), filename: match?.[1] ?? fallbackName }
+  return { blob: await response.blob(), filename: match?.[1] ?? fallbackName, truncated: response.headers.get('X-Export-Truncated') === 'true' }
 }
 
 /** Hands a downloaded blob to the browser as a file save. */

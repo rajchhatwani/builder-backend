@@ -312,7 +312,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "X-Requested-With", "X-Request-ID", "X-Preview-Token"],
-        expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash", "X-Request-ID", "X-Preview-Token"],
+        expose_headers=["Content-Disposition", "X-Generation-Id", "X-Spec-Hash", "X-Request-ID", "X-Preview-Token", "X-Export-Truncated"],
     )
     app.add_middleware(SpecWriteLimit, max_bytes=settings.max_spec_write_bytes)
     app.add_middleware(SecurityMiddleware, settings=settings)
