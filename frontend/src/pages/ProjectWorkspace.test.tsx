@@ -124,3 +124,57 @@ describe('ProjectWorkspace documents section (v2)', () => {
     expect(host.textContent).not.toContain('ten ready-made templates')
   })
 })
+
+describe('ProjectWorkspace load guards (F-1252)', () => {
+  it('a 423 org_deletion_pending is the locked-org heading, not "missing"', async () => {
+    handler = route({ '/projects/p1': () => json(423, { code: 'org_deletion_pending', message: 'x', details: [] }) })
+    await mount()
+    expect(host.textContent).toContain("This project's organization is scheduled for deletion")
+    expect(host.textContent).not.toContain("We can't find this project")
+  })
+
+  it('a 403 org_mfa_required is the two-factor heading', async () => {
+    handler = route({ '/projects/p1': () => json(403, { code: 'org_mfa_required', message: 'x', details: [] }) })
+    await mount()
+    expect(host.textContent).toContain("requires two-factor authentication")
+    expect(host.textContent).not.toContain("We can't find this project")
+  })
+
+  it('a slow older load never overwrites the newest one', async () => {
+    let calls = 0
+    let releaseSlow: () => void = () => {}
+    const slow = new Promise<void>((r) => { releaseSlow = r })
+    const base = route()
+    handler = async (path) => {
+      if (path.endsWith('/projects/p1')) {
+        calls += 1
+        if (calls === 2) { await slow; return json(200, { ...project, name: 'StaleName' }) }
+        if (calls === 3) return json(200, { ...project, name: 'FreshName' })
+      }
+      return base(path)
+    }
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const render = (section: string) => (
+      <QueryClientProvider client={qc}>
+        <UiProvider>
+          <ProjectWorkspace projectId="p1" section={section as never} />
+        </UiProvider>
+      </QueryClientProvider>
+    )
+    host = document.createElement('div')
+    document.body.appendChild(host)
+    root = createRoot(host)
+    const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 20)) })
+    await act(async () => { root.render(render('overview')) })
+    await settle()
+    await act(async () => { root.render(render('entities')) })
+    await settle()
+    await act(async () => { root.render(render('roles')) })
+    await settle()
+    expect(host.textContent).toContain('FreshName')
+    releaseSlow()
+    await settle()
+    expect(host.textContent).toContain('FreshName')
+    expect(host.textContent).not.toContain('StaleName')
+  })
+})

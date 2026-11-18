@@ -47,7 +47,7 @@ function orgHref(slug: string, path = ''): string {
   return link(`/org/${encodeURIComponent(slug)}${path}`)
 }
 
-function timeLeft(expiresAt: string, now: number): string {
+export function timeLeft(expiresAt: string, now: number): string {
   const ms = new Date(expiresAt).getTime() - now
   if (ms <= 0) return 'expired'
   const days = Math.floor(ms / 86_400_000)
@@ -228,6 +228,7 @@ function InvitesTab({ org, members }: { org: Organization; members: OrgMember[] 
   const [fresh, setFresh] = useState<OrgInvitationCreated | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!canAdmin) return
@@ -237,9 +238,10 @@ function InvitesTab({ org, members }: { org: Organization; members: OrgMember[] 
       .then((page) => {
         if (cancelled) return
         setInvites(page.items)
+        setLoadError(null)
         setNow(Date.now())
       })
-      .catch((err) => !cancelled && setError(message(err)))
+      .catch((err) => !cancelled && setLoadError(message(err)))
     return () => {
       cancelled = true
     }
@@ -273,6 +275,7 @@ function InvitesTab({ org, members }: { org: Organization; members: OrgMember[] 
       danger: true,
     })
     if (!ok) return
+    setError(null)
     try {
       await api.revokeOrgInvitation(org.slug, inv.id)
       toast('Invitation revoked.')
@@ -284,6 +287,7 @@ function InvitesTab({ org, members }: { org: Organization; members: OrgMember[] 
   }
 
   async function resend(inv: OrgInvitation) {
+    setError(null)
     try {
       const again = await api.resendOrgInvitation(org.slug, inv.id)
       setFresh(again)
@@ -360,7 +364,22 @@ function InvitesTab({ org, members }: { org: Organization; members: OrgMember[] 
             </button>
           )}
         </div>
-        {invites === null ? (
+        {loadError ? (
+          <div role="alert" data-variant="danger" className="stack">
+            {loadError}
+            <div>
+              <button
+                className="outline small"
+                onClick={() => {
+                  setLoadError(null)
+                  setVersion((v) => v + 1)
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : invites === null ? (
           <p className="empty-state">Loading…</p>
         ) : pending.length === 0 && !showPast ? (
           <p className="muted">No pending invitations.</p>

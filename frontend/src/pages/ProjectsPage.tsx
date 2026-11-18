@@ -7,7 +7,7 @@ import { link } from '../components/Sidebar'
 import { useUi } from '../components/Ui'
 
 interface Summary {
-  entities: number
+  entities: number | null
   authOn: boolean
   problems: number
 }
@@ -28,13 +28,13 @@ function ProjectCard({ project, onDelete, lockedOrg, mfaOrg }: ProjectCardProps)
     if (lockedOrg || mfaOrg) return
     let cancelled = false
     Promise.all([
-      api.listEntities(project.id, 1, 0),
+      api.listEntities(project.id, 1, 0).catch(() => null),
       api.getAuthConfig(project.id).catch(() => null),
       api.validateProject(project.id).catch(() => null),
     ]).then(([entities, auth, report]) => {
       if (cancelled) return
       setSummary({
-        entities: entities.total,
+        entities: entities ? entities.total : null,
         authOn: auth?.enabled ?? false,
         problems: report?.issues.length ?? 0,
       })
@@ -121,6 +121,7 @@ function ProjectCard({ project, onDelete, lockedOrg, mfaOrg }: ProjectCardProps)
 }
 
 function describe(s: Summary): string {
+  if (s.entities === null) return 'Summary unavailable'
   const entities = s.entities === 0 ? 'No entities yet' : `${s.entities} ${s.entities === 1 ? 'entity' : 'entities'}`
   return `${entities} · ${s.authOn ? 'Sign-in on' : 'No sign-in'}`
 }

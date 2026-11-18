@@ -167,14 +167,21 @@ export function AccountPage() {
   const [dialog, setDialog] = useState(false)
   const [fresh, setFresh] = useState<ApiTokenCreated | null>(null)
 
+  const [loadError, setLoadError] = useState(false)
+
   const load = useCallback(async () => {
-    const [t, p] = await Promise.all([api.listApiTokens(), api.listProjects(200, 0)])
-    setTokens(t)
-    setProjects(p.items)
+    try {
+      const [t, p] = await Promise.all([api.listApiTokens(), api.listProjects(200, 0)])
+      setTokens(t)
+      setProjects(p.items)
+      setLoadError(false)
+    } catch {
+      setLoadError(true)
+    }
   }, [])
 
   useEffect(() => {
-    load().catch(() => undefined)
+    void load()
   }, [load])
 
   async function revoke(token: ApiTokenInfo) {
@@ -256,7 +263,16 @@ export function AccountPage() {
             </div>
           </div>
         )}
-        {active.length === 0 ? (
+        {loadError ? (
+          <div role="alert" data-variant="danger" className="stack">
+            <strong>Could not load your tokens.</strong>
+            <div>
+              <button className="outline small" onClick={() => void load()}>
+                Retry
+              </button>
+            </div>
+          </div>
+        ) : active.length === 0 ? (
           <p className="muted">No active tokens.</p>
         ) : (
           <table>

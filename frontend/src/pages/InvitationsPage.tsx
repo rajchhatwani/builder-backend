@@ -7,7 +7,7 @@ import { link } from '../components/Sidebar'
 import { useUi } from '../components/Ui'
 
 /** Accepts a pasted invite link (…#/invite/<token>) or the bare token. */
-function tokenFrom(input: string): string {
+export function tokenFrom(input: string): string {
   const value = input.trim()
   const match = value.match(/#\/invite\/([^/?#\s]+)/)
   return match ? decodeURIComponent(match[1]) : value
