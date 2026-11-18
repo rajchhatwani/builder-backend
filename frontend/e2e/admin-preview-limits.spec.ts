@@ -23,13 +23,15 @@ test.describe('admin preview limits', () => {
   test.beforeEach(async ({ request }) => {
     const admin = await adminApi(request)
     const r = await admin.get('/admin/preview-limits')
+    expect(r.ok(), `GET /admin/preview-limits -> ${r.status()}`).toBe(true)
     const body = await r.json()
     original = { kill_switch: body.kill_switch, defaults: body.defaults }
   })
   test.afterEach(async ({ request }) => {
     if (!original) return
     const admin = await adminApi(request)
-    await admin.put('/admin/preview-limits', original)
+    const put = await admin.put('/admin/preview-limits', original)
+    expect(put.status(), 'restoring the preview limits must succeed').toBe(200)
   })
 
   test('nav entry, defaults with bounds, save, and restore', async ({ page }) => {

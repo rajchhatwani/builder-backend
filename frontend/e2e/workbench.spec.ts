@@ -83,8 +83,8 @@ test('workbench: console sends as a role to the preview origin only, history red
   await page.getByRole('button', { name: 'Generate invalid payload' }).click()
   const role = page.getByLabel('Act as role')
   await expect(role.locator('option').first()).toHaveText('No role (anonymous)')
-  const roles = await role.locator('option').count()
-  expect(roles, 'the project declares roles, so the role picker has more than "No role"').toBeGreaterThan(1)
+  // roles load async: wait until more than the "No role" option is present
+  await expect(role.locator('option'), 'the project declares roles, so the role picker has more than "No role"').not.toHaveCount(1)
   await role.selectOption({ index: 1 })
   await page.getByLabel(/Test-user token/).fill('E2E-SECRET-TOKEN')
   await page.getByRole('button', { name: 'Send request' }).click()

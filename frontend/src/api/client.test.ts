@@ -96,6 +96,28 @@ describe('api client', () => {
     await expect(api.previewDocument('p1', { template: {}, data: {}, compute: null })).resolves.toBeInstanceOf(Blob)
     expect(fetchMock).toHaveBeenCalledTimes(6)
   })
+
+  it('binary call: a refresh outage (503) does not sign out and surfaces the original 401', async () => {
+    const lost = vi.fn()
+    const off = onSessionLost(lost)
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(503, {}))
+    await expect(api.exportOrg('acme')).rejects.toMatchObject({ status: 401 })
+    expect(lost).not.toHaveBeenCalled()
+    off()
+  })
+
+  it('binary call: a refused refresh (401) signs the user out once', async () => {
+    const lost = vi.fn()
+    const off = onSessionLost(lost)
+    fetchMock
+      .mockResolvedValueOnce(reply(401, { code: 'invalid_session', message: 'x', details: [] }))
+      .mockResolvedValueOnce(reply(401, {}))
+    await expect(api.exportOrg('acme')).rejects.toMatchObject({ status: 401 })
+    expect(lost).toHaveBeenCalledOnce()
+    off()
+  })
 })
 
 describe('api client, unreadable bodies', () => {
