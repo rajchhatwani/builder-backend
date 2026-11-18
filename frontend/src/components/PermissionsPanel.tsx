@@ -166,8 +166,9 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
       setPermissions(map)
     }
 
+    let updated: ProjectPermission[] | null = null
+    let persistedAny = false
     try {
-      let updated: ProjectPermission[] | null = null
       if (entries.length > 0) {
         try {
           updated = await api.bulkUpsertPermissions(projectId, entries)
@@ -187,6 +188,7 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
         }
       }
       let deleteConfirmed = false
+      persistedAny = updated !== null
       for (const k of clearedKeys) {
         try {
           await api.deletePermission(savedIds.current[k], deleteConfirmed)
@@ -209,10 +211,12 @@ export function PermissionsPanel({ projectId, entities, roles, keycloak = false 
           }
           await api.deletePermission(savedIds.current[k], true)
         }
+        persistedAny = true
       }
       await reload(clearedKeys.length > 0, updated)
       setSuccess('Permissions saved successfully.')
     } catch (err) {
+      if (persistedAny) await reload(true, updated).catch(() => undefined)
       setError(err instanceof ApiError ? err.message : 'Failed to save permissions.')
     } finally {
       setSaving(false)

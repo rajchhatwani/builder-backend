@@ -75,4 +75,21 @@ describe('PermissionsPanel revoke', () => {
     expect(m.bulk).toHaveBeenCalled()
     expect(m.list).toHaveBeenCalledTimes(2)
   })
+
+  it('reloads the matrix when a later delete fails after an earlier one persisted (F-1205)', async () => {
+    m.list.mockResolvedValueOnce([perm('p-list', 'list', ['admin']), perm('p-get', 'get', ['admin'])])
+    m.del.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('boom'))
+    m.list.mockResolvedValue([perm('p-get', 'get', ['admin'])])
+    const host = await mount(createElement(PermissionsPanel, { projectId: 'p', entities, roles }))
+    for (const op of ['list', 'get']) {
+      await click(host.querySelector(`td[title="Click to edit permissions for Post:${op}"]`) as HTMLElement)
+      await click(host.querySelector('dialog input[type="checkbox"]') as HTMLInputElement)
+      await click(host.querySelector('dialog button[type="submit"]'))
+    }
+    const save = Array.from(host.querySelectorAll('button')).find((b) => /Save all/.test(b.textContent ?? ''))
+    await click(save!)
+    await flush()
+    expect(m.del).toHaveBeenCalledTimes(2)
+    expect(m.list).toHaveBeenCalledTimes(2)
+  })
 })

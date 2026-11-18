@@ -16,4 +16,12 @@ describe('FieldDialog parseDefault precision', () => {
     expect(parseDefault('1.5', 'float')).toBe(1.5)
     expect(() => parseDefault('abc', 'decimal')).toThrow()
   })
+  it('rejects non-finite, hex and fractional-integer defaults (F-1206)', () => {
+    expect(() => parseDefault('Infinity', 'float')).toThrow()
+    expect(() => parseDefault('1e999', 'decimal')).toThrow()
+    expect(() => parseDefault('0x10', 'integer')).toThrow()
+    expect(() => parseDefault('1.5', 'integer')).toThrow()
+    expect(() => parseDefault('9007199254740993', 'integer')).toThrow()
+    expect(parseDefault('-5', 'integer')).toBe(-5)
+  })
 })

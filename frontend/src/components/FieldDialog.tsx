@@ -45,7 +45,10 @@ export function parseDefault(text: string, type: FieldType): unknown {
     case 'float':
     case 'decimal': {
       const value = Number(trimmed)
-      if (Number.isNaN(value)) throw new Error('Default must be a number.')
+      if (!Number.isFinite(value)) throw new Error('Default must be a finite number.')
+      if (!/^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/.test(trimmed)) throw new Error('Default must be a number.')
+      if ((type === 'integer' || type === 'bigint') && (!/^-?\d+$/.test(trimmed) || !Number.isSafeInteger(value)))
+        throw new Error('Default must be a whole number within the safe range.')
       // The API takes JSON numbers only, so refuse values a JS number cannot hold exactly.
       if (type === 'bigint' && /^-?\d+$/.test(trimmed) && !Number.isSafeInteger(value))
         throw new Error('Default is too large to store exactly; use a smaller number.')
