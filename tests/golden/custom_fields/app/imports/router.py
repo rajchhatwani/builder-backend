@@ -125,6 +125,7 @@ async def import_contacts(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -182,6 +183,7 @@ async def import_notes(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 

@@ -131,6 +131,7 @@ async def import_authors(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -188,6 +189,7 @@ async def import_books(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -245,6 +247,7 @@ async def import_members(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -302,6 +305,7 @@ async def import_profiles(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -359,6 +363,7 @@ async def import_shelves(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 

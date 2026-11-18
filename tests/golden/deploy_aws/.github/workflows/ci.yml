@@ -6,13 +6,14 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_call: # the deploy workflow runs these same checks first
 
 # The default token can read the repository and nothing else. Jobs that need more say so themselves.
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

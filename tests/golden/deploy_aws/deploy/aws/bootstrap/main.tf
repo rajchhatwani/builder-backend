@@ -237,10 +237,23 @@ data "aws_iam_policy_document" "deploy" {
     resources = [aws_ecr_repository.app.arn]
   }
 
+  # State (and its lock file) of THIS environment only: <project>/<env>/ in the bucket. The dev role
+  # cannot read the production state (it holds the database password) or rewrite it.
   statement {
     sid       = "TerraformState"
-    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject", "s3:ListBucket"]
-    resources = [aws_s3_bucket.state.arn, "${aws_s3_bucket.state.arn}/*"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+    resources = ["${aws_s3_bucket.state.arn}/${var.project}/${each.value}/*"]
+  }
+
+  statement {
+    sid       = "TerraformStateList"
+    actions   = ["s3:ListBucket"]
+    resources = [aws_s3_bucket.state.arn]
+    condition {
+      test     = "StringLike"
+      variable = "s3:prefix"
+      values   = ["${var.project}/${each.value}/*", "${var.project}/${each.value}"]
+    }
   }
 }
 

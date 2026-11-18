@@ -132,6 +132,7 @@ async def import_announcements(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -191,6 +192,7 @@ async def import_labels(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -250,6 +252,7 @@ async def import_tasks(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=False,
     )
 
 

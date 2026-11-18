@@ -146,6 +146,7 @@ async def import_{{ e.table }}(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list={{ may_list[e.name] }},
     )
 {% if "list" in e.ops %}
 {% set lcall = "access.user" if "list" in e.access_ops else "None" %}

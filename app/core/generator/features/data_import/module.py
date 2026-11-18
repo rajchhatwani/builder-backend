@@ -32,6 +32,32 @@ def import_entities(project: ProjectCtx) -> tuple[EntityCtx, ...]:
     return tuple(e for e in project.entities if "create" in e.ops)
 
 
+def caller_may_list(entity: EntityCtx) -> bool:
+    """True when everyone who may create may also list the entity, in the same row scope. Only then can the
+    import say "duplicate" for a row that exists; otherwise it would tell a create-only caller what exists."""
+    if "list" not in entity.ops:
+        return False
+    by_op = {a.op: a for a in entity.access}
+    lst = by_op.get("list")
+    if lst is None:  # list is public
+        return True
+    cre = by_op.get("create")
+    if cre is None:  # public create, protected list
+        return False
+    if lst.policy or cre.policy:
+        return lst.policy and cre.policy
+    if (lst.owner, lst.tenant, lst.admin_sees_all, lst.match) != (
+        cre.owner,
+        cre.tenant,
+        cre.admin_sees_all,
+        cre.match,
+    ):
+        return False
+    if lst.roles and not (cre.roles and set(cre.roles) <= set(lst.roles)):
+        return False
+    return bool(cre.needs_user or not lst.needs_user)
+
+
 def _field_literals(project: ProjectCtx, entity: EntityCtx) -> list[str]:
     """One `SpecField(...)` source literal per importable field: scalar fields, then foreign keys.
     Values come from the validated spec; repr() renders them as safe literals."""
@@ -60,7 +86,9 @@ def _field_literals(project: ProjectCtx, entity: EntityCtx) -> list[str]:
             + ")"
         )
     for fk in entity.fks:
-        out.append(f"SpecField(name={fk.column!r}, type='uuid', required={fk.required!r}, unique={fk.unique!r})")
+        out.append(
+            f"SpecField(name={fk.column!r}, type='uuid', required={fk.required!r}, unique={fk.unique!r})"
+        )
     return out
 
 
@@ -76,7 +104,8 @@ class DataImportModule:
         if not entities:
             return {}
         files: FileTree = {
-            template.rsplit(".", 1)[0]: read_verbatim(_TEMPLATES, template) for template in _VERBATIM
+            template.rsplit(".", 1)[0]: read_verbatim(_TEMPLATES, template)
+            for template in _VERBATIM
         }
         files["app/imports/fields.py"] = render_template(
             self._env,
@@ -87,6 +116,7 @@ class DataImportModule:
             self._env,
             "app/imports/router.py.j2",
             entities=entities,
+            may_list={e.name: caller_may_list(e) for e in entities},
             with_access=any(e.access_ops for e in entities),
             export_cap=EXPORT_ROW_CAP,
         )

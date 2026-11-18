@@ -131,6 +131,7 @@ async def import_expenses(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=False,
     )
 
 
@@ -190,6 +191,7 @@ async def import_payrolls(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 

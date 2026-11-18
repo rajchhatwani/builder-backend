@@ -51,10 +51,15 @@ def check_deployment(spec: Spec, add: Add) -> None:
 
 def _check_slug(spec: Spec, block: SpecDeployment, add: Add) -> None:
     """Resource names are `<slug>-<env>` cut to a cloud limit (32 for the AWS load balancer,
-    30 for GCP service accounts such as `<slug>-deploy-<env>`): longer slugs collide."""
+    30 for GCP service accounts such as `<slug>-deploy-<env>`, 32 for the Azure Container Apps
+    environment): longer slugs collide."""
     longest_env = max((len(e.name) for e in block.environments), default=0)
     slug = spec.project.slug
-    limits = {"aws": 32 - 1 - longest_env, "gcp": 30 - len("-deploy-") - longest_env}
+    limits = {
+        "aws": 32 - 1 - longest_env,
+        "gcp": 30 - len("-deploy-") - longest_env,
+        "azure": 32 - 1 - longest_env,  # Container Apps environment name
+    }
     limit = limits.get(block.cloud)
     if limit is not None and len(slug) > limit:
         add(
@@ -106,6 +111,12 @@ def _check_sizes(cloud: str, env: SpecDeployEnvironment, path: str, add: Add) ->
         add(f"{path}.cpu", "invalid_value", f"{cloud.upper()} offers only: {pairs}")
     if env.min_instances is not None and not 0 <= env.min_instances <= 100:
         add(f"{path}.min_instances", "invalid_value", "must be between 0 and 100")
+    elif cloud == "aws" and env.min_instances == 0:
+        add(
+            f"{path}.min_instances",
+            "invalid_value",
+            "AWS needs at least 1 (the load balancer cannot start a stopped service)",
+        )
     if env.max_instances is not None and not 1 <= env.max_instances <= 1000:
         add(f"{path}.max_instances", "invalid_value", "must be between 1 and 1000")
     if (

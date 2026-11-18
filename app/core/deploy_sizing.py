@@ -51,6 +51,9 @@ class Profile:
     db_size: str  # small | medium | large, mapped to a class per cloud below
 
 
+# Environments with these names are production: deletion protection on unless the spec says otherwise.
+PROD_NAMES = frozenset({"prod", "production", "live"})
+
 _PROFILES = {
     "small": Profile(512, 1024, 1, 2, 20, "small"),
     "medium": Profile(1024, 2048, 2, 6, 50, "medium"),
@@ -133,7 +136,7 @@ def resolve(
             db_high_availability if db_high_availability is not None else profile != "small"
         ),
         deletion_protection=(
-            deletion_protection if deletion_protection is not None else name == "prod"
+            deletion_protection if deletion_protection is not None else name in PROD_NAMES
         ),
     )
 

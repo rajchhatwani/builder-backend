@@ -31,7 +31,17 @@ concurrency:
   cancel-in-progress: false # never stop a deployment half way
 
 jobs:
+  # A push to main ships only what passes the same checks as a pull request (tests, image scan, migration
+  # check). Promoting an existing image by hand (workflow_dispatch) skips them: that image passed when built.
+  checks:
+    if: ${{ github.event_name == 'push' }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   deploy:
+    needs: checks
+    if: ${{ !cancelled() && (needs.checks.result == 'success' || needs.checks.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: ${{ inputs.environment || '@@FIRST_ENV@@' }}
@@ -104,7 +114,33 @@ jobs:
             -backend-config="use_oidc=true" \
             -backend-config="use_azuread_auth=true"
 
-      # Step 1: make sure the infrastructure exists and is current while the service keeps running the
+      # Terraform creates each secret with a placeholder; a person must replace it. This runs BEFORE the
+      # public service exists, so the service is never started with a known placeholder as its secret.
+      - name: Create the vault and secrets (no service yet)
+        working-directory: deploy/azure
+        run: |
+          IMAGE="${REGISTRY_NAME}.azurecr.io/@@SLUG@@:${IMAGE_TAG}"
+          terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
+            -var "subscription_id=${ARM_SUBSCRIPTION_ID}" -var "registry_name=${REGISTRY_NAME}" \
+            -var "registry_resource_group=${REGISTRY_RG}" -var "image=${IMAGE}" \
+            -target=azurerm_key_vault_secret.app -target=azurerm_role_assignment.vault_admin
+
+      - name: Check that every secret has been set
+        working-directory: deploy/azure
+        run: |
+          STATE="$(terraform show -json)"
+          VAULT="$(jq -r '.values.root_module.resources[] | select(.address == "azurerm_key_vault.main") | .values.name' <<<"$STATE")"
+          STATUS=0
+          for NAME in $(jq -r '.values.root_module.resources[] | select(.address | startswith("azurerm_key_vault_secret.app[")) | .values.name' <<<"$STATE"); do
+            VALUE="$(az keyvault secret show --vault-name "$VAULT" --name "$NAME" --query value -o tsv)"
+            if [ "$VALUE" = "__SET_ME_BEFORE_THE_FIRST_DEPLOYMENT__" ]; then
+              echo "::error::Key Vault secret $NAME in $VAULT still holds the placeholder. Set it: az keyvault secret set --vault-name $VAULT --name $NAME --value '...'"
+              STATUS=1
+            fi
+          done
+          exit $STATUS
+
+      # Step 1 (secrets are verified above): make sure the infrastructure exists and is current while the service keeps running the
       # image it already has (the first deployment has none, so it starts from the new one).
       - name: Terraform apply (infrastructure, service unchanged)
         working-directory: deploy/azure
@@ -114,22 +150,6 @@ jobs:
           terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
             -var "subscription_id=${ARM_SUBSCRIPTION_ID}" -var "registry_name=${REGISTRY_NAME}" \
             -var "registry_resource_group=${REGISTRY_RG}" -var "image=${CURRENT:-$IMAGE}"
-
-      # Terraform creates each secret with a placeholder; a person must replace it. Deploying with a
-      # placeholder would start the service with a meaningless secret, so stop here instead.
-      - name: Check that every secret has been set
-        working-directory: deploy/azure
-        run: |
-          VAULT="$(terraform output -raw key_vault)"
-          STATUS=0
-          for NAME in $(terraform output -json secrets_to_fill | jq -r '.[]'); do
-            VALUE="$(az keyvault secret show --vault-name "$VAULT" --name "$NAME" --query value -o tsv)"
-            if [ "$VALUE" = "__SET_ME_BEFORE_THE_FIRST_DEPLOYMENT__" ]; then
-              echo "::error::Key Vault secret $NAME in $VAULT still holds the placeholder. Set it: az keyvault secret set --vault-name $VAULT --name $NAME --value '...'"
-              STATUS=1
-            fi
-          done
-          exit $STATUS
 
       # Step 2: apply the database migrations with the NEW image before any traffic reaches it. Write
       # migrations so the previous version keeps working against the new schema (add first, remove later).

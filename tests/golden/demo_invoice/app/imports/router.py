@@ -129,6 +129,7 @@ async def import_invoices(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 
@@ -188,6 +189,7 @@ async def import_suppliers(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=True,
     )
 
 

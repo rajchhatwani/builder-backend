@@ -31,7 +31,17 @@ concurrency:
   cancel-in-progress: false # never stop a deployment half way
 
 jobs:
+  # A push to main ships only what passes the same checks as a pull request (tests, image scan, migration
+  # check). Promoting an existing image by hand (workflow_dispatch) skips them: that image passed when built.
+  checks:
+    if: ${{ github.event_name == 'push' }}
+    uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
+
   deploy:
+    needs: checks
+    if: ${{ !cancelled() && (needs.checks.result == 'success' || needs.checks.result == 'skipped') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     environment: ${{ inputs.environment || 'dev' }}

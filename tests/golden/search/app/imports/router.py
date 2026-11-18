@@ -128,6 +128,7 @@ async def import_tickets(
         hidden_read=hidden_read,
         dry_run=dry_run,
         make_payload=payload,
+        may_list=False,
     )
 
 

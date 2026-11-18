@@ -7,7 +7,8 @@ earlier row of the same file, so re-uploading a file creates nothing. The table 
 candidate keys of the file are looked up with bounded IN queries per chunk (a cap that would be hit refuses the
 file with a 422, never a silent partial check). Rows the caller may not read are never echoed: a rejected row
 shows only columns that are not hidden fields, and a key that includes a field the caller may not read is
-never answered with "duplicate" (generic `import_row_rejected` instead), so dedupe is no existence oracle.
+never answered with "duplicate" (generic `import_row_rejected` instead), and neither is an existing row when the
+caller may create but not list the entity, so dedupe is no existence oracle.
 
 Every created row runs the same lifecycle as Repository.create: before_save and the checks per row, after_save
 inside the one transaction (an error rolls the whole import back), after_commit once the data is safe.
@@ -183,6 +184,7 @@ async def run_import(
     hidden_read: frozenset[str],
     dry_run: bool,
     make_payload: Callable[[BaseModel], dict[str, Any]],
+    may_list: bool = False,
 ) -> ImportResult:
     try:
         parsed = ci.parse_csv(data)
@@ -242,7 +244,9 @@ async def run_import(
     pending: list[tuple[dict[str, Any], HookContext]] = []
     for row_no, raw, values, key in candidates:
         if key in existing or key in seen:
-            if key[0] == "guarded":  # a key over a field the caller may not read: no "duplicate" answer
+            if key[0] == "guarded" or (key in existing and not may_list):
+                # a key over a field the caller may not read, or an existing row of an entity the caller may
+                # create but not list: no "duplicate" answer (only rows repeated inside the file are counted)
                 reject(row_no, raw, [ci.FieldError("row", "import_row_rejected", "this row could not be imported")])
             else:
                 duplicate += 1

@@ -99,7 +99,11 @@ def _env_rows(block: SpecDeployment) -> list[sizing.Resolved]:
 
 def tfvars_for(block: SpecDeployment, env: sizing.Resolved, keycloak: bool = False) -> str:
     """One environment's tfvars: sizing numbers plus the few cloud-specific switches."""
-    dev_like = env.name == block.environments[0].name and not env.deletion_protection
+    dev_like = (
+        env.name == block.environments[0].name
+        and not env.deletion_protection
+        and env.name not in sizing.PROD_NAMES
+    )
     text = sizing.tfvars_text(block.region, env, "development" if dev_like else "production")
     if block.cloud == "aws":
         text += "\n# HTTPS needs a certificate from AWS Certificate Manager in this region:\n"
@@ -142,7 +146,7 @@ def fill_tokens(text: str, values: dict[str, str]) -> str:
 
 class DeployModule:
     name = "deploy"
-    manifest = ModuleManifest(id="deploy", version="1", depends_on=('auth',))
+    manifest = ModuleManifest(id="deploy", version="1", depends_on=("auth",))
 
     def __init__(self) -> None:
         self._env = make_environment(_TEMPLATES)
