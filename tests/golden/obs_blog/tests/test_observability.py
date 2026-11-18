@@ -41,7 +41,7 @@ def build_app() -> FastAPI:
 
     @app.get("/denied")
     async def denied() -> None:
-        log.info("authz_denied", entity="Thing", op="get", user_id="u-1")
+        telemetry.count("app.authz.denied", entity="Thing", op="get")  # what auth/authorize.py does on a denial
         raise HTTPException(status_code=403)
 
     return app
@@ -126,6 +126,8 @@ def test_scrub_span_covers_names_attributes_events_and_status() -> None:
         name=f"GET /x?token={SECRET_QUERY}",
         attributes={
             "http.url": f"http://h/x?token={SECRET_QUERY}&a=1",
+            "url.query": f"token={SECRET_QUERY}&a=1",
+            "http.query": f"token={SECRET_QUERY}&a=1",
             "http.request.header.authorization": "Bearer abcdefghijklmnop",
             "db.password": "hunter2hunter2",
             "ok": 5,
@@ -142,6 +144,8 @@ def test_scrub_span_covers_names_attributes_events_and_status() -> None:
     for secret in (SECRET_QUERY, SECRET_KEY, "abcdefghijklmnop", "hunter2hunter2"):
         assert secret not in text
     assert clean.attributes["ok"] == 5
+    for key in ("url.query", "http.query"):
+        assert "a=" in str(clean.attributes[key])
 
 
 def test_extra_redact_keys_from_the_spec_are_honoured() -> None:

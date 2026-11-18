@@ -92,6 +92,7 @@ class PolicyBinding:
             self._deny("the change would move the row out of your reach")
 
     def _deny(self, reason: str) -> None:
+        _count_denied(self.entity, self.op)
         logger.info(
             "authz_denied",
             entity=self.entity,
@@ -102,6 +103,15 @@ class PolicyBinding:
         raise _forbidden()
 
 
+def _count_denied(entity: str, op: str) -> None:
+    """Count the denial in the app.authz.denied metric when the project has telemetry (independent of LOG_LEVEL)."""
+    try:
+        from app.core import telemetry
+    except ImportError:
+        return
+    telemetry.count("app.authz.denied", entity=entity, op=op)
+
+
 def policy_dependency(
     entity: str, op: str, *, stamp: bool = False, tenant: bool = False
 ) -> Callable[..., Awaitable[Access]]:
@@ -109,6 +119,7 @@ def policy_dependency(
         context = Context(subject=subject_of(user), env=env_of(request))
         decision = plan(POLICY_SET, context, entity, op, sa.column)
         if not decision.allowed:
+            _count_denied(entity, op)
             logger.info(
                 "authz_denied",
                 entity=entity,

@@ -65,7 +65,8 @@ redact.register_secret_keys(EXTRA_REDACT_KEYS)
 
 def _excluded_urls_pattern() -> str | None:
     """Regexes (comma separated) the instrumentation matches against the full request URL."""
-    patterns = [rf"(?:^|://[^/]+){re.escape(path)}(?:\?.*)?$" for path in EXCLUDED_PATHS]
+    # Anchored at the URL start, so a path that only appears in the query string never matches.
+    patterns = [rf"^(?:[A-Za-z][A-Za-z0-9+.-]*://[^/?#]+)?{re.escape(path)}(?:\?.*)?$" for path in EXCLUDED_PATHS]
     return ",".join(patterns) or None
 
 
@@ -73,14 +74,11 @@ def enabled() -> bool:
     return os.environ.get("APP_OTEL_ENABLED", "true").strip().lower() in _TRUE
 
 
-def _endpoint_configured() -> bool:
+def _endpoint_configured(signal: str) -> bool:
+    """The generic OTLP endpoint, or the one for this signal ("TRACES" or "METRICS")."""
     return any(
         os.environ.get(name, "").strip()
-        for name in (
-            "OTEL_EXPORTER_OTLP_ENDPOINT",
-            "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT",
-            "OTEL_EXPORTER_OTLP_METRICS_ENDPOINT",
-        )
+        for name in ("OTEL_EXPORTER_OTLP_ENDPOINT", f"OTEL_EXPORTER_OTLP_{signal}_ENDPOINT")
     )
 
 
@@ -156,10 +154,9 @@ class RedactingExporter(SpanExporter):
 
 _counters: dict[str, Any] = {}
 _meter: metrics.Meter | None = None
-# Log events that are also counted (low-cardinality attributes only).
-_COUNTED_EVENTS: dict[str, tuple[str, tuple[str, ...]]] = {
-    "authz_denied": ("app.authz.denied", ("entity", "op")),
-}
+# Log events that are also counted (low-cardinality attributes only). Empty: app.authz.denied is counted
+# at the denial site (app/auth/authorize.py), because a log processor never sees events below LOG_LEVEL.
+_COUNTED_EVENTS: dict[str, tuple[str, tuple[str, ...]]] = {}
 
 
 def count(name: str, **attributes: str) -> None:
@@ -259,7 +256,7 @@ def setup(
     )
 
     exporter: SpanExporter | None = span_exporter
-    if exporter is None and _endpoint_configured():
+    if exporter is None and _endpoint_configured("TRACES"):
         exporter = OTLPSpanExporter()
     tracer_provider = TracerProvider(resource=resource)  # sampler comes from OTEL_TRACES_SAMPLER*
     if exporter is not None:
@@ -270,7 +267,7 @@ def setup(
 
     meter_provider: MeterProvider | None = None
     reader = metric_reader
-    if reader is None and _endpoint_configured():
+    if reader is None and _endpoint_configured("METRICS"):
         reader = PeriodicExportingMetricReader(OTLPMetricExporter())
     meter_provider = MeterProvider(resource=resource, metric_readers=[reader] if reader else [])
     _meter = meter_provider.get_meter(DEFAULT_SERVICE_NAME)

@@ -135,17 +135,29 @@ async def places_within(
 async def places_nearest(
     session: AsyncSession, user: _t.Any, point: tuple[int, int], n: int, kind: str | None
 ) -> _s.PlaceHits:
-    """Widen the radius (x4 each round, from 1 km) until at least n places are inside it: all places within the
-    radius were read, so the n closest of them are the n closest overall."""
+    """Widen the radius (x4 each round, from 1 km) until at least n places are inside it. When every place inside
+    the radius was read, the n closest of them are the n closest overall. A scan that hit SCAN_CAP read an
+    arbitrary subset, so the radius is halved until a scan is complete (or the answer is flagged truncated)."""
     tn = tenant(user)
     radius = 1000
-    truncated = False
     while True:
         radius = min(radius, _config.MAX_RADIUS_M)
         hits, truncated = await _scan(session, tn, point[0], point[1], radius, kind)
         if len(hits) >= n or radius >= _config.MAX_RADIUS_M:
-            return _s.PlaceHits(items=[_hit(r, d) for d, r in hits[:n]], truncated=truncated)
+            break
         radius *= 4
+    if not truncated:
+        return _s.PlaceHits(items=[_hit(r, d) for d, r in hits[:n]], truncated=False)
+    shrunk = radius
+    while shrunk > 1:
+        shrunk //= 2
+        small, small_truncated = await _scan(session, tn, point[0], point[1], shrunk, kind)
+        if small_truncated:
+            continue
+        if len(small) >= n:  # complete scan holding n places: these are the true n closest
+            return _s.PlaceHits(items=[_hit(r, d) for d, r in small[:n]], truncated=False)
+        break
+    return _s.PlaceHits(items=[_hit(r, d) for d, r in hits[:n]], truncated=True)
 
 
 # --- geofences -------------------------------------------------------------------------------------------
