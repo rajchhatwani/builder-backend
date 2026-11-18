@@ -5,6 +5,7 @@ No database, no clock, no randomness. Same inputs -> byte-identical plan JSON, w
 entities, fields or relations in the inputs. Renames are NEVER guessed: only declared ones are applied.
 """
 
+from dataclasses import replace
 from typing import Any
 
 from app.core.custom_fields import PromotionPlan, promotion_column_type
@@ -375,8 +376,9 @@ def _swapped_parent_fk(b: _Builder, old: Snapshot, new: Snapshot, o: Rel | None,
               action="export the links first, then confirm the drop",
               sql=f"ALTER TABLE {_q(child.table)} DROP COLUMN {_q(o.fk_column)}")
     if n and not n.is_join:
-        if keep_col:
+        if keep_col and o:
             _add_fk_step(b, new, n)
+            _rel_change(b, new, replace(o, on_delete=n.on_delete), n)  # required/kind deltas; the new FK already carries on_delete
         else:
             _rel_add(b, old, new, n)
 
