@@ -7,6 +7,7 @@
 # Needs Docker Compose >= 2.24 (`!reset`).
 x-sandbox-env: &sandbox_env
   BUILDER_DATABASE_URL: postgresql+asyncpg://builder_app:${APP_DB_PASSWORD}@127.0.0.1:5432/builder
+  BUILDER_SANDBOX_DISABLED: "false"
   BUILDER_SANDBOX_RUNNER_URL: http://127.0.0.1:8790
   BUILDER_SANDBOX_RUNNER_TOKEN: ${BB_RUNNER_TOKEN:?set BB_RUNNER_TOKEN (>= 32 chars)}
   BUILDER_SANDBOX_RUNTIME: ${BB_SANDBOX_RUNTIME:-runsc}

@@ -20,14 +20,15 @@ def production_problems(settings: Settings) -> list[str]:
     if not settings.environment_explicit or env in ("local", "test"):
         return []
     out: list[str] = []
-    if not settings.sandbox_runner_url or settings.sandbox_runner_token is None:
-        out.append("BUILDER_SANDBOX_RUNNER_URL and BUILDER_SANDBOX_RUNNER_TOKEN")
-    if settings.sandbox_runtime == "runc":
-        out.append("BUILDER_SANDBOX_RUNTIME (runc is not an isolation boundary)")
-    if not settings.preview_root:
-        out.append("BUILDER_PREVIEW_ROOT")
-    if not settings.preview_scheduler_enabled:
-        out.append("BUILDER_PREVIEW_SCHEDULER_ENABLED=true")
+    if not settings.sandbox_disabled:
+        if not settings.sandbox_runner_url or settings.sandbox_runner_token is None:
+            out.append("BUILDER_SANDBOX_RUNNER_URL and BUILDER_SANDBOX_RUNNER_TOKEN")
+        if settings.sandbox_runtime == "runc":
+            out.append("BUILDER_SANDBOX_RUNTIME (runc is not an isolation boundary)")
+        if not settings.preview_root:
+            out.append("BUILDER_PREVIEW_ROOT")
+        if not settings.preview_scheduler_enabled:
+            out.append("BUILDER_PREVIEW_SCHEDULER_ENABLED=true")
     if settings.key_provider == "env":
         if settings.allow_env_key_provider:
             log.warning("env_key_provider_allowed: data-at-rest keys derive from SECRET_KEY")

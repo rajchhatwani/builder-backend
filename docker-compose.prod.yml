@@ -66,6 +66,8 @@ services:
       BUILDER_TRUST_PROXY_HEADERS: "true"
       # Required in production: the org-scoped second wall. The tables are switched on by deploy.sh (rls enable).
       BUILDER_RLS_ENABLED: "true"
+      # No sandbox runner in this stack; docker-compose.sandbox.yml turns it back on (false).
+      BUILDER_SANDBOX_DISABLED: "true"
       BUILDER_SIGNUP_MODE: ${BB_SIGNUP_MODE:-closed}
       BUILDER_ADMIN_MFA_REQUIRED: ${BB_ADMIN_MFA_REQUIRED:-true}
       BUILDER_BOOTSTRAP_ADMIN_EMAIL: ${BB_BOOTSTRAP_ADMIN_EMAIL:-}

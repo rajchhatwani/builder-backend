@@ -173,6 +173,9 @@ class Settings(BaseSettings):
     # unix:///path.sock, https:// for a remote one) every sandbox call goes to the runner and the
     # API process never runs the docker binary. The token is mandatory with it.
     sandbox_runner_url: str | None = None
+    # Explicit "previews and the agent sandbox are off in this deployment" (the base prod compose). Only
+    # lets production_problems() skip the runner/preview requirements; it enables nothing.
+    sandbox_disabled: bool = False
     sandbox_runner_token: SecretStr | None = None
     # Runner side: the only directory a code mount may come from (== preview_root/workspace_root).
     runner_mount_root: str | None = None
