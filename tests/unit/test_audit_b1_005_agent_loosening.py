@@ -136,3 +136,28 @@ async def test_f0939_approved_set_section_other_section_refused(monkeypatch: pyt
     with pytest.raises(approved_effects.AppError) as ei:
         await approved_effects._d_op(None, run, {"op_type": "set_section", "section": "hooks", "items": []})  # type: ignore[arg-type]
     assert ei.value.code == "approval_not_applicable" and ei.value.status_code == 422
+
+
+async def test_f1007_renamed_open_transition_needs_approval(monkeypatch: pytest.MonkeyPatch) -> None:
+    cur = _sm()
+    _patch(monkeypatch, [cur], [cur])
+    new = _sm()
+    new["transitions"][0]["name"] = "pay2"
+    new["transitions"][0]["roles"] = ["viewer"]
+    r = await _set([new])
+    assert r.approval is not None and r.approval.kind == ApprovalKind.D, r.failures
+
+
+async def test_f1008_already_drafted_edit_is_not_reprompted(monkeypatch: pytest.MonkeyPatch) -> None:
+    base = _sm()
+    base["transitions"][0]["when"] = "x"
+    cur = _sm()
+    cur["transitions"][0]["when"] = "x and y"  # approved rewrite, already in the draft
+    _patch(monkeypatch, [cur], [base])
+
+    async def apply(*a: Any, **k: Any) -> Any:
+        return spec_tools.ToolResult(ok=True)
+
+    monkeypatch.setattr(spec_tools, "_apply", apply)
+    r = await _set([copy.deepcopy(cur)])
+    assert r.ok and r.approval is None, r.failures

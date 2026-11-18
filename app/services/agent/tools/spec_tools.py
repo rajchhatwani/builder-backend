@@ -173,15 +173,18 @@ async def _loosened_transitions(ctx: ToolContext, items: list[dict[str, Any]]) -
         ent = str(item.get("entity"))
         olds = [m for m in (cur.get(ent), base.get(ent)) if m is not None]
         if not olds:
-            continue
+            continue  # a brand-new machine is a new feature (B1-023 accepts the guide example); only edits to existing ones loosen
+        cur_ts = {str(t.get("name")): _norm_transition(t) for t in (cur.get(ent) or {}).get("transitions") or []}
         old_ts = [{str(t.get("name")): _norm_transition(t) for t in o.get("transitions") or []} for o in olds]
         for t in item.get("transitions") or []:
+            name = str(t.get("name"))
             new_t = _norm_transition(t)
-            known = [ts[str(t.get("name"))] for ts in old_ts if str(t.get("name")) in ts]
-            if any(transition_loosened(b, new_t) for b in known) or (
-                not known and (new_t.get("auto") or not new_t.get("roles"))
-            ):
-                out.add(f"{ent}.{t.get('name')}")
+            if cur_ts.get(name) == new_t:
+                continue  # already in the draft (approved earlier): not a new change
+            known = [ts[name] for ts in old_ts if name in ts]
+            # no same-name predecessor (new / renamed transition, or a whole new machine): it grants access
+            if not known or any(transition_loosened(b, new_t) for b in known):
+                out.add(f"{ent}.{name}")
     return sorted(out)
 
 
