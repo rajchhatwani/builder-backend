@@ -699,3 +699,18 @@ def test_permission_references_are_checked(change: dict[str, Any], path: str, co
 def test_duplicate_permission_slots_are_rejected() -> None:
     found = codes(issues_for(disabled_with(permissions=[permission(), permission(roles=[])])))
     assert ("auth.permissions[1]", "duplicate_name") in found
+
+
+@pytest.mark.parametrize(
+    "kw",
+    [
+        {"max_value": 3_000_000_000},
+        {"min_value": -3_000_000_000},
+        {"min_value": 2_147_483_647 + 1},
+        {"default_value": "3000000000"},
+    ],
+)
+def test_integer_custom_field_must_fit_int32(kw: dict[str, Any]) -> None:
+    """Audit F-1027: the column is sa.Integer, so bounds/default beyond 32 bits are rejected."""
+    found = codes(issues_for(with_fields(custom("n", "integer", **kw))))
+    assert any(p.startswith("auth.registration.custom_fields[0].") for p, _ in found), found

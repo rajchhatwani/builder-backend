@@ -1280,6 +1280,9 @@ def _check_auth_custom_fields(auth: SpecAuth, ctx: _Ctx) -> None:
         _check_custom_field_constraints(f, p, ctx)
 
 
+_INT32 = (-(2**31), 2**31 - 1)  # auth custom integer fields are stored in sa.Integer
+
+
 def _check_custom_field_constraints(f: SpecAuthCustomField, p: str, ctx: _Ctx) -> None:
     if f.type == "enum":
         values = f.enum_values or []
@@ -1309,6 +1312,8 @@ def _check_custom_field_constraints(f: SpecAuthCustomField, p: str, ctx: _Ctx) -
             ctx.add(f"{p}.{attr}", "not_applicable", "only valid for integer and float fields")
         elif not math.isfinite(bound):
             ctx.add(f"{p}.{attr}", "invalid_value", "must be a finite number")
+        elif f.type == "integer" and not _INT32[0] <= bound <= _INT32[1]:
+            ctx.add(f"{p}.{attr}", "out_of_range", f"must be within {_INT32[0]}..{_INT32[1]}")
     if (
         f.min_value is not None
         and f.max_value is not None
@@ -1326,7 +1331,8 @@ def _check_custom_default(f: SpecAuthCustomField, p: str, ctx: _Ctx) -> None:
     try:
         match f.type:
             case "integer":
-                int(value)
+                if not _INT32[0] <= int(value) <= _INT32[1]:
+                    raise ValueError(value)
             case "float":
                 if not math.isfinite(float(value)):
                     raise ValueError(value)

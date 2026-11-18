@@ -37,6 +37,9 @@ from app.auth.config import get_auth_settings
 from app.auth.middleware import SecurityHeadersMiddleware
 {% endif %}
 from app.auth.provider_lock import ensure_provider_lock
+{% if auth.provider != "keycloak" %}
+from app.auth.service import drain_deliveries
+{% endif %}
 from app.auth.router import router as _auth_router
 {% endif %}
 {% if booking %}
@@ -169,6 +172,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% endif %}
 {% else %}
     yield
+{% endif %}
+{% if auth and auth.provider != "keycloak" %}
+    await drain_deliveries()  # mails / SMS still queued when the app stops get their chance to leave
 {% endif %}
 {% if observability %}
     telemetry.shutdown()  # flush what has not been exported yet

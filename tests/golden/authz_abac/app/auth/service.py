@@ -21,6 +21,13 @@ from app.core.errors import AppError, ConflictError
 logger = structlog.get_logger()
 _DELIVERIES: set[asyncio.Future[None]] = set()
 
+
+async def drain_deliveries(timeout: float = 10.0) -> None:
+    """Wait (bounded) for queued mails / SMS to finish; called when the app shuts down."""
+    pending = {task for task in _DELIVERIES if not task.done()}
+    if pending:
+        await asyncio.wait(pending, timeout=timeout)
+
 # Purposes of a stored verification code, and the channel that delivers each.
 EMAIL_VERIFY = "email_verify"
 MAGIC_LOGIN = "magic_login"
@@ -452,6 +459,8 @@ class AuthService:
                 await send()
             except (DeliveryError, AppError) as exc:
                 logger.error("auth_delivery_failed", purpose=purpose, error=str(exc))
+            except Exception as exc:  # noqa: BLE001 - a background task must never go unreported
+                logger.error("auth_delivery_failed", purpose=purpose, error=repr(exc))
 
         # Not awaited: a slow mail server must not make a known address answer slower than an
         # unknown one. The task is kept referenced until it finishes.

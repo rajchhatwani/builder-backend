@@ -143,3 +143,14 @@ def test_soft_delete_clears_custom_columns(shop: dict[str, str]) -> None:
     service = shop["app/auth/service.py"]
     delete = service.split("async def delete_account", 1)[1].split("# --- tokens", 1)[0]
     assert "_CORE_COLUMNS" in delete or "__table__.columns" in delete
+
+
+def test_integer_variants_stay_inside_int32() -> None:
+    """Audit F-1027: sample+n / sample-n never leave the 32-bit column range."""
+    from app.core.generator.features.auth.module import _variant
+
+    up = _variant("integer", "2147483647", low=2147483647)
+    down = _variant("integer", "-2147483648", high=-2147483648)
+    for n in range(10):
+        assert -(2**31) <= _eval(up, n) <= 2**31 - 1  # type: ignore[operator]
+        assert -(2**31) <= _eval(down, n) <= 2**31 - 1  # type: ignore[operator]

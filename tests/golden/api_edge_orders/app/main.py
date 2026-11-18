@@ -13,6 +13,7 @@ from app.api_edge.install import install as install_api_edge
 from app.auth.config import get_auth_settings
 from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
+from app.auth.service import drain_deliveries
 from app.auth.router import router as _auth_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers, reject_nul_characters
@@ -29,6 +30,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_auth_settings()  # a missing secret stops the app here, with a clear message
     await ensure_provider_lock()  # refuses to start on a database used by another provider
     yield
+    await drain_deliveries()  # mails / SMS still queued when the app stops get their chance to leave
     await engine.dispose()
 
 

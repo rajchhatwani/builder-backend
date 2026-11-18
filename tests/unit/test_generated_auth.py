@@ -874,3 +874,81 @@ def test_tenant_projects_expose_the_tenant_routes_and_require_a_name(
     assert "tenant_name" in (workspace / "app/auth/schemas.py").read_text(encoding="utf-8")
     assert '"/tenant"' not in (twilio / "app/auth/router.py").read_text(encoding="utf-8")
     assert "tenant_name" not in (twilio / "app/auth/schemas.py").read_text(encoding="utf-8")
+
+
+def test_failure_limiter_does_not_count_concurrent_successes(twilio: Path) -> None:
+    """Audit F-1026: overlapping valid sign-ins must not use up the failure budget."""
+    run_script(
+        twilio,
+        """
+        import asyncio
+        from app.auth.ratelimit import FailureRateLimiter
+        from app.core.errors import AppError
+
+        class Req:
+            class client:
+                host = "10.0.0.1"
+
+        async def call(limiter, fail):
+            try:
+                gen = limiter(Req())
+                await gen.__anext__()
+            except AppError as exc:
+                return exc.status_code
+            try:
+                await asyncio.sleep(0.05)
+                if fail:
+                    await gen.athrow(AppError("invalid_credentials", "no", 401))
+                else:
+                    await gen.aclose()
+            except AppError as exc:
+                return exc.status_code
+            return 200
+
+        async def main():
+            limiter = FailureRateLimiter("t", "5/hour")
+            ok = await asyncio.gather(*[call(limiter, False) for _ in range(8)])
+            assert ok == [200] * 8, ok
+            bad = [await call(limiter, True) for _ in range(5)]
+            assert bad == [401] * 5, bad
+            assert await call(limiter, False) == 429
+            # a huge concurrent burst is still bounded
+            limiter.reset()
+            burst = await asyncio.gather(*[call(limiter, True) for _ in range(200)])
+            assert burst.count(429) > 100, burst.count(429)
+
+        asyncio.run(main())
+        """,
+    )
+
+
+def test_drain_deliveries_waits_for_queued_mail(twilio: Path) -> None:
+    """Audit F-1028: shutdown awaits queued deliveries; stray errors are logged, not lost."""
+    run_script(
+        twilio,
+        """
+        import asyncio
+        from app.auth import service
+
+        sent = []
+
+        async def main():
+            svc = service.AuthService.__new__(service.AuthService)
+
+            async def slow():
+                await asyncio.sleep(0.05)
+                sent.append(1)
+
+            async def boom():
+                raise RuntimeError("smtp exploded")
+
+            await svc._deliver(slow, "password_reset")
+            await svc._deliver(boom, "password_reset")
+            assert not sent
+            await service.drain_deliveries(timeout=5)
+            assert sent == [1]
+            assert not service._DELIVERIES
+
+        asyncio.run(main())
+        """,
+    )

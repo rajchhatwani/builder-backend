@@ -146,6 +146,10 @@ def _variant(
             if low is not None and high is not None:
                 span = int(high - low) + 1  # stays inside [low, high]; repeats if span < 10
                 return f"{sample} + n % {max(span, 1)}"
+            if field_type == "integer":  # sa.Integer is 32 bit: never step past its ends
+                if high is not None:
+                    return f"max({sample} - n, -2147483648)"
+                return f"min({sample} + n, 2147483647)"
             if high is not None:
                 return f"{sample} - n"  # counts down from the maximum
             return f"{sample} + n"

@@ -68,6 +68,15 @@ class FailureRateLimiter(RateLimiter):
     Once a client has `limit` failures inside the window every further call gets 429 until the
     oldest failure ages out."""
 
+    # Calls in flight are bounded separately from failures: a handful of overlapping valid
+    # sign-ins (or a proxy's shared address) must not 429, but a parallel guessing burst is
+    # still capped at `count + _INFLIGHT_EXTRA` attempts before the first failure lands.
+    _INFLIGHT_EXTRA = 20
+
+    def __init__(self, name: str, limit: str) -> None:
+        super().__init__(name, limit)
+        self._inflight: defaultdict[str, int] = defaultdict(int)
+
     async def __call__(self, request: Request) -> AsyncIterator[None]:  # type: ignore[override]
         client = request.client.host if request.client else "unknown"
         now = time.monotonic()
@@ -81,25 +90,23 @@ class FailureRateLimiter(RateLimiter):
                 f"too many requests; retry in {retry_after} seconds",
                 429,
             )
-        # Reserve the slot before the endpoint runs, so a concurrent burst is counted too;
-        # give it back unless the endpoint rejects the call with a client error.
-        hits.append(now)
+        if len(hits) + self._inflight[client] >= self.count + self._INFLIGHT_EXTRA:
+            raise AppError("rate_limited", "too many requests; retry in 1 seconds", 429)
+        self._inflight[client] += 1
         try:
             yield
         except AppError as exc:
-            if not (400 <= exc.status_code < 500 and exc.status_code != 429):
-                self._release(client, now)
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                self._hits[client].append(time.monotonic())
             raise
-        except BaseException:
-            self._release(client, now)
-            raise
-        else:
-            self._release(client, now)
+        finally:
+            self._inflight[client] -= 1
+            if self._inflight[client] <= 0:
+                self._inflight.pop(client, None)
 
-    def _release(self, client: str, stamp: float) -> None:
-        hits = self._hits.get(client)
-        if hits is not None and stamp in hits:
-            hits.remove(stamp)
+    def reset(self) -> None:
+        super().reset()
+        self._inflight.clear()
 
 
 def reset_all() -> None:
