@@ -132,6 +132,18 @@ describe('AgentApprovalsPage', () => {
     expect(q('agentapprovals-notice')!.textContent).toBe('create_ticket: approved.')
     expect(calls.filter((c) => c.url.includes('/proposals?')).length).toBeGreaterThan(1)
   })
+  it('F-1289: a refresh keeps the list mounted (focus survives) instead of flashing a loading state', async () => {
+    const { f } = api()
+    await load(f)
+    const list = q('proposal-list')!, head = q('proposal-head-p1') as HTMLElement
+    head.focus()
+    await click(q('agentapprovals-refresh'))
+    expect(q('proposal-list')).toBe(list)
+    expect(q('proposal-head-p1')).toBe(head)
+    expect(document.activeElement).toBe(head)
+    await click(q('approve-p1'))
+    expect(q('proposal-list')).toBe(list)
+  })
   it('rejects with a reason after confirming, and can cancel', async () => {
     const { f, calls } = api()
     await load(f); await click(q('reject-p1'))

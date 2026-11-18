@@ -109,7 +109,9 @@ export function useSection<Row, Body>(
       const issues = await fetchIssues()
       setS((p) => ({
         // rows edited while the save was in flight are newer than what was sent: they stay dirty
-        ...p, saving: false, saved: read.items, version: read.version, dirty: p.rows !== cur.rows, issues,
+        ...p, saving: false, saved: read.items, version: read.version, dirty: p.rows !== cur.rows,
+        // fetched indexes refer to the saved list: when rows changed meanwhile they would land on the wrong rows, so keep the current ones
+        issues: p.rows === cur.rows ? issues : p.issues,
         savedNote: `Saved (version ${read.version}).`,
         // keep the user's rows (and keys): the server echoes them
       }))

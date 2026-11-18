@@ -307,6 +307,55 @@ describe('BookingsPage', () => {
     expect((q('bookings-range-hold') as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('F-1288: a pool cell with two bookings in the same start slot lists and acts on each of them', async () => {
+    const pool = (o: Record<string, unknown>) => bk({ resource_id: 'r2', resource_name: 'Bike pool', kind: 'bikes', mode: 'pool', starts_at: '2026-12-02T09:00:00Z', ends_at: '2026-12-02T11:00:00Z', ...o })
+    const two = [pool({ id: 'pa', status: 'confirmed', customer_ref: 'ANNA' }), pool({ id: 'pb', status: 'held', customer_ref: 'ZED', hold_expires_at: '2026-12-02T10:10:00Z' })]
+    const { f, calls } = api((m, url) => (m === 'GET' && url.includes('/booking/bookings?') ? json({ items: two, total: 2, limit: 200, offset: 0 }) : undefined), [POOL])
+    await load(f)
+    await click(cell('2026-12-02|10:00'))
+    const infos = qa('bookings-booking-info').map((e) => e.textContent)
+    expect(infos).toHaveLength(2)
+    expect(infos.join(' ')).toContain('ANNA'); expect(infos.join(' ')).toContain('ZED')
+    await click(q('bookings-confirm'))
+    expect(calls.some((c) => c.m === 'POST' && c.url.endsWith('/booking/bookings/pb/confirm'))).toBe(true)
+    expect(qa('bookings-cancel-btn')).toHaveLength(2)
+    await click(qa('bookings-cancel-btn')[1])
+    await click(q('bookings-cancel-yes'))
+    expect(calls.some((c) => c.m === 'POST' && c.url.endsWith('/booking/bookings/pb/cancel'))).toBe(true)
+  })
+
+  it('F-1291: customer, notes and reason are cleared when another cell is chosen and after a successful action', async () => {
+    const { f } = api()
+    await load(f)
+    await click(cell(TUE9))
+    await setInput(q('bookings-customer') as HTMLInputElement, 'Anna')
+    await setInput(q('bookings-notes') as HTMLInputElement, 'allergy')
+    await click(cell('2026-12-04|09:00'))
+    expect((q('bookings-customer') as HTMLInputElement).value).toBe('')
+    expect((q('bookings-notes') as HTMLInputElement).value).toBe('')
+    await setInput(q('bookings-customer') as HTMLInputElement, 'Bob')
+    await click(q('bookings-hold'))
+    expect((q('bookings-customer') as HTMLInputElement).value).toBe('')
+    await click(cell(TUE930))
+    await click(q('bookings-cancel-btn'))
+    await setInput(q('bookings-reason') as HTMLInputElement, 'sick')
+    await click(cell(WED9))
+    await click(q('bookings-cancel-btn'))
+    expect((q('bookings-reason') as HTMLInputElement).value).toBe('')
+  })
+
+  it('F-1292: warns when the booking or resource list is capped below its total', async () => {
+    const { f } = api((m, url) => {
+      if (m !== 'GET') return undefined
+      if (url.includes('/booking/bookings?')) return json({ items: url.includes('from=2026-11-29') ? BOOKINGS : [], total: 250, limit: 200, offset: 0 })
+      if (url.includes('/booking/resources?')) return json({ items: [R1], total: 300, limit: 200, offset: 0 })
+      return undefined
+    })
+    await load(f)
+    expect(q('bookings-truncated')).not.toBeNull()
+    expect(q('bookings-resources-truncated')).not.toBeNull()
+  })
+
   it('has no axe violations (grid, selection, cancel confirm, range form)', async () => {
     const { f } = api()
     const host = await load(f)

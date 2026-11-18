@@ -29,6 +29,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
   const tokenId = useId(), statusId = useId(), textId = useId()
+  const loadedKey = useRef('')
   const rowRefs = useRef(new Map<number, HTMLButtonElement>())
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
@@ -39,12 +40,15 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
     return { status: r.status, json }
   }, [origin, active, doFetch])
 
-  useEffect(() => { setActive(''); setToken(''); setList({ s: 'idle' }); setStats({ s: 'idle' }); setErrors({}); setNotice(null); setOffset(0); setForms(null); setRuns({}) }, [projectId])
+  useEffect(() => { loadedKey.current = ''; setActive(''); setToken(''); setList({ s: 'idle' }); setStats({ s: 'idle' }); setErrors({}); setNotice(null); setOffset(0); setForms(null); setRuns({}) }, [projectId])
 
   useEffect(() => {
     if (!active) return
     let dead = false
-    setList({ s: 'loading' })
+    // same status and page as the last load: refresh in place so the rows (focus, scroll) stay mounted
+    const key = `${active}|${status}|${offset}`
+    if (loadedKey.current !== key) setList({ s: 'loading' })
+    loadedKey.current = key
     void (async () => {
       try {
         const r = await call('GET', `/ai/agents/proposals?status=${encodeURIComponent(status)}&limit=${LIMIT}&offset=${offset}`)

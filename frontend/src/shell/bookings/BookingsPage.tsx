@@ -3,7 +3,7 @@ import { sendRequest } from '../workbench/sendRequest'
 import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
 import { newIdempotencyKey } from '../ledger/ledgerLogic'
 import {
-  addDays, bookingErrorMessage, buildGrid, cancellationNote, findOverlaps, formatDay, formatInstant, localParts, moveFocus, parseBookingJson, parseLocalInput,
+  addDays, bookingErrorMessage, buildGrid, cancellationNote, findOverlaps, formatDay, formatInstant, isActive, localParts, moveFocus, parseBookingJson, parseLocalInput,
   weekInstants, weekRange, type Booking, type Cell, type CellState, type Resource, type Slot,
 } from './calendarLogic'
 
@@ -35,7 +35,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [confirmCancel, setConfirmCancel] = useState(false)
+  const [confirmCancel, setConfirmCancel] = useState<string | null>(null) // id of the booking whose cancel is being confirmed
   const [idem, setIdem] = useState(() => newIdempotencyKey())
   const [customer, setCustomer] = useState('')
   const [notes, setNotes] = useState('')
@@ -111,10 +111,16 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   }, [exists, focus])
   const overlapsFound = useMemo(() => (bookings.s === 'ok' ? findOverlaps(bookings.v.items, nowMs) : []), [bookings]) // eslint-disable-line react-hooks/exhaustive-deps
   const selected: Cell | null = grid && selKey ? grid.cells.flat().find((c) => c?.key === selKey) ?? null : null
+  // every booking in the cell, active ones first (a pool/range cell can hold several); a dead one only when nothing is active
+  const shown = useMemo<Booking[]>(() => {
+    if (!selected) return []
+    const act = selected.bookings.filter((b) => isActive(b, nowMs))
+    return act.length ? act : selected.booking ? [selected.booking] : []
+  }, [selected, nowMs])
   const reload = () => setRefresh((n) => n + 1)
 
   function choose(c: Cell) {
-    setSelKey(c.key); setError(null); setNotice(null); setConfirmCancel(false); setIdem(newIdempotencyKey())
+    setSelKey(c.key); setError(null); setNotice(null); setConfirmCancel(null); setCustomer(''); setNotes(''); setReason(''); setIdem(newIdempotencyKey())
   }
   function onKey(e: React.KeyboardEvent, r: number, c: number) {
     if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return
@@ -128,7 +134,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
     setBusy(true); setError(null); setNotice(null)
     try {
       const r = await run()
-      if (r.status >= 200 && r.status < 300) { setNotice(ok(r.json as Booking)); setConfirmCancel(false); setIdem(newIdempotencyKey()); reload() }
+      if (r.status >= 200 && r.status < 300) { setNotice(ok(r.json as Booking)); setConfirmCancel(null); setCustomer(''); setNotes(''); setReason(''); setIdem(newIdempotencyKey()); reload() }
       else { setError(bookingErrorMessage(r.status, r.json)); reload() } // state may have changed (slot taken, hold expired): show the truth
     } catch (e) { setError(msg(e, 'Could not reach the booking API')) } finally { setBusy(false) }
   }
@@ -163,6 +169,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
 
       {active && resources.s === 'loading' && <p role="status" className="muted" data-testid="bookings-resources-loading">Loading resources…</p>}
       {active && resources.s === 'error' && <p role="alert" className="error-text" data-testid="bookings-resources-error">{resources.m}</p>}
+      {active && resources.s === 'ok' && (resources.v.total ?? 0) > resources.v.items.length && <p role="alert" className="error-text" data-testid="bookings-resources-truncated">Only the first {resources.v.items.length} of {resources.v.total} resources are listed.</p>}
       {active && resources.s === 'ok' && resources.v.items.length === 0 && <p className="muted" data-testid="bookings-resources-empty">No bookable resources yet. Create one with POST /booking/resources.</p>}
 
       {active && resources.s === 'ok' && resource && week && (
@@ -183,6 +190,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
           {(avail.s === 'loading' || bookings.s === 'loading') && <p role="status" className="muted" data-testid="bookings-loading">Loading the week…</p>}
           {avail.s === 'error' && <p role="alert" className="error-text" data-testid="bookings-grid-error">{avail.m}</p>}
           {bookings.s === 'error' && <p role="alert" className="error-text" data-testid="bookings-grid-error-bookings">{bookings.m}</p>}
+          {bookings.s === 'ok' && (bookings.v.total ?? 0) > bookings.v.items.length && <p role="alert" className="error-text" data-testid="bookings-truncated">Only the first {bookings.v.items.length} of {bookings.v.total} bookings this week are shown, so some slots may look free that are not.</p>}
           {overlapsFound.length > 0 && <p role="alert" className="error-text" data-testid="bookings-overlap-warning">{overlapsFound.length} overlapping active booking pair(s) are shown below. The server should refuse these, please report it.</p>}
 
           {grid && grid.times.length === 0 && <p className="muted" data-testid="bookings-grid-empty">Nothing bookable or booked this week. Try another week{resource.mode === 'slot' ? ' (slots come from the resource schedule)' : ''}.</p>}
@@ -234,13 +242,39 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
             {selected && (
               <div data-testid="bookings-selected" data-state={selected.state} className="stack">
                 <h2>{formatDay(selected.day)} {selected.time} ({selected.label})</h2>
-                {selected.booking && (
-                  <p className="small-text" data-testid="bookings-booking-info">
-                    Booking {selected.booking.status}{selected.booking.customer_ref ? ` for ${selected.booking.customer_ref}` : ''}, {formatInstant(selected.booking.starts_at, tz)} to {formatInstant(selected.booking.ends_at, tz)}
-                    {selected.booking.status === 'held' && selected.booking.hold_expires_at ? `; hold expires ${formatInstant(selected.booking.hold_expires_at, tz)}` : ''}
-                    {selected.booking.status === 'cancelled' ? `. ${cancellationNote(selected.booking)}` : ''}
-                  </p>
-                )}
+                {shown.map((bk) => (
+                  <div key={bk.id} className="stack" data-testid="bookings-booking">
+                    <p className="small-text" data-testid="bookings-booking-info">
+                      Booking {bk.status}{bk.customer_ref ? ` for ${bk.customer_ref}` : ''}, {formatInstant(bk.starts_at, tz)} to {formatInstant(bk.ends_at, tz)}
+                      {bk.status === 'held' && bk.hold_expires_at ? `; hold expires ${formatInstant(bk.hold_expires_at, tz)}` : ''}
+                      {bk.status === 'cancelled' ? `. ${cancellationNote(bk)}` : ''}
+                    </p>
+                    {isActive(bk, nowMs) && bk.status === 'held' && (
+                      <div className="hstack">
+                        <button type="button" disabled={busy} onClick={() => void confirm(bk)} data-testid="bookings-confirm">Confirm booking</button>
+                        <button type="button" className="outline" disabled={busy} onClick={() => setConfirmCancel(bk.id)} data-testid="bookings-cancel-btn">Cancel hold</button>
+                      </div>
+                    )}
+                    {isActive(bk, nowMs) && bk.status === 'confirmed' && (
+                      <button type="button" className="outline" disabled={busy} onClick={() => setConfirmCancel(bk.id)} data-testid="bookings-cancel-btn">Cancel booking</button>
+                    )}
+                    {confirmCancel === bk.id && (
+                      <div role="group" aria-label="Confirm cancellation" data-testid="bookings-cancel-confirm" className="stack">
+                        <p className="small-text">
+                          {bk.status === 'held'
+                            ? 'Cancelling a hold is free.'
+                            : 'Cancelling a confirmed booking close to its start may cost the cancellation fee set in the project spec. The exact fee is recorded and shown here once it is cancelled.'}
+                        </p>
+                        <label htmlFor={`${reasonId}-${bk.id}`}>Reason (optional)</label>
+                        <input id={`${reasonId}-${bk.id}`} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} data-testid="bookings-reason" />
+                        <div className="hstack">
+                          <button type="button" disabled={busy} onClick={() => void cancel(bk)} data-testid="bookings-cancel-yes">Yes, cancel</button>
+                          <button type="button" className="outline" onClick={() => setConfirmCancel(null)} data-testid="bookings-cancel-no">Keep it</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
                 {selected.label === 'Taken' && <p className="small-text muted" data-testid="bookings-taken">This slot is taken (possibly by a booking you cannot see).</p>}
 
                 {selected.bookable && resource.mode === 'slot' && (
@@ -253,30 +287,6 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
                   </form>
                 )}
 
-                {selected.booking?.status === 'held' && selected.state === 'held' && (
-                  <div className="hstack">
-                    <button type="button" disabled={busy} onClick={() => void confirm(selected.booking!)} data-testid="bookings-confirm">Confirm booking</button>
-                    <button type="button" className="outline" disabled={busy} onClick={() => setConfirmCancel(true)} data-testid="bookings-cancel-btn">Cancel hold</button>
-                  </div>
-                )}
-                {selected.booking?.status === 'confirmed' && selected.state === 'booked' && (
-                  <button type="button" className="outline" disabled={busy} onClick={() => setConfirmCancel(true)} data-testid="bookings-cancel-btn">Cancel booking</button>
-                )}
-                {confirmCancel && selected.booking && (
-                  <div role="group" aria-label="Confirm cancellation" data-testid="bookings-cancel-confirm" className="stack">
-                    <p className="small-text">
-                      {selected.booking.status === 'held'
-                        ? 'Cancelling a hold is free.'
-                        : 'Cancelling a confirmed booking close to its start may cost the cancellation fee set in the project spec. The exact fee is recorded and shown here once it is cancelled.'}
-                    </p>
-                    <label htmlFor={reasonId}>Reason (optional)</label>
-                    <input id={reasonId} value={reason} maxLength={200} onChange={(e) => setReason(e.target.value)} data-testid="bookings-reason" />
-                    <div className="hstack">
-                      <button type="button" disabled={busy} onClick={() => void cancel(selected.booking!)} data-testid="bookings-cancel-yes">Yes, cancel</button>
-                      <button type="button" className="outline" onClick={() => setConfirmCancel(false)} data-testid="bookings-cancel-no">Keep it</button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
           </div>
