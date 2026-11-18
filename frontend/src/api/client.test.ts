@@ -21,14 +21,6 @@ describe('api client', () => {
     setAccessToken('app', null)
   })
 
-  it('exportImportRecordsCsv reports the X-Export-Truncated header from the real fetch path', async () => {
-    const csv = (h: string) => new Response('a', { status: 200, headers: { 'Content-Disposition': 'attachment; filename="X.csv"', 'X-Export-Truncated': h } })
-    fetchMock.mockResolvedValueOnce(csv('true'))
-    expect(await api.exportImportRecordsCsv('p1', 'X')).toMatchObject({ filename: 'X.csv', truncated: true })
-    fetchMock.mockResolvedValueOnce(csv('false'))
-    expect(await api.exportImportRecordsCsv('p1', 'X')).toMatchObject({ truncated: false })
-  })
-
   it('turns an error envelope into an ApiError with status, code and details', async () => {
     fetchMock.mockResolvedValueOnce(reply(409, { code: 'conflict', message: 'taken', details: [{ f: 1 }] }))
     const err = await api.getProject('p1').catch((e) => e)

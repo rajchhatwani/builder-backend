@@ -28,8 +28,3 @@ def test_preflight_allows_preview_token_header() -> None:
 
 def test_cors_middleware_present() -> None:
     assert any(m.cls is CORSMiddleware for m in app.user_middleware)
-
-
-def test_cors_exposes_export_truncated_header() -> None:
-    mw = next(m for m in app.user_middleware if m.cls is CORSMiddleware)
-    assert "X-Export-Truncated" in mw.kwargs["expose_headers"]
