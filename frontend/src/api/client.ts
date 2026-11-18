@@ -696,7 +696,7 @@ export const api = {
     }
     const disposition = response.headers.get('Content-Disposition') ?? ''
     const match = /filename="([^"]+)"/.exec(disposition)
-    return { blob: await response.blob(), filename: match?.[1] ?? fallbackName }
+    return { blob: await response.blob(), filename: match?.[1] ?? fallbackName, truncated: response.headers.get('X-Export-Truncated') === 'true' }
   },
 
   // ── Auth Config ──────────────────────────────────────────────────────────
@@ -1290,7 +1290,7 @@ export const api = {
 }
 
 /** Authenticated binary download (refreshes the session once on 401), like downloadZip. */
-async function downloadBlob(path: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
+async function downloadBlob(path: string, fallbackName: string): Promise<{ blob: Blob; filename: string; truncated: boolean }> {
   const go = () => fetch(`${BASE_URL}${path}`, { credentials: 'include', headers: authHeader('app') })
   const response = await fetchWithRefresh(go)
   if (!response.ok) {

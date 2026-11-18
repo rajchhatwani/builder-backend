@@ -165,6 +165,24 @@ describe('DocumentsPage', () => {
     expect((q('approve-btn') as HTMLButtonElement).disabled).toBe(true); expect((q('reject-btn') as HTMLButtonElement).disabled).toBe(true)
     expect((q('field-edit-total') as HTMLButtonElement).disabled).toBe(true)
   })
+  it('F-1303: the reply of an action on document A does not overwrite document B selected meanwhile', async () => {
+    let release: (r: Response) => void = () => {}
+    const { f } = api((m, url) => (m === 'POST' && url.endsWith('/d1/approve') ? (new Promise<Response>((res) => { release = res }) as unknown as Response) : undefined))
+    await load(f); await open('d1')
+    await act(async () => { (q('approve-btn') as HTMLButtonElement).click() })
+    await click(q('document-row-d2')); await flush()
+    expect(q('document-detail')!.textContent).toContain('Beta April')
+    await act(async () => { release(json(DOC({ status: 'approved', content: undefined }))) })
+    await flush()
+    expect(q('document-detail')!.textContent).toContain('Beta April')
+    expect(q('document-detail')!.textContent).not.toContain('Acme March')
+    expect(q('document-notice')).toBeNull()
+  })
+  it('F-1304: without a client threshold the server review_required decides the low-confidence flag', async () => {
+    const mid = DOC({ fields: [fld({ confidence_bp: 7000, review_required: false })] })
+    await load(api(undefined, [mid]).f); await open()
+    expect(q('field-low-total')).toBeNull()
+  })
   it('disables review when canReview is false', async () => {
     await load(api().f, { canReview: false }); await open()
     expect((q('approve-btn') as HTMLButtonElement).disabled).toBe(true); expect(q('review-disabled-note')!.textContent).toMatch(/role/)

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { sendRequest } from '../workbench/sendRequest'
 import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
 import {
@@ -31,6 +31,9 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   const [refresh, setRefresh] = useState(0)
   const [open, setOpen] = useState<Set<string>>(new Set())
   const [hist, setHist] = useState<{ account: Account; load: Load<Page<AccountEntry>> } | null>(null)
+  const [moreBusy, setMoreBusy] = useState(false)
+  const [moreError, setMoreError] = useState<string | null>(null)
+  const moreRef = useRef(false)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [revKey, setRevKey] = useState('')
   const [revError, setRevError] = useState<string | null>(null)
@@ -100,6 +103,7 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   const reload = () => { setPage(0); setRefresh((n) => n + 1); setHist(null) }
 
   async function showHistory(a: Account) {
+    setMoreError(null)
     setHist({ account: a, load: { s: 'loading' } })
     let dead = false
     await get<Page<AccountEntry>>(`/ledger/accounts/${encodeURIComponent(a.id)}/entries?limit=${HISTORY_PAGE}`, (l) => { if (!dead) setHist((h) => (h && h.account.id === a.id ? { account: a, load: l } : h)) }, () => dead)
@@ -108,18 +112,21 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
 
   async function moreHistory() {
     const h = hist
-    if (!h || h.load.s !== 'ok') return
+    if (!h || h.load.s !== 'ok' || moreRef.current) return
+    moreRef.current = true
+    setMoreBusy(true)
+    setMoreError(null)
     const have = h.load.v
     try {
       const r = await call('GET', `/ledger/accounts/${encodeURIComponent(h.account.id)}/entries?limit=${HISTORY_PAGE}&offset=${have.items.length}`)
       const good = r.status >= 200 && r.status < 300 && isPage(r.json)
+      if (!good) { setMoreError(r.status >= 200 && r.status < 300 ? UNEXPECTED : ledgerErrorMessage(r.status, r.json)); return }
+      const more = r.json as Page<AccountEntry>
       setHist((cur) => {
         if (!cur || cur.account.id !== h.account.id || cur.load.s !== 'ok') return cur
-        if (!good) return { account: cur.account, load: { s: 'error', m: r.status >= 200 && r.status < 300 ? UNEXPECTED : ledgerErrorMessage(r.status, r.json) } }
-        const more = r.json as Page<AccountEntry>
         return { account: cur.account, load: { s: 'ok', v: { items: [...cur.load.v.items, ...more.items], total: more.total ?? cur.load.v.total } } }
       })
-    } catch (e) { setHist((cur) => (cur && cur.account.id === h.account.id ? { account: cur.account, load: { s: 'error', m: msg(e, 'Could not reach the ledger API') } } : cur)) }
+    } catch (e) { setMoreError(msg(e, 'Could not reach the ledger API')) } finally { moreRef.current = false; setMoreBusy(false) }
   }
 
   async function reverse(t: Transaction) {
@@ -196,7 +203,8 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
                     {v.items.length < v.total && (
                       <p data-testid="ledger-history-more-wrap">
                         Showing {v.items.length} of {v.total} entries.{' '}
-                        <button type="button" className="ghost small" data-testid="ledger-history-more" onClick={() => void moreHistory()}>Show more</button>
+                        <button type="button" className="ghost small" data-testid="ledger-history-more" disabled={moreBusy} onClick={() => void moreHistory()}>{moreBusy ? 'Loading…' : 'Show more'}</button>
+                        {moreError && <span role="alert" data-testid="ledger-history-more-error"> {moreError}</span>}
                       </p>
                     )}
                   </div>
