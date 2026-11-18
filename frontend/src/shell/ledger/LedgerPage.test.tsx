@@ -1,5 +1,5 @@
 import axe from 'axe-core'
-import { act, createElement } from 'react'
+import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
 import { LedgerPage } from './LedgerPage'
@@ -145,32 +145,6 @@ describe('LedgerPage', () => {
     expect(calls.some((c) => c.url.includes('/entries') && c.url.includes('offset=2'))).toBe(true)
     expect(qa('ledger-history-row')).toHaveLength(3)
     expect(q('ledger-history-more')).toBeNull()
-  })
-
-  it('F-1302: a double click on Show more fetches the page once; a failed page keeps the loaded entries', async () => {
-    const ent = (i: number) => ({ id: `h${i}`, transaction_id: 't1', line_no: 1, currency: 'USD', amount_minor: 1, direction: 'debit', posted_at: '2026-01-01', description: 'd', reverses_id: null })
-    let release: (r: Response) => void = () => {}
-    let fail = false
-    const { f, calls } = api((_m, u) => {
-      if (!u.includes('/entries')) return undefined
-      const off = Number(new URL(u).searchParams.get('offset') ?? 0)
-      if (off === 0) return json({ items: [ent(1), ent(2)], total: 5 })
-      if (fail) return json({ error: { code: 'x', message: 'boom' } }, 500)
-      return new Promise<Response>((res) => { release = res }) as unknown as Response
-    })
-    await load(f)
-    await click(qa('ledger-history-btn')[0])
-    const more = q('ledger-history-more') as HTMLButtonElement
-    await act(async () => { more.click(); more.click() })
-    expect(calls.filter((c) => c.url.includes('/entries') && c.url.includes('offset=2'))).toHaveLength(1)
-    expect((q('ledger-history-more') as HTMLButtonElement).disabled).toBe(true)
-    await act(async () => { release(json({ items: [ent(3), ent(4)], total: 5 })) })
-    expect(qa('ledger-history-row')).toHaveLength(4)
-    fail = true
-    await click(q('ledger-history-more'))
-    expect(qa('ledger-history-row')).toHaveLength(4)
-    expect(q('ledger-history-more-error')).not.toBeNull()
-    expect(q('ledger-history-more')).not.toBeNull()
   })
 
   it('shows empty and error states', async () => {

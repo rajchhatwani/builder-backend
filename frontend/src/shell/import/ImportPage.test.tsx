@@ -123,34 +123,6 @@ describe('ImportPage', () => {
     expect(q('[data-testid=import-export-error]')?.textContent).toBe('too many rows')
   })
 
-  it('F-1300: tells the user when the CSV export was cut at the server cap', async () => {
-    await toReview()
-    m.commit.mockResolvedValue({ batch_id: 'b1', status: 'committed', created: 2, duplicate: 0, rejected: 0 })
-    m.records.mockResolvedValue({ items: [], total: 0, limit: 20, offset: 0 })
-    await click(/Commit 2 rows/)
-    m.csv.mockResolvedValueOnce({ blob: new Blob(['a']), filename: 'Invoice.csv', truncated: true })
-    await act(async () => { q('[data-testid=import-export-csv]')!.click() })
-    await flush()
-    expect(q('[data-testid=import-export-truncated]')?.textContent).toContain('10,000')
-    m.csv.mockResolvedValueOnce({ blob: new Blob(['a']), filename: 'Invoice.csv', truncated: false })
-    await act(async () => { q('[data-testid=import-export-csv]')!.click() })
-    await flush()
-    expect(q('[data-testid=import-export-truncated]')).toBeNull()
-  })
-
-  it('F-1301: the record list says how many of the total it shows and that they are the entity\'s latest', async () => {
-    await toReview()
-    m.commit.mockResolvedValue({ batch_id: 'b1', status: 'committed', created: 500, duplicate: 0, rejected: 0 })
-    const items = Array.from({ length: 20 }, (_, i) => ({ id: `x${i}`, entity: 'Invoice', data: { invoice_no: `INV-${i}` }, batch_id: 'b0', created_at: '' }))
-    m.records.mockResolvedValue({ items, total: 1200, limit: 20, offset: 0 })
-    await click(/Commit 2 rows/)
-    await flush()
-    const note = q('[data-testid=import-records-note]')?.textContent ?? ''
-    expect(note).toContain('20')
-    expect(note).toContain('1,200')
-    expect(note).toContain('Invoice')
-  })
-
   it('keeps a row in the queue when the fix is still invalid', async () => {
     await toReview()
     m.fix.mockResolvedValue({ ...BAD, errors: [{ field: 'amount', code: 'x', message: 'still wrong' }] })

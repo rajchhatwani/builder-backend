@@ -438,8 +438,6 @@ function FixRow({ row, entity, mapping, onSave }: { row: ImportRow; entity: Spec
 
 function Done({ projectId, entity, result, onAgain }: { projectId: string; entity: string; result: ImportCommitResult; onAgain: () => void }) {
   const [records, setRecords] = useState<ImportRecord[] | null>(null)
-  const [recordTotal, setRecordTotal] = useState(0)
-  const [truncated, setTruncated] = useState(false)
   const [failed, setFailed] = useState(false)
   const [tick, setTick] = useState(0)
   const [exporting, setExporting] = useState(false)
@@ -448,11 +446,9 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
   const exportCsv = async () => {
     setExporting(true)
     setExportError(null)
-    setTruncated(false)
     try {
-      const { blob, filename, truncated: cut } = await api.exportImportRecordsCsv(projectId, entity)
+      const { blob, filename } = await api.exportImportRecordsCsv(projectId, entity)
       saveBlob(blob, filename)
-      setTruncated(cut === true)
     } catch (err) {
       setExportError(err instanceof Error ? err.message : 'The export failed')
     } finally {
@@ -464,7 +460,7 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
     api
       .listImportRecords(projectId, entity)
       .then((page) => {
-        if (!cancelled) { setRecords(page.items); setRecordTotal(typeof page.total === 'number' ? page.total : page.items.length) }
+        if (!cancelled) setRecords(page.items)
       })
       .catch(() => {
         if (!cancelled) setFailed(true)
@@ -485,11 +481,6 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
       {failed && <p role="alert">The imported records could not be listed, but the import itself went through.</p>}
       {records && records.length === 0 && <p>No imported records to show.</p>}
       {records && records.length > 0 && (
-        <p className="muted" data-testid="import-records-note">
-          Showing the latest {records.length.toLocaleString('en-US')} of {Math.max(recordTotal, records.length).toLocaleString('en-US')} records of {entity} (all imports, not only this one).
-        </p>
-      )}
-      {records && records.length > 0 && (
         <ul aria-label="Imported records" data-testid="import-records">
           {records.map((r) => (
             <li key={r.id}>{Object.entries(r.data).map(([k, v]) => `${k}: ${String(v)}`).join(', ')}</li>
@@ -497,7 +488,6 @@ function Done({ projectId, entity, result, onAgain }: { projectId: string; entit
         </ul>
       )}
       {exportError && <p role="alert" data-testid="import-export-error">{exportError}</p>}
-      {truncated && <p role="status" data-testid="import-export-truncated">Only the first 10,000 rows were exported. The file is not the full list.</p>}
       <p>
         <button className="outline" onClick={() => void exportCsv()} disabled={exporting} data-testid="import-export-csv" aria-label={`Export records (CSV) for ${entity}`}>
           {exporting ? 'Exporting…' : 'Export records (CSV)'}

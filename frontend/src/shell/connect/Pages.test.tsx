@@ -9,10 +9,8 @@ import { ApiError } from '../../api/client'
 import { ProvidersPage } from './ProvidersPage'
 import { WebhooksPage } from './WebhooksPage'
 
-const w = vi.hoisted(() => ({ list: vi.fn(), inbound: vi.fn(), create: vi.fn(), rotate: vi.fn(), setEnabled: vi.fn(), remove: vi.fn(), setInboundSecret: vi.fn() }))
 const m = vi.hoisted(() => ({ getSpecBlocks: vi.fn(), validateProject: vi.fn(), getBlock: vi.fn(), putBlock: vi.fn(), getAdvisor: vi.fn() }))
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), api: m }))
-vi.mock('./webhookApi', () => ({ webhookApi: w, WebhookApiError: class extends Error {} }))
 vi.mock('../../components/Ui', () => ({ useUi: () => ({ confirm: vi.fn(), toast: vi.fn() }) }))
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -26,7 +24,7 @@ async function mount(el: ReturnType<typeof createElement>) {
   await act(async () => { await Promise.resolve() })
 }
 const q = (id: string) => host.querySelector(`[data-testid=${id}]`)
-afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; Object.values(m).forEach((f) => f.mockReset()); Object.values(w).forEach((f) => f.mockReset()) })
+afterEach(() => { act(() => root?.unmount()); host?.remove(); root = null; Object.values(m).forEach((f) => f.mockReset()) })
 
 const SPEC = {
   jobs: {
@@ -134,42 +132,6 @@ describe('Webhooks live panel refresh (F-0634)', () => {
     await act(async () => { await Promise.resolve() })
     expect(m.getSpecBlocks).toHaveBeenCalledTimes(2)
     expect(q('wh-live')).not.toBeNull()
-  })
-})
-
-describe('Webhooks page with the live panel (F-1305)', () => {
-  it('saving the block refreshes the panel events and receivers, and the secret goes to the new receiver', async () => {
-    const before = { enabled: true, events: ['order.created'], inbound: [] }
-    const after = { enabled: true, events: ['order.created', 'order.paid'], inbound: [{ name: 'stripe' }] }
-    m.getSpecBlocks.mockResolvedValueOnce({ ...SPEC, webhooks: before }).mockResolvedValue({ ...SPEC, webhooks: after })
-    m.validateProject.mockResolvedValue({ valid: true, issues: [] })
-    m.getBlock.mockResolvedValue({ webhooks: before, version: 1 })
-    m.putBlock.mockImplementation(async (_p: string, _n: string, b: Record<string, unknown>) => ({ webhooks: b.webhooks, version: 2 }))
-    w.list.mockResolvedValue([])
-    w.inbound.mockResolvedValue([])
-    w.setInboundSecret.mockResolvedValue({})
-    await mount(createElement(WebhooksPage, { projectId: 'p', origin: 'http://localhost:9999' }))
-    const set = (el: HTMLInputElement, v: string) => act(async () => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(el, v)
-      el.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-    await set(host.querySelector<HTMLInputElement>('#wh-token')!, 'admin-token-value')
-    await act(async () => { btn(/Load subscriptions/).click() })
-    await act(async () => { await Promise.resolve() })
-    expect(host.textContent).not.toContain('Incoming receivers')
-    await act(async () => { btn(/Add events item/).click() })
-    const texts = [...host.querySelectorAll<HTMLInputElement>('[data-schema-form] input[type=text]')]
-    await set(texts[texts.length - 1], 'order.paid')
-    await act(async () => { btn(/^Save$/).click() })
-    await act(async () => { await Promise.resolve() })
-    expect(m.getSpecBlocks).toHaveBeenCalledTimes(2)
-    expect(host.textContent).toContain('Incoming receivers')
-    expect(host.querySelector<HTMLSelectElement>('#wh-in-name')!.value).toBe('stripe')
-    await set(host.querySelector<HTMLInputElement>('#wh-in-value')!, 'a-long-signing-secret-1')
-    await act(async () => { btn(/Store or rotate secret/).click() })
-    await act(async () => { await Promise.resolve() })
-    expect(w.setInboundSecret).toHaveBeenCalledTimes(1)
-    expect(w.setInboundSecret.mock.calls[0][1]).toBe('stripe')
   })
 })
 

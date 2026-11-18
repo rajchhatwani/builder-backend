@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { sendRequest } from '../workbench/sendRequest'
 import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
 import {
-  STATUSES, STATUS_LABEL, confidencePercent, documentErrorMessage, highlightSegments, isLowConfidence, isReviewable, moveRow, pageInfo,
+  DEFAULT_REVIEW_BELOW_BP, STATUSES, STATUS_LABEL, confidencePercent, documentErrorMessage, highlightSegments, isLowConfidence, isReviewable, moveRow, pageInfo,
   parseDocJson, pendingFields, type Doc, type DocField,
 } from './documentLogic'
 
@@ -11,10 +11,9 @@ type Load<T> = { s: 'idle' } | { s: 'loading' } | { s: 'error'; m: string } | { 
 const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 const LIMIT = 20
 
-/** `reviewBelowBp` is an optional extra client-side threshold; by default the server's per-field `review_required` (from the spec's review_below_bp) decides.
- *  Document review queue for a generated project's AI documents pack (D34). Queue by status, anchored highlights, correct / approve / reject.
+/** Document review queue for a generated project's AI documents pack (D34). Queue by status, anchored highlights, correct / approve / reject.
  *  Bearer token held in memory only. The server decides who may review; a 403/409/404 is shown, never hidden. */
-export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, reviewBelowBp, canReview = true }: {
+export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, reviewBelowBp = DEFAULT_REVIEW_BELOW_BP, canReview = true }: {
   projectId: string; origin?: string | null; doFetch?: typeof fetch; reviewBelowBp?: number; canReview?: boolean
 }) {
   const [token, setToken] = useState('')
@@ -36,8 +35,6 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
   const [confirmReject, setConfirmReject] = useState(false)
   const tokenId = useId(), statusId = useId(), reasonId = useId()
   const rowRefs = useRef(new Map<number, HTMLButtonElement>())
-  const selIdRef = useRef(selId)
-  selIdRef.current = selId
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
     if (!origin) throw new Error('No preview API is configured')
@@ -99,17 +96,14 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
   }
 
   async function act(run: () => Promise<{ status: number; json: unknown }>, ok: string) {
-    const target = selIdRef.current
     setBusy(true); setError(null); setNotice(null)
     try {
       const r = await run()
-      const same = selIdRef.current === target // the user may have selected another document while this was in flight
       if (r.status >= 200 && r.status < 300) {
-        if (same && r.json && typeof r.json === 'object') setDetail((cur) => { const n = r.json as Doc; return { s: 'ok', v: n.content == null && cur.s === 'ok' ? { ...n, content: cur.v.content } : n } })
-        if (same) { setNotice(ok); setPending([]); setEditing(null); setConfirmReject(false) }
-        setRefresh((n) => n + 1)
-      } else if (same) { setPending(r.status === 409 ? pendingFields(r.json) : []); setError(documentErrorMessage(r.status, r.json)); if (r.status === 409 || r.status === 404) setRefresh((n) => n + 1) }
-    } catch (e) { if (selIdRef.current === target) setError(msg(e, 'Could not reach the document API')) } finally { setBusy(false) }
+        if (r.json && typeof r.json === 'object') setDetail((cur) => { const n = r.json as Doc; return { s: 'ok', v: n.content == null && cur.s === 'ok' ? { ...n, content: cur.v.content } : n } })
+        setNotice(ok); setPending([]); setEditing(null); setConfirmReject(false); setRefresh((n) => n + 1)
+      } else { setPending(r.status === 409 ? pendingFields(r.json) : []); setError(documentErrorMessage(r.status, r.json)); if (r.status === 409 || r.status === 404) setRefresh((n) => n + 1) }
+    } catch (e) { setError(msg(e, 'Could not reach the document API')) } finally { setBusy(false) }
   }
   const base = (d: Doc) => `/ai/documents/${encodeURIComponent(d.id)}`
   const correct = (d: Doc, name: string) => act(() => call('POST', `${base(d)}/fields/${encodeURIComponent(name)}/correct`, { value: draft.trim() === '' ? null : draft }), `Field ${name} corrected.`)
@@ -206,7 +200,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
                 <caption className="sr-only">Extracted fields</caption>
                 <thead><tr><th scope="col">Field</th><th scope="col">Value</th><th scope="col">Confidence</th><th scope="col">Evidence</th><th scope="col">Action</th></tr></thead>
                 <tbody>
-                  {doc.fields.map((f) => <FieldRow key={f.name} f={f} doc={doc} threshold={reviewBelowBp ?? 0} hasText={!!hl} reviewable={reviewable} busy={busy}
+                  {doc.fields.map((f) => <FieldRow key={f.name} f={f} doc={doc} threshold={reviewBelowBp} hasText={!!hl} reviewable={reviewable} busy={busy}
                     editing={editing === f.name} draft={draft} onEdit={() => { setEditing(f.name); setDraft(f.value ?? '') }} onDraft={setDraft} onCancel={() => setEditing(null)} onSave={() => void correct(doc, f.name)} />)}
                 </tbody>
               </table>
