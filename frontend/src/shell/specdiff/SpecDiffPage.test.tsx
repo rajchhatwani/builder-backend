@@ -115,4 +115,26 @@ describe('SpecDiffPage', () => {
     expect(opts).toContain('Before the first change')
     expect(opts.some((t) => /After change #2: add_entity/.test(t ?? ''))).toBe(true)
   })
+
+  it('drops a version baseline when the picker is cleared (F-1317)', async () => {
+    m.at.mockResolvedValue(BASELINE)
+    window.location.hash = '#/p/p/specdiff?base=1'
+    await mount()
+    await act(async () => { await Promise.resolve() })
+    expect(q('[data-testid=specdiff-source]')?.textContent).toContain('after change #1')
+    await act(async () => { window.location.hash = '#/p/p/specdiff'; window.dispatchEvent(new HashChangeEvent('hashchange')) })
+    expect(q('[data-testid=specdiff-nobaseline]')).not.toBeNull()
+  })
+
+  it('does not keep the previous project baseline when projectId changes (F-1316)', async () => {
+    window.localStorage.setItem('x', '1')
+    await mount()
+    await paste(JSON.stringify(BASELINE))
+    await click(/Use as baseline/)
+    expect(q('[data-testid=specdiff-nobaseline]')).toBeNull()
+    await act(async () => { root!.render(createElement(SpecDiffPage, { projectId: 'other' })) })
+    await act(async () => { await Promise.resolve() })
+    expect(q('[data-testid=specdiff-nobaseline]')).not.toBeNull()
+    expect((q('textarea') as HTMLTextAreaElement).value).toBe('')
+  })
 })

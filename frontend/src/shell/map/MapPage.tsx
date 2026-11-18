@@ -140,6 +140,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
           {positions.s === 'ok' && positions.v.truncated && <p role="status" className="muted" data-testid="map-truncated">Only the first 500 positions are shown. Use &quot;Load only this area&quot; to narrow it down.</p>}
           {fences.s === 'off' && <p className="muted small-text" data-testid="map-geo-off">Geofences are not enabled in this project.</p>}
           {fences.s === 'error' && <p role="alert" className="error-text" data-testid="map-fences-error">{fences.m}</p>}
+          {places.s === 'error' && <p role="alert" className="error-text" data-testid="map-places-error">{places.m}</p>}
           {assignments.s === 'error' && <p role="alert" className="error-text" data-testid="map-assignments-error">{assignments.m}</p>}
 
           {positions.s === 'ok' && posItems.length === 0 && <p className="muted" data-testid="map-positions-empty">No live locations in this area yet. Subjects appear after they POST /location/positions.</p>}

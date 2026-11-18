@@ -144,14 +144,15 @@ function Templates({ types, onSave }: { types: NType[]; onSave: (typeName: strin
       <div className="bh-grid">
         <div className="bh-field">
           <label htmlFor="nt-type">Notification type</label>
-          <select id="nt-type" value={type.name} onChange={(e) => { setTypeName(e.target.value); setChannel('') }}>
+          <select id="nt-type" value={type.name} disabled={dirty || saving} onChange={(e) => { setTypeName(e.target.value); setChannel('') }}>
             {types.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
           </select>
+          {dirty && <small className="muted" data-testid="nt-switch-locked">Save or discard your changes to switch type or channel.</small>}
           <small className="muted">{type.category === 'transactional' ? 'Transactional: always sent' : 'Optional: users can opt out'}</small>
         </div>
         <div className="bh-field">
           <label htmlFor="nt-channel">Channel</label>
-          <select id="nt-channel" value={ch} onChange={(e) => setChannel(e.target.value)} disabled={type.channels.length === 0}>
+          <select id="nt-channel" value={ch} onChange={(e) => setChannel(e.target.value)} disabled={type.channels.length === 0 || dirty || saving}>
             {type.channels.map((c) => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>

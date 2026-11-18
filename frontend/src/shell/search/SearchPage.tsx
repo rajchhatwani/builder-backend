@@ -15,6 +15,8 @@ export function SearchPage({ projectId }: { projectId: string }) {
   const [hits, setHits] = useState<{ items: Hit[]; total: number } | null>(null)
   const [searching, setSearching] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [attempt, setAttempt] = useState(0)
   const [reindexing, setReindexing] = useState(false)
   const [reindex, setReindex] = useState<Record<string, unknown> | null>(null)
   const [reindexError, setReindexError] = useState<string | null>(null)
@@ -24,12 +26,13 @@ export function SearchPage({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     let off = false
+    setLoadError(null)
     api.getSpecJson(projectId).then(
       (spec) => { if (!off) { const names = entitiesOf(spec).map((e) => e.name); setEntities(names); setEntity(names[0] ?? '') } },
-      (e: unknown) => { if (!off) { setEntities([]); setError(msg(e, 'Could not load the project')) } },
+      (e: unknown) => { if (!off) { setEntities(null); setLoadError(msg(e, 'Could not load the project')) } },
     )
     return () => { off = true }
-  }, [projectId])
+  }, [projectId, attempt])
 
   useEffect(() => {
     let off = false
@@ -62,7 +65,13 @@ export function SearchPage({ projectId }: { projectId: string }) {
           <p>Search the records you imported. Results only include what the role you pick is allowed to see.</p>
         </div>
       </div>
-      {entities === null && <p className="empty-state">Loading…</p>}
+      {loadError && (
+        <div className="card empty-hero" role="alert" data-testid="search-load-error">
+          <p>{loadError}</p>
+          <button onClick={() => setAttempt((n) => n + 1)} data-testid="search-retry">Try again</button>
+        </div>
+      )}
+      {entities === null && !loadError && <p className="empty-state">Loading…</p>}
       {entities !== null && entities.length === 0 && <p className="empty-state" data-testid="search-noentities">Add an entity first, then import records to search.</p>}
       {entities !== null && entities.length > 0 && (
         <form className="card" role="search" aria-label="Search records" onSubmit={(e) => { e.preventDefault(); void search() }}>

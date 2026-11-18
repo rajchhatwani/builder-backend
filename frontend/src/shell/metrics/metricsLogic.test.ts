@@ -129,4 +129,14 @@ describe('error messages', () => {
     expect(errorMessage(err('quota_exceeded'), 'x')).toMatch(/limit is used up/)
     expect(errorMessage('boom', 'fallback')).toBe('fallback')
   })
+  it('flags boolean values that are not true/false and bad numeric in-lists (F-1313)', () => {
+    const ok = { ...emptyMetricForm('Invoice'), key: 'n', label: 'N' }
+    const f = (field: string, op: string, value: string) => validateMetricForm({ ...ok, filters: [{ field, op, value }] }, ENTITIES, false, []).map((p) => p.field)
+    expect(f('paid', 'eq', 'yes')).toEqual(['filter-0'])
+    expect(f('paid', 'eq', '1')).toEqual(['filter-0'])
+    expect(f('paid', 'eq', 'True')).toEqual([])
+    expect(f('paid', 'in', 'true, nope')).toEqual(['filter-0'])
+    expect(f('amount', 'in', '1,,2')).toEqual(['filter-0'])
+    expect(f('amount', 'in', '1, 2.5')).toEqual([])
+  })
 })

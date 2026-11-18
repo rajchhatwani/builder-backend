@@ -102,4 +102,16 @@ describe('NotificationsPage', () => {
     await act(async () => { btn(/Delivery log/).click() })
     expect(q('[data-testid=nt-log-empty]')).not.toBeNull()
   })
+
+  it('locks the type and channel selects while edits are unsaved (F-1319)', async () => {
+    m.get.mockResolvedValue(SPEC)
+    await mount()
+    const sel = q('#nt-type') as HTMLSelectElement
+    expect(sel.disabled).toBe(false)
+    await type(q('#nt-body') as HTMLTextAreaElement, 'changed {{ order_number }}')
+    expect(sel.disabled).toBe(true)
+    expect((q('#nt-channel') as HTMLSelectElement).disabled).toBe(true)
+    await act(async () => { btn(/Discard changes/).click() })
+    expect(sel.disabled).toBe(false)
+  })
 })

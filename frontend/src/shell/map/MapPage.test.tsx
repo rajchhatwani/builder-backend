@@ -195,4 +195,10 @@ describe('MapPage', () => {
     const res = await axe.run(host, { rules: { 'color-contrast': { enabled: false } } })
     expect(res.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.html).join(' ')}`)).toEqual([])
   })
+
+  it('shows an error when the places feed fails (F-1315)', async () => {
+    const { f } = api((u) => (u.includes('/geo/places') ? json({ detail: 'nope' }, 500) : undefined))
+    await load(f)
+    expect(q('map-places-error')).not.toBeNull()
+  })
 })

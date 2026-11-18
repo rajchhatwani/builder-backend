@@ -137,7 +137,7 @@ export function MachinesPage({ projectId }: { projectId: string }) {
 
             <section aria-label={`${machine.entity} diagram`} className="card machine-stage">
               <Suspense fallback={<p className="empty-state">Loading diagram…</p>}>
-                <MachineDiagram machine={machine} selected={selected} onSelect={onSelect} />
+                <MachineDiagram key={machine.entity} machine={machine} selected={selected} onSelect={onSelect} />
               </Suspense>
             </section>
 

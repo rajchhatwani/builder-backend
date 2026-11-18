@@ -19,7 +19,12 @@ const store = (): Storage | null => {
   }
 }
 
+/** Keyed by project so baseline, pasted text and ops never carry over when the project changes. */
 export function SpecDiffPage({ projectId }: { projectId: string }) {
+  return <SpecDiffBody key={projectId} projectId={projectId} />
+}
+
+function SpecDiffBody({ projectId }: { projectId: string }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
   const [baseline, setBaseline] = useState<{ spec: Spec; source: Source } | null>(() => {
@@ -59,7 +64,12 @@ export function SpecDiffPage({ projectId }: { projectId: string }) {
 
   // `?base=<seq>` (set by the picker, shareable as a link): the spec as it was right after change <seq>.
   useEffect(() => {
-    if (base === null || !/^\d{1,9}$/.test(base)) return
+    // picker cleared: a version baseline must not outlive its hash param
+    if (base === null) {
+      setBaseline((b) => (b?.source.kind === 'version' ? null : b))
+      return
+    }
+    if (!/^\d{1,9}$/.test(base)) return
     const seq = Number(base)
     let cancelled = false
     api.getSpecAt(projectId, seq).then(

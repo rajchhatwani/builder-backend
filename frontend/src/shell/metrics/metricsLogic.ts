@@ -135,9 +135,11 @@ export function validateMetricForm(form: MetricForm, entities: SpecEntity[], edi
     if (!f.field) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: choose a field.` })
     else if (f.value.trim() === '') out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: enter a value.` })
     else if (!opsFor(entity.fields.find((x) => x.name === f.field)?.type ?? '').some((o) => o.id === f.op)) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: this operator does not work with ${f.field}.` })
-    else if (f.op !== 'in') {
+    else {
       const t = entity.fields.find((x) => x.name === f.field)?.type ?? ''
-      if (NUMERIC.has(t) && !/^[+-]?\d+(\.\d+)?$/.test(f.value.trim())) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: ${f.field} is a number.` })
+      const parts = f.op === 'in' ? f.value.split(',') : [f.value]
+      if (NUMERIC.has(t) && !parts.every((p) => /^[+-]?\d+(\.\d+)?$/.test(p.trim()))) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: ${f.field} is a number.` })
+      else if (t === 'boolean' && !parts.every((p) => ['true', 'false'].includes(p.trim().toLowerCase()))) out.push({ field: `filter-${i}`, message: `Filter ${i + 1}: ${f.field} must be true or false.` })
     }
   })
   return out

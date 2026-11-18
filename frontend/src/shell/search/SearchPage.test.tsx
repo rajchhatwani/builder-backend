@@ -54,4 +54,15 @@ describe('SearchPage', () => {
     await mount(createElement(SearchPage, { projectId: 'p' }))
     expect(q('search-noentities')).not.toBeNull()
   })
+
+  it('shows a load error with Try again, not the empty-entities state (F-1318)', async () => {
+    m.spec.mockReset()
+    m.spec.mockRejectedValueOnce(new Error('spec down')).mockResolvedValue({ entities: [{ name: 'Invoice', fields: [] }] })
+    await mount(createElement(SearchPage, { projectId: 'p' }))
+    expect(q('search-load-error')?.textContent).toContain('spec down')
+    expect(q('search-noentities')).toBeNull()
+    await click(q('search-retry'))
+    expect(q('search-load-error')).toBeNull()
+    expect(q('search-entity')).not.toBeNull()
+  })
 })
