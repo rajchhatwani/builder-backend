@@ -64,7 +64,7 @@ interface PeopleTabProps {
   onChanged: () => void
 }
 
-function PeopleTab({ org, members, onChanged }: PeopleTabProps) {
+export function PeopleTab({ org, members, onChanged }: PeopleTabProps) {
   const me = useUser()
   const { confirm, toast } = useUi()
   const [error, setError] = useState<string | null>(null)
