@@ -1,4 +1,4 @@
-import { useId, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
 import { Modal } from '../components/Modal'
 import { filterCommands, type Command } from './groups'
 
@@ -14,6 +14,10 @@ export function CommandPalette({ commands, onClose }: Props) {
   const listId = useId()
   const shown = useMemo(() => filterCommands(commands, query), [commands, query])
   const current = Math.min(active, Math.max(shown.length - 1, 0))
+
+  useEffect(() => {
+    document.getElementById(`${listId}-${current}`)?.scrollIntoView?.({ block: 'nearest' })
+  }, [listId, current])
 
   function run(cmd: Command | undefined) {
     if (!cmd) return

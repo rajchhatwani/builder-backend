@@ -14,26 +14,37 @@ type Load =
 
 type Review = { status: 'checking' } | { status: 'error'; message: string } | { status: 'ready'; diff: AccessDiff }
 
+const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const msg = (e: unknown, fallback: string) => (e instanceof Error ? e.message : fallback)
 
 export function AccessPage({ projectId }: { projectId: string }) {
   const [load, setLoad] = useState<Load>({ status: 'loading' })
   const [attempt, setAttempt] = useState(0)
+  const loaded = useRef(false)
 
   useEffect(() => {
     let cancelled = false
-    setLoad({ status: 'loading' })
+    // After the first load a refresh keeps the matrix mounted (entity/layer stay) instead of blanking it.
+    if (!loaded.current) setLoad({ status: 'loading' })
     Promise.all([api.getAccessMatrix(projectId), api.getSpecJson(projectId)])
       .then(([matrix, spec]) => {
-        if (!cancelled) setLoad({ status: 'ready', matrix, spec })
+        if (cancelled) return
+        loaded.current = true
+        setLoad({ status: 'ready', matrix, spec })
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoad({ status: 'error', message: msg(err, 'Could not load the access matrix') })
+        if (cancelled) return
+        loaded.current = false
+        setLoad({ status: 'error', message: msg(err, 'Could not load the access matrix') })
       })
     return () => {
       cancelled = true
     }
   }, [projectId, attempt])
+
+  useEffect(() => {
+    loaded.current = false
+  }, [projectId])
 
   return (
     <>
@@ -74,6 +85,7 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
   const [review, setReview] = useState<Review | null>(null)
   const [applying, setApplying] = useState(false)
   const [applyError, setApplyError] = useState<string | null>(null)
+  const [applied, setApplied] = useState(false)
   const entityId = useId()
   const seq = useRef(0)
 
@@ -101,6 +113,7 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
 
   const edit = (next: { permissions?: PermissionRule[]; field_access?: FieldAccessRule[] }) => {
     setApplyError(null)
+    setApplied(false)
     setDraft({ permissions: next.permissions ?? draft?.permissions ?? null, field_access: next.field_access ?? draft?.field_access ?? null })
   }
 
@@ -108,18 +121,24 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
     if (!draft || review?.status !== 'ready') return
     setApplying(true)
     setApplyError(null)
+    setApplied(false)
     try {
       // Re-read the spec right before the whole-spec replace so a change made since page load is not reverted.
       const fresh = await api.getSpecJson(projectId)
+      if ((draft.permissions && !sameJson(permissionsOf(fresh), savedPerms)) || (draft.field_access && !sameJson(fieldAccessOf(fresh), savedFields))) {
+        setApplyError('The access rules were changed elsewhere since this page loaded. Reload the page, then make your edit again.')
+        return
+      }
       await api.applySpecOp(projectId, 'replace_spec', { spec: withEdits(fresh, draft) }, review.diff.weakens)
       setDraft(null)
+      setApplied(true)
       onApplied()
     } catch (err) {
       setApplyError(msg(err, 'Could not apply the change'))
     } finally {
       setApplying(false)
     }
-  }, [draft, review, projectId, onApplied])
+  }, [draft, review, projectId, onApplied, savedPerms, savedFields])
 
   const table = groupTable(matrix, layer, entity)
   const label = LAYERS.find((l) => l.id === layer)!.label
@@ -129,14 +148,14 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
       <div className="access-controls" style={{ display: 'flex', gap: 'var(--space-4)', flexWrap: 'wrap', alignItems: 'flex-end', marginBlockEnd: 'var(--space-3)' }}>
         <div role="group" aria-label="Layer" className="access-layers">
           {LAYERS.map((l) => (
-            <button key={l.id} className={l.id === layer ? '' : 'ghost'} aria-pressed={l.id === layer} onClick={() => setLayer(l.id)}>
+            <button key={l.id} disabled={applying} className={l.id === layer ? '' : 'ghost'} aria-pressed={l.id === layer} onClick={() => setLayer(l.id)}>
               {l.label}
             </button>
           ))}
         </div>
         <div className="access-entity">
           <label htmlFor={entityId}>Entity</label>{' '}
-          <select id={entityId} value={entity} onChange={(e) => setEntity(e.target.value)}>
+          <select id={entityId} disabled={applying} value={entity} onChange={(e) => setEntity(e.target.value)}>
             {matrix.entities.map((n) => (
               <option key={n} value={n}>{n}</option>
             ))}
@@ -173,12 +192,13 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
       )}
 
       {layer === 'object' && (
-        <ObjectEditor entity={entity} operations={table.targets} roles={editableRoles(matrix)} rules={perms} onChange={(rules) => edit({ permissions: rules })} />
+        <ObjectEditor disabled={applying} entity={entity} operations={table.targets} roles={editableRoles(matrix)} rules={perms} onChange={(rules) => edit({ permissions: rules })} />
       )}
       {layer === 'field' && (
-        <FieldEditor entity={entity} fieldList={fieldNames(matrix, entity)} roles={editableRoles(matrix)} rules={fields} onChange={(rules) => edit({ field_access: rules })} />
+        <FieldEditor disabled={applying} entity={entity} fieldList={fieldNames(matrix, entity)} roles={editableRoles(matrix)} rules={fields} onChange={(rules) => edit({ field_access: rules })} />
       )}
 
+      {applied && !draft && <p role="status" data-testid="access-applied">Change applied.</p>}
       {draft && (
         <ReviewPanel review={review} applying={applying} applyError={applyError} onApply={apply} onDiscard={() => { setDraft(null); setApplyError(null) }} />
       )}
@@ -186,7 +206,7 @@ function Matrix({ projectId, matrix, spec, onApplied }: { projectId: string; mat
   )
 }
 
-function ObjectEditor({ entity, operations, roles, rules, onChange }: { entity: string; operations: string[]; roles: string[]; rules: PermissionRule[]; onChange: (r: PermissionRule[]) => void }) {
+function ObjectEditor({ disabled, entity, operations, roles, rules, onChange }: { disabled: boolean; entity: string; operations: string[]; roles: string[]; rules: PermissionRule[]; onChange: (r: PermissionRule[]) => void }) {
   const [op, setOp] = useState('')
   const id = useId()
   const current = operations.includes(op) ? op : operations[0]
@@ -206,7 +226,7 @@ function ObjectEditor({ entity, operations, roles, rules, onChange }: { entity: 
         <legend>Roles allowed to {current}</legend>
         {roles.map((r) => (
           <label key={r} style={{ marginInlineEnd: 'var(--space-4)' }}>
-            <input type="checkbox" checked={allowed.includes(r)} onChange={(e) => onChange(toggleRole(rules, entity, current, r, e.target.checked))} /> {r}
+            <input type="checkbox" disabled={disabled} checked={allowed.includes(r)} onChange={(e) => onChange(toggleRole(rules, entity, current, r, e.target.checked))} /> {r}
           </label>
         ))}
       </fieldset>
@@ -214,7 +234,7 @@ function ObjectEditor({ entity, operations, roles, rules, onChange }: { entity: 
   )
 }
 
-function FieldEditor({ entity, fieldList, roles, rules, onChange }: { entity: string; fieldList: string[]; roles: string[]; rules: FieldAccessRule[]; onChange: (r: FieldAccessRule[]) => void }) {
+function FieldEditor({ disabled, entity, fieldList, roles, rules, onChange }: { disabled: boolean; entity: string; fieldList: string[]; roles: string[]; rules: FieldAccessRule[]; onChange: (r: FieldAccessRule[]) => void }) {
   const [field, setField] = useState('')
   const id = useId()
   const current = fieldList.includes(field) ? field : fieldList[0]
@@ -227,13 +247,13 @@ function FieldEditor({ entity, fieldList, roles, rules, onChange }: { entity: st
       <fieldset key={kind}>
         <legend>{title}</legend>
         <label style={{ marginInlineEnd: 'var(--space-4)' }}>
-          <input type="checkbox" checked={list === null} onChange={(e) => set(kind, e.target.checked ? null : [...roles])} /> No field rule (follows the operation)
+          <input type="checkbox" disabled={disabled} checked={list === null} onChange={(e) => set(kind, e.target.checked ? null : [...roles])} /> No field rule (follows the operation)
         </label>
         {roles.map((r) => (
           <label key={r} style={{ marginInlineEnd: 'var(--space-4)' }}>
             <input
               type="checkbox"
-              disabled={list === null}
+              disabled={disabled || list === null}
               checked={list?.includes(r) ?? false}
               aria-label={`${r} may ${kind === 'read_roles' ? 'read' : 'write'} ${current}`}
               onChange={(e) => set(kind, e.target.checked ? [...(list ?? []), r] : (list ?? []).filter((x) => x !== r))}
