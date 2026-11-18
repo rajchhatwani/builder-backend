@@ -20,10 +20,9 @@ def test_import_draws_numbers_when_writing_not_in_dry_run() -> None:
     assert "async def draw_numbers(" in entity
     assert "self.draw_numbers(data)" in entity
     service = files["app/imports/service.py"]
-    write = service.split("if not dry_run and pending:")[1]
-    assert 'getattr(repo, "draw_numbers", None)' in write
-    assert write.index("draw_numbers") < write.index("repo.model(**prepared)")
-    assert "draw_numbers" not in service.split("if not dry_run and pending:")[0]
+    dry_split = service.split("if not dry_run and pending:")[0]
+    assert 'None if dry_run else getattr(repo, "draw_numbers", None)' in dry_split  # a dry run draws nothing
+    assert "begin_nested()" in service  # a rejected row rolls its draw back (gapless)
 
 
 def test_update_rereads_the_written_row_without_the_access_scope() -> None:

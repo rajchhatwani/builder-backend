@@ -105,7 +105,7 @@ def _service_ns(stub: dict[str, object]) -> dict[str, object]:
     import ast
 
     tree = ast.parse(_files()["app/imports/service.py"])
-    keep = {"_prepare", "_lock_scope", "run_import"}
+    keep = {"_prepare", "_prepare_row", "_lock_scope", "run_import"}
     body = [
         n
         for n in tree.body
@@ -131,6 +131,70 @@ def _service_ns(stub: dict[str, object]) -> dict[str, object]:
     return ns
 
 
+class _Session:
+    """Stub session: begin_nested() snapshots `counter` and restores it when the block raises."""
+
+    counter = 0
+
+    def begin_nested(self) -> "_Savepoint":
+        return _Savepoint(self)
+
+
+class _Savepoint:
+    def __init__(self, session: _Session) -> None:
+        self.session = session
+        self.saved = session.counter
+
+    async def __aenter__(self) -> "_Savepoint":
+        return self
+
+    async def __aexit__(self, exc_type: object, *_: object) -> None:
+        if exc_type is not None:
+            self.session.counter = self.saved
+
+
+def test_f1071_a_rejected_row_does_not_advance_the_gapless_counter() -> None:
+    import asyncio
+
+    class Rejected(Exception):
+        pass
+
+    class Repo:
+        owner_id = None
+        tenant_id = None
+        policy = None
+        hooks = ()
+        session = _Session()
+
+        def _ctx(self, _op: str, values: dict[str, object]) -> object:
+            return type("C", (), {"values": values})()
+
+        async def _pop_related(self, _out: object) -> dict[str, object]:
+            return {}
+
+        async def _check_references(self, _out: object) -> None:
+            return None
+
+        async def draw_numbers(self, data: dict[str, object]) -> dict[str, object]:
+            self.session.counter += 1
+            return {**data, "no": self.session.counter}
+
+    async def run_stage(_stage: str, _hooks: object, ctx: object, **_: object) -> None:
+        if ctx.values["a"] == 2:  # type: ignore[attr-defined]
+            raise Rejected
+
+    ns = _service_ns({"run_stage": run_stage, "HookContext": object})
+    repo = Repo()
+    numbers: list[object] = []
+    for a in (1, 2, 3):
+        try:
+            prepared, _ = asyncio.run(ns["_prepare"](repo, {"a": a}, repo.draw_numbers))  # type: ignore[operator]
+            numbers.append(prepared["no"])
+        except Rejected:
+            pass
+    assert numbers == [1, 2] and repo.session.counter == 2
+
+
 def test_f1071_numbers_are_drawn_before_before_save_hooks() -> None:
     import asyncio
 
@@ -145,6 +209,7 @@ def test_f1071_numbers_are_drawn_before_before_save_hooks() -> None:
         tenant_id = None
         policy = None
         hooks = ()
+        session = _Session()
 
         def _ctx(self, _op: str, values: dict[str, object]) -> Ctx:
             return Ctx(values)

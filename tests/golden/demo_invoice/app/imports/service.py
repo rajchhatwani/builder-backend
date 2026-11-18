@@ -299,7 +299,16 @@ async def _prepare(
     hooks, owner / tenant stamp, policy, references), without its flush / commit. Returns the values to write
     and the hook context, which the caller later runs through after_save / after_commit. Writes nothing, so a dry run
     may call it (it passes no `draw`: no sequence is consumed)."""
-    ctx = repo._ctx("create", dict(await draw(values) if draw is not None else values))
+    if draw is None:
+        return await _prepare_row(repo, values)
+    # A row rejected by a hook, the policy or a reference check must not burn a number (sequences are gapless):
+    # the draw and the checks share a savepoint, which rolls the counter back when the row is rejected.
+    async with repo.session.begin_nested():
+        return await _prepare_row(repo, await draw(values))
+
+
+async def _prepare_row(repo: Repository[Any], values: dict[str, Any]) -> tuple[dict[str, Any], HookContext]:
+    ctx = repo._ctx("create", dict(values))
     await run_stage("before_save", repo.hooks, ctx)
     out = ctx.values
     if repo.owner_id is not None:
