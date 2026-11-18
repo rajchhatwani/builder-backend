@@ -379,3 +379,4 @@ tests/unit/test_migration_planner_swapped_parent_deltas_b1_007.py
 tests/unit/test_audit_b1_012_deploy_script.py
 tests/unit/test_prod_compose_env.py
 tests/unit/test_audit_b1_014_sandbox_overlay.py
+tests/unit/test_audit_b1_030.py

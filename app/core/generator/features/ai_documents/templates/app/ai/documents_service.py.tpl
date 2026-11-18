@@ -69,8 +69,21 @@ def _normal(text: str) -> str:
 def _supported(value: str, quote: str) -> bool:
     """The value equals the quote or a whole run of its words (never a fragment of one word: '125' vs '1,250.00')."""
     want = _normal(value)
-    words = quote.split()
-    return bool(want) and any(_normal("".join(words[i:j])) == want for i in range(len(words)) for j in range(i + 1, len(words) + 1))
+    if not want:
+        return False
+    # linear: normalise each word once, then look for `want` in the joined text at word boundaries only
+    parts = [_normal(w) for w in quote.split()]
+    joined = "".join(parts)
+    bounds, at = {0}, 0
+    for part in parts:
+        at += len(part)
+        bounds.add(at)
+    pos = joined.find(want)
+    while pos != -1:
+        if pos in bounds and pos + len(want) in bounds:
+            return True
+        pos = joined.find(want, pos + 1)
+    return False
 
 
 def _required(kind: str) -> set[str]:

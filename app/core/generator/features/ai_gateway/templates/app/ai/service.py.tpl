@@ -112,6 +112,28 @@ async def _release_stale(session: AsyncSession, tenant: Tenant, period: AiBudget
         call.finished_at = now
 
 
+async def _release_stale_other_periods(
+    session: AsyncSession, tenant: Tenant, caller: _t.Any, key: str, start: date, now: datetime
+) -> None:
+    """A crashed reservation of this key in an earlier period must not wedge the key (the unique index spans periods)."""
+    cutoff = now - timedelta(seconds=_config.STALE_RESERVATION_SECONDS)
+    stmt = _scoped(
+        _sa.select(AiCall.period_start)
+        .where(
+            AiCall.caller_id == caller,
+            AiCall.idempotency_key == key,
+            AiCall.status == "reserved",
+            AiCall.period_start != start,
+            AiCall.created_at < cutoff,
+        )
+        .distinct(),
+        AiCall,
+        tenant,
+    )
+    for other in sorted((await session.execute(stmt)).scalars().all()):
+        await _release_stale(session, tenant, await _lock_period(session, tenant, other), now)
+
+
 def _parse_json(text: str | None) -> _t.Any | None:
     if text is None:
         return None
@@ -200,6 +222,7 @@ async def complete(session: AsyncSession, user: _t.Any, body: _s.CompleteIn, *, 
     period = await _lock_period(session, tenant, start)
     await _release_stale(session, tenant, period, now)  # before the replay lookup: a crashed first call must not wedge its key
     if body.idempotency_key is not None and caller is not None:
+        await _release_stale_other_periods(session, tenant, caller, body.idempotency_key, start, now)
         found = (
             await session.execute(
                 _scoped(
