@@ -189,3 +189,14 @@ def test_realtime_announces_transitions_and_caps_streams_globally() -> None:
     assert "_limiter.at_capacity()" in router and "503" in router and "await session.close()" in router
     assert "idle * 1.5" in router
     assert "REALTIME_MAX_STREAMS=50" in files[".env.example"] and "REALTIME_MAX_STREAMS`" in files["README.md"]
+
+
+def test_count_distinct_key_never_expands_a_huge_exponent() -> None:
+    from app.core.metrics import _distinct_key
+
+    engine = _load(generate(_spec())["app/metrics/engine.py"].replace("from app.core.errors import AppError", "AppError = RuntimeError").replace("from app.crud._base import Repository", "Repository = dict"), "gen_engine_dk")
+    for text in ("9E999999999", "1E-999999999", "7", "7.0", " 07 ", "1.50"):
+        assert len(engine.distinct_key(text)) < 200 and len(_distinct_key(text)) < 200, text
+        assert engine.distinct_key(text) == _distinct_key(text), text
+    assert engine.distinct_key("9E999999999") == "9E999999999"
+    assert engine.distinct_key(" 07 ") == engine.distinct_key("7.0") == "7"

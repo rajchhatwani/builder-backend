@@ -120,15 +120,26 @@ def ensure_client(admin: str, token: str, desired: dict[str, Any]) -> str:
         print(f"  updated client {client_id}")
     internal = str(found[0]["id"])
     existing, _ = call("GET", f"{admin}/clients/{internal}/protocol-mappers/models", token=token)
-    have = {m["name"] for m in existing}
+    have = {m["name"]: m for m in existing}
     for mapper in mappers:
-        if mapper["name"] not in have:
+        current_mapper = have.get(mapper["name"])
+        if current_mapper is None:
             call(
                 "POST",
                 f"{admin}/clients/{internal}/protocol-mappers/models",
                 token=token,
                 body=mapper,
             )
+        elif any(current_mapper.get(k) != v for k, v in mapper.items() if k != "config") or any(
+            current_mapper.get("config", {}).get(k) != v for k, v in mapper.get("config", {}).items()
+        ):
+            call(
+                "PUT",
+                f"{admin}/clients/{internal}/protocol-mappers/models/{current_mapper['id']}",
+                token=token,
+                body={**current_mapper, **mapper, "config": {**current_mapper.get("config", {}), **mapper.get("config", {})}},
+            )
+            print(f"  updated mapper {mapper['name']}")
     return internal
 
 
@@ -144,6 +155,9 @@ def ensure_roles(admin: str, token: str, api_internal: str, roles: list[dict[str
         if found is None:
             call("POST", f"{admin}/clients/{api_internal}/roles", token=token, body=role)
             print(f"  added role {role['name']}")
+        elif "description" in role and found.get("description") != role["description"]:
+            call("PUT", f"{admin}/clients/{api_internal}/roles/{name}", token=token, body={**found, **role})
+            print(f"  updated role {role['name']}")
 
 
 def map_scopes(admin: str, token: str, api_internal: str, browser_internal: list[str]) -> None:

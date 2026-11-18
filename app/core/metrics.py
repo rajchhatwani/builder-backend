@@ -270,7 +270,10 @@ def _aggregate(d: MetricDef, rows: list[dict[str, Any]]) -> int | str | None:
 
 def _distinct_key(v: Any) -> Any:
     n = _num(v)
-    return _fmt(n) if n is not None else str(v)
+    # a huge/tiny exponent ("9E999999999") would make _fmt build a gigabyte string: key it by its text
+    if n is not None and (-40 <= n.adjusted() <= 40 and len(n.as_tuple().digits) <= 80):
+        return _fmt(n)
+    return str(v)
 
 
 def _group_key(v: Any) -> str | None:

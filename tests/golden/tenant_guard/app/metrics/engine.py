@@ -156,7 +156,10 @@ def distinct_key(value: Any) -> str:
         number = Decimal(str(value).strip())
     except InvalidOperation:
         return str(value)
-    return fmt(number) if number.is_finite() else str(value)
+    # a huge/tiny exponent ("9E999999999") would make fmt build a gigabyte string: key it by its text
+    if number.is_finite() and -40 <= number.adjusted() <= 40 and len(number.as_tuple().digits) <= 80:
+        return fmt(number)
+    return str(value)
 
 
 def _check_groups(count: int) -> None:
