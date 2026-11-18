@@ -21,6 +21,7 @@ const SCOPES: ScopeDef[] = [
   { id: 'mcp:read', label: 'MCP read', help: 'Let an AI tool read the project through MCP', group: 'mcp' },
   { id: 'mcp:write', label: 'MCP write', help: 'Let an AI tool change the model through MCP (editor+ role required)', group: 'mcp' },
   { id: 'mcp:generate', label: 'MCP generate', help: 'Let an AI tool request a code download through MCP', group: 'mcp' },
+  { id: 'mcp:destructive', label: 'MCP destructive', help: 'Let an AI tool remove model parts and confirm access-widening edits (the AI should ask you first). Off by default', group: 'mcp' },
 ]
 
 function when(iso: string | null): string {

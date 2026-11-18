@@ -142,7 +142,9 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
     if not _MCP_AVAILABLE:  # pragma: no cover
         raise RuntimeError("mcp package not installed; run: uv add 'mcp>=2.0'")
 
-    from app.services.mcp_service import McpService
+    from mcp.types import ToolAnnotations
+
+    from app.services.mcp_extra import McpExtra as McpService
 
     mcp = MCPServer(
         name="BackendBuilder",
@@ -151,7 +153,13 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             "Start with list_projects to discover projects you have access to. "
             "All tools are project-scoped. "
             "Authenticate with a Bearer API token (mcp:read scope required; "
-            "mcp:write for write tools; mcp:generate for generate_project)."
+            "mcp:write for write tools; mcp:generate for generate_project; "
+            "mcp:destructive for removes and for confirming access-widening edits). "
+            "You can create or change the data model, roles and permissions, sign-in settings, "
+            "authorization policies and behaviour (state machines, hooks, settings, jobs, "
+            "workflows, events, webhooks ...). Use get_project_status to see what is still missing. "
+            "Credentials (SMTP/SMS/Stripe/GitHub/Okta keys) are never set here: tell the user to "
+            "enter them in the dashboard."
         ),
         lifespan=_make_lifespan(session_factory),
     )
@@ -223,6 +231,54 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).validate_spec(principal, uuid.UUID(project_id))
 
+    @mcp.tool(
+        description="List the spec operation types with their payload schemas and which are destructive."
+    )
+    async def list_op_types(project_id: str, ctx: Context) -> list[dict[str, Any]]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).list_op_types(principal, uuid.UUID(project_id))
+
+    @mcp.tool(description="Recent spec changes (who/what/when), newest last. limit<=50.")
+    async def list_spec_history(
+        project_id: str,
+        limit: int = 20,
+        offset: int = 0,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).list_spec_history(
+                principal, uuid.UUID(project_id), limit, offset
+            )
+
+    @mcp.tool(
+        description=(
+            "The dashboard's readiness board: what is configured, issues per section, and the "
+            "one next step. Use it at the end to tell the user what they still have to fill in."
+        )
+    )
+    async def get_project_status(project_id: str, ctx: Context) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).get_project_status(principal, uuid.UUID(project_id))
+
+    @mcp.tool(description="Roles and the entity x operation permission matrix of a project.")
+    async def list_roles_and_permissions(project_id: str, ctx: Context) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).list_roles_and_permissions(principal, uuid.UUID(project_id))
+
+    @mcp.tool(description="Past code generations of a project (id, spec hash, file count, time).")
+    async def list_generations(
+        project_id: str,
+        limit: int = 10,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).list_generations(principal, uuid.UUID(project_id), limit)
+
     # ── Write tools (scope: mcp:write, requires editor+ role) ────────────────────────
 
     @mcp.tool(
@@ -279,9 +335,11 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
 
     @mcp.tool(
         description=(
-            "Record intended RBAC permissions for an entity operation. "
-            "Requires mcp:write scope and editor+ role. "
-            "Use PUT /projects/{id}/authorization to persist full policy changes."
+            "Save one entry of the role permission matrix: which roles may do `operation` "
+            "(list|get|create|update|replace|delete|head) on an entity. Roles must exist "
+            "(create_role first); an empty role list is refused because it would make the "
+            "operation public. row_rule: owner|role_scoped|tenant (optional). Needs sign-in "
+            "enabled to take effect (set_auth_config). Requires mcp:write and editor+."
         )
     )
     async def set_permissions(
@@ -289,12 +347,188 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
         entity_name: str,
         operation: str,
         roles: list[str],
+        row_rule: str | None = None,
+        confirm_weakening: bool = False,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
             return await McpService(db).set_permissions(
-                principal, uuid.UUID(project_id), entity_name, operation, roles
+                principal, uuid.UUID(project_id), entity_name, operation, roles, row_rule,
+                confirm_weakening,
+            )  # fmt: skip
+
+    @mcp.tool(
+        description=(
+            "Create a role. role keys: name, label, is_default, self_assignable, invite_only, "
+            "inherits_from. Requires mcp:write and editor+."
+        )
+    )
+    async def create_role(
+        project_id: str,
+        role: dict[str, Any],
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).create_role(principal, uuid.UUID(project_id), role)
+
+    @mcp.tool(
+        description=(
+            "Create or update sign-in settings (enabled, token lifetimes, registration rules, "
+            "magic link, rate limits, app_name ...). Only the keys you send change. First "
+            "creation: email_magic_link_enabled defaults to true and then needs smtp_config "
+            "{host, port, use_tls, from_email, from_name}; send email_magic_link_enabled=false to "
+            "skip e-mail for now. SMTP/SMS "
+            "credentials and suite identity cannot be set here. Switching sign-in off or any "
+            "change that widens access needs confirm_weakening=true AND the mcp:destructive scope."
+        )
+    )
+    async def set_auth_config(
+        project_id: str,
+        config: dict[str, Any],
+        confirm_weakening: bool = False,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).set_auth_config(
+                principal, uuid.UUID(project_id), config, confirm_weakening
+            )
+
+    @mcp.tool(
+        description=(
+            "Replace the authorization block (model, policies, attachments, field_access) like "
+            "the dashboard's Authorization page. Read get_project_spec first and send the whole "
+            "block. An edit that widens access is refused unless confirm_weakening=true with the "
+            "mcp:destructive scope."
+        )
+    )
+    async def set_authorization(
+        project_id: str,
+        authorization: dict[str, Any],
+        confirm_weakening: bool = False,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).set_authorization(
+                principal, uuid.UUID(project_id), authorization, confirm_weakening
+            )
+
+    @mcp.tool(
+        description=(
+            "Apply ONE typed spec operation (see list_op_types for the payload schemas): "
+            "add_entity, update_entity, add_field, update_field, add_relation, update_relation, "
+            "define_custom_field, update_custom_field, promote_custom_field, and set_section "
+            "(section: state_machines|settings|sequences|lists|history|hooks|seed; items REPLACE "
+            "the whole section, so read it first). dry_run=true returns what would change without "
+            "saving. Removals are not available here (apply_destructive_op)."
+        )
+    )
+    async def apply_op(
+        project_id: str,
+        op_type: str,
+        payload: dict[str, Any],
+        dry_run: bool = False,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).apply_op(
+                principal, uuid.UUID(project_id), op_type, payload, dry_run=dry_run
+            )
+
+    @mcp.tool(
+        description=(
+            "Save one behaviour block: events, providers, notifications, jobs, workflows, "
+            "api_edge, webhooks (hook_effects: project owner only). `value` is the block as in "
+            "get_project_spec; it replaces the block. expected_version (optional) refuses the "
+            "save if someone else changed it. Secrets are refused."
+        )
+    )
+    async def put_behavior_block(
+        project_id: str,
+        block: str,
+        value: dict[str, Any] | None,
+        expected_version: int | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).put_behavior_block(
+                principal, uuid.UUID(project_id), block, value, expected_version
+            )
+
+    @mcp.tool(
+        description=(
+            "Undo your own most recent MCP change. Refuses if the latest change was made by "
+            "someone else or in the dashboard."
+        )
+    )
+    async def undo_last_change(
+        project_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).undo_last_change(principal, uuid.UUID(project_id))
+
+    @mcp.tool(description="Redo the change you just undid (same ownership rule as undo).")
+    async def redo_last_change(
+        project_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).redo_last_change(principal, uuid.UUID(project_id))
+
+    # ── Destructive tools (scope: mcp:destructive; editor+; dry run by default) ────────
+
+    @mcp.tool(
+        description=(
+            "DESTRUCTIVE. Apply remove_entity | remove_field | remove_relation | "
+            "remove_custom_field | replace_spec. Data in generated apps that depends on what you "
+            "remove is lost. dry_run defaults to true: call it first, show the user the "
+            "would_change summary, and only repeat with dry_run=false after they agree. "
+            "Requires the mcp:destructive scope."
+        ),
+        annotations=ToolAnnotations(destructive_hint=True, read_only_hint=False),
+    )
+    async def apply_destructive_op(
+        project_id: str,
+        op_type: str,
+        payload: dict[str, Any],
+        dry_run: bool = True,
+        confirm_weakening: bool = False,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_DESTRUCTIVE)
+            return await McpService(db).apply_op(
+                principal, uuid.UUID(project_id), op_type, payload,
+                dry_run=dry_run, confirm_weakening=confirm_weakening, destructive=True,
+            )  # fmt: skip
+
+    @mcp.tool(
+        description=(
+            "DESTRUCTIVE. Set the domain packs block (money, operations, booking, ai) as in "
+            "get_project_spec; it replaces `packs`. Implemented as a whole-spec rewrite, so "
+            "dry_run defaults to true; show the user the summary before dry_run=false. "
+            "Requires the mcp:destructive scope."
+        ),
+        annotations=ToolAnnotations(destructive_hint=True, read_only_hint=False),
+    )
+    async def put_packs(
+        project_id: str,
+        packs: dict[str, Any] | None,
+        dry_run: bool = True,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_DESTRUCTIVE)
+            return await McpService(db).put_packs(
+                principal, uuid.UUID(project_id), packs, dry_run=dry_run
             )
 
     # ── Generate tool (scope: mcp:generate) ──────────────────────────────────────────

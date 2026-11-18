@@ -18,8 +18,18 @@ SCOPE_GENERATE = "generate"
 SCOPE_MCP_READ = "mcp:read"
 SCOPE_MCP_WRITE = "mcp:write"
 SCOPE_MCP_GENERATE = "mcp:generate"
+# Removes/rewrites model data and confirms access-widening edits; never granted by default.
+SCOPE_MCP_DESTRUCTIVE = "mcp:destructive"
 VALID_SCOPES = frozenset(
-    {SCOPE_READ, SCOPE_WRITE, SCOPE_GENERATE, SCOPE_MCP_READ, SCOPE_MCP_WRITE, SCOPE_MCP_GENERATE}
+    {
+        SCOPE_READ,
+        SCOPE_WRITE,
+        SCOPE_GENERATE,
+        SCOPE_MCP_READ,
+        SCOPE_MCP_WRITE,
+        SCOPE_MCP_GENERATE,
+        SCOPE_MCP_DESTRUCTIVE,
+    }
 )
 
 _READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
