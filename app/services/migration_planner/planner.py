@@ -351,6 +351,8 @@ def _diff_relations(b: _Builder, old: Snapshot, new: Snapshot, replaced: set[str
                 _rel_remove(b, old, o, new)
             if n and n.is_join and (swapped_from or not (o and o.is_join)):
                 _rel_add(b, old, new, n)
+            if swapped_from and key[2] not in replaced and key[2] in old.tables and key[2] in new.tables:
+                _swapped_parent_fk(b, old, new, o, n)  # the kept child's FK died with the dropped parent
             continue
         if o and n and o.is_join != n.is_join:
             _rel_remove(b, old, o, new)
@@ -361,6 +363,22 @@ def _diff_relations(b: _Builder, old: Snapshot, new: Snapshot, replaced: set[str
             _rel_add(b, old, new, n)
         elif o and n:
             _rel_change(b, new, o, n)
+
+
+def _swapped_parent_fk(b: _Builder, old: Snapshot, new: Snapshot, o: Rel | None, n: Rel | None) -> None:
+    """Parent table swapped, child kept: the old FK constraint went with the dropped parent table."""
+    keep_col = bool(o and n and not o.is_join and not n.is_join and o.fk_column == n.fk_column)
+    if o and not o.is_join and not keep_col:
+        child = new.tables[o.to_entity]
+        b.add("destructive", StepKind.drop_column, o.to_entity, child.table, o.fk_column, Safety.destructive,
+              f"relation removed: column {o.to_entity}.{o.fk_column} and its links are lost",
+              action="export the links first, then confirm the drop",
+              sql=f"ALTER TABLE {_q(child.table)} DROP COLUMN {_q(o.fk_column)}")
+    if n and not n.is_join:
+        if keep_col:
+            _add_fk_step(b, new, n)
+        else:
+            _rel_add(b, old, new, n)
 
 
 def _rel_remove(b: _Builder, old: Snapshot, r: Rel, new: Snapshot) -> None:
@@ -389,7 +407,7 @@ def _rel_add(b: _Builder, old: Snapshot, new: Snapshot, r: Rel) -> None:
         return
     if r.to_entity not in old.tables:
         return  # the FK column is part of the new table
-    child, parent = new.tables[r.to_entity], new.tables[r.from_entity]
+    child = new.tables[r.to_entity]
     col = r.fk_column
     if r.required:
         b.add("backfill", StepKind.add_column, r.to_entity, child.table, col, Safety.backfill,
@@ -400,12 +418,18 @@ def _rel_add(b: _Builder, old: Snapshot, new: Snapshot, r: Rel) -> None:
     else:
         b.add("additive", StepKind.add_column, r.to_entity, child.table, col, Safety.safe,
               f"new optional relation column {r.to_entity}.{col}", sql=f"ALTER TABLE {_q(child.table)} ADD COLUMN {_q(col)} uuid")
+    _add_fk_step(b, new, r)
+    if r.kind == "one_to_one":
+        _add_unique(b, child, col, new_col=not r.required)
+
+
+def _add_fk_step(b: _Builder, new: Snapshot, r: Rel) -> None:
+    child, parent = new.tables[r.to_entity], new.tables[r.from_entity]
+    col = r.fk_column
     b.add("constrain", StepKind.add_fk, r.to_entity, child.table, col, Safety.backfill,
           f"new foreign key {r.to_entity}.{col} -> {parent.table}: existing values must reference existing rows",
           strategy=f"find orphans (SELECT count(*) FROM {_q(child.table)} c LEFT JOIN {_q(parent.table)} p ON p.id = c.{_q(col)} WHERE c.{_q(col)} IS NOT NULL AND p.id IS NULL) and fix them before the constraint",
           sql=_fk_sql(child, parent, r))
-    if r.kind == "one_to_one":
-        _add_unique(b, child, col, new_col=not r.required)
 
 
 def _rel_change(b: _Builder, new: Snapshot, o: Rel, n: Rel) -> None:

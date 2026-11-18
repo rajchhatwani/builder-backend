@@ -1,5 +1,6 @@
 """Requirements map persistence and the intake / answer / start-run flows (B3-6)."""
 
+import logging
 import uuid
 from dataclasses import dataclass
 from typing import Any, cast
@@ -29,6 +30,8 @@ from app.services.agent.run_service import RunService
 from app.services.ai.gateway import ModelGateway, ProviderFactory
 from app.services.requirements import planner
 from app.services.requirements import reader as rd
+
+_log = logging.getLogger(__name__)
 
 _limiter = SlidingWindowLimiter(attempts=12, window_seconds=3600)  # intakes per project per hour
 _user_limiter = SlidingWindowLimiter(attempts=20, window_seconds=3600)  # intakes per user per hour
@@ -207,10 +210,21 @@ class RequirementsService:
 
     @staticmethod
     async def _release_cross_worker(conn: Any, project_id: uuid.UUID) -> None:
+        released = False
         try:
-            await conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:k, 0))"), {"k": f"intake:{project_id}"})
-        finally:
+            res = await conn.execute(text("SELECT pg_advisory_unlock(hashtextextended(:k, 0))"), {"k": f"intake:{project_id}"})
+            released = bool(res.scalar())
+        except Exception:
+            _log.warning("intake lock release failed for project %s", project_id, exc_info=True)
+        try:
+            if not released:  # the session lock must die with its connection, never return to the pool
+                await conn.invalidate()
+        except Exception:
+            _log.warning("intake lock connection invalidate failed", exc_info=True)
+        try:
             await conn.close()
+        except Exception:
+            _log.warning("intake lock connection close failed", exc_info=True)
 
     async def _run_intake(
         self, project: Project, user_id: uuid.UUID, docs: list[rd.ReadDoc], deps: ReaderDeps

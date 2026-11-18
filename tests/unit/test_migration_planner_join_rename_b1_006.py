@@ -44,3 +44,63 @@ def test_swapped_target_table_keeps_join_table_untouched() -> None:
     new = _spec([_ent("Order", "orders"), _ent("Tag", "tags2")], [_m2m("Order")])
     plan = plan_migration(old, new)
     assert not [s for s in plan.steps if s.table == "orders_tags"]
+
+
+def _o2m() -> dict[str, Any]:
+    return {"kind": "one_to_many", "from_entity": "Order", "to_entity": "Item", "from_name": "items", "to_name": "order"}
+
+
+def _m2m_item() -> dict[str, Any]:
+    return {"kind": "many_to_many", "from_entity": "Order", "to_entity": "Item", "from_name": "items", "to_name": "order"}
+
+
+ITEM = _ent("Item", "items")
+
+
+def _kinds(plan: Any) -> list[tuple[str, str]]:
+    return sorted((s.kind.value, s.table) for s in plan.steps)
+
+
+def test_swapped_parent_replans_fk_on_kept_child() -> None:
+    old = _spec([_ent("Order", "orders"), ITEM], [_o2m()])
+    new = _spec([_ent("Order", "orders2"), ITEM], [_o2m()])
+    kinds = _kinds(plan_migration(old, new))
+    assert ("add_fk", "items") in kinds
+    assert ("add_column", "items") not in kinds
+
+
+def test_swapped_parent_with_removed_relation_drops_child_column_only() -> None:
+    old = _spec([_ent("Order", "orders"), ITEM], [_o2m()])
+    new = _spec([_ent("Order", "orders2"), ITEM], [])
+    kinds = _kinds(plan_migration(old, new))
+    assert ("drop_column", "items") in kinds
+    assert ("drop_fk", "items") not in kinds
+
+
+def test_m2m_to_o2m_flip_with_swapped_parent_adds_fk_column() -> None:
+    old = _spec([_ent("Order", "orders"), ITEM], [_m2m_item()])
+    new = _spec([_ent("Order", "orders2"), ITEM], [_o2m()])
+    kinds = _kinds(plan_migration(old, new))
+    assert ("add_column", "items") in kinds and ("add_fk", "items") in kinds
+    assert ("drop_table", "orders_items") in kinds
+
+
+def test_o2m_to_m2m_flip_with_swapped_parent_drops_child_column() -> None:
+    old = _spec([_ent("Order", "orders"), ITEM], [_o2m()])
+    new = _spec([_ent("Order", "orders2"), ITEM], [_m2m_item()])
+    kinds = _kinds(plan_migration(old, new))
+    assert ("drop_column", "items") in kinds and ("create_table", "orders2_items") in kinds
+
+
+def test_m2m_added_and_removed_while_from_swapped() -> None:
+    added = _kinds(plan_migration(_spec([_ent("Order", "orders"), TAG], []), _spec([_ent("Order", "orders2"), TAG], [_m2m("Order")])))
+    assert ("create_table", "orders2_tags") in added
+    removed = _kinds(plan_migration(_spec([_ent("Order", "orders"), TAG], [_m2m("Order")]), _spec([_ent("Order", "orders2"), TAG], [])))
+    assert ("drop_table", "orders_tags") in removed
+
+
+def test_declared_rename_with_unchanged_table_makes_no_join_rename() -> None:
+    old = _spec([_ent("Order", "orders"), TAG], [_m2m("Order")])
+    new = _spec([_ent("Purchase", "orders"), TAG], [_m2m("Purchase")])
+    plan = plan_migration(old, new, [{"kind": "entity", "from": "Order", "to": "Purchase"}])
+    assert not [s for s in plan.steps if s.table == "orders_tags"]

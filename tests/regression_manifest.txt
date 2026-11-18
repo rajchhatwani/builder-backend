@@ -374,3 +374,4 @@ tests/audit/tenant_rls/test_preview_isolation.py
 tests/audit/tenant_rls/test_rls_db.py
 tests/unit/test_audit_b1_001_workflows.py
 tests/unit/test_audit_b1_002_prod_imports.py
+tests/unit/test_intake_lock_release_b1_006.py
