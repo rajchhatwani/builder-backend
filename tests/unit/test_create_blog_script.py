@@ -109,3 +109,36 @@ def test_author_not_self_assignable(monkeypatch):
 def test_failure_cleans_up_project(monkeypatch):
     calls, _ = _run(monkeypatch, fail_path="/auth")
     assert any(m == "DELETE" and p.startswith("/projects/") for m, p, _ in calls)
+
+
+def test_transport_error_cleans_up_partial_project(monkeypatch):
+    calls = []
+    monkeypatch.setenv("BUILDER_TOKEN", "tok")
+
+    class FakeClient:
+        def __init__(self, *a, **kw):
+            pass
+
+        def post(self, path, json=None):
+            calls.append(("POST", path))
+            if path.endswith("/entities"):
+                raise httpx.ReadTimeout("slow")
+            return _Resp(200, {"id": "p1", "name": "x"})
+
+        def delete(self, path):
+            calls.append(("DELETE", path))
+            return _Resp(204)
+
+    monkeypatch.setattr(httpx, "Client", FakeClient)
+    try:
+        runpy.run_path(SCRIPT)
+        raised = None
+    except SystemExit as e:
+        raised = e
+    assert isinstance(raised, SystemExit) and raised.code == 1
+    assert ("DELETE", "/projects/p1") in calls
+
+
+def test_header_documents_public_draft_posts():
+    text = Path(SCRIPT).read_text()
+    assert "draft" in text.split('"""')[1].lower()

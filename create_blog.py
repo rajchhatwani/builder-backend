@@ -3,7 +3,10 @@
 Env: BUILDER_TOKEN (required; session JWT or bb_pat_ API token),
 BUILDER_URL (default http://localhost:8000).
 Not idempotent: slug "blog-app" must be free. If a later step fails, the
-half-built project is deleted so the script can simply be re-run.
+half-built project is deleted (also on timeouts/connection errors) so the
+script can simply be re-run.
+Note: Post list/get are public, so draft/archived posts are readable by
+anonymous callers; add a status filter or a row rule if that matters.
 """
 import json
 import os
@@ -16,16 +19,35 @@ TOKEN = os.environ.get("BUILDER_TOKEN")
 if not TOKEN:
     print("ERROR: set BUILDER_TOKEN to a bearer token (session JWT or bb_pat_ API token)")
     sys.exit(1)
-c = httpx.Client(base_url=BASE, timeout=10, headers={"Authorization": f"Bearer {TOKEN}"})
+_raw = httpx.Client(base_url=BASE, timeout=10, headers={"Authorization": f"Bearer {TOKEN}"})
 pid = None
+
+def _fail(msg):
+    print(msg)
+    if pid:
+        try:
+            _raw.delete(f"/projects/{pid}")
+            print(f"  cleaned up partial project {pid}")
+        except httpx.HTTPError as exc:
+            print(f"  cleanup of project {pid} failed ({exc!r}); delete it manually")
+    sys.exit(1)
+
+class _Api:
+    """Client proxy: transport errors (timeout/connect) also trigger cleanup."""
+    def __getattr__(self, name):
+        fn = getattr(_raw, name)
+        def call(*a, **kw):
+            try:
+                return fn(*a, **kw)
+            except httpx.HTTPError as exc:
+                _fail(f"ERROR transport: {exc!r}")
+        return call
+
+c = _Api()
 
 def j(r):
     if r.status_code >= 400:
-        print(f"ERROR {r.status_code}: {r.text}")
-        if pid:
-            c.delete(f"/projects/{pid}")
-            print(f"  cleaned up partial project {pid}")
-        sys.exit(1)
+        _fail(f"ERROR {r.status_code}: {r.text}")
     return r.json()
 
 # ── 1. Project ─────────────────────────────────────────────────────────────
