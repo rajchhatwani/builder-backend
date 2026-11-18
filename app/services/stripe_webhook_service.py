@@ -157,7 +157,10 @@ class StripeWebhookService:
             return WebhookResult("other_subscription", org_id)
         if created < await self._newest_applied(org_id, event_type) or (
             event_type == "checkout.session.completed"
-            and self._checkout_predates_cancel(obj, sub)
+            and (
+                self._checkout_predates_cancel(obj, sub)
+                or self._checkout_of_replaced_subscription(obj, sub)
+            )
             and created < await self._newest_applied(org_id, "customer.subscription.updated")
         ):
             await self._record(event, org_id, created, "stale")
@@ -210,6 +213,17 @@ class StripeWebhookService:
             sub.status is SubscriptionStatus.canceled
             and sub.stripe_subscription_id is not None
             and session.get("subscription") == sub.stripe_subscription_id
+        )
+
+    @staticmethod
+    def _checkout_of_replaced_subscription(session: dict[str, Any], sub: Subscription) -> bool:
+        """A delayed checkout for a subscription the org has since replaced (another id is
+        recorded) must not overwrite the live one when subscription events are newer."""
+        event_sub = session.get("subscription")
+        return bool(
+            event_sub
+            and sub.stripe_subscription_id is not None
+            and event_sub != sub.stripe_subscription_id
         )
 
     def _apply_checkout(self, sub: Subscription, session: dict[str, Any]) -> None:

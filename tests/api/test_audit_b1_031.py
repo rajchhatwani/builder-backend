@@ -327,6 +327,32 @@ async def test_checkout_older_than_a_cancel_does_not_resurrect_the_plan(
     assert (await deliver(anon_client, fresh)).json()["outcome"] == "applied"
 
 
+async def test_late_checkout_of_a_replaced_subscription_does_not_overwrite_live_one(
+    client: AsyncClient,
+    anon_client: AsyncClient,
+    session_factory: Factory,
+    webhook_configured: None,  # noqa: F811
+) -> None:
+    org_id = await _team_org(client)
+    t0 = 1_800_000_000
+    deleted = event(
+        "customer.subscription.deleted",
+        subscription_obj(org_id, status="canceled"),
+        created=t0 + 100,
+    )
+    assert (await deliver(anon_client, deleted)).json()["outcome"] == "applied"
+    live = event(
+        "customer.subscription.updated",
+        subscription_obj(org_id, sub_id="sub_Y"),
+        created=t0 + 200,
+    )
+    assert (await deliver(anon_client, live)).json()["outcome"] == "applied"
+    late = event("checkout.session.completed", checkout_completed(org_id), created=t0)
+    assert (await deliver(anon_client, late)).json()["outcome"] == "stale"
+    after = await _sub(session_factory, org_id)
+    assert after.stripe_subscription_id == "sub_Y" and after.status.value == "active"
+
+
 @needs_git
 async def test_awaiting_approval_run_allows_rollback_but_blocks_file_write(
     client: AsyncClient, ws_settings: Settings, session_factory: Factory
