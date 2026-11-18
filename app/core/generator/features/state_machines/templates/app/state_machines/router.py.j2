@@ -6,7 +6,7 @@ import uuid as _uuid
 from typing import Annotated
 {% endif %}
 
-from fastapi import APIRouter{{ ", Depends" if auth else "" }}
+from fastapi import APIRouter{{ ", Depends" if auth else "" }}{{ ", Request" if routes | selectattr("move_check") | list else "" }}
 from pydantic import BaseModel
 
 {% if auth %}
@@ -14,11 +14,11 @@ from app.auth import access as _access
 {% if routes | selectattr("e.guarded") | list %}
 from app.auth import field_access as _fx
 {% endif %}
-{% if routes | selectattr("update_ops") | list %}
+{% if routes | selectattr("update_ops") | list or routes | selectattr("move_check") | list %}
 from app.auth.deps import CurrentUser
 {% endif %}
 from app.auth.service import effective_roles
-{% if routes | selectattr("update_ops") | list %}
+{% if routes | selectattr("update_ops") | list or routes | selectattr("move_check") | list %}
 from app.core.errors import AppError
 {% endif %}
 {% endif %}
@@ -65,6 +65,17 @@ _access_move_{{ e.table }} = _ACCESS_{{ e.table }}["{{ r.post_op }}"]
 {% else %}
 _access_{{ e.table }} = _access.access_dependency({% if r.gated %}authenticate=True{% endif %})
 {% endif %}
+{% endif %}
+{% if r.move_check %}
+
+
+async def _can_move_{{ e.table }}(request: Request, user: CurrentUser) -> _access.Access | AppError:
+    """The entity's UPDATE decision for this caller; a refusal is kept, not raised: the list reports it
+    as the POST would refuse it."""
+    try:
+        return await _ACCESS_{{ e.table }}["{{ r.post_op }}"](request, user)
+    except AppError as refused:
+        return refused
 {% endif %}
 {% for u in r.update_ops %}
 
@@ -113,6 +124,9 @@ async def list_{{ e.table }}_transitions(
     session: SessionDep,
 {% if auth %}
     access: Annotated[_access.Access, Depends(_access_{{ e.table }})],
+{% if r.move_check %}
+    can_move: Annotated[_access.Access | AppError, Depends(_can_move_{{ e.table }})],
+{% endif %}
 {% endif %}
 ) -> list[dict[str, object]]:
 {% if auth and e.guarded %}
@@ -127,15 +141,25 @@ async def list_{{ e.table }}_transitions(
 {% if settings_guards %}
     await engine.prime_settings(session, item)
 {% endif %}
+{% if auth and r.move_check %}
+    # POST needs the UPDATE decision for every transition on a policy entity: say so here too.
+    moved_refused = isinstance(can_move, AppError)
+{% endif %}
     return engine.available(
         "{{ e.name }}",
         item,
+{% if auth and r.move_check %}
+        set() if moved_refused else _roles_{{ e.table }}(access),
+{% else %}
         _roles_{{ e.table }}({% if auth %}access{% endif %}),
+{% endif %}
 {% if e.guarded %}
         mask_guard=bool(_fx.hidden_read("{{ e.name }}", access.user)),
 {% endif %}
 {% if auth and r.update_ops %}
         no_update=no_update,
+{% elif auth and r.move_check %}
+        no_update=moved_refused,
 {% endif %}
     )
 

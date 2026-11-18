@@ -111,6 +111,8 @@ def _happy_path(e: Any, machine: dict[str, Any], project: Any) -> dict[str, Any]
     (a guard hook could refuse any move, and the tests cannot know)."""
     if has_guard_hooks(project.spec):
         return None
+    if any(t["auto"] and t["guard"] is None and machine["initial"] in t["from"] for t in machine["transitions"]):
+        return None  # an unguarded automatic move leaves the initial state at once: no record ever waits there
     for t in machine["transitions"]:
         if t["auto"] or machine["initial"] not in t["from"] or t["guard"] is not None:
             continue
@@ -393,6 +395,7 @@ class StateMachinesModule:
                     "post_op": post_op,
                     "gated": gated,
                     "update_ops": update_ops,
+                    "move_check": bool(e.policy and post_op != op),
                     "probe": _role_probe(e, machines[e.name], project, op) if update_ops else None,
                     "skip": _skip_reason(e, project),
                     "happy": _happy_path(e, machines[e.name], project),

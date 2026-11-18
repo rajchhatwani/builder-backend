@@ -163,9 +163,9 @@ async def apply(
         raise NotFoundError(f"{entity} {item_id} not found")
     state = current_state(entity, item)
     if state not in t["from"]:
-        raise AppError(
-            "invalid_transition", f"{name} cannot start from the state {state!r}", 409
-        )
+        # a caller who may not read the state field must not learn the state from the error
+        detail = f"{name} is not available" if mask_guard else f"{name} cannot start from the state {state!r}"
+        raise AppError("invalid_transition", detail, 409)
     if not guard_holds(entity, t, row_values(item)):
         await session.rollback()
         detail = f"{name} is not available" if mask_guard else f"the conditions for {name} are not met"

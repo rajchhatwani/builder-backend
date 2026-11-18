@@ -4,11 +4,13 @@ import datetime as _dt
 import uuid as _uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from app.auth import access as _access
+from app.auth.deps import CurrentUser
 from app.auth.service import effective_roles
+from app.core.errors import AppError
 from app.crud.tickets import TicketRepository
 from app.db import SessionDep
 from app.routers.tickets import _ACCESS as _ACCESS_tickets
@@ -39,6 +41,15 @@ _access_tickets = _ACCESS_tickets["get"]
 _access_move_tickets = _ACCESS_tickets["update"]
 
 
+async def _can_move_tickets(request: Request, user: CurrentUser) -> _access.Access | AppError:
+    """The entity's UPDATE decision for this caller; a refusal is kept, not raised: the list reports it
+    as the POST would refuse it."""
+    try:
+        return await _ACCESS_tickets["update"](request, user)
+    except AppError as refused:
+        return refused
+
+
 def _roles_tickets(access: _access.Access) -> set[str]:
     return effective_roles(access.user.roles) if access.user is not None else set()
 
@@ -48,12 +59,16 @@ async def list_tickets_transitions(
     item_id: _uuid.UUID,
     session: SessionDep,
     access: Annotated[_access.Access, Depends(_access_tickets)],
+    can_move: Annotated[_access.Access | AppError, Depends(_can_move_tickets)],
 ) -> list[dict[str, object]]:
     item = await TicketRepository(session, **access.repo_kwargs).get(item_id)
+    # POST needs the UPDATE decision for every transition on a policy entity: say so here too.
+    moved_refused = isinstance(can_move, AppError)
     return engine.available(
         "Ticket",
         item,
-        _roles_tickets(access),
+        set() if moved_refused else _roles_tickets(access),
+        no_update=moved_refused,
     )
 
 
