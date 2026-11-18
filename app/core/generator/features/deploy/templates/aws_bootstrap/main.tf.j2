@@ -252,7 +252,7 @@ data "aws_iam_policy_document" "deploy" {
     condition {
       test     = "StringLike"
       variable = "s3:prefix"
-      values   = ["${var.project}/${each.value}/*", "${var.project}/${each.value}"]
+      values   = ["${var.project}/${each.value}/*", "${var.project}/${each.value}", "env:/*"]
     }
   }
 }

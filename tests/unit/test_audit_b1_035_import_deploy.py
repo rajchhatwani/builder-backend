@@ -136,3 +136,9 @@ def test_f1072_policy_governed_ops_are_never_assumed_listable() -> None:
     both = _ent(("create", "list"), _acc("create", policy=True), _acc("list", policy=True))
     assert not caller_may_list(both)
     assert not caller_may_list(_ent(("create", "list"), _acc("list", policy=True)))
+
+
+def test_f1432_state_list_allows_workspace_prefix() -> None:
+    main = _gen("aws")["deploy/aws/bootstrap/main.tf"]
+    lst = main.split('sid       = "TerraformStateList"')[1].split("}\n  }\n}")[0]
+    assert '"env:/*"' in lst
