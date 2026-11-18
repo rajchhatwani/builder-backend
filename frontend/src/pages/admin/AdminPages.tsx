@@ -199,7 +199,7 @@ function NewUserDialog({ open, onClose, onCreated }: { open: boolean; onClose: (
   )
 }
 
-function UserTokensDialog({
+export function UserTokensDialog({
   user,
   open,
   onClose,
@@ -212,13 +212,16 @@ function UserTokensDialog({
   const [tokens, setTokens] = useState<ApiTokenInfo[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const latest = useRef<string | null>(null)
   const load = useCallback(async () => {
     if (!user) return
+    latest.current = user.id
     setError(null)
     try {
-      setTokens(await api.adminListUserTokens(user.id))
+      const list = await api.adminListUserTokens(user.id)
+      if (latest.current === user.id) setTokens(list)
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Can't load tokens.")
+      if (latest.current === user.id) setError(err instanceof ApiError ? err.message : "Can't load tokens.")
     }
   }, [user])
 
@@ -2046,9 +2049,13 @@ export function AdminAudit() {
 
 export function AdminSettings() {
   const [s, setS] = useState<PlatformSettings | null>(null)
+  const [err, setErr] = useState('')
+  const [tries, setTries] = useState(0)
   useEffect(() => {
-    api.adminSettings().then(setS).catch(() => undefined)
-  }, [])
+    let cancelled = false
+    api.adminSettings().then((v) => { if (!cancelled) { setErr(''); setS(v) } }, (e) => { if (!cancelled) setErr(loadMsg(e)) })
+    return () => { cancelled = true }
+  }, [tries])
   const rows: [string, string | number | boolean | undefined, string][] = [
     ['Environment', s?.environment, 'BUILDER_ENVIRONMENT'],
     ['Sign-up', s?.signup_mode, 'BUILDER_SIGNUP_MODE (open or closed)'],
@@ -2064,6 +2071,7 @@ export function AdminSettings() {
   return (
     <>
       <Header title="Settings">Read-only. Change these with environment variables and restart.</Header>
+      {err && !s && <LoadFailed what="the settings" message={err} onRetry={() => setTries((n) => n + 1)} />}
       <table>
         <tbody>
           {rows.map(([label, value, env]) => (

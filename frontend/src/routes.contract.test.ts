@@ -42,6 +42,9 @@ const CONTRACT: [string, unknown][] = [
   ['#/admin/nonsense', { page: 'admin', section: 'overview' }],
   // Added by CP-5V (addition): the platform-admin SSO domain release page.
   ['#/admin/sso', { page: 'admin', section: 'sso' }],
+  ['#/admin/previews', { page: 'admin', section: 'previews' }],
+  ['#/admin/operations', { page: 'admin', section: 'operations' }],
+  ['#/admin/usage', { page: 'admin', section: 'usage' }],
   [`#/p/${PID}`, { page: 'project', projectId: PID, section: 'overview' }],
   // Added by F1-4 (an addition, no existing row changed): the v2-only State machines page.
   [`#/p/${PID}/machines`, { page: 'project', projectId: PID, section: 'machines' }],

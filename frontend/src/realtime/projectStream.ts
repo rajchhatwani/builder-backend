@@ -61,6 +61,7 @@ export function connectProjectEvents(opts: StreamOptions): { close: () => void; 
   let lastId: number | null = null
   let attempt = 0
   let refreshed = false
+  let everLive = false
 
   const run = async () => {
     while (!ctl.signal.aborted) {
@@ -90,6 +91,10 @@ export function connectProjectEvents(opts: StreamOptions): { close: () => void; 
           refreshed = false
           openedAt = now()
           opts.onStatus?.('live')
+          // Reconnecting before any event was seen: no Last-Event-ID could be sent, so the server starts at head and
+          // whatever happened in the gap is not replayed. Tell the client to refetch everything.
+          if (everLive && lastId === null) opts.onEvent({ id: null, topic: '', type: 'resync', data: {} })
+          everLive = true
           const parser = createSseParser()
           const reader = res.body.getReader()
           const dec = new TextDecoder()

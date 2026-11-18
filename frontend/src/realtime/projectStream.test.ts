@@ -133,3 +133,17 @@ describe('project stream', () => {
     conn.close()
   })
 })
+
+describe('project stream resume without an id (F-1266)', () => {
+  it('emits a synthetic resync when it reconnects before any event was seen', async () => {
+    const h = harness([streamRes([]), streamRes([frame(7, 'spec.changed')])])
+    await settle()
+    expect(h.calls[1].headers['Last-Event-ID']).toBeUndefined()
+    expect(h.events.map((e) => `${e.type}:${e.id}`)).toEqual(['resync:null', 'spec.changed:7'])
+  })
+  it('does not emit one on the very first connection', async () => {
+    const h = harness([streamRes([frame(7, 'spec.changed')])])
+    await settle()
+    expect(h.events.map((e) => e.type)).toEqual(['spec.changed'])
+  })
+})
