@@ -297,7 +297,7 @@ def _coerce_value(value: Any, f: SpecField) -> Any:
                 raise _Bad("invalid_json", "JSON is nested too deeply")
             if _has_nul(parsed):
                 raise _Bad("invalid_json", "JSON contains a NUL character")
-            json.dumps(parsed, allow_nan=False).encode("utf-8")
+            json.dumps(parsed, allow_nan=False, ensure_ascii=False).encode("utf-8")
         except (ValueError, RecursionError, TypeError) as exc:
             raise _Bad("invalid_json", "not valid JSON") from exc
         return parsed

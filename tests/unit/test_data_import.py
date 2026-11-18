@@ -245,3 +245,11 @@ def test_json_field_with_escaped_nul_is_invalid_json() -> None:
         with pytest.raises(ValueError, match="invalid_json"):
             di.coerce(bad, js)
     assert di.coerce('{"a":"\\\\u0000"}', js) == {"a": "\\u0000"}
+
+
+def test_json_field_with_lone_surrogate_is_invalid_json() -> None:
+    js = f("json")
+    for bad in ('"\\ud800"', '{"a":"\\udc00x"}', '{"\\ud800":1}'):
+        with pytest.raises(ValueError, match="invalid_json"):
+            di.coerce(bad, js)
+    assert di.coerce('"\\ud83d\\ude00"', js) == "\U0001f600"
