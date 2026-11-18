@@ -37,11 +37,22 @@ services:
       BUILDER_ENVIRONMENT: production
       BUILDER_RUNNER_MOUNT_ROOT: ${BB_DATA}
       BUILDER_SANDBOX_RUNTIME: ${BB_SANDBOX_RUNTIME:-runsc}
+    healthcheck:
+      # any HTTP answer (401/404 without the token) proves the listener is up; only a refused connection fails
+      test:
+        - CMD
+        - /app/.venv/bin/python
+        - -c
+        - "import urllib.request as u, urllib.error as e\ntry: u.urlopen('http://127.0.0.1:8790/', timeout=3)\nexcept e.HTTPError: pass"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 5s
 
   api:
     network_mode: host
     depends_on:
-      runner: { condition: service_started }
+      runner: { condition: service_healthy }
     volumes:
       - ${BB_DATA}:${BB_DATA}
     environment: *sandbox_env

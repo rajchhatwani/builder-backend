@@ -20,10 +20,17 @@ SANDBOX="$(envval SANDBOX_ENABLED)"
 if [ "$SANDBOX" = "true" ]; then
   FILES+=(-f docker-compose.sandbox.yml)
   BB_DATA="$(envval BB_DATA)"; BB_DATA="${BB_DATA:-/var/lib/builder}"; export BB_DATA
+  token="${BB_RUNNER_TOKEN:-$(envval BB_RUNNER_TOKEN)}"
+  [ "${#token}" -ge 32 ] || { echo "sandbox: BB_RUNNER_TOKEN must be set in .env with >= 32 chars (openssl rand -hex 32)" >&2; exit 1; }
   rt="$(envval BB_SANDBOX_RUNTIME)"; rt="${rt:-runsc}"
   docker info --format '{{json .Runtimes}}' | grep -q "\"$rt\"" \
     || { echo "sandbox: runtime '$rt' is not registered with Docker (install gVisor): see docs/DEPLOY.md" >&2; exit 1; }
-  mkdir -p "$BB_DATA/previews" "$BB_DATA/ws"
+  api_uid="${BB_API_UID:-10001}"
+  fixhint="run once as root: sudo install -d -o $api_uid -g $api_uid \"$BB_DATA\" \"$BB_DATA/previews\" \"$BB_DATA/ws\""
+  for d in "$BB_DATA" "$BB_DATA/previews" "$BB_DATA/ws"; do
+    [ -d "$d" ] || mkdir -p "$d" 2>/dev/null || { echo "sandbox: BB_DATA '$BB_DATA' cannot be created; $fixhint" >&2; exit 1; }
+    [ "$(stat -c %u "$d")" = "$api_uid" ] || { echo "sandbox: '$d' is not owned by uid $api_uid (the API user); $fixhint" >&2; exit 1; }
+  done
 fi
 dc() { docker compose --env-file .env "${FILES[@]}" "$@"; }
 

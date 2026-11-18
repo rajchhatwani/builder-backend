@@ -55,7 +55,7 @@ Do once on the server, as root, before the first sandbox deploy:
 2. **Address pools:** make sure Docker's default pools never hand out `172.30.0.0/16` (or set `SANDBOX_SUBNET_POOL`).
 3. **Firewall:** `sudo bash /opt/builder/scripts/sandbox_firewall.sh apply --yes`. It stops containers reaching the cloud
    metadata address, the host gateway and private ranges. It needs the `bb-` sandbox network labels the runner creates.
-4. **Data directory:** `sudo mkdir -p /var/lib/builder` (path = `BB_DATA`; it must be the same on host and in containers).
+4. **Data directory:** `sudo install -d -o 10001 -g 10001 /var/lib/builder /var/lib/builder/previews /var/lib/builder/ws` (path = `BB_DATA`; same on host and in containers; owned by the API user uid 10001, which `deploy.sh` checks).
 5. **.env:** `SANDBOX_ENABLED=true`, `PREVIEW_DOMAIN` (a third DNS name, different from the app's: the Workbench needs a
    separate origin), `BB_RUNNER_TOKEN=$(openssl rand -hex 32)`; set the `PREVIEW_DOMAIN` repository variable too (it is
    baked into the dashboard build), and the `SANDBOX_ENABLED` variable (`true`) for the workflow.

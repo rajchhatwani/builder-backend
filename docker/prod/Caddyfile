@@ -2,6 +2,8 @@
 # files, and one origin for dashboard + API (the refresh cookie is SameSite=Strict).
 {
 	email {$ACME_EMAIL}
+	# host network: the default admin endpoint (localhost:2019, unauthenticated) would be reachable by every host process
+	admin off
 }
 
 {$BB_DOMAIN} {
