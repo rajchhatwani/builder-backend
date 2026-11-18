@@ -82,4 +82,7 @@ def scrub(value: Any, _depth: int = 0) -> Any:
 
 def redact_processor(_logger: Any, _method: str, event_dict: dict[str, Any]) -> dict[str, Any]:
     """structlog processor: scrub every field of a log record."""
-    return {k: scrub(v) if k != "event" else scrub_text(str(v)) for k, v in event_dict.items()}
+    return {
+        k: scrub_text(str(v)) if k == "event" else REDACTED if is_secret_key(k) else scrub(v)
+        for k, v in event_dict.items()
+    }

@@ -8,6 +8,7 @@ timezone-aware datetimes only.
 """
 
 import re
+from bisect import bisect_left
 from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
@@ -111,7 +112,18 @@ def free_slots(
     slots: list[tuple[datetime, datetime]], busy: list[tuple[datetime, datetime]]
 ) -> list[tuple[datetime, datetime, bool]]:
     """Every slot with a `free` flag: free when it overlaps no busy interval."""
-    return [(s, e, not any(overlaps(s, e, bs, be) for bs, be in busy)) for s, e in slots]
+    # O(n log n): busy sorted by start, with a running maximum of the ends; a slot is taken when some interval
+    # starting before the slot's end also ends after the slot's start
+    ordered = sorted(busy)
+    starts = [bs for bs, _ in ordered]
+    reach: list[datetime] = []
+    for _, be in ordered:
+        reach.append(be if not reach or be > reach[-1] else reach[-1])
+    out: list[tuple[datetime, datetime, bool]] = []
+    for s, e in slots:
+        n = bisect_left(starts, e)  # intervals with start < e
+        out.append((s, e, not (n and reach[n - 1] > s)))
+    return out
 
 
 def booked_units(bookings: list[tuple[datetime, datetime, int]], start: datetime, end: datetime) -> int:
@@ -136,6 +148,11 @@ def cancellation_fee(status: str, starts_at: datetime, now: datetime, free_until
     if _aware(now) <= _aware(starts_at) - timedelta(hours=free_until_hours):
         return 0
     return fee_minor
+
+
+def can_cancel_now(status: str, starts_at: datetime, now: datetime) -> bool:
+    """A confirmed booking that has started (or passed) is history: only a hold or a future booking can be cancelled."""
+    return status != "confirmed" or _aware(starts_at) > _aware(now)
 
 
 def hold_deadline(now: datetime, ttl_seconds: int) -> datetime:

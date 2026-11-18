@@ -11,7 +11,7 @@ class MemberCreate(_pd.BaseModel):
     email: str = _pd.Field(max_length=120)
     joined_on: _dt.date | None = _pd.Field(default=_dt.date.fromisoformat('2026-01-01'))
     sponsor_id: _uuid.UUID | None = None
-    borrowed_books: list[_uuid.UUID] = _pd.Field(default_factory=list)
+    borrowed_books: list[_uuid.UUID] = _pd.Field(default_factory=list, max_length=1000)
 
 
 class MemberUpdate(_pd.BaseModel):
@@ -19,7 +19,7 @@ class MemberUpdate(_pd.BaseModel):
     email: str | None = _pd.Field(default=None, max_length=120)
     joined_on: _dt.date | None = _pd.Field(default=None)
     sponsor_id: _uuid.UUID | None = None
-    borrowed_books: list[_uuid.UUID] | None = None
+    borrowed_books: list[_uuid.UUID] | None = _pd.Field(default=None, max_length=1000)
 
     @_pd.model_validator(mode="after")
     def reject_null_values(self) -> _t.Self:

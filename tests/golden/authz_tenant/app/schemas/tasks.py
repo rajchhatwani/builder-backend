@@ -10,14 +10,14 @@ class TaskCreate(_pd.BaseModel):
     title: str = _pd.Field(max_length=120)
     done: bool | None = _pd.Field(default=False)
     points: int | None = _pd.Field(default=None, ge=-2147483648, le=2147483647)
-    labels: list[_uuid.UUID] = _pd.Field(default_factory=list)
+    labels: list[_uuid.UUID] = _pd.Field(default_factory=list, max_length=1000)
 
 
 class TaskUpdate(_pd.BaseModel):
     title: str | None = _pd.Field(default=None, max_length=120)
     done: bool | None = _pd.Field(default=None)
     points: int | None = _pd.Field(default=None, ge=-2147483648, le=2147483647)
-    labels: list[_uuid.UUID] | None = None
+    labels: list[_uuid.UUID] | None = _pd.Field(default=None, max_length=1000)
 
     @_pd.model_validator(mode="after")
     def reject_null_values(self) -> _t.Self:

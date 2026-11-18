@@ -12,7 +12,7 @@ class PostCreate(_pd.BaseModel):
     published: bool = _pd.Field(default=False)
     views: int | None = _pd.Field(default=0, ge=0, le=2147483647)
     author_id: _uuid.UUID
-    tags: list[_uuid.UUID] = _pd.Field(default_factory=list)
+    tags: list[_uuid.UUID] = _pd.Field(default_factory=list, max_length=1000)
 
 
 class PostUpdate(_pd.BaseModel):
@@ -21,7 +21,7 @@ class PostUpdate(_pd.BaseModel):
     published: bool | None = _pd.Field(default=None)
     views: int | None = _pd.Field(default=None, ge=0, le=2147483647)
     author_id: _uuid.UUID | None = None
-    tags: list[_uuid.UUID] | None = None
+    tags: list[_uuid.UUID] | None = _pd.Field(default=None, max_length=1000)
 
     @_pd.model_validator(mode="after")
     def reject_null_values(self) -> _t.Self:

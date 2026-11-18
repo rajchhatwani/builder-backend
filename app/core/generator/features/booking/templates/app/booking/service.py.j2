@@ -399,6 +399,8 @@ async def capacity(
         raise AppError("not_pool_resource", "a slot resource has an availability list instead", 422)
     if end <= start:
         raise AppError("invalid_range", "ends_at must be after starts_at", 422)
+    if end - start > timedelta(days=_config.MAX_AVAILABILITY_DAYS):
+        raise AppError("invalid_range", f"the range is at most {_config.MAX_AVAILABILITY_DAYS} days", 422)
     booked = _rules.booked_units(await _active_intervals(session, tenant, res.id, start, end), start, end)
     return _s.CapacityOut(resource_id=res.id, capacity=res.capacity, booked=booked, free=max(res.capacity - booked, 0))
 
@@ -588,6 +590,9 @@ async def cancel_booking(
     if not _rules.can_transition(status_was, "cancelled"):
         await session.rollback()
         raise AppError("invalid_transition", f"a {status_was} booking cannot be cancelled", 409)
+    if not _rules.can_cancel_now(status_was, starts_at, now):
+        await session.rollback()
+        raise AppError("invalid_transition", "that booking has already started", 409)
     fee = _rules.cancellation_fee(status_was, starts_at, now, _config.FREE_CANCEL_HOURS, _config.CANCEL_FEE_MINOR)
     await session.execute(
         _sa.update(Booking)

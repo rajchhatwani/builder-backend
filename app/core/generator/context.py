@@ -630,10 +630,13 @@ def _m2m_attr(
         relationship_decl=(
             f'{attr}: _orm.Mapped[list["{other}"]] = _orm.relationship({", ".join(args)})'
         ),
-        create_decl=f"{attr}: list[_uuid.UUID] = _pd.Field(default_factory=list)",
-        update_decl=f"{attr}: list[_uuid.UUID] | None = None",
+        create_decl=f"{attr}: list[_uuid.UUID] = _pd.Field(default_factory=list, max_length={M2M_MAX_IDS})",
+        update_decl=f"{attr}: list[_uuid.UUID] | None = _pd.Field(default=None, max_length={M2M_MAX_IDS})",
         read_decl=f"{attr}: list[_uuid.UUID] = _pd.Field(default_factory=list)",
     )
+
+
+M2M_MAX_IDS = 1000  # one bind per id in the lookup: keep far below the 32767 driver argument limit
 
 
 # --- entities ---------------------------------------------------------------------------

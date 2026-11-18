@@ -19,7 +19,7 @@ class BookCreate(_pd.BaseModel):
     catalog_id: _uuid.UUID | None = _pd.Field(default=None)
     author_id: _uuid.UUID
     shelf_id: _uuid.UUID | None = None
-    borrowers: list[_uuid.UUID] = _pd.Field(default_factory=list)
+    borrowers: list[_uuid.UUID] = _pd.Field(default_factory=list, max_length=1000)
 
 
 class BookUpdate(_pd.BaseModel):
@@ -34,7 +34,7 @@ class BookUpdate(_pd.BaseModel):
     catalog_id: _uuid.UUID | None = _pd.Field(default=None)
     author_id: _uuid.UUID | None = None
     shelf_id: _uuid.UUID | None = None
-    borrowers: list[_uuid.UUID] | None = None
+    borrowers: list[_uuid.UUID] | None = _pd.Field(default=None, max_length=1000)
 
     @_pd.model_validator(mode="after")
     def reject_null_values(self) -> _t.Self:
