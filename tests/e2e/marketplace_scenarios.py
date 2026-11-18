@@ -166,7 +166,7 @@ async def test_sale_to_payout_to_bank_statement_to_reconciliation(http, people) 
     assert imp.status_code == 201, imp.text
     run = imp.json()
     m = await http.post(f"/reconciliation/runs/{run['id']}/match", headers=a)
-    assert m.json() == {"new_matches": 6, "matched_count": 6, "unmatched_line_count": 1, "entries_truncated": False}
+    assert m.json() == {"new_matches": 6, "matched_count": 6, "unmatched_line_count": 1}
     res = (await http.get(f"/reconciliation/runs/{run['id']}/results", headers=a)).json()
     payout_lines = {p["line"]["external_id"]: p for p in res["matched"] if p["line"]["external_id"] in ("S4", "S5", "S6")}
     assert {k: (v["match"]["method"], v["match"]["diff_minor"], v["entry"]["amount_minor"]) for k, v in payout_lines.items()} == {

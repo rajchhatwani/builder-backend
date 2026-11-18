@@ -90,7 +90,7 @@ async def test_import_match_results_and_close_with_an_integer_summary(http, peop
     assert run["status"] == "open" and run["line_count"] == 4 and run["matched_count"] == 0 and run["currency"] == "USD"
     assert set(run) == {"id", "account_id", "currency", "name", "period_start", "period_end", "status", "line_count", "matched_count", "created_at", "closed_at", "summary"}
     m = await http.post(f"/reconciliation/runs/{run['id']}/match", headers=a)
-    assert m.status_code == 200 and m.json() == {"new_matches": 3, "matched_count": 3, "unmatched_line_count": 1, "entries_truncated": False}
+    assert m.status_code == 200 and m.json() == {"new_matches": 3, "matched_count": 3, "unmatched_line_count": 1}
     res = (await http.get(f"/reconciliation/runs/{run['id']}/results", headers=a)).json()
     assert {p["line"]["external_id"]: (p["match"]["method"], p["match"]["diff_minor"]) for p in res["matched"]} == {
         "L1": ("exact_reference", 0),
