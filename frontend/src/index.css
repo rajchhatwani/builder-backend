@@ -139,7 +139,7 @@ dialog form {
 .auth-subtabs .tab-btn {
   font-size: var(--text-7);
   padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-medium) var(--radius-medium) 0 0;
 }
 
 /* ── Auth config sections ─────────────────────────────────────────────────── */
@@ -147,7 +147,7 @@ dialog form {
 details.auth-section {
   margin-block-end: var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   overflow: hidden;
 }
 
@@ -155,7 +155,7 @@ details.auth-section > summary {
   padding: var(--space-3) var(--space-4);
   font-weight: var(--font-semibold);
   cursor: pointer;
-  background: var(--surface-1);
+  background: var(--faint);
   border-block-end: 1px solid var(--border);
   user-select: none;
 }
@@ -185,7 +185,7 @@ details.auth-section > .auth-section-body {
 
 .permission-matrix th {
   font-weight: var(--font-semibold);
-  background: var(--surface-1);
+  background: var(--faint);
   white-space: nowrap;
 }
 
@@ -196,7 +196,7 @@ details.auth-section > .auth-section-body {
 }
 
 .permission-matrix td.matrix-cell:hover {
-  background: var(--surface-2);
+  background: var(--muted);
 }
 
 .permission-matrix td.entity-name {
@@ -211,7 +211,7 @@ details.auth-section > .auth-section-body {
   padding: 0.1em 0.5em;
   margin: 0.1em;
   font-size: var(--text-8);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--primary);
   color: var(--primary-foreground);
   white-space: nowrap;
@@ -225,7 +225,7 @@ details.auth-section > .auth-section-body {
 }
 
 .badge-muted {
-  background: var(--surface-2);
+  background: var(--muted);
   color: var(--muted-foreground);
 }
 
@@ -428,7 +428,7 @@ dialog footer {
   gap: var(--space-4);
   padding: var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--card);
 }
 
@@ -496,7 +496,7 @@ dialog footer {
   gap: 0;
   padding: var(--space-2) var(--space-3);
   border: none;
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: none;
   color: var(--foreground);
   text-align: start;
@@ -504,11 +504,11 @@ dialog footer {
 }
 
 .entity-item:hover {
-  background: var(--surface-2);
+  background: var(--muted);
 }
 
 .entity-item[aria-current='true'] {
-  background: var(--surface-2);
+  background: var(--muted);
   box-shadow: inset 3px 0 0 var(--primary);
   font-weight: var(--font-semibold);
 }
@@ -584,7 +584,7 @@ dialog footer {
   gap: var(--space-1);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   cursor: pointer;
 }
 
@@ -597,7 +597,7 @@ dialog footer {
   padding: var(--space-4);
   margin-block-end: var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
 }
 
 .idp-card-head {
@@ -826,6 +826,14 @@ body.is-viewing {
   padding-block-end: 4.5rem;
 }
 
+/* Fixed elements do not follow body padding: lift them above the banner. */
+body.is-viewing .toast-stack {
+  inset-block-end: 4.5rem;
+}
+body.is-viewing .wb-drawer {
+  inset-block-end: 4.5rem;
+}
+
 /* Wide tables (org People: role selects, dates) scroll inside their own box on phones
    instead of clipping their cells (FEAT F-8). */
 .table-scroll {
@@ -944,7 +952,7 @@ body.is-viewing {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   font-size: var(--text-7);
   font-weight: var(--font-medium);
 }
@@ -969,7 +977,7 @@ body.is-viewing {
   padding: 0.1em 0.5em;
   font-size: var(--text-8);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--card);
   color: var(--foreground);
   cursor: pointer;
@@ -1055,7 +1063,7 @@ body.is-viewing {
 /* ── F1-2: Home readiness board (new shell only) ──────────────────────────── */
 .home-banner {
   padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   margin-block-end: var(--space-4);
   border: 1px solid var(--border);
 }
@@ -1078,7 +1086,7 @@ body.is-viewing {
   gap: var(--space-3);
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   background: var(--card);
 }
 .home-section-text { display: flex; flex-direction: column; min-width: 0; }
@@ -1094,7 +1102,7 @@ body.is-viewing {
   margin: 0;
   padding: var(--space-3);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 0.95rem;
   line-height: 1.5;
@@ -1126,11 +1134,11 @@ body.is-viewing {
   overflow-y: auto;
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-medium);
   box-shadow: 0 6px 20px rgb(0 0 0 / 0.15);
 }
 .rules-listbox[hidden] { display: none; }
-.rules-listbox li { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-2); border-radius: var(--radius); cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+.rules-listbox li { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-1) var(--space-2); border-radius: var(--radius-medium); cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .rules-listbox li.active { background: var(--muted, rgb(127 127 127 / 0.18)); }
 .rules-result { min-height: 2rem; margin-block-end: var(--space-4); display: flex; align-items: center; }
 .rules-chip { display: inline-block; padding: var(--space-1) var(--space-3); border-radius: 999px; border: 1px solid var(--success); border-inline-start-width: 6px; font-weight: 600; }
@@ -1138,7 +1146,7 @@ body.is-viewing {
 :root[data-theme='dark'] .rules-error { color: var(--foreground); }
 .rules-field-list { list-style: none; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-4); }
 .rules-guard-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
-.rules-guard-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.rules-guard-list li { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-medium); background: var(--card); }
 .rules-guard-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
 .rules-badge { flex: none; padding: 0 var(--space-2); border-radius: 999px; border: 1px solid var(--border); border-inline-start-width: 6px; font-size: var(--text-8, 0.85rem); }
 .rules-badge-ok { border-inline-start-color: var(--success); }
