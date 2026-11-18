@@ -65,8 +65,10 @@ def _field_schema(f: Any) -> dict[str, object]:
     t = str(f.type).lower()
     if t in ("integer", "int", "bigint"):
         return {"type": "integer"}
-    if t in ("float", "decimal"):
+    if t == "float":
         return {"type": "number"}
+    if t == "decimal":  # pydantic v2 serialises Decimal as a JSON string
+        return {"type": "string", "format": "decimal"}
     if t in ("boolean", "bool"):
         return {"type": "boolean"}
     if t == "json":
@@ -90,20 +92,50 @@ def _openapi_from_spec(spec: Any) -> dict[str, object]:
     for e in spec.entities:
         props = {f.name: _field_schema(f) for f in e.fields}
         required = [f.name for f in e.fields if f.required]
-        schemas[e.name] = {"type": "object", "properties": props, "required": required}
-        ref = {"$ref": f"#/components/schemas/{e.name}"}
-        json_ref = {"content": {"application/json": {"schema": ref}}}
-        ok = {"200": {"description": "OK", **json_ref}}
-        created = {"201": {"description": "Created", **json_ref}}
+        stamps = {
+            "id": {"type": "string", "format": "uuid"},
+            "created_at": {"type": "string", "format": "date-time"},
+            "updated_at": {"type": "string", "format": "date-time"},
+        }
+        schemas[f"{e.name}Create"] = {"type": "object", "properties": props, "required": required}
+        schemas[f"{e.name}Update"] = {"type": "object", "properties": props}
+        schemas[f"{e.name}Read"] = {
+            "type": "object",
+            "properties": {**stamps, **props},
+            "required": [*stamps, *required],
+        }
+
+        def _ref(kind: str, name: str = e.name) -> dict[str, object]:
+            return {"$ref": f"#/components/schemas/{name}{kind}"}
+
+        def _json(schema: dict[str, object]) -> dict[str, object]:
+            return {"content": {"application/json": {"schema": schema}}}
+
+        ok = {"200": {"description": "OK", **_json(_ref("Read"))}}
+        created = {"201": {"description": "Created", **_json(_ref("Read"))}}
         listed = {
             "200": {
                 "description": "OK",
-                "content": {"application/json": {"schema": {"type": "array", "items": ref}}},
+                **_json(
+                    {
+                        "type": "object",
+                        "properties": {
+                            "items": {"type": "array", "items": _ref("Read")},
+                            "total": {"type": "integer"},
+                            "limit": {"type": "integer"},
+                            "offset": {"type": "integer"},
+                        },
+                        "required": ["items", "total", "limit", "offset"],
+                    }
+                ),
             }
         }
         no_body = {"200": {"description": "OK"}}
         deleted = {"204": {"description": "No Content"}}
-        body = {"requestBody": {"required": True, "content": {"application/json": {"schema": ref}}}}
+
+        def body(kind: str) -> dict[str, object]:
+            return {"requestBody": {"required": True, **_json(_ref(kind))}}
+
         ops = {str(o) for o in e.options.operations} if e.options else set()
         base = "/" + e.plural_path.strip("/")
         coll: dict[str, object] = {}
@@ -111,18 +143,22 @@ def _openapi_from_spec(spec: Any) -> dict[str, object]:
         if "list" in ops:
             coll["get"] = {"operationId": f"list_{e.name}", "responses": listed}
         if "create" in ops:
-            coll["post"] = {"operationId": f"create_{e.name}", **body, "responses": created}
-        for op, verb, responses, has_body in (
-            ("get", "get", ok, False),
-            ("replace", "put", ok, True),
-            ("update", "patch", ok, True),
-            ("delete", "delete", deleted, False),
-            ("head", "head", no_body, False),
+            coll["post"] = {
+                "operationId": f"create_{e.name}",
+                **body("Create"),
+                "responses": created,
+            }
+        for op, verb, responses, body_kind in (
+            ("get", "get", ok, None),
+            ("replace", "put", ok, "Create"),
+            ("update", "patch", ok, "Update"),
+            ("delete", "delete", deleted, None),
+            ("head", "head", no_body, None),
         ):
             if op in ops:
                 item[verb] = {
                     "operationId": f"{op}_{e.name}",
-                    **(body if has_body else {}),
+                    **(body(body_kind) if body_kind else {}),
                     "responses": responses,
                 }
         if coll:
@@ -162,7 +198,9 @@ class McpService:
         await self._check_org(principal, project_id)
         return member
 
-    async def _check_org(self, principal: Principal, project_id: uuid.UUID) -> None:
+    async def _check_org(
+        self, principal: Principal, project_id: uuid.UUID, *, record_denial: bool = True
+    ) -> None:
         """The same org rules the HTTP guard applies (§5): org membership, the deletion lock
         (423) and the org's MFA policy (403 `org_mfa_required`, §4.4)."""
         from app.api.security import org_deletion_pending, org_mfa_required
@@ -189,6 +227,10 @@ class McpService:
         orgs = OrganizationService(self.db)
         plan, _sub = await orgs.plan_and_subscription(org.id)
         if not plan.allow_mcp:
+            if not record_denial:  # list filtering: no rollback, no audit row per project
+                raise AppError(
+                    code="mcp_not_in_plan", message="plan doesn't include MCP", status_code=402
+                )
             raise await orgs.deny_mcp_not_in_plan(
                 org.id, plan, actor_id=principal.user.id, actor_email=principal.user.email
             )
@@ -239,23 +281,25 @@ class McpService:
                 ProjectMember.mcp_enabled.is_(True),
             )
         )
+        # Plain values first: nothing below may touch ORM rows a commit could expire.
+        found = [(p.id, p.name, p.slug, p.description or "", str(m.role)) for p, m in rows.all()]
         projects = []
-        for project, member in rows.all():
+        for pid, name, slug, description, role in found:
             # Respect token pin
-            if principal.token_project_id is not None and project.id != principal.token_project_id:
+            if principal.token_project_id is not None and pid != principal.token_project_id:
                 continue
             # Same org rules as every other MCP call: membership, deletion lock, MFA, plan.
             try:
-                await self._check_org(principal, project.id)
+                await self._check_org(principal, pid, record_denial=False)
             except AppError:
                 continue
             projects.append(
                 {
-                    "id": str(project.id),
-                    "name": project.name,
-                    "slug": project.slug,
-                    "description": project.description or "",
-                    "your_role": str(member.role),
+                    "id": str(pid),
+                    "name": name,
+                    "slug": slug,
+                    "description": description,
+                    "your_role": role,
                 }
             )
         await audit_service.record(

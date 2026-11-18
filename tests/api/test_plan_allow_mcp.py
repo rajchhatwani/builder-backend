@@ -91,3 +91,32 @@ async def test_existing_mcp_use_stops_after_a_downgrade(
         with pytest.raises(AppError) as exc:
             await McpService(db).get_project_spec(principal, project_id)
     assert exc.value.status_code == 402 and exc.value.code == "mcp_not_in_plan"
+
+
+@pytest.mark.usefixtures("mcp_off_on_business")
+async def test_list_projects_under_mcp_off_plan_is_empty_and_records_no_denials(
+    client_for: ClientFor, session_factory: Factory
+) -> None:
+    """F-1021: filtering the list must not roll back mid-iteration or write a denial per row."""
+    owner, org = await _business_org(client_for, session_factory)
+    ids = []
+    for n in range(3):
+        made = await owner.post("/projects", json={"name": f"P{n}", "organization_id": org["id"]})
+        assert made.status_code == 201, made.text
+        ids.append(uuid.UUID(made.json()["id"]))
+    async with session_factory() as s:
+        for pid in ids:
+            member = await s.get(ProjectMember, (pid, owner.user.id))  # type: ignore[attr-defined]
+            assert member is not None
+            member.mcp_enabled, member.role = True, MemberRole.owner
+        await s.commit()
+    principal = await _principal(owner.user)  # type: ignore[attr-defined]
+    async with session_factory() as db:
+        assert await McpService(db).list_projects(principal) == []
+    async with session_factory() as s:
+        denied = [
+            a
+            for a in (await s.execute(AuditLog.__table__.select())).all()
+            if a.action == "quota.denied" and a.detail.get("resource") == "mcp_tokens"
+        ]
+    assert denied == []
