@@ -127,6 +127,8 @@ function LeafEditor({ leaf, onChange, onRemove, ctx }: { leaf: PolicyLeaf; onCha
   const op = OPS.find((o) => o.id === leaf.op) ?? OPS[0]
   const leftKind = kindOfOperand(ctx, leaf.left)
   const rightKind = leaf.right ? kindOfOperand(ctx, leaf.right) : undefined
+  /** Re-reads a typed literal against the kind of the (newly chosen) other side. */
+  const reparse = (lit: { literal: unknown }, kind: string | undefined) => ({ literal: parseLiteral(literalToText(lit.literal), Boolean(op.list), kind) })
 
   return (
     <div
@@ -146,7 +148,10 @@ function LeafEditor({ leaf, onChange, onRemove, ctx }: { leaf: PolicyLeaf; onCha
         ctx={ctx}
         listValue={false}
         hintKind={rightKind}
-        onChange={(left) => onChange({ ...leaf, left })}
+        onChange={(left) => {
+          const right = leaf.right && 'literal' in leaf.right ? reparse(leaf.right, kindOfOperand(ctx, left)) : leaf.right
+          onChange(right ? { ...leaf, left, right } : { ...leaf, left })
+        }}
       />
       <select
         aria-label="Comparison"

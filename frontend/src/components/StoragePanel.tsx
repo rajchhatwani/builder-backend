@@ -143,7 +143,9 @@ function lines(text: string): string[] {
     .filter((line) => line !== '')
 }
 
-function toWrite(f: Form): StorageWrite {
+function toWrite(f: Form, knownRoles?: string[]): StorageWrite {
+  const known = knownRoles && knownRoles.length > 0 ? new Set(knownRoles) : null
+  const keep = (names: string[]) => (known ? names.filter((n) => known.has(n)) : names)
   const quota = f.userQuotaMb.trim()
   return {
     backend: f.backend,
@@ -156,7 +158,7 @@ function toWrite(f: Form): StorageWrite {
     uploads_per_hour: Number(f.uploadsPerHour),
     download_mode: f.downloadMode,
     allow_inline_images: f.allowInlineImages,
-    roles: f.roles,
+    roles: Object.fromEntries(Object.entries(f.roles).map(([k, v]) => [k, keep(v as string[])])) as unknown as StorageRoles,
     security: {
       audit_retention_days: Number(f.auditRetentionDays),
       audit_ip: f.auditIp,
@@ -232,7 +234,7 @@ export function StoragePanel({ project, roles, authEnabled, issues, onChanged }:
     setSaving(true)
     setMessage(null)
     try {
-      const saved = await api.putStorage(project.id, toWrite(form))
+      const saved = await api.putStorage(project.id, toWrite(form, roles.map((r) => r.name)))
       setConfig(saved)
       setForm(formFrom(saved))
       toast('File upload settings saved.')
@@ -564,9 +566,9 @@ export function StoragePanel({ project, roles, authEnabled, issues, onChanged }:
         projectId={project.id}
         action={switching}
         onClose={() => setSwitching(null)}
-        onDone={() => {
+        onDone={(updated) => {
           setSwitching(null)
-          load()
+          setConfig(updated)
           onChanged()
         }}
       />
@@ -583,7 +585,7 @@ function SwitchDialog({
   projectId: string
   action: 'enable' | 'disable' | null
   onClose: () => void
-  onDone: () => void
+  onDone: (updated: StorageConfig) => void
 }) {
   const { toast } = useUi()
   const [impact, setImpact] = useState<StorageImpact | null>(null)
@@ -606,9 +608,9 @@ function SwitchDialog({
     setBusy(true)
     setError(null)
     try {
-      await api.switchStorage(projectId, action)
+      const updated = await api.switchStorage(projectId, action)
       toast(action === 'enable' ? 'File uploads are on.' : 'File uploads are off. Your settings are kept.')
-      onDone()
+      onDone(updated)
     } catch (err) {
       setError(errorText(err, 'Could not switch.'))
     } finally {

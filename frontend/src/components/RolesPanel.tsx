@@ -150,7 +150,7 @@ export function RolesPanel({ projectId, keycloak = false }: RolesPanelProps) {
     } catch (err) {
       if (err instanceof CancelledSave) return
       if (err instanceof ApiError && err.status === 409) {
-        setFormError('A role with this name already exists.')
+        setFormError(err.message)
       } else {
         setFormError(err instanceof Error ? err.message : 'Something went wrong.')
       }

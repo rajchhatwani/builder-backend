@@ -57,3 +57,15 @@ describe('RolesPanel access_weakened (F-0902)', () => {
     expect(m.update.mock.calls.map((c) => c[2])).toEqual([false, true])
   })
 })
+
+describe('RolesPanel 409 text (F-1232)', () => {
+  it('shows the server message, not a fixed name-exists text', async () => {
+    m.update.mockRejectedValueOnce(new ApiError(409, { code: 'conflict', message: 'update that role first (set is_default=false)', details: [] }))
+    const host = await mount(createElement(RolesPanel, { projectId: 'p' }))
+    await click(btn(host, /Edit/i))
+    await click(host.querySelector('dialog button[type="submit"]'))
+    await flush()
+    expect(host.textContent).toContain('update that role first')
+    expect(host.textContent).not.toContain('name already exists')
+  })
+})

@@ -50,4 +50,10 @@ describe('ConditionEditor', () => {
     expect(input().value).toBe('in progress')
     expect(r.get().all[0].right).toEqual({ literal: 'in progress' })
   })
+  it('changing the compared attribute to a number re-reads a typed literal (F-1229)', async () => {
+    const r = await render({ all: [{ left: { resource: 'status' }, op: 'eq', right: { literal: '18' } }] })
+    await setInput(r.host.querySelector('select[aria-label="Compare what"]') as HTMLSelectElement, 'subject')
+    await setInput(r.host.querySelector('select[aria-label="Attribute of the person"]') as HTMLSelectElement, 'level')
+    expect(r.get().all[0].right).toEqual({ literal: 18 })
+  })
 })
