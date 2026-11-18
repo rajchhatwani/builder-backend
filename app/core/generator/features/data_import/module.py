@@ -44,8 +44,8 @@ def caller_may_list(entity: EntityCtx) -> bool:
     cre = by_op.get("create")
     if cre is None:  # public create, protected list
         return False
-    if lst.policy or cre.policy:
-        return lst.policy and cre.policy
+    if lst.policy or cre.policy:  # policies are per action: list vs create is undecidable statically
+        return False
     if (lst.owner, lst.tenant, lst.admin_sees_all, lst.match) != (
         cre.owner,
         cre.tenant,

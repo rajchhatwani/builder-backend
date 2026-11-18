@@ -130,3 +130,9 @@ def test_f1078_state_access_is_scoped_to_the_environment_prefix() -> None:
     assert "/${var.project}/${each.value}/*" in state
     assert '"${aws_s3_bucket.state.arn}/*"' not in main.split('sid       = "PushImages"')[1]
     assert "s3:prefix" in main
+
+
+def test_f1072_policy_governed_ops_are_never_assumed_listable() -> None:
+    both = _ent(("create", "list"), _acc("create", policy=True), _acc("list", policy=True))
+    assert not caller_may_list(both)
+    assert not caller_may_list(_ent(("create", "list"), _acc("list", policy=True)))
