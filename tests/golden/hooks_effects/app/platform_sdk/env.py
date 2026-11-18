@@ -73,7 +73,7 @@ def now() -> _dt.datetime:
     return _dt.datetime.now(_dt.UTC)
 
 
-def find_rows(entity: str, *, limit: int = 50, **equals: Any) -> list[dict[str, Any]]:
+def find_rows(entity: str, *, limit: int | None = None, **equals: Any) -> list[dict[str, Any]]:
     """Read-only lookup: rows of `entity` whose columns equal the given values, as plain dicts.
 
     Only the entities the hook declares in `reads` can be read, and only up to its `rows` budget.
@@ -82,16 +82,18 @@ def find_rows(entity: str, *, limit: int = 50, **equals: Any) -> list[dict[str, 
     permissions, owner / tenant / custom row rules, abac / pbac policies, soft-deleted rows hidden),
     and only the fields that endpoint returns come back. Entities that person may not read raise
     `AccessDenied`; with no identifiable person the read is refused where the endpoint needs one.
-    Nothing can be written through this function."""
+    Without `limit` at most 50 rows (fewer when the budget has less left) come back. Nothing can be written through this function."""
     env = _env()
     if env.finder is None or entity not in env.reads:
         env.breached = True
         raise BudgetExceeded("this hook may not read that entity")
-    if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
+    if limit is not None and (not isinstance(limit, int) or isinstance(limit, bool) or limit < 1):
         raise ValueError("limit must be a positive integer")
     if any(not isinstance(v, _SCALARS) for v in equals.values()):
         raise ValueError("filter values must be plain strings, numbers or booleans")
     remaining = env.rows_budget - env.rows_used
+    if limit is None:
+        limit = min(50, remaining)  # the default never exceeds what the budget still allows
     if remaining <= 0 or limit > remaining:
         env.breached = True
         raise BudgetExceeded("the rows budget of this hook is used up")

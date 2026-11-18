@@ -80,7 +80,22 @@ def _policy_kwargs(entity: str, rule: dict[str, Any], caller: Any) -> dict[str, 
     )
     return access.repo_kwargs  # type: ignore[no-any-return]
 {% endif %}
+
+
+def hidden_fields(entity: str, caller: Any) -> frozenset[str]:
+    """Fields of `entity` the person behind the request may not read (the list endpoint hides them)."""
+{% if field_rules %}
+    from app.auth import field_access
+
+    return field_access.hidden_read(entity, caller)
 {% else %}
+    return frozenset()
+{% endif %}
+{% else %}
+
+
+def hidden_fields(entity: str, caller: Any) -> frozenset[str]:
+    return frozenset()
 
 
 def repo_kwargs(entity: str, caller: Any) -> dict[str, Any]:

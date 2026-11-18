@@ -66,6 +66,12 @@ def check_documents(spec: Spec, add: Add) -> None:
             add(f"{path}.template", "documents.template", problem)
         if tpl.compute is not None and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", tpl.compute):
             add(f"{path}.compute", "invalid_value", "the name of a list in the data")
+        if tpl.entity is not None and tpl.compute is not None:
+            add(
+                f"{path}.compute",
+                "documents.compute_needs_unbound",
+                "totals are only recomputed for templates without an entity: remove compute or entity",
+            )
         if tpl.entity is not None:
             _check_entity(tpl, path, entities, add)
 

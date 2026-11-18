@@ -383,3 +383,4 @@ tests/unit/test_audit_b1_030.py
 tests/unit/test_audit_b1_032.py
 tests/unit/test_audit_b1_033_import_deploy.py
 tests/unit/test_audit_b1_035_import_deploy.py
+tests/unit/test_audit_b1_037_gen_deps_hooks.py

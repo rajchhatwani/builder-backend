@@ -128,12 +128,12 @@ async def run_forever(
     loop = asyncio.get_running_loop()
     while not stop.is_set():
         try:
-            if await deliver_batch(factory, adapter):
-                continue
             if loop.time() - last_purge >= config.PURGE_EVERY_SECONDS:
                 last_purge = loop.time()
                 async with factory() as session:
                     await purge_delivered(session)
+            if await deliver_batch(factory, adapter):
+                continue
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # the database may be briefly away: log the class, try again

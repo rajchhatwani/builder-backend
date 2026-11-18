@@ -47,3 +47,8 @@ def repo_kwargs(entity: str, caller: Any) -> dict[str, Any]:
         return build_access(caller, **rule["build"]).repo_kwargs  # type: ignore[no-any-return]
     except AppError as exc:
         raise _denied() from exc
+
+
+def hidden_fields(entity: str, caller: Any) -> frozenset[str]:
+    """Fields of `entity` the person behind the request may not read (the list endpoint hides them)."""
+    return frozenset()

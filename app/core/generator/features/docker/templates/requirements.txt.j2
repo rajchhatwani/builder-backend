@@ -3,7 +3,7 @@ asyncpg>=0.32.0
 {% if sns or storage %}
 boto3>=1.38.0
 {% endif %}
-{% if rs256 or keycloak %}
+{% if rs256 or keycloak or provider_vault %}
 cryptography>=44.0.0
 {% endif %}
 fastapi>=0.156.8

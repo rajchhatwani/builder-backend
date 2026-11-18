@@ -16,6 +16,7 @@ from typing import Any
 from app.platform_sdk.env import AccessDenied
 
 RULES: dict[str, dict[str, Any]] = {'Ticket': {'build': {},
+            'guarded': False,
             'mode': 'policy',
             'needs_user': True,
             'op': 'list',
@@ -78,3 +79,8 @@ def _policy_kwargs(entity: str, rule: dict[str, Any], caller: Any) -> dict[str, 
         policy=authorize.PolicyBinding(entity, rule["op"], context),
     )
     return access.repo_kwargs  # type: ignore[no-any-return]
+
+
+def hidden_fields(entity: str, caller: Any) -> frozenset[str]:
+    """Fields of `entity` the person behind the request may not read (the list endpoint hides them)."""
+    return frozenset()

@@ -88,6 +88,10 @@ async def _find(
     if not set(equals) <= readable:
         raise ValueError("unknown column in the filter")
     kwargs = access.repo_kwargs(entity, caller)
+    hidden = access.hidden_fields(entity, caller)  # field-level read rules of the list endpoint
+    if hidden & set(equals):
+        raise sdk_env.AccessDenied("the signed-in person may not filter by that field")
+    readable = readable - hidden
     if "tenant_id" in columns and kwargs.get("scope", {}).get("tenant_id") is None:
         raise sdk_env.AccessDenied("the signed-in person may not read that entity")  # no tenant, no rows
     async with session_factory() as session:

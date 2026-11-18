@@ -266,6 +266,7 @@ def access_rules(project: ProjectCtx, hooks: list[HookView]) -> dict[str, dict[s
             "needs_user": False,
             "tenant": False,
             "build": {},
+            "guarded": entity.guarded,
         }
         ctx = next((a for a in entity.access if a.op == op), None)
         if op is not None and ctx is not None:
@@ -424,6 +425,7 @@ class HooksModule:
                 "app/hooks_gen/access.py.j2",
                 auth=auth,
                 policy=any(e.policy for e in project.entity_by_name.values()),
+                field_rules=auth and any(e.guarded for e in project.entity_by_name.values()),
                 rules=pprint.pformat(access_rules(project, hooks), width=96, sort_dicts=True),
             ),
             "app/platform_sdk/helpers.py": read_verbatim(

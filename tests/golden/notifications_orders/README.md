@@ -133,6 +133,26 @@ demand, never your dev database).
 Names in generated code use a leading underscore (`_orm`, `_sa`, ...) for library aliases so
 that your field names can never shadow them.
 
+## Events
+
+Domain events are written to an outbox table in the same transaction as the change and delivered
+at least once by the relay (`app/events/relay.py`). By default the relay runs inside the API process.
+To run it separately set `EVENTS_RELAY_ENABLED=false` for the API and start `python -m app.events.relay`
+(`--once` delivers what is due and exits).
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `EVENTS_RELAY_ENABLED` | `true` | run the relay inside the API process |
+| `EVENTS_POLL_INTERVAL_SECONDS` | `1` | pause between delivery rounds when idle |
+| `EVENTS_MAX_ATTEMPTS` | `8` | attempts before an event is parked as `failed` |
+| `EVENTS_HANDLER_TIMEOUT_SECONDS` | `30` | time one subscriber may take |
+| `EVENTS_RETENTION_DAYS` | spec value | delivered events older than this are purged |
+
+Subscribers live in `app/hooks/subscribers.py` (`@subscribe("type")`); delivery is at least once, so
+keep handlers idempotent. A parked (`failed`) event keeps blocking later events of the same record until
+you fix the cause and requeue it: `await outbox.requeue_failed(session, event_id)` (all parked events
+when `event_id` is omitted).
+
 ## Not included
 
 Authorization rules on the entity endpoints, background jobs, caching and webhooks.

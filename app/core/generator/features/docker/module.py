@@ -105,6 +105,7 @@ class DockerModule:
             "workflows_worker": workflows_active(project.spec) and project.auth is not None,
             "workflows_concurrency": project.spec.workflows.worker.concurrency if project.spec.workflows is not None else 1,
             "hooks": hooks_active(project.spec),
+            "events_active": events_active(project.spec),
             "hook_effects": project.spec.hook_effects is not None and project.spec.hook_effects.enabled,
             # any optional feature that ships its own Alembic revision (see "Upgrading a deployed project")
             "optional_migrations": any(

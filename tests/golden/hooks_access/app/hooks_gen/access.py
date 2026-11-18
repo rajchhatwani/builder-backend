@@ -16,6 +16,7 @@ from typing import Any
 from app.platform_sdk.env import AccessDenied
 
 RULES: dict[str, dict[str, Any]] = {'Ledger': {'build': {'roles': ('admin',), 'tenant': True},
+            'guarded': False,
             'mode': 'roles',
             'needs_user': True,
             'op': 'list',
@@ -26,6 +27,7 @@ RULES: dict[str, dict[str, Any]] = {'Ledger': {'build': {'roles': ('admin',), 't
                     'owner': True,
                     'roles': ('admin', 'member'),
                     'tenant': True},
+          'guarded': False,
           'mode': 'roles',
           'needs_user': True,
           'op': 'list',
@@ -63,3 +65,8 @@ def repo_kwargs(entity: str, caller: Any) -> dict[str, Any]:
         return build_access(caller, **rule["build"]).repo_kwargs  # type: ignore[no-any-return]
     except AppError as exc:
         raise _denied() from exc
+
+
+def hidden_fields(entity: str, caller: Any) -> frozenset[str]:
+    """Fields of `entity` the person behind the request may not read (the list endpoint hides them)."""
+    return frozenset()

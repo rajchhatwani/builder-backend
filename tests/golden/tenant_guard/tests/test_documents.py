@@ -113,14 +113,17 @@ async def test_totals_are_recomputed_not_trusted(
 ) -> None:
     if not allowed_for(template):
         pytest.skip("no role may render this template")
+    key = template["compute"]
     data = {
         "currency": "EUR",
-        "items": [{"description": "Widget", "quantity": 3, "unit_price": "9.99", "tax_rate": 20}],
+        key: [{"description": "Widget", "quantity": 3, "unit_price": "9.99", "tax_rate": 20}],
         "totals": {"subtotal": "1.00", "tax_total": "0.00", "total": "1.00"},  # a lie
     }
     response = await authed_client.post(f"/documents/{template['id']}/render", json={"data": data})
     assert response.status_code == 200, response.text
     text = text_of(response.content)
+    if "totals." not in json.dumps(template["template"]):
+        pytest.skip("this template does not print the totals")
     assert "35.96 EUR" in text  # 3 x 9.99 = 29.97 net, 20% tax = 5.99
     assert "1.00 EUR" not in text
 
@@ -132,9 +135,10 @@ async def test_unacceptable_data_is_a_clear_422(
     if not allowed_for(template):
         pytest.skip("no role may render this template")
     url = f"/documents/{template['id']}/render"
-    bad_number = {"items": [{"quantity": "many", "unit_price": 1}]}
-    too_many = {"items": [{"quantity": 1, "unit_price": 1}] * 501}
-    for data in (bad_number, too_many, {"items": "not a list"}):
+    key = template["compute"]
+    bad_number = {key: [{"quantity": "many", "unit_price": 1}]}
+    too_many = {key: [{"quantity": 1, "unit_price": 1}] * 501}
+    for data in (bad_number, too_many, {key: "not a list"}):
         response = await authed_client.post(url, json={"data": data})
         assert response.status_code == 422, data
         assert response.json()["code"] == "invalid_document"
