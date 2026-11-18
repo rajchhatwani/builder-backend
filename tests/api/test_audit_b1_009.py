@@ -102,3 +102,68 @@ async def test_parallel_wrong_mfa_codes_trip_the_lockout(
         row = await db.get(PlatformUser, user.id)
         assert row is not None
         assert row.locked_until is not None, f"lost updates: failed_logins={row.failed_logins}"
+
+
+async def _org_with_owner_and_member(
+    session_factory: Factory, make_user: MakeUser, slug: str
+) -> tuple[uuid.UUID, PlatformUser, PlatformUser]:
+    a = await make_user(f"a-{slug}@example.com")
+    c = await make_user(f"c-{slug}@example.com")
+    async with session_factory() as s:
+        org = Organization(name="Acme", slug=slug)
+        s.add(org)
+        await s.flush()
+        org_id = org.id
+        s.add(OrganizationMember(organization_id=org_id, user_id=a.id, role=OrgRole.owner))
+        s.add(OrganizationMember(organization_id=org_id, user_id=c.id, role=OrgRole.member))
+        await s.commit()
+    return org_id, a, c
+
+
+async def _roles(session_factory: Factory, org_id: uuid.UUID) -> dict[uuid.UUID, OrgRole]:
+    async with session_factory() as db:
+        rows = await db.execute(
+            OrganizationMember.__table__.select().where(
+                OrganizationMember.organization_id == org_id
+            )
+        )
+        return {m.user_id: m.role for m in rows.all()}
+
+
+async def test_transfer_ownership_swaps_roles(
+    session_factory: Factory, make_user: MakeUser
+) -> None:
+    org_id, a, c = await _org_with_owner_and_member(session_factory, make_user, "acme-b1009-ok")
+    async with session_factory() as db:
+        await OrganizationService(db).transfer_ownership(org_id, a.id, c.id)
+    roles = await _roles(session_factory, org_id)
+    assert roles[a.id] is OrgRole.admin and roles[c.id] is OrgRole.owner
+
+
+async def test_transfer_ownership_target_removed_concurrently_is_404(
+    session_factory: Factory, make_user: MakeUser, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """F-1017: the target is removed (committed) after it was read; expect 404, not a 500."""
+    from sqlalchemy import delete
+
+    org_id, a, c = await _org_with_owner_and_member(session_factory, make_user, "acme-b1009-gone")
+    real_lock = OrganizationService.lock_owners
+
+    async def remove_then_lock(self: OrganizationService, organization_id: uuid.UUID):  # type: ignore[no-untyped-def]
+        async with session_factory() as other:
+            await other.execute(
+                delete(OrganizationMember).where(
+                    OrganizationMember.organization_id == org_id,
+                    OrganizationMember.user_id == c.id,
+                )
+            )
+            await other.commit()
+        return await real_lock(self, organization_id)
+
+    monkeypatch.setattr(OrganizationService, "lock_owners", remove_then_lock)
+    async with session_factory() as db:
+        with pytest.raises(AppError) as exc:
+            await OrganizationService(db).transfer_ownership(org_id, a.id, c.id)
+        assert exc.value.status_code == 404
+    roles = await _roles(session_factory, org_id)
+    assert roles == {a.id: OrgRole.owner}

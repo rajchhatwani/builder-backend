@@ -631,7 +631,21 @@ class OrganizationService:
                 message="only an owner can transfer ownership",
                 status_code=403,
             )
-        await self.db.refresh(dst)
+        # Lock the target row too: remove_member(dst) may have committed after it was read (F-1017).
+        locked = await self.db.execute(
+            select(OrganizationMember)
+            .where(
+                OrganizationMember.organization_id == organization_id,
+                OrganizationMember.user_id == to_user_id,
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        dst_row = locked.scalar_one_or_none()
+        if dst_row is None:
+            await self.db.rollback()
+            raise AppError(code="not_found", message="member not found", status_code=404)
+        dst = dst_row
         src.role = OrgRole.admin
         dst.role = OrgRole.owner
         await self.db.commit()
