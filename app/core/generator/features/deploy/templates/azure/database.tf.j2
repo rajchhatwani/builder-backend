@@ -6,13 +6,18 @@ resource "random_password" "db" {
   special = false # letters and digits only: safe inside a connection URL
 }
 
+locals {
+  # Flexible Server accepts only these sizes (MB); db_storage_gb is rounded up to the next one.
+  db_storage_sizes_mb = [32768, 65536, 131072, 262144, 524288, 1048576, 2097152, 4194304, 8388608, 16777216, 33554432]
+}
+
 resource "azurerm_postgresql_flexible_server" "main" {
   name                = local.name
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   version             = "16"
   sku_name            = var.db_class
-  storage_mb          = var.db_storage_gb * 1024
+  storage_mb          = [for s in local.db_storage_sizes_mb : s if s >= var.db_storage_gb * 1024][0]
 
   delegated_subnet_id           = azurerm_subnet.db.id
   private_dns_zone_id           = azurerm_private_dns_zone.db.id

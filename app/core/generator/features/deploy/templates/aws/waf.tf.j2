@@ -38,6 +38,15 @@ resource "aws_wafv2_web_acl" "main" {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
+
+        # SizeRestrictions_BODY blocks every request body over 8 KB: CSV imports (up to 5 MB), documents
+        # and large JSON would get a 403. Count it instead (the app limits body sizes itself).
+        rule_action_override {
+          name = "SizeRestrictions_BODY"
+          action_to_use {
+            count {}
+          }
+        }
       }
     }
     visibility_config {

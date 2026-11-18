@@ -148,6 +148,15 @@ jobs:
         run: |
           terraform apply -input=false -auto-approve -var-file="environments/${TARGET}.tfvars" \
             -var "image=${REGISTRY_REPO}:${IMAGE_TAG}"
+          # Re-running the same image changes nothing for Terraform: when the service is short of tasks or
+          # its last rollout failed, start a fresh deployment of the current task definition.
+          CLUSTER="$(terraform output -raw cluster_name)"
+          SERVICE="$(terraform output -raw service_name)"
+          read -r RUNNING DESIRED FAILED <<< "$(aws ecs describe-services --cluster "$CLUSTER" --services "$SERVICE" \
+            --query "services[0].[runningCount,desiredCount,length(deployments[?rolloutState=='FAILED'])]" --output text)"
+          if [ "$FAILED" != "0" ] || [ "$RUNNING" -lt "$DESIRED" ]; then
+            aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment > /dev/null
+          fi
 
       - name: Wait until the service is stable
         working-directory: deploy/aws

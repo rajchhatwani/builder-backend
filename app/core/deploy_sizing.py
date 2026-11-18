@@ -62,6 +62,9 @@ _PROFILE_COMBO = {
     "azure": {"small": (500, 1024), "medium": (1000, 2048), "large": (2000, 4096)},
     "gcp": {"small": (1000, 1024), "medium": (1000, 2048), "large": (2000, 4096)},
 }
+# Database storage (GB) each cloud accepts: RDS gp3 PostgreSQL starts at 20 and its autoscaling ceiling
+# (4x) must stay within 65536; Flexible Server tops out at 32 TiB; Cloud SQL takes 10 to 65536.
+DB_STORAGE_GB = {"aws": (20, 16384), "azure": (10, 32768), "gcp": (10, 65536)}
 DB_CLASSES = {
     "aws": {"small": "db.t4g.small", "medium": "db.m7g.large", "large": "db.m7g.xlarge"},
     "azure": {

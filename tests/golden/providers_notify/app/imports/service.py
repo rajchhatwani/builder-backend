@@ -17,7 +17,7 @@ import datetime as dt
 import decimal
 import json
 import uuid
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import sqlalchemy as sa
@@ -32,6 +32,7 @@ MAX_REJECTED_SHOWN = 100
 PROBE_CHUNK = 500  # candidate keys per IN query
 MAX_PROBE_ROWS = 50_000  # rows one probe may return; more means the file is refused (422), never truncated
 _ECHO_CELL_CHARS = 200
+MAX_MAPPING_CHARS = 100_000  # the mapping form field: one header per column, far below this
 
 
 class Counts(BaseModel):
@@ -77,9 +78,11 @@ def canon(value: Any) -> Any:
 def _mapping(raw: str | None, parsed: ci.ParsedCsv, entity: ci.SpecEntity) -> dict[str, str]:
     if raw is None or not raw.strip():
         return ci.suggest_mapping(parsed.headers, entity)
+    if len(raw) > MAX_MAPPING_CHARS:
+        raise AppError("import_bad_mapping", "mapping is too large", 422)
     try:
         loaded = json.loads(raw)
-    except ValueError as exc:
+    except (ValueError, RecursionError) as exc:
         raise AppError("import_bad_mapping", "mapping must be valid JSON", 422) from exc
     try:
         return ci.clean_mapping(loaded, parsed.headers, entity)
@@ -162,6 +165,13 @@ async def _probe(
     return found
 
 
+async def _lock_scope(repo: Repository[Any], entity_name: str) -> None:
+    """Serialise real imports into one entity and scope: the probe-then-insert below is only idempotent when
+    no other import of the same data runs in between. Held until the transaction commits or rolls back."""
+    key = f"import:{entity_name}:{repo.tenant_id}:{repo.owner_id}"
+    await repo.session.execute(sa.text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": key})
+
+
 async def run_import(
     repo: Repository[Any],
     entity: ci.SpecEntity,
@@ -225,6 +235,8 @@ async def run_import(
         candidates.append((row_no, raw, values, key))
 
     # pass 2: which keys exist already (bounded lookups), then dedupe, checks and hooks per row
+    if not dry_run and candidates:
+        await _lock_scope(repo, entity.name)
     existing = await _probe(repo, keys, [(values, key) for _, _, values, key in candidates])
     seen: set[tuple[str, str]] = set()
     pending: list[tuple[dict[str, Any], HookContext]] = []
@@ -236,7 +248,7 @@ async def run_import(
                 duplicate += 1
             continue
         try:  # also in a dry run, so would_create counts only rows the real import would accept
-            prepared, ctx = await _prepare(repo, values)
+            prepared, ctx = await _prepare(repo, values, None if dry_run else getattr(repo, "draw_numbers", None))
         except AppError as exc:
             reject(row_no, raw, [ci.FieldError(_detail_field(exc), exc.code, exc.message[:200])])
             continue
@@ -245,10 +257,7 @@ async def run_import(
 
     created = 0
     if not dry_run and pending:
-        draw = getattr(repo, "draw_numbers", None)  # numbered fields: drawn only when really writing
         for prepared, ctx in pending:
-            if draw is not None:
-                prepared = await draw(prepared)
             item = repo.model(**prepared)
             repo.session.add(item)
             ctx.item = item
@@ -281,11 +290,16 @@ def _detail_field(exc: AppError) -> str:
     return str(details[0].get("field", "row")) if details else "row"
 
 
-async def _prepare(repo: Repository[Any], values: dict[str, Any]) -> tuple[dict[str, Any], HookContext]:
-    """The same steps as Repository.create up to the write (before_save hooks, owner / tenant stamp, policy,
-    references), without its flush / commit. Returns the values to write and the hook context, which the
-    caller later runs through after_save / after_commit. Writes nothing, so a dry run may call it."""
-    ctx = repo._ctx("create", dict(values))
+async def _prepare(
+    repo: Repository[Any],
+    values: dict[str, Any],
+    draw: Callable[[dict[str, Any]], Awaitable[dict[str, Any]]] | None = None,
+) -> tuple[dict[str, Any], HookContext]:
+    """The same steps as Repository.create up to the write (numbers drawn first when `draw` is given, before_save
+    hooks, owner / tenant stamp, policy, references), without its flush / commit. Returns the values to write
+    and the hook context, which the caller later runs through after_save / after_commit. Writes nothing, so a dry run
+    may call it (it passes no `draw`: no sequence is consumed)."""
+    ctx = repo._ctx("create", dict(await draw(values) if draw is not None else values))
     await run_stage("before_save", repo.hooks, ctx)
     out = ctx.values
     if repo.owner_id is not None:

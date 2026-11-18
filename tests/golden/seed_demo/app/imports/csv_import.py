@@ -381,13 +381,14 @@ def validate_rows(
 
 
 def dedupe_key(entity: SpecEntity, record: dict[str, Any], key_fields: list[str] | None = None) -> str:
-    """sha256 over canonical JSON of the entity's unique fields (or the whole record when it has none,
+    """sha256 over canonical JSON of the entity's unique fields (or every field of `entity` when it has none,
     or when every unique field is empty in this record). Blank values are left out so the key does not
     depend on which columns were mapped."""
     names = key_fields if key_fields is not None else [f.name for f in entity.fields if f.unique]
     picked = {n: record[n] for n in sorted(names) if record.get(n) is not None}
     if not picked:
-        picked = {k: v for k, v in sorted(record.items()) if v is not None}
+        fields = sorted(entity.fields, key=lambda f: f.name)
+        picked = {f.name: record[f.name] for f in fields if record.get(f.name) is not None}
     blob = json.dumps(
         {"entity": entity.name, "key": picked}, sort_keys=True, separators=(",", ":"), ensure_ascii=True
     )

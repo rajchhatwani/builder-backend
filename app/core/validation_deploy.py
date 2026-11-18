@@ -114,8 +114,13 @@ def _check_sizes(cloud: str, env: SpecDeployEnvironment, path: str, add: Add) ->
         and env.min_instances > env.max_instances
     ):
         add(f"{path}.max_instances", "invalid_value", "must be at least the minimum")
-    if env.db_storage_gb is not None and not 10 <= env.db_storage_gb <= 65536:
-        add(f"{path}.db_storage_gb", "invalid_value", "must be between 10 and 65536")
+    low, high = sizing.DB_STORAGE_GB.get(cloud, (10, 65536))
+    if env.db_storage_gb is not None and not low <= env.db_storage_gb <= high:
+        add(
+            f"{path}.db_storage_gb",
+            "invalid_value",
+            f"{cloud.upper()} needs between {low} and {high} GB",
+        )
 
 
 def _check_supported(spec: Spec, add: Add) -> None:

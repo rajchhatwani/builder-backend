@@ -68,7 +68,7 @@ def test_m2_dedupe_uses_bounded_in_queries_and_never_a_silent_limit() -> None:
 def test_l4_dry_run_runs_the_same_prepare_checks() -> None:
     service = _spec_files()["app/imports/service.py"]
     assert "if not dry_run:\n            try:" not in service
-    assert "await _prepare(repo, values)" in service
+    assert "await _prepare(repo, values," in service
     assert "Writes nothing" in service
 
 

@@ -135,7 +135,8 @@ resource "aws_ecs_service" "app" {
     ignore_changes = [desired_count] # owned by autoscaling
   }
 
-  depends_on = [aws_lb_listener.http]
+  # The tasks read DATABASE_URL at start: wait for its secret version (it needs the database to exist).
+  depends_on = [aws_lb_listener.http, aws_secretsmanager_secret_version.database_url]
 }
 
 resource "aws_appautoscaling_target" "app" {
