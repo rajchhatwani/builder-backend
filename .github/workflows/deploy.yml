@@ -39,11 +39,30 @@ jobs:
       tag: ${{ steps.meta.outputs.tag }}
       prefix: ${{ steps.meta.outputs.prefix }}
     steps:
+      - name: Check required variables
+        env:
+          BB_DOMAIN: ${{ vars.BB_DOMAIN }}
+        run: |
+          [ -n "$BB_DOMAIN" ] || { echo "::error::BB_DOMAIN is not set for this environment"; exit 1; }
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Production only from the release branch
+        env:
+          ENVIRONMENT: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production' || 'beta') }}
+          RELEASE_BRANCH: ${{ vars.PROD_BRANCH || 'main' }}
+        run: |
+          [ "$ENVIRONMENT" = production ] || exit 0
+          git fetch --no-tags origin "$RELEASE_BRANCH"
+          git merge-base --is-ancestor "$GITHUB_SHA" "origin/$RELEASE_BRANCH" \
+            || { echo "::error::production deploys must be commits reachable from $RELEASE_BRANCH"; exit 1; }
       - id: meta
+        env:
+          ENVIRONMENT: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production' || 'beta') }}
         run: |
           owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+          # the dashboard bakes the environment's API origin, so tags must not be shared across environments
+          echo "tag=sha-${GITHUB_SHA::12}-${ENVIRONMENT}" >> "$GITHUB_OUTPUT"
           echo "prefix=ghcr.io/${owner}" >> "$GITHUB_OUTPUT"
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -73,12 +92,10 @@ jobs:
             VITE_PREVIEW_API_ORIGIN=${{ vars.PREVIEW_DOMAIN && format('https://{0}', vars.PREVIEW_DOMAIN) || '' }}
           tags: |
             ${{ steps.meta.outputs.prefix }}/builder-web:${{ steps.meta.outputs.tag }}
-            ${{ steps.meta.outputs.prefix }}/builder-web:latest
           cache-from: type=gha,scope=web
           cache-to: type=gha,scope=web,mode=max
 
-      - name: Sandbox runner image (only when SANDBOX_ENABLED=true)
-        if: vars.SANDBOX_ENABLED == 'true'
+      - name: Sandbox runner image (always built; the server .env decides whether it is used)
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -89,8 +106,7 @@ jobs:
             ${{ steps.meta.outputs.prefix }}/builder-runner:latest
           cache-from: type=gha,scope=runner
           cache-to: type=gha,scope=runner,mode=max
-      - name: Preview runtime image (only when SANDBOX_ENABLED=true)
-        if: vars.SANDBOX_ENABLED == 'true'
+      - name: Preview runtime image (always built)
         uses: docker/build-push-action@v6
         with:
           context: docker/preview-app
@@ -107,9 +123,22 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: ${{ inputs.environment || (startsWith(github.ref, 'refs/tags/') && 'production' || 'beta') }}
+    permissions:
+      contents: read
+      packages: read
     env:
       DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/builder' }}
     steps:
+      - name: Check required variables and secrets
+        env:
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for v in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            [ -n "${!v}" ] || { echo "::error::$v is not set for this environment"; exit 1; }
+          done
       - uses: actions/checkout@v5
       - name: SSH setup
         env:
@@ -137,6 +166,8 @@ jobs:
         env:
           REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" \
-            "cd '$DEPLOY_PATH' && echo '$REGISTRY_TOKEN' | docker login ghcr.io -u '${{ github.actor }}' --password-stdin \
+          # token goes over stdin (not the command line) into a throwaway docker config that is removed afterwards
+          printf '%s' "$REGISTRY_TOKEN" | ssh -i ~/.ssh/id_deploy -o StrictHostKeyChecking=yes "${{ vars.DEPLOY_USER }}@${{ vars.DEPLOY_HOST }}" \
+            "cd '$DEPLOY_PATH' && export DOCKER_CONFIG=\$(mktemp -d) && trap 'rm -rf \"\$DOCKER_CONFIG\"' EXIT \
+             && docker login ghcr.io -u '${{ github.actor }}' --password-stdin \
              && BB_IMAGE_PREFIX='${{ needs.images.outputs.prefix }}' bash ./deploy.sh '${{ needs.images.outputs.tag }}'"

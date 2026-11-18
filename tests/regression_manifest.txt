@@ -372,3 +372,4 @@ tests/audit/tenant_rls/test_nested_ids.py
 tests/audit/tenant_rls/test_org_attacks.py
 tests/audit/tenant_rls/test_preview_isolation.py
 tests/audit/tenant_rls/test_rls_db.py
+tests/unit/test_audit_b1_001_workflows.py

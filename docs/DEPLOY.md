@@ -25,7 +25,10 @@ pulled by your server. Secrets live only in `/opt/builder/.env` on the server.
 - The server runs `deploy.sh <tag>`: pull, start databases, **migrate as the owner role**, (re)create the
   least-privilege `builder_app` role, start everything, check `https://$BB_DOMAIN/health`.
 - Roll back: on the server `./deploy.sh $(cat .previous-tag)` (database migrations are not reversed).
-- Images are tagged `sha-<12 chars>` and `latest`. Dependabot keeps actions and dependencies current.
+- Images are tagged `sha-<12 chars>-<environment>` (the dashboard bakes the environment's API origin). The deploy login to GHCR is temporary; for manual pulls/rollbacks run `docker login ghcr.io` on the server with a read-only `read:packages` token.
+- Production deploys are refused unless the commit is reachable from `main` (override with the `PROD_BRANCH` variable); also restrict deployment branches/tags in the `production` environment settings.
+- The runner and preview images are always built; `SANDBOX_ENABLED` in the server `.env` decides whether they are used.
+- Images are also tagged `latest` (API/runner/preview only). Dependabot keeps actions and dependencies current.
 
 ## Keycloak (instead of Okta)
 Keycloak runs at `https://$KC_DOMAIN`. First sign in with `KC_ADMIN_USER` / `KC_ADMIN_PASSWORD`, then:
@@ -40,7 +43,7 @@ Keycloak runs at `https://$KC_DOMAIN`. First sign in with `KC_ADMIN_USER` / `KC_
 ## Previews and the agent sandbox (optional, on the same server)
 Previews and the builder agent's draft workspaces run generated code in gVisor-isolated containers started by a
 **narrow runner** (the only thing with `docker.sock`). Turn it on with `SANDBOX_ENABLED=true`; the workflow then also
-builds `builder-runner` and `builder-preview-app`, and `deploy.sh` adds `docker-compose.sandbox.yml`.
+(the workflow always builds `builder-runner` and `builder-preview-app`) `deploy.sh` adds `docker-compose.sandbox.yml`.
 
 What that overlay changes: the API, scheduler, runner and proxy run on the **host network** (the API reaches sandbox
 containers by their internal-network IPs). They still listen on `127.0.0.1` only, except Caddy on 80/443; the Postgres
