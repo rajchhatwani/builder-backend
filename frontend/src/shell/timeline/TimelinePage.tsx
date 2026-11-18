@@ -3,7 +3,7 @@ import { useRealtimeRefresh } from '../../realtime/bus'
 import { api } from '../../api/client'
 import type { SpecOp } from '../../api/types'
 import { useUi } from '../../components/Ui'
-import { actorLabel, canRestore, failureMessage, formatWhen, impactText, latestSeq, opSummary, opsToUndo } from './timelineLogic'
+import { actorLabel, canRestore, failureMessage, weakenedRoles, formatWhen, impactText, latestSeq, opSummary, opsToUndo } from './timelineLogic'
 
 const PAGE = 200
 const MAX_PAGES = 5 // 1000 operations; older ones are reported as not loaded
@@ -80,11 +80,23 @@ export function TimelinePage({ projectId }: { projectId: string }) {
   const undone = selected === null ? [] : opsToUndo(ops, selected)
   const target = selected === null ? null : ops.find((o) => o.seq === selected) ?? null
 
-  async function run(fn: () => Promise<unknown>, done: string) {
+  async function run(fn: (confirmWeakening?: boolean) => Promise<unknown>, done: string) {
     setBusy(true)
     setAlert(null)
     try {
-      await fn()
+      try {
+        await fn()
+      } catch (err) {
+        if ((err as { code?: string } | null)?.code !== 'access_weakened') throw err
+        const ok = await confirm({
+          title: 'This gives more access to some roles',
+          message: `This change gives ${weakenedRoles(err)} more access than they have now. Apply it anyway?`,
+          confirmLabel: 'Apply anyway',
+          danger: true,
+        })
+        if (!ok) throw err
+        await fn(true)
+      }
       setSelected(null)
       await reload()
       toast(done)
@@ -111,15 +123,15 @@ export function TimelinePage({ projectId }: { projectId: string }) {
       confirmLabel: 'Restore',
       danger: true,
     })
-    if (ok) await run(() => api.restoreSpec(projectId, selected), `Restored to ${label}.`)
+    if (ok) await run((c) => api.restoreSpec(projectId, selected, c), `Restored to ${label}.`)
   }
 
   return (
     <>
       {header}
       <div ref={statusRef} tabIndex={-1} role="group" className="bh-actions" aria-label="History actions">
-        <button className="outline small" disabled={busy || ops.length === 0} onClick={() => run(() => api.undoSpec(projectId), 'Undid the last change.')}>Undo last change</button>
-        <button className="outline small" disabled={busy || ops.length === 0} onClick={() => run(() => api.redoSpec(projectId), 'Redid the change.')}>Redo</button>
+        <button className="outline small" disabled={busy || ops.length === 0} onClick={() => run((c) => api.undoSpec(projectId, c), 'Undid the last change.')}>Undo last change</button>
+        <button className="outline small" disabled={busy || ops.length === 0} onClick={() => run((c) => api.redoSpec(projectId, c), 'Redid the change.')}>Redo</button>
         <small className="muted" role="status">{total === 0 ? 'No changes recorded' : `${total} ${total === 1 ? 'change' : 'changes'} recorded, newest first`}</small>
       </div>
       {alert && <div role="alert" data-variant="warning" className="bh-conflict" data-testid="timeline-alert">{alert}</div>}

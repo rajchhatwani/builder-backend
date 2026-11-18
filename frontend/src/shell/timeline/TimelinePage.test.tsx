@@ -78,7 +78,7 @@ describe('TimelinePage', () => {
     expect(m.confirm.mock.calls[0][0].title).toContain('version 1')
     expect(m.restore).not.toHaveBeenCalled()
     await click(byText(/Restore the draft/))
-    expect(m.restore).toHaveBeenCalledWith('p', 1)
+    expect(m.restore).toHaveBeenCalledWith('p', 1, undefined)
     expect(m.list).toHaveBeenCalledTimes(2) // reloaded after the restore
   })
 
@@ -92,5 +92,44 @@ describe('TimelinePage', () => {
     expect(m.list).toHaveBeenCalledTimes(2)
     expect(host.querySelector('[data-testid=timeline-alert]')?.textContent).toMatch(/Someone else changed/)
     expect(host.querySelector('[data-testid=timeline-preview]')).toBeNull() // selection cleared
+  })
+})
+
+describe('TimelinePage access_weakened', () => {
+  const weak = () => Object.assign(new Error('repeat with confirm_weakening'), {
+    status: 409, code: 'access_weakened', details: [{ role: 'hr' }, { role: 'hr' }, { role: 'ops' }],
+  })
+
+  it('asks to confirm a weakening undo, then retries with the flag', async () => {
+    m.list.mockResolvedValue(page(LOG))
+    m.undo.mockRejectedValueOnce(weak()).mockResolvedValueOnce(op(3, 'replace_spec', {}))
+    m.confirm.mockResolvedValue(true)
+    await mount()
+    await click(byText(/Undo last change/))
+    expect(m.confirm).toHaveBeenCalledTimes(1)
+    expect(m.confirm.mock.calls[0][0].message).toContain('hr')
+    expect(m.undo).toHaveBeenNthCalledWith(2, "p", true)
+    expect(host.querySelector('[data-testid=timeline-alert]')).toBeNull()
+  })
+
+  it('does not retry when the user declines, and shows a readable message', async () => {
+    m.list.mockResolvedValue(page(LOG))
+    m.redo.mockRejectedValue(weak())
+    m.confirm.mockResolvedValue(false)
+    await mount()
+    await click(byText(/Redo/))
+    expect(m.redo).toHaveBeenCalledTimes(1)
+    expect(host.querySelector('[data-testid=timeline-alert]')?.textContent).not.toContain('confirm_weakening')
+  })
+
+  it('restore retries with confirm_weakening after confirmation', async () => {
+    m.list.mockResolvedValue(page(LOG))
+    m.restore.mockRejectedValueOnce(weak()).mockResolvedValueOnce(op(3, 'replace_spec', {}))
+    m.confirm.mockResolvedValue(true)
+    await mount()
+    await click(byText(/Version 1:/))
+    await click(byText(/Restore the draft/))
+    expect(m.confirm).toHaveBeenCalledTimes(2)
+    expect(m.restore).toHaveBeenNthCalledWith(2, 'p', 1, true)
   })
 })

@@ -100,6 +100,15 @@ export function impactText(undone: SpecOp[]): string {
   return `${undone.length} ${undone.length === 1 ? 'change' : 'changes'}: ${parts.join(', ')}`
 }
 
+/** Role names from an access_weakened error's details, e.g. "hr, ops" (or "some roles"). */
+export function weakenedRoles(err: unknown): string {
+  const d = (err as { details?: unknown } | null)?.details
+  const roles = Array.isArray(d)
+    ? [...new Set(d.map((x) => (x as { role?: unknown } | null)?.role).filter((r): r is string => typeof r === 'string'))]
+    : []
+  return roles.length ? roles.join(', ') : 'some roles'
+}
+
 /** A message the user can act on for a failed undo/redo/restore. `conflict` means: reload the log. */
 export function failureMessage(err: unknown): { text: string; conflict: boolean } {
   const e = err as { status?: number; code?: string; message?: string } | null
@@ -109,6 +118,7 @@ export function failureMessage(err: unknown): { text: string; conflict: boolean 
   }
   if (code === 'spec_changed') return { conflict: true, text: 'The spec was changed outside the history, so it cannot be restored safely. The history was reloaded.' }
   if (code === 'already_there') return { conflict: true, text: 'The spec is already at that version. The history was reloaded.' }
+  if (code === 'access_weakened') return { conflict: false, text: `This change would give ${weakenedRoles(err)} more access, so it was not applied.` }
   if (code === 'nothing_to_undo') return { conflict: false, text: 'There is nothing to undo.' }
   if (code === 'nothing_to_redo') return { conflict: false, text: 'There is nothing to redo.' }
   if (e?.status === 403) return { conflict: false, text: 'You do not have permission to change this project.' }

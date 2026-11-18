@@ -252,6 +252,7 @@ export function redactJson(v: unknown, depth = 0): Json {
     }
     return out
   }
+  if (typeof v === 'string') return v.replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, 'Bearer [redacted]').replace(JWT, '[redacted]')
   return v as Json
 }
 

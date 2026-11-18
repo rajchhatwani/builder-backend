@@ -157,3 +157,12 @@ describe('wider redaction', () => {
     expect(t).toContain('name=bob')
   })
 })
+
+describe('redactJson token values under plain keys', () => {
+  it('redacts JWT and Bearer values whatever the key', () => {
+    const jwt = 'eyJhbGciOi.eyJzdWIiOi.sig'
+    expect(rj({ data: jwt, list: ['Bearer abcdef123'], n: { x: `got ${jwt} ok` }, fine: 'hello' })).toEqual({
+      data: '[redacted]', list: ['Bearer [redacted]'], n: { x: 'got [redacted] ok' }, fine: 'hello',
+    })
+  })
+})

@@ -467,10 +467,14 @@ export const api = {
     request<ReportRunPage>(`/projects/${projectId}/reports/${reportId}/runs?limit=${limit}`),
   getReportValue: (projectId: string, reportId: string) =>
     request<ReportValue>(`/projects/${projectId}/reports/${reportId}/value`),
-  undoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/undo`, { method: 'POST' }),
-  redoSpec: (projectId: string) => request<SpecOp>(`/projects/${projectId}/spec/redo`, { method: 'POST' }),
-  restoreSpec: (projectId: string, toSeq: number) =>
-    request<SpecOp>(`/projects/${projectId}/spec/restore`, { method: 'POST', body: JSON.stringify({ to_seq: toSeq }) }),
+  undoSpec: (projectId: string, confirmWeakening = false) =>
+    request<SpecOp>(`/projects/${projectId}/spec/undo${confirmWeakening ? '?confirm_weakening=true' : ''}`, { method: 'POST' }),
+  redoSpec: (projectId: string, confirmWeakening = false) =>
+    request<SpecOp>(`/projects/${projectId}/spec/redo${confirmWeakening ? '?confirm_weakening=true' : ''}`, { method: 'POST' }),
+  restoreSpec: (projectId: string, toSeq: number, confirmWeakening = false) =>
+    request<SpecOp>(`/projects/${projectId}/spec/restore${confirmWeakening ? '?confirm_weakening=true' : ''}`, {
+      method: 'POST', body: JSON.stringify({ to_seq: toSeq }),
+    }),
   getHistory: (projectId: string) => request<HistoryRead>(`/projects/${projectId}/behavior/history`),
   putHistory: (projectId: string, history: HistoryBody[], expectedVersion: number) =>
     request<HistoryRead>(`/projects/${projectId}/behavior/history`, {
