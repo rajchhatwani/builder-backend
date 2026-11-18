@@ -190,9 +190,13 @@ def uninstall_statements() -> list[str]:
     return [f"DROP POLICY IF EXISTS {POLICY} ON {t}" for t in ALL_TABLES]
 
 
-def enable_statements() -> list[str]:
+def enable_statements(current: dict[str, dict[str, bool]] | None = None) -> list[str]:
+    """`current` (from status()): skip tables already enabled+forced, so a routine deploy takes no locks."""
     out: list[str] = []
     for table in ALL_TABLES:
+        info = (current or {}).get(table)
+        if info and info["enabled"] and info["forced"]:
+            continue
         out.append(f"ALTER TABLE {table} ENABLE ROW LEVEL SECURITY")
         out.append(f"ALTER TABLE {table} FORCE ROW LEVEL SECURITY")
     return out
@@ -419,7 +423,7 @@ async def _main(command: str, yes: bool) -> int:
             statements = {
                 "install": install_statements(),
                 "uninstall": uninstall_statements(),
-                "enable": enable_statements(),
+                "enable": enable_statements(await status(conn)),
                 "disable": disable_statements(),
             }[command]
             await run(conn, statements)

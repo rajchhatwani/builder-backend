@@ -24,7 +24,7 @@ pulled by your server. Secrets live only in `/opt/builder/.env` on the server.
 - Tag `v1.2.3` (or run the workflow manually) -> `production`.
 - The server runs `deploy.sh <tag>`: pull, start databases, **migrate as the owner role**, (re)create the
   least-privilege `builder_app` role, start everything, check `https://$BB_DOMAIN/health`.
-- Roll back: on the server `./deploy.sh $(cat .previous-tag)` (database migrations are not reversed).
+- Roll back: on the server `./deploy.sh --no-migrate $(cat .previous-tag)` (database migrations are not reversed; `--no-migrate` skips them, as the old image cannot see newer revisions; `BB_IMAGE_PREFIX` is read from `.env` when not exported).
 - Images are tagged `sha-<12 chars>-<environment>` (the dashboard bakes the environment's API origin). The deploy login to GHCR is temporary; for manual pulls/rollbacks run `docker login ghcr.io` on the server with a read-only `read:packages` token.
 - Production deploys are refused unless the commit is reachable from `main` (override with the `PROD_BRANCH` variable); also restrict deployment branches/tags in the `production` environment settings.
 - The runner and preview images are always built; `SANDBOX_ENABLED` in the server `.env` decides whether they are used.
