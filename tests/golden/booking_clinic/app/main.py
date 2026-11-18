@@ -12,8 +12,8 @@ from app import custom_routers
 from app.auth.config import get_auth_settings
 from app.auth.middleware import SecurityHeadersMiddleware
 from app.auth.provider_lock import ensure_provider_lock
-from app.auth.service import drain_deliveries
 from app.auth.router import router as _auth_router
+from app.auth.service import drain_deliveries
 from app.booking.router import router as _booking_router
 from app.config import get_settings
 from app.core.errors import register_exception_handlers, reject_nul_characters
