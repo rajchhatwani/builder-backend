@@ -63,4 +63,19 @@ describe('IntakePage', () => {
     await click(host.querySelector('[data-testid=req-unmet]'))
     expect(m.putItem).toHaveBeenCalledWith('p', { id: '2', text: 'Leave request', status: 'unmet' })
   })
+  it('applies the file cap across separate picks (already-picked files count)', async () => {
+    m.getRequirements.mockResolvedValue(null)
+    await mount()
+    const input = host.querySelector('input[type=file]') as HTMLInputElement
+    const pickFiles = async (names: string[]) => {
+      const list = names.map((n) => new File(['x'], n, { type: 'text/plain' }))
+      Object.defineProperty(input, 'files', { value: list, configurable: true })
+      await act(async () => { input.dispatchEvent(new Event('change', { bubbles: true })) })
+    }
+    await pickFiles(['a.txt', 'b.txt', 'c.txt', 'd.txt', 'e.txt'])
+    expect(host.querySelectorAll('[data-testid=intake-files] li')).toHaveLength(5)
+    await pickFiles(['f.txt'])
+    expect(host.querySelectorAll('[data-testid=intake-files] li')).toHaveLength(5)
+    expect(host.textContent).toContain('f.txt: at most 5 files per upload.')
+  })
 })
