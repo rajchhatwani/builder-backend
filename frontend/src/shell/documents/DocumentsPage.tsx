@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { sendRequest } from '../workbench/sendRequest'
-import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
+import { PreviewSessionGate } from '../preview/PreviewSessionGate'
+import { usePreviewSession } from '../preview/usePreviewSession'
+import type { PreviewSession } from '../preview/previewSession'
 import {
   DEFAULT_REVIEW_BELOW_BP, STATUSES, STATUS_LABEL, confidencePercent, documentErrorMessage, highlightSegments, isLowConfidence, isReviewable, moveRow, pageInfo,
   parseDocJson, pendingFields, type Doc, type DocField,
@@ -12,12 +13,9 @@ const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 const LIMIT = 20
 
 /** Document review queue for a generated project's AI documents pack (D34). Queue by status, anchored highlights, correct / approve / reject.
- *  Bearer token held in memory only. The server decides who may review; a 403/409/404 is shown, never hidden. */
-export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, reviewBelowBp = DEFAULT_REVIEW_BELOW_BP, canReview = true }: {
-  projectId: string; origin?: string | null; doFetch?: typeof fetch; reviewBelowBp?: number; canReview?: boolean
-}) {
-  const [token, setToken] = useState('')
-  const [active, setActive] = useState('')
+ *  Uses the dashboard-supplied preview session (tokens kept in memory only, never shown). The server decides who may review; a 403/409/404 is shown, never hidden. */
+function DocumentsPageBody({ session, reviewBelowBp = DEFAULT_REVIEW_BELOW_BP, canReview = true }: { projectId: string; session: PreviewSession; reviewBelowBp?: number; canReview?: boolean }) {
+  const { request } = session
   const [status, setStatus] = useState('needs_review')
   const [offset, setOffset] = useState(0)
   const [list, setList] = useState<Load<Page<Doc>>>({ s: 'idle' })
@@ -33,21 +31,18 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
   const [reason, setReason] = useState('')
   const [pending, setPending] = useState<string[]>([])
   const [confirmReject, setConfirmReject] = useState(false)
-  const tokenId = useId(), statusId = useId(), reasonId = useId()
+  const statusId = useId(), reasonId = useId()
   const rowRefs = useRef(new Map<number, HTMLButtonElement>())
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
-    if (!origin) throw new Error('No preview API is configured')
-    const r = await sendRequest({ url: origin + path, origin, method, body: body === undefined ? undefined : JSON.stringify(body), bearer: active || undefined }, doFetch)
+    const r = await request(method, path, body)
     let json: unknown = null
     try { json = r.text ? parseDocJson(r.text) : null } catch { json = null }
     return { status: r.status, json }
-  }, [origin, active, doFetch])
+  }, [request])
 
-  useEffect(() => { setActive(''); setToken(''); setList({ s: 'idle' }); setSelId(null); setDetail({ s: 'idle' }); setError(null); setNotice(null); setOffset(0) }, [projectId])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     setList({ s: 'loading' })
     void (async () => {
@@ -59,10 +54,10 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
       } catch (e) { if (!dead) setList({ s: 'error', m: msg(e, 'Could not reach the document API') }) }
     })()
     return () => { dead = true }
-  }, [active, status, offset, refresh, call])
+  }, [status, offset, refresh, call])
 
   useEffect(() => {
-    if (!active || !selId) { setDetail({ s: 'idle' }); return }
+    if (!selId) { setDetail({ s: 'idle' }); return }
     let dead = false
     setDetail({ s: 'loading' })
     void (async () => {
@@ -74,7 +69,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
       } catch (e) { if (!dead) setDetail({ s: 'error', m: msg(e, 'Could not reach the document API') }) }
     })()
     return () => { dead = true }
-  }, [active, selId, call, refresh])
+  }, [selId, call, refresh])
 
   const items = list.s === 'ok' ? list.v.items : []
   const total = list.s === 'ok' ? list.v.total ?? items.length : 0
@@ -112,27 +107,10 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
 
   const hl = useMemo(() => (doc && typeof doc.content === 'string' ? highlightSegments(doc.content, doc.fields ?? []) : null), [doc])
 
-  if (!origin) {
-    return (
-      <section aria-labelledby="doc-h" data-testid="documents-page">
-        <h1 id="doc-h">Documents</h1>
-        <p className="muted" data-testid="documents-no-origin">No preview API is configured for this dashboard, so there is no review queue to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the AI documents pack on).</p>
-      </section>
-    )
-  }
-
   return (
-    <section aria-labelledby="doc-h" data-testid="documents-page" className="stack">
-      <h1 id="doc-h">Documents</h1>
-      <p className="muted">Review queue for AI-extracted documents. Check each field against the source text, correct what is wrong, then approve or reject. The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="documents-token-form">
-        <label htmlFor={tokenId}>Bearer token</label>
-        <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="documents-token" />
-        <button type="submit" disabled={!token} data-testid="documents-load">Load queue</button>
-      </form>
-      {!active && <p className="muted" data-testid="documents-notoken">Paste a bearer token for the project (a role allowed to read or review documents) to load the queue.</p>}
+    <>
 
-      {active && (
+      {(
         <div className="hstack" role="group" aria-label="Queue controls">
           <label htmlFor={statusId}>Status</label>
           <select id={statusId} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); setSelId(null); setRowFocus(0) }} data-testid="status-filter">
@@ -142,14 +120,14 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
         </div>
       )}
       <p role="status" aria-live="polite" className="small-text muted" data-testid="documents-live">
-        {active && list.s === 'ok' ? `${total} ${STATUS_LABEL[status] ?? status} document${total === 1 ? '' : 's'}${total > 0 ? `, showing ${pg.from} to ${pg.to}` : ''}.` : ''}
+        {list.s === 'ok' ? `${total} ${STATUS_LABEL[status] ?? status} document${total === 1 ? '' : 's'}${total > 0 ? `, showing ${pg.from} to ${pg.to}` : ''}.` : ''}
       </p>
 
-      {active && list.s === 'loading' && <p className="muted" data-testid="documents-loading">Loading documents…</p>}
-      {active && list.s === 'error' && <p role="alert" className="error-text" data-testid="documents-error">{list.m}</p>}
-      {active && list.s === 'ok' && items.length === 0 && <p className="muted" data-testid="documents-empty">No documents with status {STATUS_LABEL[status] ?? status}.</p>}
+      {list.s === 'loading' && <p className="muted" data-testid="documents-loading">Loading documents…</p>}
+      {list.s === 'error' && <p role="alert" className="error-text" data-testid="documents-error">{list.m}</p>}
+      {list.s === 'ok' && items.length === 0 && <p className="muted" data-testid="documents-empty">No documents with status {STATUS_LABEL[status] ?? status}.</p>}
 
-      {active && list.s === 'ok' && items.length > 0 && (
+      {list.s === 'ok' && items.length > 0 && (
         <div className="stack">
           <ul role="list" aria-label="Document queue" data-testid="document-queue" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {items.map((d, i) => (
@@ -174,7 +152,7 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
         </div>
       )}
 
-      {active && selId && (
+      {selId && (
         <section aria-label="Document detail" className="stack" data-testid="document-detail">
           {detail.s === 'loading' && <p className="muted" data-testid="document-detail-loading">Loading document…</p>}
           {detail.s === 'error' && <p role="alert" className="error-text" data-testid="document-detail-error">{detail.m}</p>}
@@ -231,6 +209,20 @@ export function DocumentsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fe
           {notice && <p role="status" data-testid="document-notice">{notice}</p>}
         </section>
       )}
+    </>
+  )
+}
+
+export function DocumentsPage({ projectId, session, reviewBelowBp, canReview }: { projectId: string; session?: PreviewSession; reviewBelowBp?: number; canReview?: boolean }) {
+  const own = usePreviewSession(projectId, { disabled: !!session })
+  const s = session ?? own
+  return (
+    <section aria-labelledby="doc-h" data-testid="documents-page" className="stack">
+      <h1 id="doc-h">Documents</h1>
+      <p className="muted">Review queue for AI-extracted documents. Check each field against the source text, correct what is wrong, then approve or reject.</p>
+      <PreviewSessionGate session={s} prefix="documents">
+        <DocumentsPageBody key={projectId} projectId={projectId} session={s} reviewBelowBp={reviewBelowBp} canReview={canReview}/>
+      </PreviewSessionGate>
     </section>
   )
 }

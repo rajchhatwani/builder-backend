@@ -51,7 +51,7 @@ async def list_suites(session: AsyncSession, user: _t.Any) -> list[_s.SuiteOut]:
     for name, suite in sorted(_config.SUITES.items()):
         latest = (
             await session.execute(
-                _scoped(_sa.select(AiEvalRun).where(AiEvalRun.suite == name), tenant).order_by(AiEvalRun.created_at.desc(), AiEvalRun.id.desc()).limit(1)
+                _scoped(_sa.select(AiEvalRun).where(AiEvalRun.suite == name), tenant).order_by(AiEvalRun.created_at.desc(), AiEvalRun.seq.desc()).limit(1)
             )
         ).scalar_one_or_none()
         out.append(
@@ -137,7 +137,7 @@ async def list_runs(
     rows = (
         await session.execute(
             _scoped(_sa.select(AiEvalRun).where(*conditions), tenant)
-            .order_by(AiEvalRun.created_at.desc(), AiEvalRun.id.desc())
+            .order_by(AiEvalRun.created_at.desc(), AiEvalRun.seq.desc())
             .limit(limit)
             .offset(offset)
         )

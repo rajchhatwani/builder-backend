@@ -32,6 +32,7 @@ STAGES: dict[str, dict[str, str | int | None]] = {'classify': {'fallback_model':
 MAX_MESSAGES = 50
 MAX_CONTENT_CHARS = 20_000
 STALE_RESERVATION_SECONDS = 300  # a reservation older than this (crashed worker) is released as `abandoned`
+PROVIDER_TIMEOUT_SECONDS = 100  # hard limit of one provider attempt (primary + fallback = 200 s); strictly below STALE_RESERVATION_SECONDS
 WAIT_FOR_DUPLICATE_SECONDS = 30
 MAX_TOTAL_CHARS = 400_000  # all message texts of one call together (a hostile body cannot make the gateway chew on megabytes)
 # Test switch of the FAKE provider: [[fake:...]] and [[conf=...]] markers in message text are honoured only when this is True.

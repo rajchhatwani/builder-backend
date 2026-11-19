@@ -351,3 +351,51 @@ async def test_a_hostile_body_is_bounded(http, people) -> None:  # noqa: ANN001
     assert time.monotonic() - started < 5 and r.status_code in (200, 422, 429), r.text
     huge = await http.post("/ai/complete", json={"stage": "summarize", "messages": [{"role": "user", "content": "x" * 20_000}] * 25}, headers=agent)
     assert huge.status_code == 422 and error_shape(huge) == "validation_error"  # above the total size cap (500k > 400k)
+
+
+# --- L1: a cancelled call never leaks its reservation ---------------------------------------------------------------
+
+
+async def test_a_cancelled_provider_call_releases_its_reservation(http, people, monkeypatch) -> None:  # noqa: ANN001
+    from app.ai import providers
+
+    assert ai_config.PROVIDER_TIMEOUT_SECONDS < ai_config.STALE_RESERVATION_SECONDS
+    agent = people["agent"]
+    assert (await complete(http, agent, "warm up")).status_code == 200  # a period row exists
+    before = await rows("SELECT spent_micro_usd, reserved_micro_usd FROM ai_budget_periods")
+    assert before[0].reserved_micro_usd == 0
+
+    async def cancelled(*args, **kwargs):  # noqa: ANN002, ANN003, ANN202
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(providers, "complete", cancelled)
+    task = asyncio.ensure_future(complete(http, agent, "going away"))
+    await asyncio.wait([task])
+    assert task.cancelled() or task.exception() is not None  # the request died (the transport reports it as it likes)
+    call = (await rows("SELECT status, error_code, reserved_micro_usd FROM ai_calls ORDER BY created_at DESC LIMIT 1"))[0]
+    assert (call.status, call.error_code, call.reserved_micro_usd) == ("error", "cancelled", 0)
+    assert await rows("SELECT spent_micro_usd, reserved_micro_usd FROM ai_budget_periods") == before
+
+
+# --- L4: the fake provider's [[fake:json=...]] scan is JSON-aware and linear ----------------------------------------
+
+
+def test_the_fake_json_directive_is_json_aware_and_linear() -> None:
+    import time
+
+    from app.ai.providers import _directives
+
+    def value(text: str) -> str | None:
+        return _directives([text]).get("json")
+
+    assert value('x [[fake:json={"a":[[1]]}]] y') == '{"a":[[1]]}'  # nested arrays
+    assert value("[[fake:json=[[1],[2]]]]") == "[[1],[2]]"
+    assert value('[[fake:json={"s":"a]]b"}]]') == '{"s":"a]]b"}'  # "]]" inside a JSON string
+    assert value('[[fake:json={"a": 1}]]') == '{"a": 1}'
+    assert value("[[fake:json={bad json]] tail ]]") == "{bad json"  # malformed: ends at the first "]]"
+    assert _directives(["[[fake:delay=300]] [[fake:fail]]"]) == {"delay": "300", "fail": ""}
+    hostile = "[[fake:json=" + "[" * 20_000
+    started = time.monotonic()
+    _directives([hostile])
+    _directives(["[[fake:json=" + "[[" * 10_000, "[[fake:" * 3000, "[[fake:json=" * 1700])
+    assert time.monotonic() - started < 2

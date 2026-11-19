@@ -1,7 +1,7 @@
 """ai pack: gateway cost ledger and budget periods
 
 Revision ID: 0038
-Revises: 0002
+Revises: 0009
 Create Date: rendered from the spec by Backend Builder
 
 ai_calls is the cost ledger (one row per call, also the failed ones); ai_budget_periods holds the spent and reserved
@@ -15,7 +15,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "0038"
-down_revision: str | None = "0002"
+down_revision: str | None = "0009"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

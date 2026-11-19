@@ -135,6 +135,9 @@ class AgingOut(BaseModel):
 
 
 class PayoutRunIn(BaseModel):
+    """Run a payout. Irreversible. `seller` is an operator-chosen label, not checked against the invoice counterparty:
+    a non-empty string without spaces or control characters (the pattern rejects them, also a trailing newline)."""
+
     model_config = ConfigDict(extra="forbid")
 
     idempotency_key: str = Field(min_length=1, max_length=128)

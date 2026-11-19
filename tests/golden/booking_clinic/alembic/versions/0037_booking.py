@@ -6,7 +6,9 @@ Create Date: rendered from the spec by Backend Builder
 
 Resources and bookings. Guards in the database: an EXCLUDE constraint (btree_gist) over (tenant, resource, time
 range) refuses an overlapping active slot / range booking; cancelled and expired bookings are frozen; times,
-resource and quantity never change; only held -> confirmed | expired | cancelled and confirmed -> cancelled.
+resource and quantity never change; only held -> confirmed | expired | cancelled and confirmed -> cancelled. A booking is inserted held or confirmed,
+a confirmed one keeps its customer and hold (its fee is set only by the cancellation), and rows are never deleted.
+No TRUNCATE trigger: the generated tests empty the tables with TRUNCATE ... CASCADE.
 """
 
 from collections.abc import Sequence
@@ -31,12 +33,28 @@ ALTER TABLE bookings ADD CONSTRAINT ex_bookings_no_overlap EXCLUDE USING gist (
 _GUARD = """
 CREATE FUNCTION bookings_guard() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+    IF TG_OP = 'DELETE' THEN
+        RAISE EXCEPTION 'bookings are never deleted (booking %): cancel it instead', OLD.id USING ERRCODE = '23514';
+    END IF;
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.status NOT IN ('held', 'confirmed') THEN
+            RAISE EXCEPTION 'a booking starts held or confirmed, not %', NEW.status USING ERRCODE = '23514';
+        END IF;
+        RETURN NEW;
+    END IF;
     IF OLD.status IN ('cancelled', 'expired') THEN
         RAISE EXCEPTION 'booking % is % and cannot change', OLD.id, OLD.status USING ERRCODE = '23514';
     END IF;
     IF NEW.resource_id <> OLD.resource_id OR NEW.starts_at <> OLD.starts_at OR NEW.ends_at <> OLD.ends_at
         OR NEW.quantity <> OLD.quantity OR NEW.exclusive <> OLD.exclusive OR NEW.tenant_id <> OLD.tenant_id THEN
         RAISE EXCEPTION 'booking % has an immutable time, resource and quantity', OLD.id USING ERRCODE = '23514';
+    END IF;
+    IF OLD.status = 'confirmed' AND (
+        NEW.customer_id IS DISTINCT FROM OLD.customer_id
+        OR NEW.hold_expires_at IS DISTINCT FROM OLD.hold_expires_at
+        OR (NEW.cancel_fee_minor IS DISTINCT FROM OLD.cancel_fee_minor AND NEW.status <> 'cancelled')
+    ) THEN
+        RAISE EXCEPTION 'confirmed booking % keeps its customer, hold and fee', OLD.id USING ERRCODE = '23514';
     END IF;
     IF NEW.status <> OLD.status AND NOT (
         (OLD.status = 'held' AND NEW.status IN ('confirmed', 'expired', 'cancelled'))
@@ -111,7 +129,9 @@ def upgrade() -> None:
     op.create_index("ix_bookings_resource_id_starts_at", "bookings", ["resource_id", "starts_at"], unique=False)
     op.execute(_NO_OVERLAP)
     op.execute(_GUARD)
-    op.execute("CREATE TRIGGER bookings_guard BEFORE UPDATE ON bookings FOR EACH ROW EXECUTE FUNCTION bookings_guard()")
+    op.execute(
+        "CREATE TRIGGER bookings_guard BEFORE INSERT OR UPDATE OR DELETE ON bookings FOR EACH ROW EXECUTE FUNCTION bookings_guard()"
+    )
 
 
 def downgrade() -> None:

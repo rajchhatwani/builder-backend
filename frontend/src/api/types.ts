@@ -143,6 +143,28 @@ export interface Preview {
   files: PreviewFile[]
 }
 
+/** One preview sandbox of a project (GET /projects/{id}/previews). Not the code-file `Preview` above. */
+export interface PreviewInstance {
+  id: string
+  project_id: string
+  workspace_id: string | null
+  /** starting | running | stopping | sleeping | expired | failed | killed */
+  state: string
+  spec_hash: string
+  /** Relative: "/previews/{id}/" */
+  url_path: string
+  error?: string | null
+  created_at: string
+  last_request_at: string
+  expires_at: string
+  limits: Record<string, unknown>
+  is_preview?: boolean
+}
+/** Create and rotate-token answer: the access token is shown once. */
+export interface PreviewInstanceCreated extends PreviewInstance {
+  token: string
+}
+
 export interface GenerationSummary {
   id: string
   project_id: string

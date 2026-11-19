@@ -23,6 +23,7 @@ def upgrade() -> None:
     op.create_table(
         "ai_eval_runs",
         sa.Column("id", sa.Uuid(), server_default=sa.text("gen_random_uuid()"), nullable=False),
+        sa.Column("seq", sa.BigInteger(), sa.Identity(always=False), nullable=False),
 {% if tenant %}
         sa.Column("tenant_id", sa.Uuid(), nullable=False),
 {% endif %}

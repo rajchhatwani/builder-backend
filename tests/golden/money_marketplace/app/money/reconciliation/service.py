@@ -136,8 +136,22 @@ async def _counts(session: AsyncSession, run_id: _uuid.UUID) -> tuple[int, int]:
     return int(lines), int(matched)
 
 
-async def _run_out(session: AsyncSession, run: ReconciliationRun) -> _s.RunOut:
-    line_count, matched_count = await _counts(session, run.id)
+async def _counts_many(session: AsyncSession, run_ids: list[_uuid.UUID]) -> dict[_uuid.UUID, tuple[int, int]]:
+    """Line and match counts of many runs in two grouped queries (GROUP BY run_id ... IN ids), not two per run."""
+    out = {rid: (0, 0) for rid in run_ids}
+    if not run_ids:
+        return out
+    line_q = _sa.select(ReconciliationLine.run_id, _sa.func.count()).where(ReconciliationLine.run_id.in_(run_ids)).group_by(ReconciliationLine.run_id)
+    match_q = _sa.select(ReconciliationMatch.run_id, _sa.func.count()).where(ReconciliationMatch.run_id.in_(run_ids)).group_by(ReconciliationMatch.run_id)
+    for rid, n in (await session.execute(line_q)).all():
+        out[rid] = (int(n), out[rid][1])
+    for rid, n in (await session.execute(match_q)).all():
+        out[rid] = (out[rid][0], int(n))
+    return out
+
+
+async def _run_out(session: AsyncSession, run: ReconciliationRun, counts: tuple[int, int] | None = None) -> _s.RunOut:
+    line_count, matched_count = counts if counts is not None else await _counts(session, run.id)
     return _s.RunOut(
         id=run.id,
         account_id=run.account_id,
@@ -263,7 +277,9 @@ async def list_runs(
         base = base.where(ReconciliationRun.status == status)
     total = (await session.execute(_sa.select(_sa.func.count()).select_from(base.subquery()))).scalar_one()
     rows = await session.execute(base.order_by(ReconciliationRun.created_at.desc(), ReconciliationRun.id).limit(limit).offset(offset))
-    return [await _run_out(session, r) for r in rows.scalars().all()], int(total)
+    page = list(rows.scalars().all())
+    counts = await _counts_many(session, [r.id for r in page])
+    return [await _run_out(session, r, counts[r.id]) for r in page], int(total)
 
 
 async def get_run(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID) -> _s.RunOut:
@@ -386,7 +402,10 @@ def _summary(
     )
 
 
-async def _results(session: AsyncSession, tenant: Tenant, run: ReconciliationRun) -> _s.ResultsOut:
+async def _results(
+    session: AsyncSession, tenant: Tenant, run: ReconciliationRun, limit: int | None = None, offset: int = 0
+) -> _s.ResultsOut:
+    """`limit`/`offset` page only the `matched` list; the summary always covers every matched pair."""
     lines = [_line_out(x) for x in (await session.execute(select_lines(run.id))).scalars()]
     matched = await _matched_pairs(session, tenant, run)
     matched_lines = {p.line.id for p in matched}
@@ -395,7 +414,8 @@ async def _results(session: AsyncSession, tenant: Tenant, run: ReconciliationRun
     unmatched_entries = [_entry_ref(e, t, d) for e, t, d in candidates]
     return _s.ResultsOut(
         run=await _run_out(session, run),
-        matched=matched,
+        matched=matched if limit is None else matched[offset : offset + limit],
+        matched_total=len(matched),
         unmatched_lines=unmatched_lines,
         unmatched_entries=unmatched_entries,
         entries_truncated=truncated,
@@ -403,9 +423,9 @@ async def _results(session: AsyncSession, tenant: Tenant, run: ReconciliationRun
     )
 
 
-async def results(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID) -> _s.ResultsOut:
+async def results(session: AsyncSession, user: _t.Any, run_id: _uuid.UUID, limit: int = 100, offset: int = 0) -> _s.ResultsOut:
     tenant = tenant_of(user)
-    return await _results(session, tenant, await _get_run(session, tenant, run_id))
+    return await _results(session, tenant, await _get_run(session, tenant, run_id), limit, offset)
 
 
 # --- matching ----------------------------------------------------------------------------------

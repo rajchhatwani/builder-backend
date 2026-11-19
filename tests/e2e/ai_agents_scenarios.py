@@ -804,3 +804,75 @@ async def test_oversized_args_are_not_stored_even_for_rejected_proposals(http, p
     run = await run_ok(http, people["admin"], "autopilot", ("rm_rf", big), ("add_note", big), ("add_note", {"text": "a"}), ("add_note", big), mode="auto")  # cap 3
     assert [p["args"] for p in run["proposals"]] == [{}, {}, {"text": "a"}, {}]
     assert run["proposals"][3]["reason"] == "too_many_actions"
+
+
+async def test_entity_create_goes_through_the_entity_lifecycle_and_emits_its_events(http, people, monkeypatch) -> None:  # noqa: ANN001
+    """CO6-2: an agent-created row passes the entity's own repository (hooks, events), like its POST route."""
+    from app.crud.tickets import TicketRepository
+
+    committed: list[str] = []
+
+    async def after_commit(ctx) -> None:  # noqa: ANN001
+        committed.append(str(ctx.item.id))
+
+    monkeypatch.setattr(TicketRepository, "hooks", {**TicketRepository.hooks, "after_commit": (*TicketRepository.hooks.get("after_commit", ()), after_commit)})
+    auto = await run_ok(http, people["agent"], "autopilot", ("open_ticket", ARGS["open_ticket"]), mode="auto")
+    done = only(auto)
+    assert done["status"] == "executed"
+    ticket_id = done["result"]["id"]
+    events = await rows("SELECT event_type FROM ev_outbox WHERE aggregate_type = 'Ticket' AND aggregate_id = :i", i=ticket_id)
+    assert len(events) == 1 and "created" in events[0][0]
+    assert committed == [ticket_id]  # after_commit ran once, after the commit
+    # the approval path takes the same road
+    p = only(await run_ok(http, people["agent"], "drafter", ("open_ticket", ARGS["open_ticket"])))
+    approved = await decide(http, people["admin2"], p, "approve")
+    assert approved.status_code == 200 and approved.json()["status"] == "executed"
+    assert await count("ev_outbox") >= 2 and len(committed) == 2
+
+
+async def test_entity_create_refused_by_an_entity_hook_is_failed_and_leaves_nothing_behind(http, people, monkeypatch) -> None:  # noqa: ANN001
+    from app.core.errors import ConflictError
+    from app.crud.tickets import TicketRepository
+
+    async def refuse(ctx) -> None:  # noqa: ANN001
+        raise ConflictError("gate says no")
+
+    monkeypatch.setattr(TicketRepository, "hooks", {"before_save": (refuse,)})
+    before = await count("ev_outbox")
+    auto = await run_ok(http, people["agent"], "autopilot", ("open_ticket", ARGS["open_ticket"]), ("add_note", ARGS["add_note"]), mode="auto")
+    first, second = auto["proposals"]
+    assert first["status"] == "failed" and first["result"] is None and first["error_code"] == "constraint_violation"
+    assert second["status"] == "executed"  # a refused action does not stop the run
+    assert await count("tickets") == 0 and await count("ev_outbox") == before
+
+
+async def test_a_conflict_inside_the_entity_create_keeps_earlier_actions_and_the_approval_lock(http, people, monkeypatch) -> None:  # noqa: ANN001
+    """SENTINEL H1: the repository's conflict path must roll back only the SAVEPOINT, not the run's earlier work."""
+    from app.crud.tickets import TicketRepository
+
+    first = await run_ok(http, people["agent"], "autopilot", ("open_ticket", ARGS["open_ticket"]), mode="auto")
+    taken = only(first)["result"]["id"]
+
+    async def collide(ctx) -> None:  # noqa: ANN001
+        ctx.values["id"] = _uuid_of(taken)  # primary key violation at flush
+
+    monkeypatch.setattr(TicketRepository, "hooks", {"before_save": (collide,)})
+    run = await run_ok(
+        http, people["agent"], "autopilot", ("add_note", ARGS["add_note"]), ("open_ticket", ARGS["open_ticket"]), ("add_note", ARGS["add_note"]), mode="auto"
+    )
+    note, clash, note2 = run["proposals"]
+    assert (note["status"], clash["status"], clash["error_code"], note2["status"]) == ("executed", "failed", "constraint_violation", "executed")
+    assert await count("tickets") == 1  # the earlier ticket survives
+    monkeypatch.setattr(TicketRepository, "hooks", {})
+    p = only(await run_ok(http, people["agent"], "drafter", ("open_ticket", ARGS["open_ticket"])))
+    monkeypatch.setattr(TicketRepository, "hooks", {"before_save": (collide,)})
+    done = await decide(http, people["admin2"], p, "approve")
+    assert done.status_code == 200 and done.json()["status"] == "failed" and done.json()["error_code"] == "constraint_violation"
+    assert (await decide(http, people["admin2"], p, "approve")).status_code == 409  # decided once
+    assert await count("tickets") == 1
+
+
+def _uuid_of(value: str):  # noqa: ANN202
+    import uuid
+
+    return uuid.UUID(value)

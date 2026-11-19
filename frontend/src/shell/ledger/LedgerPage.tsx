@@ -1,6 +1,7 @@
 import { Fragment, useCallback, useEffect, useId, useMemo, useState } from 'react'
-import { sendRequest } from '../workbench/sendRequest'
-import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
+import { PreviewSessionGate } from '../preview/PreviewSessionGate'
+import { usePreviewSession } from '../preview/usePreviewSession'
+import type { PreviewSession } from '../preview/previewSession'
 import {
   booksBalance, buildEntries, toBig, formatMinor, ledgerErrorMessage, newIdempotencyKey, parseLedgerJson, sumByCurrency,
   type Account, type AccountEntry, type Balances, type DraftLine, type Transaction,
@@ -18,12 +19,11 @@ const HISTORY_PAGE = 50
 
 const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 
-/** Ledger explorer for a generated project's money ledger (packs.money.ledger). Talks to the preview/runtime origin with a
- *  bearer token held in memory only (same mechanism as the Workbench request console). Read-mostly: posting and reversing
+/** Ledger explorer for a generated project's money ledger (packs.money.ledger). Talks to the preview/runtime origin with the
+ *  dashboard-supplied preview session (tokens kept in memory only, never shown). Read-mostly: posting and reversing
  *  are the only writes, nothing is ever edited or deleted. */
-export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch }: { projectId: string; origin?: string | null; doFetch?: typeof fetch }) {
-  const [token, setToken] = useState('')
-  const [active, setActive] = useState('') // token in use; changes only on "Load ledger"
+function LedgerPageBody({ session }: { projectId: string; session: PreviewSession }) {
+  const { request } = session
   const [accounts, setAccounts] = useState<Load<Account[]>>({ s: 'idle' })
   const [balances, setBalances] = useState<Load<Balances>>({ s: 'idle' })
   const [txs, setTxs] = useState<Load<Page<Transaction>>>({ s: 'idle' })
@@ -35,15 +35,13 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   const [revKey, setRevKey] = useState('')
   const [revError, setRevError] = useState<string | null>(null)
   const [revDone, setRevDone] = useState<string | null>(null)
-  const tokenId = useId()
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
-    if (!origin) throw new Error('No preview API is configured')
-    const r = await sendRequest({ url: origin + path, origin, method, body: body === undefined ? undefined : JSON.stringify(body), bearer: active || undefined }, doFetch)
+    const r = await request(method, path, body)
     let json: unknown = null
     try { json = r.text ? parseLedgerJson(r.text) : null } catch { json = null }
     return { status: r.status, json }
-  }, [origin, active, doFetch])
+  }, [request])
 
   const exponents = useMemo(() => {
     const m: Record<string, number> = {}
@@ -51,7 +49,6 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
     return m
   }, [accounts])
 
-  useEffect(() => { setActive(''); setToken(''); setAccounts({ s: 'idle' }); setBalances({ s: 'idle' }); setTxs({ s: 'idle' }); setHist(null); setPage(0) }, [projectId])
 
   const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean, valid: (j: unknown) => boolean = isPage) => {
     set({ s: 'loading' })
@@ -64,7 +61,6 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   }, [call])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     const off = () => dead
     const off0 = off
@@ -88,14 +84,13 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
     })()
     void get<Balances>('/ledger/balances', setBalances, off, isBalances)
     return () => { dead = true }
-  }, [active, refresh, get, call])
+  }, [refresh, get, call])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     void get<Page<Transaction>>(`/ledger/transactions?limit=${PAGE}&offset=${page * PAGE}`, setTxs, () => dead)
     return () => { dead = true }
-  }, [active, page, refresh, get])
+  }, [page, refresh, get])
 
   const reload = () => { setPage(0); setRefresh((n) => n + 1); setHist(null) }
 
@@ -134,28 +129,11 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
   const toggle = (id: string) => setOpen((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n })
   const acctOf = (id: string) => accounts.s === 'ok' ? accounts.v.find((a) => a.id === id) : undefined
 
-  if (!origin) {
-    return (
-      <section aria-labelledby="ledger-h" data-testid="ledger-page">
-        <h1 id="ledger-h">Ledger</h1>
-        <p className="muted" data-testid="ledger-no-origin">No preview API is configured for this dashboard, so there is no ledger to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the money ledger on).</p>
-      </section>
-    )
-  }
-
   return (
-    <section aria-labelledby="ledger-h" data-testid="ledger-page" className="stack">
-      <h1 id="ledger-h">Ledger</h1>
-      <p className="muted">Double-entry books of the running project. Posted transactions are never edited or deleted; a mistake is fixed by reversing it. The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="ledger-token-form">
-        <label htmlFor={tokenId}>Bearer token</label>
-        <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="ledger-token" />
-        <button type="submit" disabled={!token} data-testid="ledger-load">Load ledger</button>
-        {active && <button type="button" className="outline" onClick={reload} data-testid="ledger-refresh">Refresh</button>}
-      </form>
-      {!active && <p className="muted" data-testid="ledger-notoken">Paste a bearer token for the project (a role allowed to read the ledger) to load it.</p>}
+    <>
+      <div><button type="button" className="outline" onClick={reload} data-testid="ledger-refresh">Refresh</button></div>
 
-      {active && (
+      {(
         <>
           <div data-testid="ledger-accounts-wrap">
             <h2>Accounts</h2>
@@ -310,6 +288,20 @@ export function LedgerPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch
           {accounts.s === 'ok' && accounts.v.length > 0 && <PostForm accounts={accounts.v} exponents={exponents} call={call} onPosted={reload} />}
         </>
       )}
+    </>
+  )
+}
+
+export function LedgerPage({ projectId, session }: { projectId: string; session?: PreviewSession }) {
+  const own = usePreviewSession(projectId, { disabled: !!session })
+  const s = session ?? own
+  return (
+    <section aria-labelledby="ledger-h" data-testid="ledger-page" className="stack">
+      <h1 id="ledger-h">Ledger</h1>
+      <p className="muted">Double-entry books of the running project. Posted transactions are never edited or deleted; a mistake is fixed by reversing it.</p>
+      <PreviewSessionGate session={s} prefix="ledger">
+        <LedgerPageBody key={projectId} projectId={projectId} session={s} />
+      </PreviewSessionGate>
     </section>
   )
 }

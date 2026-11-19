@@ -1,6 +1,7 @@
 import axe from 'axe-core'
 import { createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { readySession, stubSession } from '../preview/testSession'
 import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
 import { LedgerPage } from './LedgerPage'
 
@@ -43,30 +44,34 @@ function api(over: (m: string, url: string) => Response | undefined = () => unde
 }
 
 async function load(f: typeof fetch) {
-  const host = await mount(createElement(LedgerPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f }))
-  await setInput(q('ledger-token') as HTMLInputElement, 'TOK')
-  await click(q('ledger-load'))
+  const host = await mount(createElement(LedgerPage, { projectId: 'p', session: readySession(f) }))
   return host
 }
 
 describe('LedgerPage', () => {
   it('explains when no preview origin is configured and fetches nothing', async () => {
     const { f } = api()
-    await mount(createElement(LedgerPage, { projectId: 'p', origin: null, doFetch: f }))
+    await mount(createElement(LedgerPage, { projectId: 'p', session: stubSession('no-origin') }))
     expect(q('ledger-no-origin')).not.toBeNull()
     expect(f).not.toHaveBeenCalled()
   })
 
-  it('asks for a token first, then loads with a Bearer header', async () => {
+  it('loads straight away with a ready session and shows no token or password input', async () => {
     const { f, calls } = api()
-    await mount(createElement(LedgerPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f }))
-    expect(q('ledger-notoken')).not.toBeNull()
-    expect(f).not.toHaveBeenCalled()
-    expect((q('ledger-token') as HTMLInputElement).type).toBe('password')
-    await setInput(q('ledger-token') as HTMLInputElement, 'TOK')
-    await click(q('ledger-load'))
+    const host = await mount(createElement(LedgerPage, { projectId: 'p', session: readySession(f) }))
+    expect(host.querySelector('input[type=password]')).toBeNull()
+    expect(host.textContent ?? '').not.toMatch(/bearer|paste a/i)
+    expect(host.querySelector('[data-testid$="-token"],[data-testid$="-notoken"],[data-testid$="-load"]')).toBeNull()
     expect(calls.length).toBeGreaterThan(2)
-    expect(calls.every((c) => c.auth === 'Bearer TOK' && c.url.startsWith('http://gen.test/ledger/'))).toBe(true)
+    expect(calls.every((c) => c.url.startsWith('http://gen.test/ledger/'))).toBe(true)
+  })
+  it('shows the gate, not the ledger, while the session is not ready', async () => {
+    const { f } = api()
+    const host = await mount(createElement(LedgerPage, { projectId: 'p', session: stubSession('no-preview') }))
+    expect(q('preview-start')).not.toBeNull()
+    expect(q('ledger-accounts-wrap')).toBeNull()
+    expect(host.querySelectorAll('h1')).toHaveLength(1)
+    expect(f).not.toHaveBeenCalled()
   })
 
   it('shows accounts, formatted balances and the books-balance check with per-currency totals', async () => {

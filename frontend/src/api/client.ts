@@ -130,6 +130,8 @@ import type {
   Page,
   PermissionEntry,
   Preview,
+  PreviewInstance,
+  PreviewInstanceCreated,
   PreviewLimits,
   PreviewLimitsWrite,
   PreviewOrgLimits,
@@ -392,6 +394,12 @@ export const api = {
     }),
   listSpecOps: (projectId: string, limit = 200, offset = 0) =>
     request<Page<SpecOp>>(`/projects/${projectId}/spec/ops?limit=${limit}&offset=${offset}`),
+  listPreviews: (projectId: string) => request<PreviewInstance[]>(`/projects/${projectId}/previews`),
+  createPreview: (projectId: string) =>
+    request<PreviewInstanceCreated>(`/projects/${projectId}/previews`, { method: 'POST', body: JSON.stringify({}) }),
+  /** A fresh access token (shown once); the previous one stops working. */
+  rotatePreviewToken: (projectId: string, previewId: string) =>
+    request<PreviewInstanceCreated>(`/projects/${projectId}/previews/${previewId}/rotate-token`, { method: 'POST' }),
   getAccessMatrix: (projectId: string) => request<AccessMatrix>(`/projects/${projectId}/access/matrix`),
   diffAccess: (projectId: string, body: AccessDiffRequest) =>
     request<AccessDiff>(`/projects/${projectId}/access/diff`, { method: 'POST', body: JSON.stringify(body) }),

@@ -11,8 +11,9 @@ which is False in generated code; the text of a message is untrusted):
   [[fake:fail_primary]]    the primary model fails, the fallback model works
   [[fake:delay=300]]       the call takes 300 ms (0..5000)
   [[fake:out=40]]          the output is exactly 40 tokens (capped by max_output_tokens)
-  [[fake:json={"a": 1}]]   with response_format json the output is exactly this JSON text (it may contain a single "]";
-                           the value ends at the first "]]" and is at most 1000 characters)
+  [[fake:json={"a": 1}]]   with response_format json the output is exactly this JSON text (at most 1000 characters). The
+                           scan is JSON-aware: nested arrays ([[1]]) and values containing "]]" work; a value that is
+                           not a JSON document ends at the first "]]"
 
 Document extraction (D34, fake only): with response_format json and no [[fake:json=...]] directive, a first message that
 starts with "EXTRACT FIELDS: a,b" and messages "SEGMENT <offset>\\n<text>" make the fake find `name: value` / `name = value`
@@ -29,7 +30,8 @@ from dataclasses import dataclass
 
 _OPEN = "[[fake:"
 _MAX_DIRECTIVE = 1000  # characters between "[[fake:" and the closing "]]": bounded, so a hostile text costs linear time
-_BODY = re.compile(r"([a-z_]{1,20})(?:=(.*))?", re.S)
+_NAME = re.compile(r"([a-z_]{1,20})")
+_JSON = json.JSONDecoder()
 _SEGMENT = re.compile(r"SEGMENT (\d+)\n")
 _CONF = re.compile(r"\[\[conf=(\d{1,5})\]\]$")
 EXTRACT_PREFIX = "EXTRACT FIELDS: "
@@ -55,8 +57,10 @@ def estimate_input_tokens(contents: list[str]) -> int:
 
 
 def _directives(contents: list[str]) -> dict[str, str]:
-    """`[[fake:name]]` or `[[fake:name=value]]`; the value ends at the first "]]" (a single "]" may appear in it, so a JSON
-    value such as {"actions": [{...}]} works). Scanned with str.find, never with a backtracking pattern."""
+    """`[[fake:name]]` or `[[fake:name=value]]`. JSON-aware: when the value starts a JSON document (json.raw_decode, so nested
+    arrays such as [[1]] and values containing "]]" work) and "]]" follows it, that is the value. Otherwise (delay=300, plain
+    text, malformed JSON) the value ends at the first "]]". At most _MAX_DIRECTIVE characters after the marker are looked at
+    per occurrence and nothing backtracks, so a hostile text costs linear time."""
     found: dict[str, str] = {}
     for content in contents:
         pos = 0
@@ -65,12 +69,33 @@ def _directives(contents: list[str]) -> dict[str, str]:
             if start < 0:
                 break
             body_start = start + len(_OPEN)
-            end = content.find("]]", body_start, body_start + _MAX_DIRECTIVE + 2)
-            match = _BODY.fullmatch(content, body_start, end) if end >= 0 else None
-            if match is None:
+            limit = body_start + _MAX_DIRECTIVE + 2
+            name = _NAME.match(content, body_start, limit)
+            if name is None:
                 pos = body_start
                 continue
-            found[match.group(1)] = match.group(2) or ""
+            after = name.end()
+            if content.startswith("]]", after, limit):
+                found[name.group(1)] = ""
+                pos = after + 2
+                continue
+            if content[after : after + 1] != "=":
+                pos = body_start
+                continue
+            window = content[after + 1 : limit]
+            try:
+                _, used = _JSON.raw_decode(window)
+            except (ValueError, RecursionError):  # malformed, or hostile deep nesting inside the 1000-char window
+                used = -1
+            if used > 0 and window.startswith("]]", used):
+                found[name.group(1)] = window[:used]
+                pos = after + 1 + used + 2
+                continue
+            end = content.find("]]", after + 1, limit)
+            if end < 0:
+                pos = body_start
+                continue
+            found[name.group(1)] = content[after + 1 : end]
             pos = end + 2
     return found
 

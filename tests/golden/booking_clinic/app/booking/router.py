@@ -96,7 +96,15 @@ async def capacity(
     return await _svc.capacity(session, user, resource_id, starts_at, ends_at)
 
 
-@router.post("/bookings", response_model=_s.BookingOut, status_code=201)
+@router.post(
+    "/bookings",
+    response_model=_s.BookingOut,
+    status_code=201,
+    description=(
+        "Hold or book a slot. With an idempotency_key a replay returns the same booking (200, Idempotent-Replayed) "
+        "while it is held or confirmed; once it is expired or cancelled the replay is 409 idempotency_key_spent: use a new key."
+    ),
+)
 async def create_booking(body: _s.BookingCreate, response: Response, session: SessionDep, user: Booker) -> _s.BookingOut:
     booking, replayed = await _svc.create_booking(session, user, body)
     if replayed:
@@ -125,12 +133,23 @@ async def get_booking(booking_id: _uuid.UUID, session: SessionDep, user: Reader)
     return await _svc.get_booking(session, user, booking_id)
 
 
-@router.post("/bookings/{booking_id}/confirm", response_model=_s.BookingOut)
+@router.post(
+    "/bookings/{booking_id}/confirm",
+    response_model=_s.BookingOut,
+    description="Confirm a hold. Confirming an already confirmed booking returns it unchanged (200); expired or cancelled bookings are refused.",
+)
 async def confirm_booking(booking_id: _uuid.UUID, session: SessionDep, user: Booker) -> _s.BookingOut:
     return await _svc.confirm_booking(session, user, booking_id)
 
 
-@router.post("/bookings/{booking_id}/cancel", response_model=_s.BookingOut)
+@router.post(
+    "/bookings/{booking_id}/cancel",
+    response_model=_s.BookingOut,
+    description=(
+        "Cancel a booking. The cancellation fee is 0 when the actor is a manager and not the booking's customer "
+        "(a manager cancelling someone else's booking never charges them)."
+    ),
+)
 async def cancel_booking(
     booking_id: _uuid.UUID, session: SessionDep, user: Booker, body: _s.CancelIn | None = None
 ) -> _s.BookingOut:

@@ -1,6 +1,7 @@
 import axe from 'axe-core'
 import { act, createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { readySession, stubSession } from '../preview/testSession'
 import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
 import { BookingsPage } from './BookingsPage'
 
@@ -46,11 +47,9 @@ function api(over: (m: string, url: string, body: unknown) => Response | undefin
   }) as unknown as typeof fetch
   return { f, calls }
 }
-const el = (f: typeof fetch) => createElement(BookingsPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f, now: () => NOW })
+const el = (f: typeof fetch) => createElement(BookingsPage, { projectId: 'p', session: readySession(f), now: () => NOW })
 async function load(f: typeof fetch) {
   const host = await mount(el(f))
-  await setInput(q('bookings-token') as HTMLInputElement, 'TOK')
-  await click(q('bookings-load'))
   await flush()
   return host
 }
@@ -61,20 +60,18 @@ const key = async (el: Element, k: string) => { await act(async () => { el.dispa
 describe('BookingsPage', () => {
   it('explains when no preview origin is configured and fetches nothing', async () => {
     const { f } = api()
-    await mount(createElement(BookingsPage, { projectId: 'p', origin: null, doFetch: f }))
+    await mount(createElement(BookingsPage, { projectId: 'p', session: stubSession('no-origin') }))
     expect(q('bookings-no-origin')).not.toBeNull()
     expect(f).not.toHaveBeenCalled()
   })
 
-  it('asks for a token first, then loads resources, availability (with taken slots) and the week of bookings', async () => {
+  it('loads resources, availability (with taken slots) and the week of bookings straight away and shows no token or password input', async () => {
     const { f, calls } = api()
-    await mount(el(f))
-    expect(q('bookings-notoken')).not.toBeNull()
-    expect(f).not.toHaveBeenCalled()
-    expect((q('bookings-token') as HTMLInputElement).type).toBe('password')
-    await setInput(q('bookings-token') as HTMLInputElement, 'TOK')
-    await click(q('bookings-load'))
-    expect(calls.every((c) => c.auth === 'Bearer TOK' && c.url.startsWith('http://gen.test/booking/'))).toBe(true)
+    const host = await mount(el(f))
+    expect(host.querySelector('input[type=password]')).toBeNull()
+    expect(host.textContent ?? '').not.toMatch(/bearer|paste a/i)
+    expect(host.querySelector('[data-testid$="-token"],[data-testid$="-notoken"],[data-testid$="bookings-load"]')).toBeNull()
+    expect(calls.every((c) => c.url.startsWith('http://gen.test/booking/'))).toBe(true)
     expect(calls.find((c) => c.url.includes('/availability'))!.url).toContain('/booking/resources/r1/availability?from=2026-11-30&to=2026-12-06&include_taken=true')
     const bu = calls.find((c) => c.m === 'GET' && c.url.includes('/booking/bookings'))!.url
     expect(bu).toContain('resource_id=r1')

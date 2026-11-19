@@ -27,7 +27,8 @@ def _allow(user: AuthUser, *groups: tuple[str, ...]) -> AuthUser:
 
 
 async def _caller(user: CurrentUser) -> AuthUser:
-    return _allow(user, _config.CALL_ROLES, _config.MANAGE_ROLES)
+    _svc.require_call_role(user)
+    return user
 
 
 async def _reader(user: CurrentUser) -> AuthUser:

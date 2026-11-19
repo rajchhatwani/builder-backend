@@ -27,8 +27,10 @@
 import asyncio
 import hashlib
 import hmac
+import importlib
 import json
 import math
+import types as _types
 import typing as _t
 import uuid as _uuid
 from datetime import UTC, date, datetime
@@ -46,13 +48,15 @@ from app.ai import service as _gateway
 from app.ai.agents_models import AiAgentProposal, AiAgentRun
 from app.auth.config import get_auth_settings
 from app.auth.service import effective_roles as _effective_roles
-from app.core.errors import AppError
+from app.core.errors import AppError, ConflictError
+from app.crud.lifecycle import run_stage as _run_stage
 from app.models import _base as _models_base
 
 OPEN = ("suggested", "pending_approval")
 OUTCOME_STATUSES = ("executed", "failed", "acknowledged")
 MAX_PROPOSALS_PER_RUN = 50  # a hostile model cannot make a run write thousands of rows
 RANK = _config.RANK
+_DEFERRED = "agent_after_commit"  # session.info key: after_commit hooks of rows created by agent actions
 
 
 def _now() -> datetime:
@@ -196,6 +200,12 @@ async def _execute(
     table = _models_base.Base.metadata.tables.get(entity)
     if table is None:
         return None, "unknown_entity"
+    runtime = _config.ENTITY_RUNTIME.get(entity)
+    if runtime is not None:
+        if runtime["policy"] or runtime["guarded"]:
+            # abac / pbac decisions and field write rules need the request's access context, which an agent has not got
+            return None, "policy_unsupported"
+        return await _create_through_repository(session, runtime, entity, values, tenant, actor, actor_roles)
     row_id = _uuid.uuid4()
     row = {**values, "id": row_id}
     if "tenant_id" in table.c and tenant is not None:
@@ -212,6 +222,85 @@ async def _execute(
     except SQLAlchemyError:
         return None, "execution_failed"
     return {"entity": entity, "id": str(row_id)}, None
+
+
+async def _create_through_repository(
+    session: AsyncSession,
+    runtime: dict[str, object],
+    entity: str,
+    values: dict[str, _t.Any],
+    tenant: _uuid.UUID | None,
+    actor: _uuid.UUID | None,
+    actor_roles: frozenset[str],
+) -> tuple[dict[str, _t.Any] | None, str | None]:
+    """Create the row through the entity's own repository: the same lifecycle as its POST route (before_save gates,
+    numbering, state machine, change history, events, realtime, search). Inside a SAVEPOINT; the repository's commit is
+    held back, so the row commits (or rolls back) together with the run or the approval that caused it, and the
+    after_commit hooks run only after that commit (see `_after_commit`)."""
+    module = importlib.import_module(str(runtime["module"]))
+    repo_cls = getattr(module, str(runtime["repository"]))
+    caller = _types.SimpleNamespace(id=actor, roles=sorted(actor_roles), tenant_id=tenant)
+    table = _models_base.Base.metadata.tables[entity]
+    owner = actor if "created_by_id" in table.c else None  # the route passes an owner only for entities that record one
+    repo = repo_cls(session, owner_id=owner, tenant_id=tenant if "tenant_id" in table.c else None, caller=caller)
+    pending: list[tuple[_t.Any, _t.Any]] = session.info.setdefault(_DEFERRED, [])
+
+    async def _held_commit() -> None:  # the caller commits
+        return None
+
+    async def _flush() -> None:
+        # the repository's own flush rolls the WHOLE session back on a conflict (Session.rollback goes to the root
+        # transaction): that would drop the rows of earlier actions and the lock on the proposal. Only the SAVEPOINT may go.
+        try:
+            await session.flush()
+        except IntegrityError as exc:
+            raise ConflictError("the request conflicts with existing data (duplicate value or referenced record)") from exc
+
+    async def _finish(ctx: _t.Any) -> None:
+        await _run_stage("after_save", repo_cls.hooks, ctx)
+        ctx.trace.append("commit")
+        pending.append((repo_cls.hooks, ctx))
+
+    repo._commit = _held_commit
+    repo._flush = _flush
+    repo._finish = _finish
+    nested = await session.begin_nested()
+    mark = len(pending)
+    try:
+        item = await repo.create(dict(values))
+        item_id = item.id
+        if nested.is_active:
+            await nested.commit()
+    except AppError as exc:  # a gate, the state machine or a unique rule refused the row
+        await _close_savepoint(session, nested)
+        del pending[mark:]
+        return None, "constraint_violation" if exc.status_code == 409 else "refused_by_entity"
+    except IntegrityError:
+        await _close_savepoint(session, nested)
+        del pending[mark:]
+        return None, "constraint_violation"
+    except DBAPIError:
+        await _close_savepoint(session, nested)
+        del pending[mark:]
+        return None, "invalid_value"
+    except SQLAlchemyError:
+        await _close_savepoint(session, nested)
+        del pending[mark:]
+        return None, "execution_failed"
+    return {"entity": entity, "id": str(item_id)}, None
+
+
+async def _close_savepoint(session: AsyncSession, nested: _t.Any) -> None:
+    """Roll the SAVEPOINT back unless the repository already did (its conflict path rolls the session back itself)."""
+    if session.get_nested_transaction() is nested:
+        await nested.rollback()
+
+
+async def _after_commit(session: AsyncSession) -> None:
+    """Run the after_commit hooks of every row an agent action created, once the outer transaction has committed."""
+    pending = session.info.pop(_DEFERRED, [])
+    for hooks, ctx in pending:
+        await _run_stage("after_commit", hooks, ctx, fail_closed=False)
 
 
 # --- prompt and model output -------------------------------------------------------------------------------
@@ -343,7 +432,7 @@ async def latest_eval_passed(session: AsyncSession, tenant: _uuid.UUID | None, s
     params: dict[str, _t.Any] = {"suite": suite}
     if tenant is not None:
         params["tenant"] = tenant
-    row = (await session.execute(_sa.text(sql + " ORDER BY created_at DESC, id DESC LIMIT 1"), params)).first()
+    row = (await session.execute(_sa.text(sql + " ORDER BY created_at DESC, seq DESC LIMIT 1"), params)).first()
     return bool(row[0]) if row is not None else False
 
 
@@ -645,8 +734,10 @@ async def start_run(
         await session.flush()  # the run row first: the proposals reference it
         session.add_all(rows)
         await session.commit()
+        await _after_commit(session)
     except IntegrityError:  # the same idempotency key won the race: return that run (its executed actions roll back with ours)
         await session.rollback()
+        session.info.pop(_DEFERRED, None)
         if key is None:
             raise
         replay = await _existing(session, tenant, caller, key, request_hash)
@@ -760,6 +851,7 @@ async def approve(session: AsyncSession, user: _t.Any, proposal_id: _uuid.UUID, 
     row.result, row.error_code, row.executed_by = result, error, str(approver)
     row.decided_by, row.decided_at, row.note = approver, _now(), note
     await session.commit()
+    await _after_commit(session)
     return await _load_out(session, tenant, proposal_id)
 
 

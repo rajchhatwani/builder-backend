@@ -80,13 +80,21 @@ async def _line_rows(session: AsyncSession, invoice_id: _uuid.UUID) -> list[Invo
     return list(found.scalars())
 
 
-async def _out(session: AsyncSession, row: Invoice) -> _s.InvoiceOut:
-    lines = await _line_rows(session, row.id)
-    payments = (
-        await session.execute(
-            _sa.select(InvoicePayment).where(InvoicePayment.invoice_id == row.id).order_by(InvoicePayment.created_at, InvoicePayment.id)
-        )
-    ).scalars()
+async def _out(
+    session: AsyncSession,
+    row: Invoice,
+    lines: _t.Sequence[InvoiceLine] | None = None,
+    payments: _t.Sequence[InvoicePayment] | None = None,
+) -> _s.InvoiceOut:
+    """One invoice. A list call passes the lines and payments it loaded for every row at once (no query per row)."""
+    if lines is None:
+        lines = await _line_rows(session, row.id)
+    if payments is None:
+        payments = (
+            await session.execute(
+                _sa.select(InvoicePayment).where(InvoicePayment.invoice_id == row.id).order_by(InvoicePayment.created_at, InvoicePayment.id)
+            )
+        ).scalars().all()
     return _s.InvoiceOut(
         id=row.id,
         kind=_t.cast(_s.Kind, row.kind),
@@ -232,7 +240,19 @@ async def list_invoices(
         base = base.where(Invoice.counterparty == counterparty)
     total = (await session.execute(_sa.select(_sa.func.count()).select_from(base.subquery()))).scalar_one()
     rows = await session.execute(base.order_by(Invoice.created_at.desc(), Invoice.id).limit(limit).offset(offset))
-    return [await _out(session, r) for r in rows.scalars().all()], int(total)
+    page = list(rows.scalars().all())
+    ids = [r.id for r in page]
+    lines_by: dict[_uuid.UUID, list[InvoiceLine]] = {i: [] for i in ids}
+    payments_by: dict[_uuid.UUID, list[InvoicePayment]] = {i: [] for i in ids}
+    if ids:  # two queries for the whole page (WHERE invoice_id IN ids), never per invoice
+        for line in (await session.execute(_sa.select(InvoiceLine).where(InvoiceLine.invoice_id.in_(ids)).order_by(InvoiceLine.line_no))).scalars():
+            lines_by[line.invoice_id].append(line)
+        found = await session.execute(
+            _sa.select(InvoicePayment).where(InvoicePayment.invoice_id.in_(ids)).order_by(InvoicePayment.created_at, InvoicePayment.id)
+        )
+        for pay in found.scalars():
+            payments_by[pay.invoice_id].append(pay)
+    return [await _out(session, r, lines_by[r.id], payments_by[r.id]) for r in page], int(total)
 
 
 async def update_invoice(session: AsyncSession, user: _t.Any, invoice_id: _uuid.UUID, body: _s.InvoiceUpdate) -> _s.InvoiceOut:

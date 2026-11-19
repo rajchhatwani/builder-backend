@@ -1,6 +1,7 @@
 import axe from 'axe-core'
 import { act, createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { readySession, stubSession } from '../preview/testSession'
 import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
 import { DocumentsPage } from './DocumentsPage'
 
@@ -33,11 +34,9 @@ function api(over: (m: string, url: string, body: unknown) => Response | undefin
   }) as unknown as typeof fetch
   return { f, calls }
 }
-const el = (f: typeof fetch, props: Record<string, unknown> = {}) => createElement(DocumentsPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f, ...props })
+const el = (f: typeof fetch, props: Record<string, unknown> = {}) => createElement(DocumentsPage, { projectId: 'p', session: readySession(f), ...props })
 async function load(f: typeof fetch, props: Record<string, unknown> = {}) {
   const host = await mount(el(f, props))
-  await setInput(q('documents-token') as HTMLInputElement, 'TOK')
-  await click(q('documents-load'))
   await flush()
   return host
 }
@@ -45,15 +44,16 @@ const open = async (id = 'd1') => { await click(q(`document-row-${id}`)); await 
 const key = async (e: Element, k: string) => { await act(async () => { e.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true })) }); await flush() }
 
 describe('DocumentsPage', () => {
-  it('asks for a token first and sends it only as bearer', async () => {
+  it('loads the queue straight away and shows no token or password input', async () => {
     const { f, calls } = api()
-    await mount(el(f))
-    expect(q('documents-notoken')).not.toBeNull(); expect(calls).toHaveLength(0)
-    await setInput(q('documents-token') as HTMLInputElement, 'TOK'); await click(q('documents-load'))
-    expect(calls[0].url).toBe('http://gen.test/ai/documents?status=needs_review&limit=20&offset=0'); expect(calls[0].auth).toBe('Bearer TOK')
+    const host = await mount(el(f))
+    expect(host.querySelector('input[type=password]')).toBeNull()
+    expect(host.textContent ?? '').not.toMatch(/bearer|paste a/i)
+    expect(host.querySelector('[data-testid$="-token"],[data-testid$="-notoken"],[data-testid$="documents-load"]')).toBeNull()
+    expect(calls[0].url).toBe('http://gen.test/ai/documents?status=needs_review&limit=20&offset=0')
   })
   it('shows no-origin note', async () => {
-    const host = await mount(el(api().f, { origin: null }))
+    const host = await mount(el(api().f, { session: stubSession('no-origin') }))
     expect(host.querySelector('[data-testid="documents-no-origin"]')).not.toBeNull()
   })
   it('lists the queue, announces the count and filters by status', async () => {

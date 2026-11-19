@@ -6,6 +6,7 @@ checks the values and the cross-section rules."""
 import re
 from collections.abc import Callable
 
+from app.core.currencies import EXPONENTS
 from app.core.spec_models import Spec
 from app.core.validation_ai import agents_active, documents_active, evals_active, gateway_active, knowledge_active
 from app.core.validation_operations import check_operations, operations_pack_ids
@@ -188,6 +189,15 @@ def _check_reconciliation(spec: Spec, add: Add) -> None:
     _check_roles(spec, add, p, rec, ("read_roles", "run_roles"))
     if not 0 <= rec.tolerance_minor <= 10**9:
         add(f"{p}.tolerance_minor", "out_of_range", "0 .. 1000000000 minor units (a larger tolerance pairs unrelated rows)")
+    cur = spec.packs.money.currency  # type: ignore[union-attr]
+    known = [EXPONENTS[c] for c in (cur.currencies if cur is not None else []) if c in EXPONENTS]
+    exponent = min(known) if known else 2  # the strictest declared currency; 2 when none is known
+    if 0 <= rec.tolerance_minor <= 10**9 and rec.tolerance_minor > 10**exponent * 100:
+        add(
+            f"{p}.tolerance_minor",
+            "tolerance_too_large",
+            f"a tolerance above {10**exponent * 100} minor units (100 whole units of the currency) would pair unrelated rows",
+        )
     if not 1 <= rec.max_lines <= 10_000:
         add(f"{p}.max_lines", "out_of_range", "1 .. 10000 statement lines per run")
 

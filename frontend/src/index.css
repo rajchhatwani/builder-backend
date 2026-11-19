@@ -226,7 +226,8 @@ details.auth-section > .auth-section-body {
 
 .badge-muted {
   background: var(--muted);
-  color: var(--muted-foreground);
+  /* oat's muted-foreground is 4.39:1 on its muted tint (axe needs 4.5); mix toward the foreground */
+  color: color-mix(in srgb, var(--muted-foreground) 80%, var(--foreground));
 }
 
 /* ── Toggle row ───────────────────────────────────────────────────────────── */

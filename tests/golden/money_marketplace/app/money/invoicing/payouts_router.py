@@ -41,7 +41,17 @@ Offset = _t.Annotated[int, Query(ge=0)]
 REPLAYED = {"Idempotent-Replayed": "true"}
 
 
-@router.post("/run", response_model=_s.PayoutOut, status_code=201)
+@router.post(
+    "/run",
+    response_model=_s.PayoutOut,
+    status_code=201,
+    description=(
+        "Pay out a paid invoice. A payout is irreversible: there is no reverse route and a paid invoice cannot be voided. "
+        "`seller` is an operator-chosen label (1-64 characters, letters, digits and . _ : @ -, no spaces or control "
+        "characters) and is not checked against the invoice counterparty, because a marketplace seller differs from the buyer: "
+        "check it before you run the payout."
+    ),
+)
 async def run_payout(body: _s.PayoutRunIn, response: Response, session: SessionDep, user: Writer) -> _s.PayoutOut:
     payout, replayed = await _svc.run_payout(session, user, body)
     if replayed:
