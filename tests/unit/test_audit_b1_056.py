@@ -92,8 +92,13 @@ async def test_failure_limiter_counts_concurrent_burst(ratelimit: Any) -> None: 
     await asyncio.sleep(0.05)
     gate.set()
     codes = await asyncio.gather(*tasks)
-    assert codes.count(401) <= 5
-    assert codes.count(429) >= 25
+    # B1-031: calls in flight are capped at count + _INFLIGHT_EXTRA (so overlapping valid sign-ins
+    # never 429), so a parallel burst may land that many attempts before the first failure counts.
+    admitted = 5 + ratelimit.FailureRateLimiter._INFLIGHT_EXTRA
+    assert codes.count(401) <= admitted
+    assert codes.count(429) >= 30 - admitted
+    # once those failures have landed the client is blocked
+    assert await _call(limiter, True, asyncio.Event()) == 429
 
 
 async def test_failure_limiter_success_does_not_use_budget(ratelimit: Any) -> None:
