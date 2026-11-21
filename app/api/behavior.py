@@ -154,6 +154,7 @@ def _block_routes() -> None:
         "webhooks": ("Webhooks", "webhooks out and in"),
         "hook_effects": ("HookEffects", "the effectful-hooks opt-in"),
         "regulated": ("Regulated", "regulated mode and field protection"),
+        "compliance": ("Compliance", "retention, legal hold, consent, break-glass and de-identified export"),
     }
     for key, (cls, what) in names.items():
         read, write = getattr(bs, cls + "Read"), getattr(bs, cls + "Write")

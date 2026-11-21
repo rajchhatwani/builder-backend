@@ -71,6 +71,7 @@ BLOCKS = (
     "webhooks",
     "hook_effects",
     "regulated",
+    "compliance",
 )
 SECTIONS = (SECTION, SETTINGS, SEQUENCES, LISTS, HISTORY, HOOKS, SEED, *BLOCKS)
 # Issue codes a block save is refused for: a secret must never be written to the spec.
@@ -472,6 +473,7 @@ def _block_models() -> dict[str, type[BaseModel]]:
         "webhooks": spec_models.SpecWebhooks,
         "hook_effects": spec_models.SpecHookEffects,
         "regulated": spec_models.SpecRegulated,
+        "compliance": spec_models.SpecCompliance,
     }
 
 

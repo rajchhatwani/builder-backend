@@ -71,6 +71,9 @@ services:
       REGULATED_KEY_FILE: /run/secrets/regulated.keys
       UVICORN_ACCESS_LOG: "false"  # the default access log prints the query string, which can hold a searched value
 {% endif %}
+{% if compliance %}
+      COMPLIANCE_EXPORT_SALT: ${COMPLIANCE_EXPORT_SALT:?set COMPLIANCE_EXPORT_SALT in .env (see .env.example)}
+{% endif %}
 {% if pay %}
       <<: *payments-env
       UVICORN_WORKERS: ${UVICORN_WORKERS:-{{ single_host_workers }}}

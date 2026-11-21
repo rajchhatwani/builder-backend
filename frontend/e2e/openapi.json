@@ -4113,6 +4113,81 @@
     "title": "CommitResult",
     "type": "object"
    },
+   "ComplianceRead": {
+    "properties": {
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ComplianceRead",
+    "type": "object"
+   },
+   "ComplianceWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "ComplianceWrite",
+    "type": "object"
+   },
    "Coverage": {
     "properties": {
      "covered": {
@@ -16469,6 +16544,16 @@
        }
       ]
      },
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "deployment": {
       "anyOf": [
        {
@@ -16741,6 +16826,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecAuthorization"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
        },
        {
         "type": "null"
@@ -18418,6 +18513,95 @@
     "title": "SpecBookingWindow",
     "type": "object"
    },
+   "SpecBreakGlass": {
+    "additionalProperties": false,
+    "description": "Emergency read access (D45): a listed role asks with a reason, gets a grant that expires after `max_minutes`;\nevery read made with the grant is audited.",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "max_minutes": {
+      "default": 60,
+      "maximum": 240.0,
+      "minimum": 5.0,
+      "title": "Max Minutes",
+      "type": "integer"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecBreakGlass",
+    "type": "object"
+   },
+   "SpecCompliance": {
+    "additionalProperties": false,
+    "description": "Compliance runtime of a generated project: retention + legal hold (D42), consent / purpose of use (D44),\nbreak-glass (D45), de-identified export (D46). Control mapping + evidence (D47) is built from this block and\n`regulated` by the platform.",
+    "properties": {
+     "break_glass": {
+      "$ref": "#/components/schemas/SpecBreakGlass"
+     },
+     "consent_purposes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Consent Purposes",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "export_consent_purpose": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Export Consent Purpose"
+     },
+     "export_entities": {
+      "items": {
+       "$ref": "#/components/schemas/SpecExportEntity"
+      },
+      "title": "Export Entities",
+      "type": "array"
+     },
+     "export_fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecExportField"
+      },
+      "title": "Export Fields",
+      "type": "array"
+     },
+     "retention": {
+      "items": {
+       "$ref": "#/components/schemas/SpecRetentionRule"
+      },
+      "title": "Retention",
+      "type": "array"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecCompliance",
+    "type": "object"
+   },
    "SpecCurrency": {
     "additionalProperties": false,
     "description": "Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode\n(`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only.",
@@ -18858,6 +19042,62 @@
      }
     },
     "title": "SpecEvents",
+    "type": "object"
+   },
+   "SpecExportEntity": {
+    "additionalProperties": false,
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "subject_field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject Field"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "SpecExportEntity",
+    "type": "object"
+   },
+   "SpecExportField": {
+    "additionalProperties": false,
+    "description": "De-identified export (D46): what happens to one field. Unlisted fields are dropped. `keep` is refused on a\ndirect identifier.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "treatment": {
+      "default": "drop",
+      "enum": [
+       "keep",
+       "drop",
+       "hash",
+       "generalise"
+      ],
+      "title": "Treatment",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "SpecExportField",
     "type": "object"
    },
    "SpecField": {
@@ -21478,6 +21718,49 @@
      "to_seq"
     ],
     "title": "SpecRestore",
+    "type": "object"
+   },
+   "SpecRetentionRule": {
+    "additionalProperties": false,
+    "description": "Records of `entity` older than `days` (by `date_field`) are purged (or anonymised) by the retention run,\nexcept rows under a legal hold (D42).",
+    "properties": {
+     "action": {
+      "default": "purge",
+      "enum": [
+       "purge",
+       "anonymise"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "anonymise_fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Anonymise Fields",
+      "type": "array"
+     },
+     "date_field": {
+      "default": "created_at",
+      "title": "Date Field",
+      "type": "string"
+     },
+     "days": {
+      "maximum": 36500.0,
+      "minimum": 1.0,
+      "title": "Days",
+      "type": "integer"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity",
+     "days"
+    ],
+    "title": "SpecRetentionRule",
     "type": "object"
    },
    "SpecRole": {
@@ -32750,6 +33033,100 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/compliance": {
+   "get": {
+    "operationId": "get_compliance",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ComplianceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get retention, legal hold, consent, break-glass and de-identified export (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_compliance",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ComplianceWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ComplianceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace retention, legal hold, consent, break-glass and de-identified export",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/events": {
    "get": {
     "operationId": "get_events",
@@ -34297,6 +34674,144 @@
     "summary": "Replace durable workflows",
     "tags": [
      "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/compliance/controls": {
+   "get": {
+    "operationId": "get_controls_projects__project_id__compliance_controls_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "framework",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "enum": [
+          "soc2",
+          "hipaa",
+          "pci"
+         ],
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Framework"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Controls Projects  Project Id  Compliance Controls Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Control mapping of the spec for one framework",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
+  "/projects/{project_id}/compliance/evidence": {
+   "get": {
+    "operationId": "get_evidence_projects__project_id__compliance_evidence_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "framework",
+      "required": true,
+      "schema": {
+       "enum": [
+        "soc2",
+        "hipaa",
+        "pci"
+       ],
+       "title": "Framework",
+       "type": "string"
+      }
+     },
+     {
+      "description": "UTC stamp YYYY-MM-DDTHH:MM:SSZ written into the bundle. Default: derived from the spec hash, so the same spec gives identical bytes.",
+      "in": "query",
+      "name": "generated_at",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "UTC stamp YYYY-MM-DDTHH:MM:SSZ written into the bundle. Default: derived from the spec hash, so the same spec gives identical bytes.",
+       "title": "Generated At"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/zip": {}
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Evidence bundle (zip) for one framework",
+    "tags": [
+     "compliance"
     ]
    }
   },

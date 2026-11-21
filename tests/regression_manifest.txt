@@ -394,3 +394,7 @@ tests/unit/test_cycle6a_low_findings.py
 tests/unit/test_regulated_spec.py
 tests/api/test_regulated_block.py
 tests/e2e/test_regulated_stack.py
+tests/unit/test_compliance_spec.py
+tests/e2e/test_compliance_stack.py
+tests/unit/test_compliance_controls.py
+tests/api/test_compliance_routes.py

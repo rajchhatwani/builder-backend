@@ -325,6 +325,7 @@ class ExpressionCheckRead(BaseModel):
 # PUT /spec are byte-identical. `null` removes the block. Same per-section version contract.
 from app.core.spec_models import (  # noqa: E402
     SpecApiEdge,
+    SpecCompliance,
     SpecRegulated,
     SpecEvents,
     SpecHookEffects,
@@ -418,3 +419,11 @@ class RegulatedWrite(_BlockWrite):
 
 class RegulatedRead(_BlockRead):
     regulated: SpecRegulated | None = None
+
+
+class ComplianceWrite(_BlockWrite):
+    compliance: SpecCompliance | None = None
+
+
+class ComplianceRead(_BlockRead):
+    compliance: SpecCompliance | None = None

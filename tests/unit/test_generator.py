@@ -85,6 +85,7 @@ NAMES = [
     "ai_agents_evals",
     "operations_fleet",
     "regulated_clients",
+    "regulated_clinic",
 ]
 
 

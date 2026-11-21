@@ -16,6 +16,7 @@ from app.core.generator.features.ai_evals.module import ai_evals_enabled
 from app.core.generator.features.ai_gateway.module import ai_gateway_enabled
 from app.core.generator.features.ai_knowledge.module import ai_knowledge_enabled
 from app.core.generator.features.booking.module import booking_enabled
+from app.core.generator.features.compliance.module import compliance_enabled
 from app.core.generator.features.regulated.module import regulated_tokens_active
 from app.core.validation_regulated import regulated_active
 from app.core.generator.features.operations_geo.module import geo_enabled
@@ -125,6 +126,7 @@ class CrudModule:
             "payouts": payouts_enabled(project),
             "booking": booking_enabled(project),
             "regulated": regulated_active(project.spec),
+            "compliance": compliance_enabled(project),
             "regulated_tokens": regulated_tokens_active(project.spec),
             "ai": ai_gateway_enabled(project),
             "ai_documents": ai_documents_enabled(project),

@@ -1352,6 +1352,55 @@ class SpecRegulated(_SpecModel):
     fields: list[SpecRegulatedField] = Field(default_factory=list)
 
 
+class SpecRetentionRule(_SpecModel):
+    """Records of `entity` older than `days` (by `date_field`) are purged (or anonymised) by the retention run,
+    except rows under a legal hold (D42)."""
+
+    entity: str
+    days: int = Field(ge=1, le=36500)
+    date_field: str = "created_at"
+    action: Literal["purge", "anonymise"] = "purge"
+    anonymise_fields: list[str] = Field(default_factory=list)
+
+
+class SpecBreakGlass(_SpecModel):
+    """Emergency read access (D45): a listed role asks with a reason, gets a grant that expires after `max_minutes`;
+    every read made with the grant is audited."""
+
+    enabled: bool = False
+    roles: list[str] = Field(default_factory=list)
+    max_minutes: int = Field(default=60, ge=5, le=240)
+
+
+class SpecExportField(_SpecModel):
+    """De-identified export (D46): what happens to one field. Unlisted fields are dropped. `keep` is refused on a
+    direct identifier."""
+
+    entity: str
+    field: str
+    treatment: Literal["keep", "drop", "hash", "generalise"] = "drop"
+
+
+class SpecExportEntity(_SpecModel):
+    entity: str
+    subject_field: str | None = None  # the field whose value is the consent subject (a person reference)
+
+
+class SpecCompliance(_SpecModel):
+    """Compliance runtime of a generated project: retention + legal hold (D42), consent / purpose of use (D44),
+    break-glass (D45), de-identified export (D46). Control mapping + evidence (D47) is built from this block and
+    `regulated` by the platform."""
+
+    enabled: bool = False
+    roles: list[str] = Field(default_factory=list)  # roles that administer holds, retention runs, exports
+    retention: list[SpecRetentionRule] = Field(default_factory=list)
+    consent_purposes: list[str] = Field(default_factory=list)
+    break_glass: SpecBreakGlass = Field(default_factory=SpecBreakGlass)
+    export_entities: list[SpecExportEntity] = Field(default_factory=list)
+    export_fields: list[SpecExportField] = Field(default_factory=list)
+    export_consent_purpose: str | None = None  # rows of subjects without active consent for it are left out
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -1386,6 +1435,7 @@ class Spec(_SpecModel):
     metrics_layer: SpecMetricsLayer | None = None
     packs: SpecPacks | None = None
     regulated: SpecRegulated | None = None
+    compliance: SpecCompliance | None = None
 
 
 def spec_hash(spec: Spec) -> str:
@@ -1395,5 +1445,7 @@ def spec_hash(spec: Spec) -> str:
         dump.pop("packs", None)  # specs without packs keep the hash they had before packs existed
     if dump.get("regulated") is None:
         dump.pop("regulated", None)  # likewise for specs without the regulated block
+    if dump.get("compliance") is None:
+        dump.pop("compliance", None)
     canonical = json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()

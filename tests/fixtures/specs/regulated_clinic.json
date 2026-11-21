@@ -1,0 +1,390 @@
+{
+  "spec_version": 1,
+  "settings": [],
+  "sequences": [],
+  "lists": [],
+  "state_machines": [],
+  "seed": [],
+  "project": {
+    "name": "regulated_clinic",
+    "slug": "regulated-clinic",
+    "description": "A neutral clinic: patient contact data encrypted at rest, with retention, consent, break-glass and de-identified export",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Patient",
+      "table_name": "patients",
+      "plural_path": "patients",
+      "options": {
+        "sortable": [
+          "created_at"
+        ],
+        "filterable": [
+          "postcode"
+        ]
+      },
+      "fields": [
+        {
+          "name": "name",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "dob",
+          "type": "string",
+          "required": false,
+          "max_length": 20
+        },
+        {
+          "name": "phone",
+          "type": "string",
+          "required": false,
+          "max_length": 30
+        },
+        {
+          "name": "postcode",
+          "type": "string",
+          "required": false,
+          "max_length": 10
+        },
+        {
+          "name": "age",
+          "type": "integer",
+          "required": false
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "required": false
+        },
+        {
+          "name": "insurance_no",
+          "type": "string",
+          "required": false,
+          "max_length": 40
+        }
+      ]
+    },
+    {
+      "name": "Appointment",
+      "table_name": "appointments",
+      "plural_path": "appointments",
+      "options": {
+        "sortable": [
+          "scheduled_at"
+        ],
+        "filterable": [
+          "status"
+        ]
+      },
+      "fields": [
+        {
+          "name": "scheduled_at",
+          "type": "datetime",
+          "required": true
+        },
+        {
+          "name": "reason",
+          "type": "string",
+          "required": false,
+          "max_length": 200
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true,
+          "enum_values": [
+            "booked",
+            "done",
+            "cancelled"
+          ]
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "kind": "one_to_many",
+      "from_entity": "Patient",
+      "to_entity": "Appointment",
+      "from_name": "appointments",
+      "to_name": "patient",
+      "on_delete": "cascade",
+      "required": false
+    }
+  ],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://clinic.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "clinician_lead",
+        "label": "Clinician lead",
+        "inherits_from": "member"
+      },
+      {
+        "name": "compliance_officer",
+        "label": "Compliance officer",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Patient",
+        "operation": "create",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Patient",
+        "operation": "list",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Patient",
+        "operation": "get",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Patient",
+        "operation": "update",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Patient",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Appointment",
+        "operation": "create",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Appointment",
+        "operation": "list",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Appointment",
+        "operation": "get",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Appointment",
+        "operation": "update",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Appointment",
+        "operation": "delete",
+        "roles": [
+          "member",
+          "clinician_lead",
+          "compliance_officer",
+          "admin"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@clinic.example.com",
+      "from_name": "Clinic Desk"
+    }
+  },
+  "regulated": {
+    "enabled": true,
+    "key_provider": "file",
+    "fields": [
+      {
+        "entity": "Patient",
+        "field": "name",
+        "mode": "encrypt",
+        "searchable": false
+      },
+      {
+        "entity": "Patient",
+        "field": "dob",
+        "mode": "encrypt",
+        "searchable": false
+      },
+      {
+        "entity": "Patient",
+        "field": "phone",
+        "mode": "encrypt",
+        "searchable": false
+      },
+      {
+        "entity": "Patient",
+        "field": "insurance_no",
+        "mode": "tokenise",
+        "searchable": false
+      }
+    ]
+  },
+  "compliance": {
+    "enabled": true,
+    "roles": [
+      "compliance_officer",
+      "admin"
+    ],
+    "retention": [
+      {
+        "entity": "Patient",
+        "days": 3650,
+        "date_field": "created_at",
+        "action": "anonymise",
+        "anonymise_fields": [
+          "phone",
+          "notes",
+          "insurance_no"
+        ]
+      },
+      {
+        "entity": "Appointment",
+        "days": 730,
+        "date_field": "scheduled_at",
+        "action": "purge",
+        "anonymise_fields": []
+      },
+      {
+        "entity": "Patient",
+        "days": 7300,
+        "date_field": "created_at",
+        "action": "purge",
+        "anonymise_fields": []
+      }
+    ],
+    "consent_purposes": [
+      "treatment",
+      "research"
+    ],
+    "break_glass": {
+      "enabled": true,
+      "roles": [
+        "clinician_lead"
+      ],
+      "max_minutes": 60
+    },
+    "export_entities": [
+      {
+        "entity": "Patient",
+        "subject_field": "id"
+      }
+    ],
+    "export_fields": [
+      {
+        "entity": "Patient",
+        "field": "name",
+        "treatment": "hash"
+      },
+      {
+        "entity": "Patient",
+        "field": "dob",
+        "treatment": "drop"
+      },
+      {
+        "entity": "Patient",
+        "field": "phone",
+        "treatment": "drop"
+      },
+      {
+        "entity": "Patient",
+        "field": "postcode",
+        "treatment": "generalise"
+      },
+      {
+        "entity": "Patient",
+        "field": "age",
+        "treatment": "generalise"
+      },
+      {
+        "entity": "Patient",
+        "field": "notes",
+        "treatment": "drop"
+      },
+      {
+        "entity": "Patient",
+        "field": "created_at",
+        "treatment": "generalise"
+      }
+    ],
+    "export_consent_purpose": "research"
+  }
+}

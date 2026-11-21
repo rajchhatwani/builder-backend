@@ -48,6 +48,9 @@ from app.booking.router import router as _booking_router
 {% if history_router %}
 from app.change_history.router import router as _change_history_router
 {% endif %}
+{% if compliance %}
+from app.compliance.router import router as _compliance_router
+{% endif %}
 from app.config import get_settings
 {% if observability %}
 from app.core import telemetry
@@ -337,6 +340,9 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if history_router %}
     app.include_router(_change_history_router)
+{% endif %}
+{% if compliance %}
+    app.include_router(_compliance_router)
 {% endif %}
     include_custom_routers(app)
     return app

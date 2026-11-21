@@ -27,6 +27,9 @@ from app.booking import models as _booking_models
 {% if change_history %}
 from app.change_history import models as _change_history_models
 {% endif %}
+{% if compliance %}
+from app.compliance import models as _compliance_models
+{% endif %}
 {% if events %}
 from app.events import models as _event_models
 {% endif %}
@@ -116,6 +119,9 @@ __all__ = [
 {% endif %}
 {% if change_history %}
     "_change_history_models",
+{% endif %}
+{% if compliance %}
+    "_compliance_models",
 {% endif %}
 {% if seed %}
     "_seed_models",

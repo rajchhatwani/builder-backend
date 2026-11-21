@@ -384,6 +384,16 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'compliance',
+    label: 'Compliance',
+    icon: (
+      <>
+        <rect x="6" y="4" width="12" height="17" rx="2" />
+        <path d="M9 4h6v3H9zM9 14l2 2 4-4" />
+      </>
+    ),
+  },
+  {
     id: 'agentactions',
     label: 'AI actions',
     icon: (

@@ -452,6 +452,18 @@ host) read-only into every service that runs app code. The provider credential
 vault takes its master key from the same keyring when `PROVIDER_VAULT_KEY` is not set.
 
 {% endif %}
+{% if compliance %}
+## Compliance
+
+`/compliance/...` (roles in `app/compliance/settings.py`, default deny): **legal holds** (`POST/GET/DELETE /compliance/legal-holds`;
+a row under an active hold is never purged or anonymised), **retention** (`POST /compliance/retention/run {"dry_run": true}` or
+`python -m app.compliance.purge [--dry-run]` from a scheduler; every run is audited), **consent** per declared purpose
+(`/compliance/consents`, `/withdraw`, `/check`), **break-glass** emergency reads (`POST /compliance/break-glass` with a reason; the
+grant expires; every read with it is audited in `compliance_audit`) and a **de-identified export** (`POST /compliance/exports`:
+listed fields only, hashed fields use `COMPLIANCE_EXPORT_SALT`, rows without consent for the export purpose are left out).
+Audit rows hold ids and counts, never a field value. This is tooling, not a compliance certification.
+
+{% endif %}
 ## Not included
 
 {% if auth %}

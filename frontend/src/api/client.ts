@@ -1241,6 +1241,18 @@ export const api = {
   /** CSV of imported records for one entity (viewer; the server caps it at 10000 rows). */
   exportImportRecordsCsv: (projectId: string, entity: string) =>
     downloadBlob(`/projects/${projectId}/imports/records/export.csv?entity=${encodeURIComponent(entity)}`, `${entity}.csv`),
+  /** CP-6C: control mapping of the compliance spec (soc2 | hipaa | pci; none = all). The answer is checked by the caller. */
+  getComplianceControls: (projectId: string, framework?: string) =>
+    request<unknown>(`/projects/${projectId}/compliance/controls${framework ? `?framework=${encodeURIComponent(framework)}` : ''}`),
+  /** CP-6C: evidence bundle (zip; the framework is required by the server). A 200 that is HTML or JSON is a proxy page, not the bundle. */
+  downloadComplianceEvidence: async (projectId: string, framework: string) => {
+    const r = await downloadBlob(
+      `/projects/${projectId}/compliance/evidence?framework=${encodeURIComponent(framework)}`,
+      `evidence-${framework}.zip`,
+    )
+    if (/html|json/i.test(r.blob.type)) throw new ApiError(200, { code: 'bad_response', message: 'The server did not send an evidence file', details: [] })
+    return r
+  },
   /** Self-host kit zip (code + compose + guide). */
   downloadSelfHostKit: (projectId: string, fallbackName: string) =>
     downloadBlob(`/projects/${projectId}/generate/self-host-kit`, fallbackName),
