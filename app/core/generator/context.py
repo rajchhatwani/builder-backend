@@ -201,6 +201,18 @@ class EntityCtx:
     custom: CustomCtx | None = None  # opted in to custom fields (the custom_fields JSONB column)
     # spec.authorization.field_access rules of this entity: (field, read_roles | None, write_roles | None)
     field_rules: tuple[tuple[str, tuple[str, ...] | None, tuple[str, ...] | None], ...] = ()
+    # regulated mode: (field, mode, searchable) of the protected fields, and the extra model columns
+    # (blind indexes) they need. Both stay empty unless the spec has an enabled `regulated` block.
+    regulated: tuple[tuple[str, str, bool], ...] = ()
+    extra_columns: tuple[str, ...] = ()
+
+    @property
+    def protected_names(self) -> tuple[str, ...]:
+        return tuple(name for name, _mode, _searchable in self.regulated)
+
+    @property
+    def searchable_protected(self) -> tuple[str, ...]:
+        return tuple(name for name, mode, searchable in self.regulated if searchable and mode == "encrypt")
 
     @property
     def guarded(self) -> bool:
@@ -813,6 +825,7 @@ def build_context(spec: Spec) -> ProjectCtx:
     entity_ctxs = _attach_history(spec, entity_ctxs)
     entity_ctxs = _attach_hooks(spec, entity_ctxs)
     entity_ctxs = _attach_field_rules(spec, entity_ctxs)
+    entity_ctxs = _attach_regulated(spec, entity_ctxs)
     if spec.events is not None and spec.events.enabled:
         entity_ctxs = tuple(replace(e, events=True) for e in entity_ctxs)
     all_tables = sorted({e.table for e in entity_ctxs} | {j.name for j in joins})
@@ -1076,6 +1089,62 @@ def _attach_access(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityC
                 owned=owned,
                 tenant_scoped=tenant_scoped,
                 fields=fields,
+            )
+        )
+    return tuple(result)
+
+
+def _attach_regulated(spec: Spec, entities: tuple[EntityCtx, ...]) -> tuple[EntityCtx, ...]:
+    """Regulated mode: a protected field is stored through `EncryptedText` (a Text column holding
+    ciphertext) and a searchable one also gets a `<field>_bidx` blind-index column for equality lookups.
+    Nothing changes for a spec without an enabled `regulated` block."""
+    from app.core.validation_regulated import regulated_active
+
+    block = spec.regulated
+    if block is None or not regulated_active(spec):
+        return entities
+    spec_fields = {e.name: {f.name: f for f in e.fields} for e in spec.entities}
+    result: list[EntityCtx] = []
+    for entity in entities:
+        rules = sorted((r for r in block.fields if r.entity == entity.name), key=lambda r: r.field)
+        if not rules:
+            result.append(entity)
+            continue
+        by_field = {r.field: r for r in rules}
+        fields: list[FieldCtx] = []
+        migration = list(entity.migration_columns)
+        extra: list[str] = []
+        indexes = list(entity.indexes)
+        for f in entity.fields:
+            rule = by_field.get(f.name)
+            if rule is None:
+                fields.append(f)
+                continue
+            sf = spec_fields[entity.name][f.name]
+            kind = "EncryptedText" if rule.mode == "encrypt" else "TokenisedText"
+            protected = replace(
+                f,
+                column=f.column.replace(sa_type(sf), f'_rg.{kind}("{entity.table}", "{f.name}")', 1),
+                migration_column=f.migration_column.replace(sa_type(sf, "sa.", "postgresql."), "sa.Text()", 1),
+            )
+            fields.append(protected)
+            at = migration.index(f.migration_column)
+            migration[at] = protected.migration_column
+            if rule.searchable and rule.mode == "encrypt":
+                bidx = f"{f.name}_bidx"
+                extra.append(
+                    f"{bidx}: _orm.Mapped[str | None] = _orm.mapped_column(_sa.String(64), nullable=True, index=True)"
+                )
+                migration.insert(at + 1, f'sa.Column("{bidx}", sa.String(length=64), nullable=True),')
+                indexes.append((_ident(f"ix_{entity.table}_{bidx}"), bidx))
+        result.append(
+            replace(
+                entity,
+                fields=tuple(fields),
+                migration_columns=tuple(migration),
+                indexes=tuple(sorted(indexes)),
+                regulated=tuple((r.field, r.mode, r.searchable) for r in rules),
+                extra_columns=tuple(extra),
             )
         )
     return tuple(result)

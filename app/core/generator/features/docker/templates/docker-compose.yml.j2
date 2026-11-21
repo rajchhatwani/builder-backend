@@ -62,7 +62,15 @@ services:
 {% endif %}
   api:
     build: .
+{% if regulated %}
+    volumes:
+      - ${REGULATED_KEY_FILE:?set REGULATED_KEY_FILE in .env to the key file on this host (see .env.example)}:/run/secrets/regulated.keys:ro
+{% endif %}
     environment:
+{% if regulated %}
+      REGULATED_KEY_FILE: /run/secrets/regulated.keys
+      UVICORN_ACCESS_LOG: "false"  # the default access log prints the query string, which can hold a searched value
+{% endif %}
 {% if pay %}
       <<: *payments-env
       UVICORN_WORKERS: ${UVICORN_WORKERS:-{{ single_host_workers }}}
@@ -104,7 +112,11 @@ services:
 {% if provider_vault %}
       # The master key of the per-tenant credential vault (app/providers). Required: a deployment without
       # one cannot start. Rotation: raise PROVIDER_VAULT_KEY_VERSION and list old keys in ..._PREVIOUS.
+{% if regulated %}
+      PROVIDER_VAULT_KEY: ${PROVIDER_VAULT_KEY:-}  # empty: the master key comes from the regulated keyring
+{% else %}
       PROVIDER_VAULT_KEY: ${PROVIDER_VAULT_KEY:?set PROVIDER_VAULT_KEY in .env (see .env.example)}
+{% endif %}
       PROVIDER_VAULT_KEY_VERSION: ${PROVIDER_VAULT_KEY_VERSION:-1}
       PROVIDER_VAULT_KEY_PREVIOUS: ${PROVIDER_VAULT_KEY_PREVIOUS:-}
 {% endif %}
@@ -176,8 +188,16 @@ services:
   # or run more of them on other machines with deploy/compose.worker.yml.
   payments-worker:
     build: .
+{% if regulated %}
+    volumes:
+      - ${REGULATED_KEY_FILE:?set REGULATED_KEY_FILE in .env to the key file on this host (see .env.example)}:/run/secrets/regulated.keys:ro
+{% endif %}
     command: ["python", "-m", "app.payments.worker"]
     environment:
+{% if regulated %}
+      REGULATED_KEY_FILE: /run/secrets/regulated.keys
+      UVICORN_ACCESS_LOG: "false"  # the default access log prints the query string, which can hold a searched value
+{% endif %}
       <<: *payments-env
 {% if pay.scale.pgbouncer %}
       DATABASE_URL: postgresql+asyncpg://app:app@pgbouncer:6432/app
@@ -221,8 +241,16 @@ services:
   # `docker compose up --scale worker-{{ g.service }}=N`. Your handlers (app/hooks/jobs.py) may need more settings here.
   worker-{{ g.service }}:
     build: .
+{% if regulated %}
+    volumes:
+      - ${REGULATED_KEY_FILE:?set REGULATED_KEY_FILE in .env to the key file on this host (see .env.example)}:/run/secrets/regulated.keys:ro
+{% endif %}
     command: ["python", "-m", "app.jobs.worker", "--group", "{{ g.name }}"]
     environment:
+{% if regulated %}
+      REGULATED_KEY_FILE: /run/secrets/regulated.keys
+      UVICORN_ACCESS_LOG: "false"  # the default access log prints the query string, which can hold a searched value
+{% endif %}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       APP_ENV: ${APP_ENV:-production}
       JOBS_CONCURRENCY: ${JOBS_CONCURRENCY_{{ g.service | upper | replace("-", "_") }}:-{{ g.concurrency }}}
@@ -250,8 +278,16 @@ services:
   # may need more settings here.
   workflow-worker:
     build: .
+{% if regulated %}
+    volumes:
+      - ${REGULATED_KEY_FILE:?set REGULATED_KEY_FILE in .env to the key file on this host (see .env.example)}:/run/secrets/regulated.keys:ro
+{% endif %}
     command: ["python", "-m", "app.workflows.worker"]
     environment:
+{% if regulated %}
+      REGULATED_KEY_FILE: /run/secrets/regulated.keys
+      UVICORN_ACCESS_LOG: "false"  # the default access log prints the query string, which can hold a searched value
+{% endif %}
       DATABASE_URL: postgresql+asyncpg://app:app@db:5432/app
       APP_ENV: ${APP_ENV:-production}
       WORKFLOWS_CONCURRENCY: ${WORKFLOWS_CONCURRENCY:-{{ workflows_concurrency }}}

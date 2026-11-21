@@ -115,8 +115,12 @@ def _extra_keys(project: ProjectCtx) -> tuple[str, ...]:
 
 
 def published_fields(e: EntityCtx, extra: tuple[str, ...] = ()) -> tuple[Any, ...]:
-    """The fields an event may carry: not credential-looking, not json (content unknown). Fail closed."""
-    return tuple(f for f in e.fields if not _secret_name(f.name, extra) and f.type != "json")
+    """The fields an event may carry: not credential-looking, not json (content unknown), not protected by
+    regulated mode (events feed the outbox, webhooks and notifications: no protected value may reach them)."""
+    protected = e.protected_names
+    return tuple(
+        f for f in e.fields if f.name not in protected and not _secret_name(f.name, extra) and f.type != "json"
+    )
 
 
 def _fk_columns(e: EntityCtx, extra: tuple[str, ...] = ()) -> tuple[Any, ...]:

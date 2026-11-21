@@ -1,5 +1,5 @@
 """Secrets never live in the spec: scan every string of the single-object blocks (events, providers,
-notifications, jobs, workflows, api_edge, webhooks, hook_effects), whether or not the block is
+notifications, jobs, workflows, api_edge, webhooks, hook_effects, regulated), whether or not the block is
 enabled (a disabled block is still stored and returned by GET /spec). Issues are `secret_in_spec`."""
 
 import re
@@ -20,6 +20,7 @@ BLOCKS = (
     "api_edge",
     "webhooks",
     "hook_effects",
+    "regulated",
 )
 # A long, space-free, token-looking string (hex, base64, base64url).
 _TOKENISH = re.compile(r"[A-Za-z0-9+/=_.-]{20,}")

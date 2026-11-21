@@ -13,6 +13,8 @@ from app.core.validation_api_edge import api_edge_tables
 from app.core.validation_events import EV_TABLES, events_active
 from app.core.generator.features.ai_gateway.module import ai_gateway_enabled
 from app.core.generator.features.booking.module import booking_enabled
+from app.core.generator.features.regulated.module import regulated_tokens_active
+from app.core.validation_regulated import regulated_active
 from app.core.generator.features.money_invoicing.module import invoicing_enabled, payouts_enabled
 from app.core.generator.features.money_ledger.module import ledger_enabled
 from app.core.generator.features.money_reconciliation.module import reconciliation_enabled
@@ -123,6 +125,8 @@ class TestsModule:
             tables |= set(PAYOUT_TABLES)
         if booking_enabled(project):
             tables |= set(BOOKING_TABLES)
+        if regulated_tokens_active(project.spec):
+            tables.add("regulated_tokens")
         if ai_gateway_enabled(project):
             tables |= set(ai_tables(project.spec))
         tables |= set(operations_tables(project.spec)) if project.auth is not None else set()
@@ -135,6 +139,7 @@ class TestsModule:
             keycloak=uses_keycloak(project.auth),
             payments=payments,
             storage=storage,
+            regulated=regulated_active(project.spec),
             file_entities=storage and any(e.file_fields for e in project.entities),
         )
         creatable_entities = [e for e in project.entities if creatable(e, project)]

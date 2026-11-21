@@ -106,6 +106,9 @@ from app.providers.router import router as _providers_router
 {% if realtime %}
 from app.realtime.router import router as _realtime_router
 {% endif %}
+{% if regulated %}
+from app.regulated import keys as _regulated_keys
+{% endif %}
 from app.routers._health import router as _health_router
 {% for e in entities %}
 from app.routers.{{ e.table }} import router as {{ e.table }}_router
@@ -149,6 +152,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% endif %}
 {% if providers %}
     _providers_config.check_boot()  # production refuses a missing, short or placeholder PROVIDER_VAULT_KEY
+{% endif %}
+{% if regulated %}
+    _regulated_keys.check_boot()  # a missing, unreadable or group-readable key file stops the app here
 {% endif %}
 {% if storage %}
     _storage_config.get_storage_settings().check()  # unsafe or missing storage settings stop the app here

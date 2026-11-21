@@ -29,6 +29,7 @@ from app.core.generator.render import make_environment, read_verbatim, render_te
 from app.core.validation_events import events_active
 from app.core.validation_jobs import jobs_active
 from app.core.validation_providers import KINDS, providers_active
+from app.core.validation_regulated import regulated_active
 
 _TEMPLATES = Path(__file__).parent / "templates"
 
@@ -37,7 +38,6 @@ _VERBATIM = (
     "app/providers/base.py.tpl",
     "app/providers/breaker.py.tpl",
     "app/providers/client.py.tpl",
-    "app/providers/config.py.tpl",
     "app/providers/emulator.py.tpl",
     "app/providers/errors.py.tpl",
     "app/providers/logsafe.py.tpl",
@@ -122,6 +122,9 @@ class ProvidersModule:
             f"{key} = {pprint.pformat(value, width=96, sort_dicts=True)}\n"
             for key, value in data.items()
         )
+        files["app/providers/config.py"] = render_template(
+            self._env, "app/providers/config.py.j2", regulated=regulated_active(project.spec)
+        )
         files["app/providers/definitions.py"] = (
             '"""Providers (generated from the spec: change it in the builder).\n\n'
             "Plain data: provider NAMES and non-secret settings. Credentials are never here; each tenant\n"
@@ -144,5 +147,6 @@ class ProvidersModule:
             request_expr=_SAMPLE_REQUESTS[first[0]] if first else "",
             has_adapter=first is not None,
             tenant=multi_tenant(project),
+            regulated=regulated_active(project.spec),
         )
         return files

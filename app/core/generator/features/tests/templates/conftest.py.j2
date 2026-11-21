@@ -21,6 +21,9 @@ from tests._auth_support import authed_client, outbox  # noqa: F401
 {% if payments %}
 from tests.payments_support import fake_provider, payments_env, provider_server  # noqa: F401
 {% endif %}
+{% if regulated %}
+from tests._regulated_support import regulated_keys  # noqa: F401
+{% endif %}
 {% if storage %}
 from tests.storage_support import fake_clamd, fake_clamd_server, storage_env  # noqa: F401
 {% endif %}

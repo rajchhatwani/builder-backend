@@ -13855,6 +13855,81 @@
     "title": "RegistryProjectRead",
     "type": "object"
    },
+   "RegulatedRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "RegulatedRead",
+    "type": "object"
+   },
+   "RegulatedWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "RegulatedWrite",
+    "type": "object"
+   },
    "RelationCreate": {
     "properties": {
      "from_entity_id": {
@@ -16552,6 +16627,16 @@
        }
       ]
      },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "relations": {
       "items": {
        "$ref": "#/components/schemas/SpecRelation"
@@ -16814,6 +16899,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecRealtime"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
        },
        {
         "type": "null"
@@ -21261,6 +21356,70 @@
      }
     },
     "title": "SpecRegistration",
+    "type": "object"
+   },
+   "SpecRegulated": {
+    "additionalProperties": false,
+    "description": "Regulated mode (D40), field encryption / tokenisation (D41), customer-managed keys (D43).",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecRegulatedField"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "key_provider": {
+      "default": "file",
+      "enum": [
+       "env",
+       "file",
+       "command"
+      ],
+      "title": "Key Provider",
+      "type": "string"
+     }
+    },
+    "title": "SpecRegulated",
+    "type": "object"
+   },
+   "SpecRegulatedField": {
+    "additionalProperties": false,
+    "description": "One protected field. `searchable` adds a blind-index column `<field>_bidx` for equality filters\n(mode encrypt only).",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "mode": {
+      "default": "encrypt",
+      "enum": [
+       "encrypt",
+       "tokenise"
+      ],
+      "title": "Mode",
+      "type": "string"
+     },
+     "searchable": {
+      "default": false,
+      "title": "Searchable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "SpecRegulatedField",
     "type": "object"
    },
    "SpecRelation": {
@@ -33435,6 +33594,100 @@
      }
     },
     "summary": "Replace the provider adapters (no credentials)",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/regulated": {
+   "get": {
+    "operationId": "get_regulated",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RegulatedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get regulated mode and field protection (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_regulated",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RegulatedWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RegulatedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace regulated mode and field protection",
     "tags": [
      "behavior"
     ]

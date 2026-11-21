@@ -391,3 +391,6 @@ tests/unit/test_audit_b1_042_providers_search.py
 tests/unit/test_audit_b1_043.py
 tests/unit/test_cp6a_codeside.py
 tests/unit/test_cycle6a_low_findings.py
+tests/unit/test_regulated_spec.py
+tests/api/test_regulated_block.py
+tests/e2e/test_regulated_stack.py

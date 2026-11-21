@@ -39,6 +39,7 @@ from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.providers.module import ProvidersModule
 from app.core.generator.features.realtime.module import RealtimeModule
+from app.core.generator.features.regulated.module import RegulatedModule
 from app.core.generator.features.runtime_config.module import RuntimeConfigModule
 from app.core.generator.features.search.module import SearchModule
 from app.core.generator.features.seed.module import SeedModule
@@ -102,6 +103,7 @@ def default_modules() -> list[FeatureModule]:
         OperationsLocationModule(),
         OperationsMatchingModule(),
         OperationsPredictionModule(),
+        RegulatedModule(),
     ]
 
 

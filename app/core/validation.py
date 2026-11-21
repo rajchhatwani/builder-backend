@@ -85,6 +85,7 @@ from app.core.validation_packs import (
 )
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
+from app.core.validation_regulated import check_regulated
 from app.core.validation_realtime import (
     RT_TABLES,
     check_metrics_layer,
@@ -246,6 +247,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_realtime(spec, ctx.add)
     check_metrics_layer(spec, entities_by_name, ctx.add)
     check_packs(spec, ctx.add)
+    check_regulated(spec, entities_by_name, ctx.add)
     check_booking(spec, ctx.add)
     check_ai(spec, ctx.add)
     check_api_edge(spec, ctx.add)

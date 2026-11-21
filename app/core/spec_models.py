@@ -1334,6 +1334,24 @@ class SpecSeedProfile(_SpecModel):
     entities: list[SpecSeedEntity] = Field(default_factory=list)
 
 
+class SpecRegulatedField(_SpecModel):
+    """One protected field. `searchable` adds a blind-index column `<field>_bidx` for equality filters
+    (mode encrypt only)."""
+
+    entity: str
+    field: str
+    mode: Literal["encrypt", "tokenise"] = "encrypt"
+    searchable: bool = False
+
+
+class SpecRegulated(_SpecModel):
+    """Regulated mode (D40), field encryption / tokenisation (D41), customer-managed keys (D43)."""
+
+    enabled: bool = False
+    key_provider: Literal["env", "file", "command"] = "file"
+    fields: list[SpecRegulatedField] = Field(default_factory=list)
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -1367,6 +1385,7 @@ class Spec(_SpecModel):
     realtime: SpecRealtime | None = None
     metrics_layer: SpecMetricsLayer | None = None
     packs: SpecPacks | None = None
+    regulated: SpecRegulated | None = None
 
 
 def spec_hash(spec: Spec) -> str:
@@ -1374,5 +1393,7 @@ def spec_hash(spec: Spec) -> str:
     dump = spec.model_dump(mode="json")
     if dump.get("packs") is None:
         dump.pop("packs", None)  # specs without packs keep the hash they had before packs existed
+    if dump.get("regulated") is None:
+        dump.pop("regulated", None)  # likewise for specs without the regulated block
     canonical = json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()

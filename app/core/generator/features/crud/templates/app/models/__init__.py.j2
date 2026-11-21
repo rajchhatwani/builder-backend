@@ -71,6 +71,9 @@ from app.providers import models as _provider_models
 {% if realtime %}
 from app.realtime import models as _realtime_models
 {% endif %}
+{% if regulated_tokens %}
+from app.regulated import models as _regulated_models
+{% endif %}
 {% if storage %}
 from app.storage import models as _storage_models
 {% endif %}
@@ -179,5 +182,8 @@ __all__ = [
 {% endif %}
 {% if invoicing %}
     "_invoicing_models",
+{% endif %}
+{% if regulated_tokens %}
+    "_regulated_models",
 {% endif %}
 ]

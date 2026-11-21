@@ -57,11 +57,24 @@ def _version() -> int:
     return int(raw)
 
 
+def _keyring_vault_keys() -> tuple[int, dict[int, str]]:
+    """Regulated mode without PROVIDER_VAULT_KEY: one master per key of the customer-managed keyring (HKDF-derived,
+    never stored), the active key's first. Rotating the ring keeps every stored credential readable; the old key's
+    master stays until `python -m app.providers.reencrypt` has moved the rows and the old key leaves the ring."""
+    from app.regulated import keys
+    from app.regulated.errors import RegulatedError
+
+    try:
+        return keys.vault_masters()
+    except RegulatedError as exc:
+        raise VaultError(f"PROVIDER_VAULT_KEY is not set and the regulated keyring is unavailable: {exc}") from None
+
+
 def vault_keys() -> tuple[int, dict[int, str]]:
     """The current key version and every key by version (current included). Raises VaultError."""
     key = os.environ.get("PROVIDER_VAULT_KEY", "").strip()
     if not key:
-        raise VaultError("PROVIDER_VAULT_KEY is not set")
+        return _keyring_vault_keys()
     problem = key_problem(key)
     if problem is not None:
         raise VaultError(f"PROVIDER_VAULT_KEY {problem}")
