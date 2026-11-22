@@ -30,6 +30,16 @@ SUITE_ID = {{ suite.suite_id | pyrepr }}
 # The issuer the suite hub was announced with; when set, any other issuer is refused at start.
 HUB_ISSUER: str | None = {{ (suite.hub_issuer.rstrip("/") if suite.hub_issuer else None) | pyrepr }}
 {% endif %}
+{% if migration %}
+
+# Identity path (b): this app used to sign its own tokens and is moving its users to the hub. See
+# app/auth/legacy.py. The window below comes from the spec; it is never read from a request.
+# legacy_read_only: legacy tokens work for GET only. dual: they work until LEGACY_DUAL_UNTIL.
+# hub_only: they are refused. The old signing secret is read from LEGACY_JWT_SECRET.
+LEGACY_STATE = {{ migration.state | pyrepr }}
+LEGACY_ISSUER = {{ migration.legacy_issuer | pyrepr }}
+LEGACY_DUAL_UNTIL: str | None = {{ (migration.dual_until.isoformat() if migration.state == "dual" and migration.dual_until else None) | pyrepr }}
+{% endif %}
 
 EMAIL_VERIFICATION_REQUIRED = {{ verification_required | pyrepr }}
 SECURITY_HEADERS_ENABLED = {{ a.security_headers_enabled | pyrepr }}

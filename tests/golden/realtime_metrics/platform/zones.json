@@ -90,6 +90,7 @@
     "app/state_machines/models.py": "generated",
     "app/state_machines/router.py": "generated",
     "docker-compose.yml": "seeded",
+    "docs/IDENTITY-MIGRATION.md": "generated",
     "pyproject.toml": "generated",
     "requirements-dev.txt": "generated",
     "requirements.txt": "generated",
@@ -103,6 +104,7 @@
     "tests/test_auth.py": "generated",
     "tests/test_expenses.py": "generated",
     "tests/test_identity.py": "generated",
+    "tests/test_identity_migration.py": "generated",
     "tests/test_payrolls.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_state_machines.py": "generated"

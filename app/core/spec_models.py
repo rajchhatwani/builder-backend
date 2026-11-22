@@ -12,6 +12,7 @@ so the same model always serializes to the same spec.
 
 import hashlib
 import json
+from datetime import datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt
@@ -198,13 +199,29 @@ class SpecKeycloak(_SpecModel):
     identity_providers: list[SpecIdentityProvider] = Field(default_factory=list)
 
 
+class SpecSuiteMigration(_SpecModel):
+    """Identity path (b): an existing app with its own sign-in moves its users to the suite hub.
+
+    The spec stays deterministic, so the dual window is two explicit instants (never "now"):
+    `window_started_at` and `dual_until` (at most 90 days apart, checked by validation). The app
+    reads the window from its generated config and refuses legacy tokens once it has passed."""
+
+    state: str = "legacy_read_only"  # legacy_read_only | dual | hub_only
+    # The `iss` of the old built-in tokens (builtin:<slug> of the app being moved).
+    legacy_issuer: str = Field(min_length=1, max_length=512)
+    dual_until: datetime | None = None
+    window_started_at: datetime | None = None
+
+
 class SpecSuiteRef(_SpecModel):
-    """Reserved: this app is one of several that share a sign-in hub. Empty (None on SpecAuth)
-    for every project that has not opted in; the generator ignores it for now."""
+    """This app is one of several that share a sign-in hub (path a: a new member; path b: an
+    existing app moving in, see `migration`). Empty (None on SpecAuth) for every project that has
+    not opted in."""
 
     suite_id: str = Field(min_length=1, max_length=63, pattern=r"^[a-z0-9][a-z0-9-]*$")
     hub_issuer: str | None = Field(default=None, max_length=512)
     join_state: str = "none"  # none | planned | joined
+    migration: SpecSuiteMigration | None = None
 
 
 class SpecAuth(_SpecModel):

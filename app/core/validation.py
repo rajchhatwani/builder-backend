@@ -53,6 +53,7 @@ from app.core.suite_identity import (
     SUITE_REALM_PREFIX,
     suite_realm,
 )
+from app.core.suite_migration import window_problems
 from app.core.validation_ai import ai_tables, check_ai
 from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
@@ -1545,6 +1546,19 @@ def _check_suite(auth: SpecAuth, project_slug: str, ctx: _Ctx) -> None:
                 f"{p}.hub_issuer",
                 "hub_issuer_realm_mismatch",
                 f"must end with the realm path /realms/{realm}",
+            )
+    if suite.migration is not None:
+        for field_name, code, message in window_problems(suite.migration):
+            ctx.add(f"{p}.migration.{field_name}", code, message)
+        if auth.provider != AuthProvider.keycloak:
+            ctx.add(
+                f"{p}.migration",
+                "migration_requires_keycloak",
+                "a migration moves users to the hub: set auth.provider to keycloak",
+            )
+        if suite.join_state == "none":
+            ctx.add(
+                f"{p}.migration", "migration_requires_suite", "set join_state to planned or joined"
             )
     kc = auth.keycloak
     if kc is not None and auth.provider == AuthProvider.keycloak:

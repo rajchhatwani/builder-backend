@@ -10,6 +10,7 @@ SUITE: dict[str, Any] = {
     "suite_id": "acme",
     "hub_issuer": "https://id.acme.com/realms/suite-acme",
     "join_state": "planned",
+    "migration": None,
 }
 
 

@@ -384,6 +384,16 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'upgrades',
+    label: 'Upgrades',
+    icon: (
+      <>
+        <path d="M12 20V6M6 12l6-6 6 6" />
+        <path d="M5 21h14" />
+      </>
+    ),
+  },
+  {
     id: 'apikeys',
     label: 'API keys',
     icon: (

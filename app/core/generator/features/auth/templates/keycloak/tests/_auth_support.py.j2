@@ -126,7 +126,12 @@ class KeyServer:
 
 def _install(monkeypatch: pytest.MonkeyPatch) -> Iterator[KeyServer]:
     """Test settings, a fake Keycloak key endpoint, and a clean key cache."""
+{% if hub_base_url %}
+    # A suite member refuses any issuer but its hub's.
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", {{ hub_base_url | pyrepr }})
+{% else %}
     monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "https://id.test")
+{% endif %}
     monkeypatch.delenv("KEYCLOAK_INTERNAL_URL", raising=False)
     monkeypatch.delenv("APP_ENV", raising=False)
     monkeypatch.delenv("AUTH_ALLOW_PROVIDER_SWITCH", raising=False)

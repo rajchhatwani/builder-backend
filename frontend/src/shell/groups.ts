@@ -17,7 +17,7 @@ export const RAIL_GROUPS: RailGroup[] = [
   { id: 'secure', label: 'Secure', sections: ['auth', 'keycloak', 'suite', 'access', 'dependencies', 'compliance'] },
   { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps'] },
   { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics', 'search', 'ledger', 'map', 'bookings', 'documents', 'agentactions'] },
-  { id: 'ship', label: 'Ship', sections: ['deployment', 'generate'] },
+  { id: 'ship', label: 'Ship', sections: ['deployment', 'generate', 'upgrades'] },
 ]
 
 export interface Command {

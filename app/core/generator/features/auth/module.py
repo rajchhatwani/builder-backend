@@ -61,7 +61,6 @@ _KEYCLOAK_VERBATIM = (
     "app/auth/middleware.py.tpl",
     "app/auth/provider_lock.py.tpl",
     "tests/test_provider_lock.py.tpl",
-    "keycloak/app/auth/deps.py.tpl",
     "keycloak/app/auth/oidc.py.tpl",
     "keycloak/app/auth/purge.py.tpl",
     "keycloak/app/auth/service.py.tpl",
@@ -69,12 +68,15 @@ _KEYCLOAK_VERBATIM = (
 _KEYCLOAK_RENDERED = (
     "keycloak/alembic/versions/0002_auth.py.j2",
     "keycloak/app/auth/config.py.j2",
+    "keycloak/app/auth/deps.py.j2",
     "keycloak/app/auth/models.py.j2",
     "keycloak/app/auth/router.py.j2",
     "keycloak/tests/_auth_support.py.j2",
     "keycloak/tests/test_auth.py.j2",
 )
 _KEYCLOAK_DIR = "keycloak/"
+# Identity path (b): only a project with `auth.suite.migration` gets these.
+_LEGACY_VERBATIM = ("keycloak/app/auth/legacy.py.tpl",)
 
 _EMAIL_PATTERN = r"^[^@\s\"'<>]+@[^@\s\"'<>]+\.[^@\s\"'<>]+$"
 _PHONE_PATTERN = r"^\+[1-9][0-9]{6,14}$"
@@ -316,6 +318,9 @@ def _auth_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
         + "}",
         "sms_provider": auth.sms_provider if auth.sms is not None else None,
         "owned_tables": sorted(e.table for e in project.entities if e.owned),
+        # Suite membership exists only with Keycloak; the keycloak context fills these in.
+        "suite": None,
+        "migration": None,
     }
 
 
@@ -336,6 +341,7 @@ def _keycloak_context(project: ProjectCtx, auth: SpecAuth) -> dict[str, Any]:
         "kc": kc,
         "docs_client_id": docs_client_id(kc),
         "suite": auth.suite,
+        "migration": auth.suite.migration if auth.suite else None,
         "hub_base_url": hub_base_url(auth.suite.hub_issuer) if auth.suite and auth.suite.hub_issuer else None,
         "custom_fields": columns,
         "kc_fields": [
@@ -448,6 +454,12 @@ class AuthModule:
         files["tests/test_identity.py"] = render_template(
             self._env, "tests/test_identity.py.j2", ledger=ledger_enabled(project), **context
         )
+        files["tests/test_identity_migration.py"] = render_template(
+            self._env, "tests/test_identity_migration.py.j2", keycloak=False, **context
+        )
+        files["docs/IDENTITY-MIGRATION.md"] = render_template(
+            self._env, "docs/IDENTITY-MIGRATION.md.j2", keycloak=False, **context
+        )
         if context["invitations"] or context["self_assignable_names"]:
             files["tests/test_invitations.py"] = render_template(
                 self._env, "tests/test_invitations.py.j2", **context
@@ -476,6 +488,20 @@ class AuthModule:
         files["tests/test_identity.py"] = render_template(
             self._env, "keycloak/tests/test_identity.py.j2", ledger=ledger_enabled(project), **context
         )
+        files["tests/test_identity_migration.py"] = render_template(
+            self._env, "tests/test_identity_migration.py.j2", keycloak=True, **context
+        )
+        files["docs/IDENTITY-MIGRATION.md"] = render_template(
+            self._env, "docs/IDENTITY-MIGRATION.md.j2", keycloak=True, **context
+        )
+        if context["migration"] is not None:
+            for template in _LEGACY_VERBATIM:
+                files[template.removeprefix(_KEYCLOAK_DIR).rsplit(".", 1)[0]] = read_verbatim(
+                    _TEMPLATES, template
+                )
+            files["tests/test_legacy_migration.py"] = render_template(
+                self._env, "keycloak/tests/test_legacy_migration.py.j2", **context
+            )
         if context["gated"]:
             files["tests/test_access.py"] = render_template(
                 self._env, "tests/test_access.py.j2", **context

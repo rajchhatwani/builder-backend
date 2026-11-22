@@ -108,6 +108,7 @@ PROJECT_CHILD_TABLES: tuple[str, ...] = (
     "metrics",
     "reports",
     "report_runs",
+    "upgrade_proposals",
 )
 # Tables that reach their org only through a parent row (no organization_id / project_id of
 # their own): table -> (column, parent table). Visible exactly when the parent row is (S2-010).

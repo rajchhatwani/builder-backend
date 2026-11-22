@@ -400,3 +400,10 @@ tests/unit/test_compliance_controls.py
 tests/api/test_compliance_routes.py
 tests/unit/test_api_platform_spec.py
 tests/e2e/test_api_platform_stack.py
+tests/unit/test_upgrade_engine.py
+tests/unit/test_scorecard.py
+tests/api/test_upgrades.py
+tests/e2e/test_upgrade_engine.py
+tests/unit/test_suite_migration.py
+tests/api/test_suite_migration.py
+tests/e2e/test_suite_identity_paths_stack.py

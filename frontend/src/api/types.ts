@@ -174,6 +174,27 @@ export interface GenerationSummary {
   created_at: string
 }
 
+// ── Upgrades + scorecard (CP-6E) ───────────────────────────────────
+export type ScorecardStatus = 'pass' | 'warn' | 'fail'
+export type FixActionKind = 'open_upgrade' | 'regenerate' | 'redeclare_hook' | 'none'
+export interface ScorecardCheck { id: string; group: string; status: ScorecardStatus; detail: string; fix: { action: FixActionKind; route: string } }
+export interface Scorecard { score: number; passing: boolean; checks: ScorecardCheck[] }
+export type UpgradeStatus = 'open' | 'applied' | 'dismissed'
+export interface UpgradeBlockChange { block: string; from: string | null; to: string | null; bump: string }
+export interface UpgradeFile { path: string; zone: string; change: string }
+export interface UpgradeSbomEntry { name: string; spec?: string | null; from?: string | null; to?: string | null }
+export interface UpgradeSbomDiff { added?: UpgradeSbomEntry[]; removed?: UpgradeSbomEntry[]; changed?: UpgradeSbomEntry[] }
+export interface UpgradeProposalSummary {
+  id: string; project_id: string; base_generation_id: string; status: UpgradeStatus
+  from_generator_version: string | null; to_generator_version: string
+  block_changes: Record<string, unknown>[]; file_count: number; auto_apply_eligible: boolean
+  created_at: string; decided_at: string | null
+}
+export interface UpgradeProposalDetail extends UpgradeProposalSummary {
+  created_by: string | null; files: Record<string, unknown>[]; patch_size: number
+  sbom_diff: Record<string, unknown>; migrations: Record<string, unknown>[]; scorecard: Record<string, unknown>; kept?: string[]
+}
+
 // ── Auth enums ──────────────────────────────────────────────────────
 
 export type TokenStore = 'db' | 'redis'

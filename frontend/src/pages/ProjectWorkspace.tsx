@@ -77,6 +77,7 @@ const MapPage = lazy(() => import('../shell/map/MapPage').then((m) => ({ default
 const DocumentsPage = lazy(() => import('../shell/documents/DocumentsPage').then((m) => ({ default: m.DocumentsPage })))
 const AgentApprovalsPage = lazy(() => import('../shell/approvals/AgentApprovalsPage').then((m) => ({ default: m.AgentApprovalsPage })))
 const ApiKeysPage = lazy(() => import('../shell/apikeys/ApiKeysPage').then((m) => ({ default: m.ApiKeysPage })))
+const UpgradesPage = lazy(() => import('../shell/upgrades/UpgradesPage').then((m) => ({ default: m.UpgradesPage })))
 const AppsPage = lazy(() => import('../shell/apps/AppsPage').then((m) => ({ default: m.AppsPage })))
 const CompliancePage = lazy(() => import('../shell/compliance/CompliancePage').then((m) => ({ default: m.CompliancePage })))
 const BookingsPage = lazy(() => import('../shell/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })))
@@ -609,7 +610,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps') && (
+      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
@@ -621,6 +622,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'compliance' && <CompliancePage projectId={project.id} />}
           {section === 'apikeys' && <ApiKeysPage projectId={project.id} />}
           {section === 'apps' && <AppsPage projectId={project.id} />}
+          {section === 'upgrades' && <UpgradesPage projectId={project.id} />}
         </Suspense>
       )}
 

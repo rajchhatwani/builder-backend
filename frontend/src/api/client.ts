@@ -116,6 +116,9 @@ import type {
   Field,
   FieldInput,
   GenerationSummary,
+  Scorecard,
+  UpgradeProposalDetail,
+  UpgradeProposalSummary,
   KeycloakConfig,
   KeycloakImpact,
   KeycloakWrite,
@@ -694,6 +697,24 @@ export const api = {
     request<Page<GenerationSummary>>(
       `/projects/${projectId}/generations?limit=${limit}&offset=${offset}`,
     ),
+
+  // ── Upgrades + scorecard (CP-6E; builder routes) ──
+  getScorecard: (projectId: string) => request<Scorecard>(`/projects/${projectId}/scorecard`),
+  listUpgrades: (projectId: string, limit = 50, offset = 0) =>
+    request<Page<UpgradeProposalSummary>>(`/projects/${projectId}/upgrades?limit=${limit}&offset=${offset}`),
+  createUpgrade: (projectId: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades`, { method: 'POST' }),
+  getUpgrade: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}`),
+  /** The proposal as a git patch (text/x-diff). */
+  async getUpgradePatch(projectId: string, uid: string): Promise<string> {
+    const response = await fetchWithRefresh(() => fetch(`${BASE_URL}/projects/${projectId}/upgrades/${uid}/patch`, { credentials: 'include', headers: authHeader('app') }))
+    if (!response.ok) {
+      const raw = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null
+      throw new ApiError(response.status, { code: raw?.code ?? 'bad_response', message: raw?.message ?? 'The patch could not be loaded', details: [] })
+    }
+    return response.text()
+  },
+  dismissUpgrade: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}/dismiss`, { method: 'POST' }),
+  markUpgradeApplied: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}/applied`, { method: 'POST' }),
 
   /** Downloads the generated project zip and records a generation. */
   async downloadZip(projectId: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {

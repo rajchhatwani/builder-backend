@@ -75,6 +75,7 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/documents`, { page: 'project', projectId: PID, section: 'documents' }],
   [`#/p/${PID}/agentactions`, { page: 'project', projectId: PID, section: 'agentactions' }],
   [`#/p/${PID}/apikeys`, { page: 'project', projectId: PID, section: 'apikeys' }],
+  [`#/p/${PID}/upgrades`, { page: 'project', projectId: PID, section: 'upgrades' }],
   [`#/p/${PID}/apps`, { page: 'project', projectId: PID, section: 'apps' }],
   [`#/p/${PID}/compliance`, { page: 'project', projectId: PID, section: 'compliance' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
