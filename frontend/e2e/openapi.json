@@ -1608,6 +1608,81 @@
     "title": "ApiEdgeWrite",
     "type": "object"
    },
+   "ApiPlatformRead": {
+    "properties": {
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ApiPlatformRead",
+    "type": "object"
+   },
+   "ApiPlatformWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "ApiPlatformWrite",
+    "type": "object"
+   },
    "ApiTokenCreate": {
     "properties": {
      "description": {
@@ -16524,6 +16599,16 @@
        }
       ]
      },
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "auth": {
       "anyOf": [
        {
@@ -16806,6 +16891,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecApiEdge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
        },
        {
         "type": "null"
@@ -17738,6 +17833,57 @@
      }
     },
     "title": "SpecApiEdge",
+    "type": "object"
+   },
+   "SpecApiPlatform": {
+    "additionalProperties": false,
+    "description": "Public API platform (D49) and app platform (D50) of a generated project: scoped, hashed, expiring API keys\nwith sandbox / prod environments and per-key rate limits, and apps a tenant installs / uninstalls. Read-only in\nthis version. Cost-based limits, write scopes and socket mode are not built.",
+    "properties": {
+     "apps": {
+      "items": {
+       "$ref": "#/components/schemas/SpecPlatformApp"
+      },
+      "title": "Apps",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "entities": {
+      "items": {
+       "$ref": "#/components/schemas/SpecPublicEntity"
+      },
+      "title": "Entities",
+      "type": "array"
+     },
+     "key_ttl_days": {
+      "default": 90,
+      "maximum": 365.0,
+      "minimum": 1.0,
+      "title": "Key Ttl Days",
+      "type": "integer"
+     },
+     "rate_limit": {
+      "default": "60/minute",
+      "title": "Rate Limit",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     },
+     "sandbox_rate_limit": {
+      "default": "20/minute",
+      "title": "Sandbox Rate Limit",
+      "type": "string"
+     }
+    },
+    "title": "SpecApiPlatform",
     "type": "object"
    },
    "SpecApiVersion": {
@@ -21172,6 +21318,40 @@
     "title": "SpecPermission",
     "type": "object"
    },
+   "SpecPlatformApp": {
+    "additionalProperties": false,
+    "description": "An app a tenant can install (D50): a slug, the entities (read scopes) it may ask for, and the signed event\ntypes it may receive.",
+    "properties": {
+     "events": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Events",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "scopes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Scopes",
+      "type": "array"
+     },
+     "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecPlatformApp",
+    "type": "object"
+   },
    "SpecPolicy": {
     "additionalProperties": false,
     "description": "One authorization policy (abac / pbac). `when` is plain data, never code: see authz_engine.",
@@ -21369,6 +21549,33 @@
      }
     },
     "title": "SpecProviders",
+    "type": "object"
+   },
+   "SpecPublicEntity": {
+    "additionalProperties": false,
+    "description": "One entity a customer's integration may read through the public API (D49). Default deny: only the listed\n`fields` (plus `id`) leave the project; a field regulated mode protects is refused.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "sandbox": {
+      "default": false,
+      "title": "Sandbox",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "SpecPublicEntity",
     "type": "object"
    },
    "SpecQuota": {
@@ -33028,6 +33235,100 @@
      }
     },
     "summary": "Replace the API edge settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/api-platform": {
+   "get": {
+    "operationId": "get_api_platform",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiPlatformRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get public API keys, rate limits and installable apps (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_api_platform",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApiPlatformWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiPlatformRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace public API keys, rate limits and installable apps",
     "tags": [
      "behavior"
     ]

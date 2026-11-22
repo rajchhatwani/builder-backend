@@ -384,6 +384,28 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'apikeys',
+    label: 'API keys',
+    icon: (
+      <>
+        <circle cx="8" cy="15" r="4" />
+        <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+      </>
+    ),
+  },
+  {
+    id: 'apps',
+    label: 'Apps',
+    icon: (
+      <>
+        <rect x="4" y="4" width="7" height="7" rx="1" />
+        <rect x="13" y="4" width="7" height="7" rx="1" />
+        <rect x="4" y="13" width="7" height="7" rx="1" />
+        <path d="M16.5 13v7M13 16.5h7" />
+      </>
+    ),
+  },
+  {
     id: 'compliance',
     label: 'Compliance',
     icon: (

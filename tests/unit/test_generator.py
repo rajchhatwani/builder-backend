@@ -86,6 +86,7 @@ NAMES = [
     "operations_fleet",
     "regulated_clients",
     "regulated_clinic",
+    "api_shop",
 ]
 
 

@@ -1401,6 +1401,39 @@ class SpecCompliance(_SpecModel):
     export_consent_purpose: str | None = None  # rows of subjects without active consent for it are left out
 
 
+class SpecPublicEntity(_SpecModel):
+    """One entity a customer's integration may read through the public API (D49). Default deny: only the listed
+    `fields` (plus `id`) leave the project; a field regulated mode protects is refused."""
+
+    entity: str
+    fields: list[str] = Field(default_factory=list)
+    sandbox: bool = False  # readable with a sandbox key too
+
+
+class SpecPlatformApp(_SpecModel):
+    """An app a tenant can install (D50): a slug, the entities (read scopes) it may ask for, and the signed event
+    types it may receive."""
+
+    name: str
+    title: str = ""
+    scopes: list[str] = Field(default_factory=list)  # entity names (read scope)
+    events: list[str] = Field(default_factory=list)  # event type slugs
+
+
+class SpecApiPlatform(_SpecModel):
+    """Public API platform (D49) and app platform (D50) of a generated project: scoped, hashed, expiring API keys
+    with sandbox / prod environments and per-key rate limits, and apps a tenant installs / uninstalls. Read-only in
+    this version. Cost-based limits, write scopes and socket mode are not built."""
+
+    enabled: bool = False
+    roles: list[str] = Field(default_factory=list)  # roles that manage keys and apps (default deny)
+    entities: list[SpecPublicEntity] = Field(default_factory=list)
+    rate_limit: str = "60/minute"  # prod keys
+    sandbox_rate_limit: str = "20/minute"
+    key_ttl_days: int = Field(default=90, ge=1, le=365)
+    apps: list[SpecPlatformApp] = Field(default_factory=list)
+
+
 class Spec(_SpecModel):
     spec_version: int = SPEC_VERSION
     project: SpecProject
@@ -1436,6 +1469,7 @@ class Spec(_SpecModel):
     packs: SpecPacks | None = None
     regulated: SpecRegulated | None = None
     compliance: SpecCompliance | None = None
+    api_platform: SpecApiPlatform | None = None
 
 
 def spec_hash(spec: Spec) -> str:
@@ -1447,5 +1481,7 @@ def spec_hash(spec: Spec) -> str:
         dump.pop("regulated", None)  # likewise for specs without the regulated block
     if dump.get("compliance") is None:
         dump.pop("compliance", None)
+    if dump.get("api_platform") is None:
+        dump.pop("api_platform", None)
     canonical = json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
     return hashlib.sha256(canonical.encode("ascii")).hexdigest()

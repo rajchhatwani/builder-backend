@@ -74,6 +74,9 @@ services:
 {% if compliance %}
       COMPLIANCE_EXPORT_SALT: ${COMPLIANCE_EXPORT_SALT:?set COMPLIANCE_EXPORT_SALT in .env (see .env.example)}
 {% endif %}
+{% if api_platform %}
+      PLATFORM_SIGNING_KEY: ${PLATFORM_SIGNING_KEY:?set PLATFORM_SIGNING_KEY in .env (see .env.example)}
+{% endif %}
 {% if pay %}
       <<: *payments-env
       UVICORN_WORKERS: ${UVICORN_WORKERS:-{{ single_host_workers }}}

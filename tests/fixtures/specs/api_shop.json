@@ -1,0 +1,219 @@
+{
+  "spec_version": 1,
+  "settings": [],
+  "sequences": [],
+  "lists": [],
+  "state_machines": [],
+  "seed": [],
+  "project": {
+    "name": "Api Shop",
+    "slug": "api-shop",
+    "description": "A neutral shop with a public read API: scoped keys, rate limits and installable apps",
+    "db_engine": "postgres"
+  },
+  "entities": [
+    {
+      "name": "Product",
+      "table_name": "products",
+      "plural_path": "products",
+      "options": {
+        "sortable": [
+          "created_at"
+        ],
+        "filterable": []
+      },
+      "fields": [
+        {
+          "name": "title",
+          "type": "string",
+          "required": true,
+          "max_length": 120
+        },
+        {
+          "name": "price_cents",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "internal_cost",
+          "type": "integer",
+          "required": false
+        }
+      ]
+    },
+    {
+      "name": "Review",
+      "table_name": "reviews",
+      "plural_path": "reviews",
+      "options": {
+        "sortable": [
+          "created_at"
+        ],
+        "filterable": []
+      },
+      "fields": [
+        {
+          "name": "stars",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "body",
+          "type": "string",
+          "required": false,
+          "max_length": 300
+        }
+      ]
+    }
+  ],
+  "relations": [],
+  "auth": {
+    "enabled": true,
+    "multi_tenant": true,
+    "app_url": "https://shop.example.com",
+    "password_reset": {
+      "email_magic_link": false,
+      "sms_otp": false,
+      "otp_ttl_minutes": 10
+    },
+    "registration": {
+      "email_verification_required": false
+    },
+    "roles": [
+      {
+        "name": "admin",
+        "label": "Admin"
+      },
+      {
+        "name": "integrator",
+        "label": "Integration manager",
+        "inherits_from": "member"
+      },
+      {
+        "name": "member",
+        "label": "Member",
+        "is_default": true
+      }
+    ],
+    "permissions": [
+      {
+        "entity": "Product",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Product",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Product",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Review",
+        "operation": "list",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Review",
+        "operation": "get",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      },
+      {
+        "entity": "Review",
+        "operation": "create",
+        "roles": [
+          "admin",
+          "integrator",
+          "member"
+        ],
+        "row_rule": "tenant"
+      }
+    ],
+    "smtp": {
+      "host": "smtp.example.com",
+      "port": 587,
+      "use_tls": true,
+      "from_email": "noreply@shop.example.com",
+      "from_name": "Shop"
+    }
+  },
+  "api_platform": {
+    "enabled": true,
+    "roles": [
+      "admin",
+      "integrator"
+    ],
+    "entities": [
+      {
+        "entity": "Product",
+        "fields": [
+          "title",
+          "price_cents"
+        ],
+        "sandbox": true
+      },
+      {
+        "entity": "Review",
+        "fields": [
+          "stars",
+          "body"
+        ],
+        "sandbox": false
+      }
+    ],
+    "rate_limit": "60/minute",
+    "sandbox_rate_limit": "5/minute",
+    "key_ttl_days": 90,
+    "apps": [
+      {
+        "name": "storefront",
+        "title": "Storefront sync",
+        "scopes": [
+          "Product"
+        ],
+        "events": [
+          "product-updated"
+        ]
+      },
+      {
+        "name": "reviews-widget",
+        "title": "Reviews widget",
+        "scopes": [
+          "Product",
+          "Review"
+        ],
+        "events": [
+          "review-created"
+        ]
+      }
+    ]
+  }
+}

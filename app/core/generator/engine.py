@@ -9,6 +9,7 @@ from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.authz.module import AuthzModule
 from app.core.generator.features.change_history.module import ChangeHistoryModule
 from app.core.generator.features.data_import.module import DataImportModule
+from app.core.generator.features.api_platform.module import ApiPlatformModule
 from app.core.generator.features.compliance.module import ComplianceModule
 from app.core.generator.features.crud.module import CrudModule
 from app.core.generator.features.deploy.module import DeployModule
@@ -106,6 +107,7 @@ def default_modules() -> list[FeatureModule]:
         OperationsPredictionModule(),
         RegulatedModule(),
         ComplianceModule(),
+        ApiPlatformModule(),
     ]
 
 

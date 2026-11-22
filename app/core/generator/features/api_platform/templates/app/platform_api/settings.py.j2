@@ -1,0 +1,21 @@
+"""API platform settings (generated from the spec: change them in the builder). Plain data, no secret."""
+
+from typing import Any
+
+# Roles that issue and revoke keys and install apps. Nobody else gets in (default deny).
+ROLES: tuple[str, ...] = {{ roles }}
+
+# public entity -> where its model lives, its URL path, the exact fields the public API returns (plus id), and whether
+# a sandbox key may read it
+ENTITIES: dict[str, dict[str, Any]] = {{ entities }}
+
+# "<count>/<n><unit>" per key and window; sandbox keys use the sandbox limit, prod keys and app tokens the other
+RATE_LIMIT: str = {{ rate_limit | pyrepr }}
+SANDBOX_RATE_LIMIT: str = {{ sandbox_rate_limit | pyrepr }}
+KEY_TTL_DAYS: int = {{ key_ttl_days | pyrepr }}
+
+# app name -> {"title", "scopes": entity names it may ask for, "events": signed event types it may receive}
+APPS: dict[str, dict[str, Any]] = {{ apps }}
+
+# multi-tenant project: keys, installs, audit rows and public reads belong to the caller's tenant
+TENANT_SCOPED: bool = {{ tenant_scoped | pyrepr }}

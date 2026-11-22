@@ -58,6 +58,7 @@ from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
 from app.core.validation_booking import booking_tables, check_booking
+from app.core.validation_api_platform import check_api_platform
 from app.core.validation_compliance import check_compliance
 from app.core.validation_deploy import check_deployment
 from app.core.validation_documents import check_documents
@@ -250,6 +251,7 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_packs(spec, ctx.add)
     check_regulated(spec, entities_by_name, ctx.add)
     check_compliance(spec, entities_by_name, ctx.add)
+    check_api_platform(spec, entities_by_name, ctx.add)
     check_booking(spec, ctx.add)
     check_ai(spec, ctx.add)
     check_api_edge(spec, ctx.add)

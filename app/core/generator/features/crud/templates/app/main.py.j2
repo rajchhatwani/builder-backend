@@ -102,6 +102,10 @@ from app.notifications.router import router as _notifications_router
 from app.payments.lock import ensure_payments_lock
 from app.payments.router import router as _payments_router
 {% endif %}
+{% if api_platform %}
+from app.platform_api.public import router as _platform_public_router
+from app.platform_api.router import router as _platform_router
+{% endif %}
 {% if providers %}
 from app.providers import config as _providers_config
 from app.providers.router import router as _providers_router
@@ -343,6 +347,10 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if compliance %}
     app.include_router(_compliance_router)
+{% endif %}
+{% if api_platform %}
+    app.include_router(_platform_router)
+    app.include_router(_platform_public_router)
 {% endif %}
     include_custom_routers(app)
     return app

@@ -68,6 +68,9 @@ from app.notifications import models as _notification_models
 {% if payments %}
 from app.payments import models as _payments_models
 {% endif %}
+{% if api_platform %}
+from app.platform_api import models as _platform_api_models
+{% endif %}
 {% if providers %}
 from app.providers import models as _provider_models
 {% endif %}
@@ -122,6 +125,9 @@ __all__ = [
 {% endif %}
 {% if compliance %}
     "_compliance_models",
+{% endif %}
+{% if api_platform %}
+    "_platform_api_models",
 {% endif %}
 {% if seed %}
     "_seed_models",

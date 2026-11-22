@@ -155,6 +155,7 @@ def _block_routes() -> None:
         "hook_effects": ("HookEffects", "the effectful-hooks opt-in"),
         "regulated": ("Regulated", "regulated mode and field protection"),
         "compliance": ("Compliance", "retention, legal hold, consent, break-glass and de-identified export"),
+        "api_platform": ("ApiPlatform", "public API keys, rate limits and installable apps"),
     }
     for key, (cls, what) in names.items():
         read, write = getattr(bs, cls + "Read"), getattr(bs, cls + "Write")

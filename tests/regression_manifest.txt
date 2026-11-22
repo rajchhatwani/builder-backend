@@ -398,3 +398,5 @@ tests/unit/test_compliance_spec.py
 tests/e2e/test_compliance_stack.py
 tests/unit/test_compliance_controls.py
 tests/api/test_compliance_routes.py
+tests/unit/test_api_platform_spec.py
+tests/e2e/test_api_platform_stack.py
