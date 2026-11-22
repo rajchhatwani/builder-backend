@@ -19,6 +19,7 @@ import { DataModelPanel } from '../components/DataModelPanel'
 import { GeneratePanel } from '../components/GeneratePanel'
 import { IntegrationsPanel } from '../components/IntegrationsPanel'
 import { KeycloakPanel } from '../components/KeycloakPanel'
+import { useHashParam, withHashParam } from '../shell/useHashParam'
 import { PaymentsPanel } from '../components/PaymentsPanel'
 import { StoragePanel } from '../components/StoragePanel'
 import { Layout } from '../components/Layout'
@@ -144,15 +145,21 @@ function SubTabs<T extends string>({
   onChange: (v: T) => void
 }) {
   return (
-    <div className="tab-bar">
+    <div className="tab-bar" role="tablist">
       {tabs.map((t) => (
-        <button key={t.id} className="tab-btn" aria-selected={value === t.id} onClick={() => onChange(t.id)}>
+        <button key={t.id} role="tab" className="tab-btn" aria-selected={value === t.id} onClick={() => onChange(t.id)}>
           {t.label}
         </button>
       ))}
     </div>
   )
 }
+
+type CfgTab = 'form' | 'guided'
+const CFG_TABS: { id: CfgTab; label: string }[] = [
+  { id: 'form', label: 'Settings form' },
+  { id: 'guided', label: 'Guided setup' },
+]
 
 function PageTitle({ title, children }: { title: string; children: string }) {
   return (
@@ -209,6 +216,13 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
   const [docTab, setDocTab] = useState<'queue' | 'templates'>('queue')
+  // v2 settings pages: the generated form or the guided setup (the old panel: switch preview, sizing, issues).
+  // The tab lives in the route hash (?tab=form|guided) so it survives a reload and can be linked to.
+  const tabParam = useHashParam('tab')
+  const cfgTab = (sec: string): CfgTab => (tabParam === 'form' || tabParam === 'guided' ? tabParam : sec === 'deployment' ? 'guided' : 'form')
+  const setCfgTab = (t: CfgTab) => {
+    window.location.hash = withHashParam(window.location.hash, 'tab', t)
+  }
   const org = useProjectOrg(project?.organization_id)
   // New shell only: one status call feeds the rail badges and the Home board (shared Query cache).
   const v2 = shellV2Enabled()
@@ -369,6 +383,23 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <HomePage projectId={project.id} />
         </Suspense>
       )}
+      {section === 'overview' && v2 && (
+        <OverviewPanel
+          embedded
+          projectId={project.id}
+          entityCount={entities.length}
+          authEnabled={auth?.enabled ?? false}
+          keycloakOn={keycloakOn}
+          keycloakSaved={keycloak !== null}
+          paymentsOn={paymentsOn}
+          paymentsSaved={payments !== null}
+          storageOn={storageOn}
+          storageSaved={storage !== null}
+          roleCount={roles.length}
+          issues={issues}
+          generationCount={generationCount}
+        />
+      )}
       {section === 'overview' && !v2 && (
         <OverviewPanel
           projectId={project.id}
@@ -510,9 +541,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       )}
 
       {section === 'payments' && v2 && (
-        <Suspense fallback={<p className="empty-state">Loading…</p>}>
-          <PaymentsFormPage projectId={project.id} />
-        </Suspense>
+        <>
+          <SubTabs tabs={CFG_TABS} value={cfgTab('payments')} onChange={setCfgTab} />
+          <div hidden={cfgTab('payments') !== 'form'}>
+            <Suspense fallback={<p className="empty-state">Loading…</p>}>
+              <PaymentsFormPage projectId={project.id} />
+            </Suspense>
+          </div>
+          <div hidden={cfgTab('payments') !== 'guided'}>
+            <>
+              <PageTitle title="Payments">
+                Take card payments through a hosted checkout, with refunds, an audit trail and servers sized for your traffic.
+              </PageTitle>
+              <PaymentsPanel project={project} entities={entities} roles={roles} authEnabled={auth?.enabled ?? false} issues={issues} onChanged={load} />
+            </>
+          </div>
+        </>
       )}
       {section === 'payments' && !v2 && (
         <>
@@ -531,9 +575,23 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       )}
 
       {section === 'storage' && v2 && (
-        <Suspense fallback={<p className="empty-state">Loading…</p>}>
-          <StorageFormPage projectId={project.id} />
-        </Suspense>
+        <>
+          <SubTabs tabs={CFG_TABS} value={cfgTab('storage')} onChange={setCfgTab} />
+          <div hidden={cfgTab('storage') !== 'form'}>
+            <Suspense fallback={<p className="empty-state">Loading…</p>}>
+              <StorageFormPage projectId={project.id} />
+            </Suspense>
+          </div>
+          <div hidden={cfgTab('storage') !== 'guided'}>
+            <>
+              <PageTitle title="File uploads">
+                Accept files of any type, scanned for malware before they are stored in S3 or a MinIO-compatible bucket, with
+                role-based access and an audit trail.
+              </PageTitle>
+              <StoragePanel project={project} roles={roles} authEnabled={auth?.enabled ?? false} issues={issues} onChanged={load} />
+            </>
+          </div>
+        </>
       )}
       {section === 'storage' && !v2 && (
         <>
@@ -569,9 +627,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       )}
 
       {section === 'observability' && v2 && (
-        <Suspense fallback={<p className="empty-state">Loading…</p>}>
-          <ObservabilityFormPage projectId={project.id} />
-        </Suspense>
+        <>
+          <SubTabs tabs={CFG_TABS} value={cfgTab('observability')} onChange={setCfgTab} />
+          <div hidden={cfgTab('observability') !== 'form'}>
+            <Suspense fallback={<p className="empty-state">Loading…</p>}>
+              <ObservabilityFormPage projectId={project.id} />
+            </Suspense>
+          </div>
+          <div hidden={cfgTab('observability') !== 'guided'}>
+            <>
+              <PageTitle title="Observability">
+                Traces, metrics and trace-correlated logs from your generated backend, through OpenTelemetry, with secrets kept out.
+              </PageTitle>
+              <ObservabilityPanel projectId={project.id} onChanged={load} />
+            </>
+          </div>
+        </>
       )}
       {section === 'observability' && !v2 && (
         <>
@@ -592,7 +663,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           onChange={setDocTab}
         />
       )}
-      {section === 'documents' && v2 && docTab === 'templates' && <DocumentsPanel projectId={project.id} onChanged={load} />}
+      {section === 'documents' && v2 && docTab === 'templates' && (
+        <>
+          <PageTitle title="Documents">
+            Generate invoices, receipts, statements, certificates and more as PDFs: ten ready-made templates you can edit, with totals recomputed on the server.
+          </PageTitle>
+          <DocumentsPanel projectId={project.id} onChanged={load} />
+        </>
+      )}
       {section === 'documents' && !v2 && (
         <>
           <PageTitle title="Documents">
@@ -603,9 +681,22 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       )}
 
       {section === 'deployment' && v2 && (
-        <Suspense fallback={<p className="empty-state">Loading…</p>}>
-          <DeploymentFormPage projectId={project.id} />
-        </Suspense>
+        <>
+          <SubTabs tabs={CFG_TABS} value={cfgTab('deployment')} onChange={setCfgTab} />
+          <div hidden={cfgTab('deployment') !== 'form'}>
+            <Suspense fallback={<p className="empty-state">Loading…</p>}>
+              <DeploymentFormPage projectId={project.id} />
+            </Suspense>
+          </div>
+          <div hidden={cfgTab('deployment') !== 'guided'}>
+            <>
+              <PageTitle title="Deploy">
+                GitHub Actions pipelines and Terraform that put your backend on AWS, Azure or Google Cloud, with no stored cloud credentials.
+              </PageTitle>
+              <DeploymentPanel projectId={project.id} onChanged={load} />
+            </>
+          </div>
+        </>
       )}
       {section === 'deployment' && !v2 && (
         <>

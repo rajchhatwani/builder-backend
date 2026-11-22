@@ -36,6 +36,13 @@ export function issueSection(issue: Pick<ValidationIssue, 'path' | 'code'>): str
   return head in SECTION_ROUTE ? head : 'model'
 }
 
+/** Where the Fix link of an issue goes. Same as issueSection except Keycloak issues (counted under Authentication by
+ *  the backend) open the Keycloak page, as the old Overview did. */
+export function fixRoute(issue: Pick<ValidationIssue, 'path' | 'code'>): AnySection {
+  if (issue.path === 'auth.keycloak' || issue.path.startsWith('auth.keycloak.')) return 'keycloak'
+  return routeFor(issueSection(issue))
+}
+
 /** Issue counts per rail item (the badges), from the same status call as the board. Keycloak issues are
  *  counted under Authentication by the backend, so the Keycloak rail item gets no badge. */
 export function railProblems(status: ProjectStatus | undefined): Partial<Record<AnySection, number>> {
