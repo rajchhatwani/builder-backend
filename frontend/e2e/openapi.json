@@ -10382,6 +10382,81 @@
     "title": "OrganizationUpdate",
     "type": "object"
    },
+   "PacksRead": {
+    "properties": {
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "PacksRead",
+    "type": "object"
+   },
+   "PacksWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "PacksWrite",
+    "type": "object"
+   },
    "Page_AdminOrgRead_": {
     "properties": {
      "items": {
@@ -34827,6 +34902,100 @@
      }
     },
     "summary": "Replace the notification settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/packs": {
+   "get": {
+    "operationId": "get_packs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PacksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the domain packs (money, operations, booking, AI) and their settings (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_packs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PacksWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PacksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the domain packs (money, operations, booking, AI) and their settings",
     "tags": [
      "behavior"
     ]

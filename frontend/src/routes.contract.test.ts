@@ -77,6 +77,16 @@ const CONTRACT: [string, unknown][] = [
   [`#/p/${PID}/apikeys`, { page: 'project', projectId: PID, section: 'apikeys' }],
   [`#/p/${PID}/upgrades`, { page: 'project', projectId: PID, section: 'upgrades' }],
   [`#/p/${PID}/apps`, { page: 'project', projectId: PID, section: 'apps' }],
+  // Added by CP-6F (additions): money + booking pages and generated pack settings forms.
+  [`#/p/${PID}/invoices`, { page: 'project', projectId: PID, section: 'invoices' }],
+  [`#/p/${PID}/payouts`, { page: 'project', projectId: PID, section: 'payouts' }],
+  [`#/p/${PID}/reconciliation`, { page: 'project', projectId: PID, section: 'reconciliation' }],
+  [`#/p/${PID}/bookingadmin`, { page: 'project', projectId: PID, section: 'bookingadmin' }],
+  [`#/p/${PID}/ledgersettings`, { page: 'project', projectId: PID, section: 'ledgersettings' }],
+  [`#/p/${PID}/currencysettings`, { page: 'project', projectId: PID, section: 'currencysettings' }],
+  [`#/p/${PID}/reconsettings`, { page: 'project', projectId: PID, section: 'reconsettings' }],
+  [`#/p/${PID}/invoicingsettings`, { page: 'project', projectId: PID, section: 'invoicingsettings' }],
+  [`#/p/${PID}/bookingsettings`, { page: 'project', projectId: PID, section: 'bookingsettings' }],
   [`#/p/${PID}/compliance`, { page: 'project', projectId: PID, section: 'compliance' }],
   // Added by F2-1 (addition, no existing row changed): the v2-only Forms preview page.
   // Added by F2-4 (addition): the v2-only History timeline page.

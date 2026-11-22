@@ -435,6 +435,87 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: (
+      <>
+        <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" />
+      </>
+    ),
+  },
+  {
+    id: 'payouts',
+    label: 'Payouts',
+    icon: (
+      <>
+        <path d="M4 8h16v10H4z" /><path d="M12 5v6M9 8l3 3 3-3" />
+      </>
+    ),
+  },
+  {
+    id: 'reconciliation',
+    label: 'Reconciliation',
+    icon: (
+      <>
+        <path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4" />
+      </>
+    ),
+  },
+  {
+    id: 'bookingadmin',
+    label: 'Booking setup',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 15h6" />
+      </>
+    ),
+  },
+  {
+    id: 'ledgersettings',
+    label: 'Ledger settings',
+    icon: (
+      <>
+        <path d="M5 4h14v16H5z" /><path d="M9 9h6M9 13h6" />
+      </>
+    ),
+  },
+  {
+    id: 'currencysettings',
+    label: 'Currency settings',
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="8" /><path d="M12 8v8M9.5 10h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4" />
+      </>
+    ),
+  },
+  {
+    id: 'reconsettings',
+    label: 'Reconciliation settings',
+    icon: (
+      <>
+        <path d="M4 8h12M12 4l4 4-4 4" /><path d="M6 18h12" />
+      </>
+    ),
+  },
+  {
+    id: 'invoicingsettings',
+    label: 'Invoicing settings',
+    icon: (
+      <>
+        <path d="M6 3h12v18H6z" /><path d="M9 8h6M9 12h6M9 16h3" />
+      </>
+    ),
+  },
+  {
+    id: 'bookingsettings',
+    label: 'Booking settings',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M8 3v4M16 3v4M10 15l2 2 3-3" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

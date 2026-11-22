@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "Money pack, D6 reconciliation (generated routes under /reconciliation): import an external statement\nagainst ONE ledger account and match its lines to ledger entries. Needs the `ledger`. `tolerance_minor`\nis the largest amount difference (minor units) the automatic matcher still pairs; `max_lines` caps the\nstatement lines of one run.",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "run_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Run Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "tolerance_minor": {
+      "default": 0,
+      "title": "Tolerance Minor",
+      "type": "integer"
+    },
+    "max_lines": {
+      "default": 1000,
+      "title": "Max Lines",
+      "type": "integer"
+    }
+  },
+  "title": "SpecReconciliation",
+  "type": "object"
+}

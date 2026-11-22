@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "SpecPayouts": {
+      "additionalProperties": false,
+      "description": "Optional payouts of the invoicing block (generated routes under /payouts): split a fully paid\nreceivable invoice between the platform (`commission_bp` basis points, largest-remainder rounding) and a\nseller, then pay the seller out of the cash account. Account values are ledger account codes.",
+      "properties": {
+        "commission_bp": {
+          "default": 1000,
+          "title": "Commission Bp",
+          "type": "integer"
+        },
+        "seller_payable_account": {
+          "default": "seller_payable",
+          "title": "Seller Payable Account",
+          "type": "string"
+        },
+        "commission_account": {
+          "default": "commission",
+          "title": "Commission Account",
+          "type": "string"
+        }
+      },
+      "title": "SpecPayouts",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Money pack, D7 invoicing and AR/AP aging (generated routes under /invoices). Needs the `ledger` and\n`currency` blocks. Account values are ledger account codes (a multi-currency project names an account\n`<code>.<CUR>` for every currency except the one that carries the plain code). `payouts` switches on\n/payouts.",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "write_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "number_prefix": {
+      "default": "INV-",
+      "title": "Number Prefix",
+      "type": "string"
+    },
+    "payment_terms_days": {
+      "default": 30,
+      "title": "Payment Terms Days",
+      "type": "integer"
+    },
+    "receivable_account": {
+      "default": "receivables",
+      "title": "Receivable Account",
+      "type": "string"
+    },
+    "payable_account": {
+      "default": "payables",
+      "title": "Payable Account",
+      "type": "string"
+    },
+    "revenue_account": {
+      "default": "revenue",
+      "title": "Revenue Account",
+      "type": "string"
+    },
+    "expense_account": {
+      "default": "expenses",
+      "title": "Expense Account",
+      "type": "string"
+    },
+    "tax_account": {
+      "default": "tax",
+      "title": "Tax Account",
+      "type": "string"
+    },
+    "cash_account": {
+      "default": "bank",
+      "title": "Cash Account",
+      "type": "string"
+    },
+    "aging_buckets_days": {
+      "items": {
+        "type": "integer"
+      },
+      "title": "Aging Buckets Days",
+      "type": "array",
+      "default": [
+        30,
+        60,
+        90
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "payouts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecPayouts"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "x-ui": {
+        "optional": true,
+        "label": "Payouts"
+      }
+    }
+  },
+  "title": "SpecInvoicing",
+  "type": "object"
+}

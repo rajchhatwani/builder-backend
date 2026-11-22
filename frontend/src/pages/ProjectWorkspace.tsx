@@ -81,6 +81,15 @@ const UpgradesPage = lazy(() => import('../shell/upgrades/UpgradesPage').then((m
 const AppsPage = lazy(() => import('../shell/apps/AppsPage').then((m) => ({ default: m.AppsPage })))
 const CompliancePage = lazy(() => import('../shell/compliance/CompliancePage').then((m) => ({ default: m.CompliancePage })))
 const BookingsPage = lazy(() => import('../shell/bookings/BookingsPage').then((m) => ({ default: m.BookingsPage })))
+const InvoicesPage = lazy(() => import('../shell/money/InvoicesPage').then((m) => ({ default: m.InvoicesPage })))
+const PayoutsPage = lazy(() => import('../shell/money/PayoutsPage').then((m) => ({ default: m.PayoutsPage })))
+const ReconciliationPage = lazy(() => import('../shell/money/ReconciliationPage').then((m) => ({ default: m.ReconciliationPage })))
+const BookingAdminPage = lazy(() => import('../shell/bookings/BookingAdminPage').then((m) => ({ default: m.BookingAdminPage })))
+const LedgerSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.LedgerSettingsPage })))
+const CurrencySettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.CurrencySettingsPage })))
+const ReconSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.ReconSettingsPage })))
+const InvoicingSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.InvoicingSettingsPage })))
+const BookingSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.BookingSettingsPage })))
 const LedgerPage = lazy(() => import('../shell/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })))
 const SearchPage = lazy(() => import('../shell/search/SearchPage').then((m) => ({ default: m.SearchPage })))
 const BuildPage = lazy(() => import('../shell/ai/BuildPage').then((m) => ({ default: m.BuildPage })))
@@ -610,7 +619,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades') && (
+      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades' || section === 'invoices' || section === 'payouts' || section === 'reconciliation' || section === 'bookingadmin' || section === 'ledgersettings' || section === 'currencysettings' || section === 'reconsettings' || section === 'invoicingsettings' || section === 'bookingsettings') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
@@ -623,6 +632,15 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'apikeys' && <ApiKeysPage projectId={project.id} />}
           {section === 'apps' && <AppsPage projectId={project.id} />}
           {section === 'upgrades' && <UpgradesPage projectId={project.id} />}
+          {section === 'invoices' && <InvoicesPage projectId={project.id} />}
+          {section === 'payouts' && <PayoutsPage projectId={project.id} />}
+          {section === 'reconciliation' && <ReconciliationPage projectId={project.id} />}
+          {section === 'bookingadmin' && <BookingAdminPage projectId={project.id} />}
+          {section === 'ledgersettings' && <LedgerSettingsPage projectId={project.id} />}
+          {section === 'currencysettings' && <CurrencySettingsPage projectId={project.id} />}
+          {section === 'reconsettings' && <ReconSettingsPage projectId={project.id} />}
+          {section === 'invoicingsettings' && <InvoicingSettingsPage projectId={project.id} />}
+          {section === 'bookingsettings' && <BookingSettingsPage projectId={project.id} />}
         </Suspense>
       )}
 

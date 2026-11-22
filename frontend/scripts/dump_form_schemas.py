@@ -7,6 +7,17 @@ Writes frontend/src/forms/schemas/*.json. The `x-ui` hints are the only hand-wri
 import json
 from pathlib import Path
 
+from app.core.spec_models import (
+    SpecBookingPack,
+    SpecCurrency,
+    SpecBookingCancellation,
+    SpecBookingKind,
+    SpecInvoicing,
+    SpecLedger,
+    SpecPayouts,
+    SpecReconciliation,
+    SpecTax,
+)
 from app.schemas.behavior import ListsWrite
 from app.schemas.observability import ObservabilityWrite
 from app.schemas.storage import StorageConfigWrite
@@ -56,6 +67,61 @@ prop(storage, "allowed_types")["x-ui"] = {"widget": "csv"}
 for k in storage["$defs"]["StorageRoles"]["properties"].values():
     k["x-ui"] = {"widget": "csv"}
 
-for name, schema in (("observability", obs), ("lists", lists), ("storage", storage)):
+# --- Packs blocks (CP-6F): derived from the Spec* models; titles/descriptions stay the model's own. ---
+CSV = {"widget": "csv"}
+
+
+def roles(schema: dict, *names: str) -> None:
+    for n in names:
+        prop(schema, n)["x-ui"] = dict(CSV)
+
+
+def with_defaults(model, extra: dict | None = None) -> dict:
+    """The model's JSON schema, plus the `default` Pydantic leaves out for default_factory fields (so the form starts
+    from the real defaults, e.g. read_roles ["admin"], not from empty = any signed-in user)."""
+    schema = model.model_json_schema()
+    nested = {m.__name__: m for m in (extra or {}).values()}
+    for node, cls in [(schema, model), *[(schema["$defs"][n], c) for n, c in nested.items() if n in schema.get("$defs", {})]]:
+        for fname, field in cls.model_fields.items():
+            if field.default_factory is not None:
+                v = field.get_default(call_default_factory=True)
+                node["properties"][fname]["default"] = v.model_dump(mode="json") if hasattr(v, "model_dump") else v
+    return schema
+
+
+ledger = with_defaults(SpecLedger)
+roles(ledger, "read_roles", "post_roles")
+
+currency = with_defaults(SpecCurrency, {1: SpecTax})
+prop(currency, "currencies")["x-ui"] = dict(CSV)
+prop(currency, "tax")["x-ui"] = {"optional": True, "label": "Tax rates"}
+currency["$defs"]["SpecTax"]["properties"]["rates_bp"]["x-ui"] = {
+    "help": 'JSON object: tax name -> rate in basis points (1 bp = 0.01%), integers only, e.g. {"VAT": 2000}'}
+
+recon = with_defaults(SpecReconciliation)
+roles(recon, "read_roles", "run_roles")
+
+invoicing = with_defaults(SpecInvoicing, {1: SpecPayouts})
+roles(invoicing, "read_roles", "write_roles")
+prop(invoicing, "aging_buckets_days")["x-ui"] = dict(CSV)
+prop(invoicing, "payouts")["x-ui"] = {"optional": True, "label": "Payouts"}
+
+booking = with_defaults(SpecBookingPack, {1: SpecBookingKind, 2: SpecBookingCancellation})
+roles(booking, "read_roles", "book_roles", "manage_roles")
+prop(booking, "kinds")["x-ui"] = {"itemLabel": "Kind"}
+kind = booking["$defs"]["SpecBookingKind"]
+kind["x-ui"] = {"order": ["name", "mode", "timezone", "slot_minutes", "capacity", "min_minutes", "max_minutes", "schedule"]}
+kind["properties"]["schedule"]["x-ui"] = {
+    "showWhen": {"field": "mode", "equals": "slot"},
+    "help": 'JSON object: weekday (mon..sun) -> list of windows, e.g. {"mon": [{"start": "09:00", "end": "17:00"}]}'}
+kind["properties"]["slot_minutes"]["x-ui"] = {"showWhen": {"field": "mode", "equals": "slot"}}
+kind["properties"]["capacity"]["x-ui"] = {"showWhen": {"field": "mode", "equals": "pool"}}
+for k in ("min_minutes", "max_minutes"):
+    kind["properties"][k]["x-ui"] = {"showWhen": {"field": "mode", "in": ["range", "pool"]}}
+
+PACK_SCHEMAS = (("ledger", ledger), ("currency", currency), ("reconciliation", recon),
+                ("invoicing", invoicing), ("booking-pack", booking))
+
+for name, schema in (("observability", obs), ("lists", lists), ("storage", storage), *PACK_SCHEMAS):
     (OUT / f"{name}.json").write_text(json.dumps(schema, indent=2, sort_keys=False) + "\n")
     print("wrote", name)

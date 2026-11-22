@@ -255,6 +255,28 @@ function ObjectField({ s, path, value, onChange, label, bare, schema }: NodeProp
   const id = idOf(c, path)
   const msgs = c.messages(path)
   const help = uiOf(schema).help ?? s.description
+  if (uiOf(schema).optional && s.nullable) {
+    const on = value !== null && value !== undefined
+    const fill = () => {
+      const o: Record<string, unknown> = {}
+      for (const [k, p] of Object.entries(props)) {
+        const v = defaultFor(c.root, p)
+        if (v !== undefined) o[k] = v
+      }
+      return o
+    }
+    return (
+      <fieldset className="card bh-row" data-field-path={pathKey(path)}>
+        <legend>{label}</legend>
+        <div className="bh-field">
+          <label htmlFor={`${id}-on`}>Enable {label.toLowerCase()}</label>
+          <input id={`${id}-on`} type="checkbox" disabled={c.readOnly} checked={on} onChange={(e) => onChange(e.target.checked ? fill() : null)} />
+          <Help id={`${id}-help`} text={help} />
+        </div>
+        {on && body}
+      </fieldset>
+    )
+  }
   return (
     <fieldset className="card bh-row" aria-describedby={[help && `${id}-help`, msgs.length && `${id}-err`].filter(Boolean).join(' ') || undefined} data-field-path={pathKey(path)}>
       <legend>{label}</legend>

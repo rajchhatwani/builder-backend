@@ -332,6 +332,7 @@ from app.core.spec_models import (  # noqa: E402
     SpecHookEffects,
     SpecJobs,
     SpecNotifications,
+    SpecPacks,
     SpecProviders,
     SpecWebhooks,
     SpecWorkflows,
@@ -428,6 +429,14 @@ class ComplianceWrite(_BlockWrite):
 
 class ComplianceRead(_BlockRead):
     compliance: SpecCompliance | None = None
+
+
+class PacksWrite(_BlockWrite):
+    packs: SpecPacks | None = None
+
+
+class PacksRead(_BlockRead):
+    packs: SpecPacks | None = None
 
 
 class ApiPlatformWrite(_BlockWrite):
