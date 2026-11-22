@@ -203,6 +203,88 @@ async def test_geofences_circle_polygon_and_contains(http, people) -> None:  # n
     assert (await http.post("/geo/contains", json={"point": pt(LAT + 15_000, LNG + 15_000)}, headers=admin)).json()["items"] == []
 
 
+async def test_places_and_geofences_can_be_edited(http, people) -> None:  # noqa: ANN001
+    admin, disp, driver, other = people["admin"], people["disp"], people["driver"], people["b_admin"]
+    p = await place(http, admin, "Depot", LAT, LNG, "depot")
+    far = LAT + 3_000_000  # about 334 km away
+    r = await http.put(f"/geo/places/{p['id']}", json={"name": "Depot 2", "kind": None, **pt(far, LNG + 5_000)}, headers=disp)
+    assert r.status_code == 200, r.text
+    moved = r.json()
+    assert (moved["id"], moved["name"], moved["kind"], moved["lat_micro"], moved["lng_micro"], moved["created_at"]) == (p["id"], "Depot 2", None, far, LNG + 5_000, p["created_at"])
+    assert (await http.put(f"/geo/places/{p['id']}", json={"name": "Dec", "lat": "10.5", "lng": "20.25"}, headers=admin)).json()["lat_micro"] == 10_500_000
+    assert (await http.put(f"/geo/places/{p['id']}", json={"name": "Depot 2", "kind": "depot", **pt(far, LNG + 5_000)}, headers=admin)).status_code == 200
+    assert (await http.get("/geo/places/within", params={**pt(), "radius_m": 1000}, headers=admin)).json()["items"] == []  # left the old spot
+    assert [h["id"] for h in (await http.get("/geo/places/within", params={**pt(far, LNG + 5_000), "radius_m": 10}, headers=admin)).json()["items"]] == [p["id"]]
+    nearest = (await http.get("/geo/places/nearest", params={**pt(far, LNG), "n": 1}, headers=driver)).json()["items"]
+    assert nearest[0]["id"] == p["id"] and nearest[0]["kind"] == "depot"
+    assert (await http.get(f"/geo/places/{p['id']}", headers=driver)).json()["lat_micro"] == far
+    assert (await http.get("/geo/places", headers=admin)).json()["total"] == 1  # an edit never duplicates
+    for body, code in (
+        ({"name": "x"}, "invalid_point"),
+        ({"name": "x", "lat_micro": 90_000_001, "lng_micro": 0}, "invalid_coordinates"),
+        ({"name": "", **pt()}, "validation_error"),
+        ({"name": "x\u0000y", **pt()}, "validation_error"),
+        ({"name": "x", "kind": "k\u0000", **pt()}, "validation_error"),
+        ({"name": "x", "colour": "red", **pt()}, "validation_error"),
+    ):
+        r = await http.put(f"/geo/places/{p['id']}", json=body, headers=admin)
+        assert r.status_code == 422 and error_shape(r) == code, (body, r.text)
+    assert (await http.get(f"/geo/places/{p['id']}", headers=admin)).json()["name"] == "Depot 2"  # refused edits change nothing
+    assert (await http.put(f"/geo/places/{p['id']}", json={"name": "no", **pt()}, headers=driver)).status_code == 403
+    assert (await http.put(f"/geo/places/{p['id']}", json={"name": "no", **pt()}, headers=people["nobody"])).status_code == 403
+    assert (await http.put(f"/geo/places/{p['id']}", json={"name": "no", **pt()})).status_code in (401, 403)
+    assert (await http.get(f"/geo/places/{p['id']}", headers=admin)).json()["name"] == "Depot 2"
+    for target in (p["id"], "00000000-0000-0000-0000-000000000000"):
+        r = await http.put(f"/geo/places/{target}", json={"name": "x", **pt()}, headers=other)
+        assert r.status_code == 404 and error_shape(r) == "not_found", r.text
+    assert (await http.put("/geo/places/not-a-uuid", json={"name": "x", **pt()}, headers=admin)).status_code == 422
+    assert (await http.get(f"/geo/places/{p['id']}", headers=admin)).json()["name"] == "Depot 2"
+
+    # geofence: circle -> polygon changes what contains says; the event history stays
+    c = await circle(http, admin, "Yard", LAT, LNG, 500)
+    assert (await http.post("/geo/evaluate", json={"subject_id": "van1", "point": pt()}, headers=admin)).json()["events"][0]["event"] == "enter"
+    square = [pt(LAT + 10_000, LNG + 10_000), pt(LAT + 10_000, LNG + 20_000), pt(LAT + 20_000, LNG + 20_000), pt(LAT + 20_000, LNG + 10_000)]
+    r = await http.put(f"/geo/geofences/{c['id']}", json={"name": "Zone", "shape": "polygon", "vertices": square}, headers=disp)
+    assert r.status_code == 200, r.text
+    z = r.json()
+    assert (z["id"], z["name"], z["shape"], z["center"], z["radius_m"], z["created_at"]) == (c["id"], "Zone", "polygon", None, None, c["created_at"])
+    assert len(z["vertices"]) == 4 and z["vertices"][0]["lat_micro"] == LAT + 10_000
+    assert (await http.post("/geo/contains", json={"point": pt()}, headers=admin)).json()["items"] == []  # the old circle centre is out
+    assert [f["id"] for f in (await http.post("/geo/contains", json={"point": pt(LAT + 15_000, LNG + 15_000)}, headers=admin)).json()["items"]] == [c["id"]]
+    events = (await http.get("/geo/events", params={"geofence_id": c["id"]}, headers=admin)).json()
+    assert events["total"] == 1 and events["items"][0]["event"] == "enter" and events["items"][0]["geofence_name"] == "Yard"  # history untouched
+    out = (await http.post("/geo/evaluate", json={"subject_id": "van1", "point": pt(LAT + 15_000, LNG + 15_000)}, headers=admin)).json()
+    assert out["inside"] == [c["id"]] and out["events"] == []  # still inside under the new shape: no exit, no second enter
+    # polygon -> circle again, with a different box
+    back = (await http.put(f"/geo/geofences/{c['id']}", json={"name": "Yard", "shape": "circle", "center": pt(LAT + 15_000, LNG + 15_000), "radius_m": 50}, headers=admin)).json()
+    assert back["shape"] == "circle" and back["vertices"] is None and back["radius_m"] == 50 and back["center"]["lat_micro"] == LAT + 15_000
+    assert [f["id"] for f in (await http.post("/geo/contains", json={"point": pt(LAT + 15_000, LNG + 15_030)}, headers=admin)).json()["items"]] == [c["id"]]
+    assert (await http.post("/geo/contains", json={"point": pt(LAT + 16_000, LNG + 15_000)}, headers=admin)).json()["items"] == []
+    assert (await http.get("/geo/geofences", headers=admin)).json()["total"] == 1
+    bowtie = [pt(LAT, LNG), pt(LAT + 10_000, LNG + 10_000), pt(LAT, LNG + 10_000), pt(LAT + 20_000, LNG)]
+    for body, code in (
+        ({"name": "x", "shape": "polygon", "vertices": bowtie}, "invalid_polygon"),
+        ({"name": "x", "shape": "polygon", "vertices": [pt(LAT + (10 if i % 2 else 0), LNG + i * 10) for i in range(13)]}, "invalid_polygon"),
+        ({"name": "x", "shape": "circle", "center": pt(), "radius_m": 5_000_001}, "invalid_shape"),
+        ({"name": "x", "shape": "circle", "center": pt(), "radius_m": 0}, "validation_error"),
+        ({"name": "x", "shape": "circle", "center": pt(), "radius_m": 10.5}, "validation_error"),
+        ({"name": "x", "shape": "polygon", "vertices": square, "radius_m": 5}, "validation_error"),
+        ({"name": "x\u0000", "shape": "circle", "center": pt(), "radius_m": 5}, "validation_error"),
+        ({"name": "x", "shape": "circle", "center": {"lat_micro": 1}, "radius_m": 5}, "invalid_point"),
+    ):
+        r = await http.put(f"/geo/geofences/{c['id']}", json=body, headers=admin)
+        assert r.status_code == 422 and error_shape(r) == code, (code, r.text)
+    assert (await http.get(f"/geo/geofences/{c['id']}", headers=admin)).json() == back  # refused edits change nothing
+    body = {"name": "no", "shape": "circle", "center": pt(), "radius_m": 5}
+    assert (await http.put(f"/geo/geofences/{c['id']}", json=body, headers=driver)).status_code == 403
+    assert (await http.put(f"/geo/geofences/{c['id']}", json=body, headers=people["nobody"])).status_code == 403
+    for target in (c["id"], "00000000-0000-0000-0000-000000000000"):
+        r = await http.put(f"/geo/geofences/{target}", json=body, headers=other)
+        assert r.status_code == 404 and error_shape(r) == "not_found", r.text
+    assert (await http.get(f"/geo/geofences/{c['id']}", headers=admin)).json() == back
+    assert (await http.get("/geo/geofences", headers=other)).json()["total"] == 0
+
+
 async def test_the_geofence_limit_is_per_tenant(http, people) -> None:  # noqa: ANN001
     for i in range(20):
         await circle(http, people["admin"], f"F{i:02d}", LAT + i * 100_000, LNG, 100)
@@ -739,6 +821,22 @@ async def test_roles_are_enforced(http, people) -> None:  # noqa: ANN001
         assert r.status_code == 403 and error_shape(r) == "forbidden", (method, path, r.text)
         r = await getattr(http, method)(path, **kwargs)
         assert r.status_code in (401, 403), (method, path, r.status_code)
+    # the remaining routes (by id, adapters, box, actions) refuse a user without a role too
+    ghost = "00000000-0000-0000-0000-000000000000"
+    more = [
+        ("get", f"/geo/places/{ghost}", None), ("put", f"/geo/places/{ghost}", {"name": "x", **pt()}), ("delete", f"/geo/places/{ghost}", None),
+        ("get", "/geo/places/nearest", None), ("get", f"/geo/geofences/{ghost}", None), ("get", "/geo/geofences", None),
+        ("put", f"/geo/geofences/{ghost}", {"name": "x", "shape": "circle", "center": pt(), "radius_m": 5}), ("delete", f"/geo/geofences/{ghost}", None),
+        ("post", "/geo/route", {"origin": pt(), "destination": pt()}), ("post", "/geo/eta", {"origin": pt(), "destination": pt()}),
+        ("get", "/location/positions", None), ("get", "/location/positions/x/history", None),
+        ("post", "/matching/batch", {"requests": [{"request_ref": "r", "point": pt()}], "candidates": pool()}), ("get", "/matching/assignments", None), ("get", f"/matching/assignments/{ghost}", None),
+        ("post", f"/matching/assignments/{ghost}/accept", None), ("post", f"/matching/assignments/{ghost}/reject", None), ("post", f"/matching/assignments/{ghost}/expire", None),
+        ("get", f"/prediction/records/{ghost}", None), ("post", f"/prediction/records/{ghost}/actual", {"actual": 1}),
+    ]
+    for method, path, body in more:
+        kwargs = {"json": body} if body is not None else {}
+        r = await getattr(http, method)(path, headers=nobody, **kwargs)
+        assert r.status_code == 403 and error_shape(r) == "forbidden", (method, path, r.status_code, r.text)
     # a driver reads geo and writes positions, but nothing else
     assert (await http.get("/geo/places", headers=driver)).status_code == 200
     assert (await http.post("/geo/places", json={"name": "x", **pt()}, headers=driver)).status_code == 403

@@ -1,0 +1,49 @@
+{
+  "additionalProperties": false,
+  "description": "Operations pack, D16 prediction adapter (generated routes under /prediction): record predictions (value,\ninterval low / high, model id from the deterministic FAKE predictor), record actuals later and read\nlogged-vs-actual error stats (count, MAE, interval coverage). Integers only.",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "write_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "model_id": {
+      "default": "fake-linear-v1",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "unit": {
+      "default": "unit",
+      "title": "Unit",
+      "type": "string"
+    },
+    "interval_bp": {
+      "default": 2000,
+      "title": "Interval Bp",
+      "type": "integer"
+    }
+  },
+  "title": "SpecPrediction",
+  "type": "object"
+}

@@ -1,0 +1,135 @@
+{
+  "$defs": {
+    "SpecAiDocField": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": false,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecAiDocField",
+      "type": "object"
+    },
+    "SpecAiDocKind": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "$ref": "#/$defs/SpecAiDocField"
+          },
+          "title": "Fields",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "itemLabel": "Field"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecAiDocKind",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "AI pack, D34 document AI (generated under /ai/documents). Extraction goes through\nthe gateway stage `stage`; a field below `review_below_bp` confidence (basis points) goes to the review queue.",
+  "properties": {
+    "kinds": {
+      "items": {
+        "$ref": "#/$defs/SpecAiDocKind"
+      },
+      "title": "Kinds",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Document kind"
+      }
+    },
+    "stage": {
+      "default": "extract",
+      "title": "Stage",
+      "type": "string"
+    },
+    "upload_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Upload Roles",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "review_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Review Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "review_below_bp": {
+      "default": 8000,
+      "title": "Review Below Bp",
+      "type": "integer",
+      "x-ui": {
+        "help": "Confidence in basis points (10000 = 100%). A field below this goes to the review queue."
+      }
+    },
+    "max_text_chars": {
+      "default": 200000,
+      "title": "Max Text Chars",
+      "type": "integer"
+    },
+    "allow_self_review": {
+      "default": false,
+      "title": "Allow Self Review",
+      "type": "boolean"
+    }
+  },
+  "title": "SpecAiDocuments",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "stage",
+      "kinds",
+      "upload_roles",
+      "review_roles",
+      "read_roles",
+      "review_below_bp",
+      "max_text_chars",
+      "allow_self_review"
+    ]
+  }
+}

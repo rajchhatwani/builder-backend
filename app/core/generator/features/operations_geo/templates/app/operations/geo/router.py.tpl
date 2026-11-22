@@ -72,6 +72,11 @@ async def get_place(place_id: _uuid.UUID, session: SessionDep, user: Reader) -> 
     return await _svc.get_place(session, user, place_id)
 
 
+@router.put("/places/{place_id}", response_model=_s.PlaceOut)
+async def update_place(place_id: _uuid.UUID, body: _s.PlaceCreate, session: SessionDep, user: Writer) -> _s.PlaceOut:
+    return await _svc.update_place(session, user, place_id, body)
+
+
 @router.delete("/places/{place_id}", status_code=204)
 async def delete_place(place_id: _uuid.UUID, session: SessionDep, user: Writer) -> Response:
     await _svc.delete_place(session, user, place_id)
@@ -92,6 +97,11 @@ async def list_geofences(session: SessionDep, user: Reader, limit: Limit = 50, o
 @router.get("/geofences/{fence_id}", response_model=_s.GeofenceOut)
 async def get_geofence(fence_id: _uuid.UUID, session: SessionDep, user: Reader) -> _s.GeofenceOut:
     return await _svc.get_geofence(session, user, fence_id)
+
+
+@router.put("/geofences/{fence_id}", response_model=_s.GeofenceOut)
+async def update_geofence(fence_id: _uuid.UUID, body: _s.GeofenceCreate, session: SessionDep, user: Writer) -> _s.GeofenceOut:
+    return await _svc.update_geofence(session, user, fence_id, body)
 
 
 @router.delete("/geofences/{fence_id}", status_code=204)

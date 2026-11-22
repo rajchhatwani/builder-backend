@@ -1,0 +1,249 @@
+{
+  "$defs": {
+    "SpecAiAction": {
+      "additionalProperties": false,
+      "description": "One entry of the ACTION REGISTRY: the only things an agent can ever do. kind: note (text stored in the proposal\nresult only) | entity_create (insert one row of a spec entity, allow-listed fields). risk: low | medium | high\n(a high-risk action never runs without a human, whatever the autonomy). max_autonomy: suggest | draft | auto.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "default": "note",
+          "title": "Kind",
+          "type": "string",
+          "x-ui": {
+            "help": "note or entity_create."
+          }
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "risk": {
+          "default": "low",
+          "title": "Risk",
+          "type": "string",
+          "x-ui": {
+            "help": "low, medium or high. A high-risk action never runs without a human."
+          }
+        },
+        "max_autonomy": {
+          "default": "draft",
+          "title": "Max Autonomy",
+          "type": "string",
+          "x-ui": {
+            "help": "suggest, draft or auto."
+          }
+        },
+        "entity": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Entity",
+          "x-ui": {
+            "help": "The entity's table name (kind entity_create)."
+          }
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Fields",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecAiAction",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "kind",
+          "description",
+          "risk",
+          "max_autonomy",
+          "entity",
+          "fields"
+        ]
+      }
+    },
+    "SpecAiAgent": {
+      "additionalProperties": false,
+      "description": "An agent: a gateway stage plus a list of registry actions. `autonomy` is its ceiling (suggest | draft | auto);\n`require_eval` names an eval suite of this agent that must have passed before `auto` runs.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "stage": {
+          "default": "answer",
+          "title": "Stage",
+          "type": "string"
+        },
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Actions",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "autonomy": {
+          "default": "suggest",
+          "title": "Autonomy",
+          "type": "string",
+          "x-ui": {
+            "help": "The agent's ceiling: suggest, draft or auto."
+          }
+        },
+        "max_actions_per_run": {
+          "default": 5,
+          "title": "Max Actions Per Run",
+          "type": "integer"
+        },
+        "require_eval": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Require Eval",
+          "x-ui": {
+            "help": "An eval suite of this agent that must have passed before auto runs."
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecAiAgent",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "stage",
+          "autonomy",
+          "actions",
+          "max_actions_per_run",
+          "require_eval"
+        ]
+      }
+    },
+    "SpecAiAgentRoles": {
+      "additionalProperties": false,
+      "description": "Empty list = any signed-in user (same convention as the other ai blocks); managing = approve_roles.",
+      "properties": {
+        "run_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Run Roles",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "approve_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Approve Roles",
+          "type": "array",
+          "default": [
+            "admin"
+          ],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Read Roles",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "title": "SpecAiAgentRoles",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "AI pack, D37 agent runtime (generated under /ai/agents). Agents call the model only through the gateway;\nevery proposal is capped by the autonomy dial: min(agent autonomy, action max_autonomy, run mode).",
+  "properties": {
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/SpecAiAction"
+      },
+      "title": "Actions",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Action",
+        "help": "The action registry: the only things an agent can ever do."
+      }
+    },
+    "agents": {
+      "items": {
+        "$ref": "#/$defs/SpecAiAgent"
+      },
+      "title": "Agents",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Agent"
+      }
+    },
+    "roles": {
+      "$ref": "#/$defs/SpecAiAgentRoles",
+      "default": {
+        "run_roles": [],
+        "approve_roles": [
+          "admin"
+        ],
+        "read_roles": []
+      }
+    },
+    "allow_self_approval": {
+      "default": false,
+      "title": "Allow Self Approval",
+      "type": "boolean"
+    }
+  },
+  "title": "SpecAiAgents",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "agents",
+      "actions",
+      "roles",
+      "allow_self_approval"
+    ]
+  }
+}

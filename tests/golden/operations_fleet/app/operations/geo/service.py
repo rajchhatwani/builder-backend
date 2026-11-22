@@ -71,6 +71,19 @@ async def create_place(session: AsyncSession, user: _t.Any, body: _s.PlaceCreate
     return place_out(row)
 
 
+async def update_place(session: AsyncSession, user: _t.Any, place_id: _uuid.UUID, body: _s.PlaceCreate) -> _s.PlaceOut:
+    """Full replace; the grid cell follows the new coordinates so within / nearest see the move at once."""
+    stmt = scoped(_sa.select(GeoPlace).where(GeoPlace.id == place_id), GeoPlace, tenant(user)).with_for_update()
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        raise AppError("not_found", "place not found", 404)
+    lat, lng = body.micro
+    row.name, row.kind, row.lat_micro, row.lng_micro = body.name, body.kind, lat, lng
+    row.cell = _gm.cell_of(lat, lng, _config.GRID_CELL_MICRO)
+    await session.commit()
+    return place_out(row)
+
+
 async def list_places(session: AsyncSession, user: _t.Any, limit: int, offset: int, kind: str | None) -> tuple[list[_s.PlaceOut], int]:
     tn = tenant(user)
     base = scoped(_sa.select(GeoPlace), GeoPlace, tn)
@@ -173,10 +186,8 @@ def _fence_box(shape: str, center: tuple[int, int] | None, radius: int | None, v
     return min_lat, max_lat, -_gm.MAX_LNG_MICRO, _gm.MAX_LNG_MICRO  # crosses the antimeridian: no longitude prefilter
 
 
-async def create_geofence(session: AsyncSession, user: _t.Any, body: _s.GeofenceCreate) -> _s.GeofenceOut:
-    tn = tenant(user)
-    if await _count(session, GeoGeofence, tn) >= _config.MAX_GEOFENCES:
-        raise AppError("limit_reached", f"at most {_config.MAX_GEOFENCES} geofences", 422)
+def _fence_values(body: _s.GeofenceCreate) -> dict[str, _t.Any]:
+    """Validate a fence body (radius cap, vertex cap, polygon rules) and compute the stored columns and the box."""
     center = body.center.micro if body.center is not None else None
     verts = [p.micro for p in body.vertices] if body.vertices is not None else []
     if body.shape == "circle":
@@ -190,15 +201,35 @@ async def create_geofence(session: AsyncSession, user: _t.Any, body: _s.Geofence
         if problem is not None:
             raise AppError("invalid_polygon", problem, 422)
     min_lat, max_lat, min_lng, max_lng = _fence_box(body.shape, center, body.radius_m, verts)
-    row = GeoGeofence(
-        name=body.name, shape=body.shape,
-        center_lat_micro=center[0] if center else None, center_lng_micro=center[1] if center else None,
-        radius_m=body.radius_m if body.shape == "circle" else None,
-        vertices=[list(v) for v in verts] if body.shape == "polygon" else None,
-        min_lat_micro=min_lat, max_lat_micro=max_lat, min_lng_micro=min_lng, max_lng_micro=max_lng,
-        **tenant_values(tn),
-    )
+    return {
+        "name": body.name, "shape": body.shape,
+        "center_lat_micro": center[0] if center and body.shape == "circle" else None,
+        "center_lng_micro": center[1] if center and body.shape == "circle" else None,
+        "radius_m": body.radius_m if body.shape == "circle" else None,
+        "vertices": [list(v) for v in verts] if body.shape == "polygon" else None,
+        "min_lat_micro": min_lat, "max_lat_micro": max_lat, "min_lng_micro": min_lng, "max_lng_micro": max_lng,
+    }
+
+
+async def create_geofence(session: AsyncSession, user: _t.Any, body: _s.GeofenceCreate) -> _s.GeofenceOut:
+    tn = tenant(user)
+    if await _count(session, GeoGeofence, tn) >= _config.MAX_GEOFENCES:
+        raise AppError("limit_reached", f"at most {_config.MAX_GEOFENCES} geofences", 422)
+    row = GeoGeofence(**_fence_values(body), **tenant_values(tn))
     session.add(row)
+    await session.commit()
+    return fence_out(row)
+
+
+async def update_geofence(session: AsyncSession, user: _t.Any, fence_id: _uuid.UUID, body: _s.GeofenceCreate) -> _s.GeofenceOut:
+    """Full replace of the shape and the box. Fence events and memberships are left alone: a subject now outside
+    the new shape gets its exit event on its next evaluation."""
+    stmt = scoped(_sa.select(GeoGeofence).where(GeoGeofence.id == fence_id), GeoGeofence, tenant(user)).with_for_update()
+    row = (await session.execute(stmt)).scalar_one_or_none()
+    if row is None:
+        raise AppError("not_found", "geofence not found", 404)
+    for key, value in _fence_values(body).items():
+        setattr(row, key, value)
     await session.commit()
     return fence_out(row)
 

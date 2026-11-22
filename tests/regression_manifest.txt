@@ -408,4 +408,6 @@ tests/unit/test_suite_migration.py
 tests/api/test_suite_migration.py
 tests/e2e/test_suite_identity_paths_stack.py
 tests/unit/test_pack_form_schemas.py
+tests/unit/test_pack_form_schemas_ops.py
 tests/api/test_packs_block.py
+tests/unit/test_pack_form_schemas_ai.py

@@ -1,0 +1,135 @@
+{
+  "$defs": {
+    "SpecAiEvalCase": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "goal": {
+          "title": "Goal",
+          "type": "string"
+        },
+        "expect_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Expect Actions",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "forbid_actions": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbid Actions",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "goal"
+      ],
+      "title": "SpecAiEvalCase",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "goal",
+          "expect_actions",
+          "forbid_actions"
+        ]
+      }
+    },
+    "SpecAiEvalSuite": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "agent": {
+          "title": "Agent",
+          "type": "string"
+        },
+        "pass_bp": {
+          "default": 8000,
+          "title": "Pass Bp",
+          "type": "integer",
+          "x-ui": {
+            "help": "Pass mark in basis points (8000 = 80%)."
+          }
+        },
+        "cases": {
+          "items": {
+            "$ref": "#/$defs/SpecAiEvalCase"
+          },
+          "title": "Cases",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "itemLabel": "Case"
+          }
+        }
+      },
+      "required": [
+        "name",
+        "agent"
+      ],
+      "title": "SpecAiEvalSuite",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "agent",
+          "pass_bp",
+          "cases"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "description": "AI pack, D38 eval harness (generated under /ai/evals). Every case runs its agent in dry mode (suggest).",
+  "properties": {
+    "suites": {
+      "items": {
+        "$ref": "#/$defs/SpecAiEvalSuite"
+      },
+      "title": "Suites",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Suite"
+      }
+    },
+    "run_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Run Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    }
+  },
+  "title": "SpecAiEvals",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "suites",
+      "run_roles"
+    ]
+  }
+}

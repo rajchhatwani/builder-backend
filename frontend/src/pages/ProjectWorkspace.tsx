@@ -90,6 +90,23 @@ const CurrencySettingsPage = lazy(() => import('../shell/packs/PackSettingsPages
 const ReconSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.ReconSettingsPage })))
 const InvoicingSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.InvoicingSettingsPage })))
 const BookingSettingsPage = lazy(() => import('../shell/packs/PackSettingsPages').then((m) => ({ default: m.BookingSettingsPage })))
+const PlacesPage = lazy(() => import('../shell/operations/PlacesPage').then((x) => ({ default: x.PlacesPage })))
+const MatchingPage = lazy(() => import('../shell/operations/MatchingPage').then((x) => ({ default: x.MatchingPage })))
+const PredictionPage = lazy(() => import('../shell/operations/PredictionPage').then((x) => ({ default: x.PredictionPage })))
+const RoutingPage = lazy(() => import('../shell/operations/RoutingPage').then((x) => ({ default: x.RoutingPage })))
+const AiUsagePage = lazy(() => import('../shell/aipack/AiUsagePage').then((x) => ({ default: x.AiUsagePage })))
+const KnowledgePage = lazy(() => import('../shell/aipack/KnowledgePage').then((x) => ({ default: x.KnowledgePage })))
+const EvalsPage = lazy(() => import('../shell/aipack/EvalsPage').then((x) => ({ default: x.EvalsPage })))
+const AgentRunsPage = lazy(() => import('../shell/aipack/AgentRunsPage').then((x) => ({ default: x.AgentRunsPage })))
+const GeoSettingsPage = lazy(() => import('../shell/operations/OpsSettingsPages').then((x) => ({ default: x.GeoSettingsPage })))
+const LocationSettingsPage = lazy(() => import('../shell/operations/OpsSettingsPages').then((x) => ({ default: x.LocationSettingsPage })))
+const MatchingSettingsPage = lazy(() => import('../shell/operations/OpsSettingsPages').then((x) => ({ default: x.MatchingSettingsPage })))
+const PredictionSettingsPage = lazy(() => import('../shell/operations/OpsSettingsPages').then((x) => ({ default: x.PredictionSettingsPage })))
+const AiGatewaySettingsPage = lazy(() => import('../shell/aipack/AiSettingsPages').then((x) => ({ default: x.AiGatewaySettingsPage })))
+const AiDocumentsSettingsPage = lazy(() => import('../shell/aipack/AiSettingsPages').then((x) => ({ default: x.AiDocumentsSettingsPage })))
+const KnowledgeSettingsPage = lazy(() => import('../shell/aipack/AiSettingsPages').then((x) => ({ default: x.KnowledgeSettingsPage })))
+const AgentsSettingsPage = lazy(() => import('../shell/aipack/AiSettingsPages').then((x) => ({ default: x.AgentsSettingsPage })))
+const EvalsSettingsPage = lazy(() => import('../shell/aipack/AiSettingsPages').then((x) => ({ default: x.EvalsSettingsPage })))
 const LedgerPage = lazy(() => import('../shell/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage })))
 const SearchPage = lazy(() => import('../shell/search/SearchPage').then((m) => ({ default: m.SearchPage })))
 const BuildPage = lazy(() => import('../shell/ai/BuildPage').then((m) => ({ default: m.BuildPage })))
@@ -619,7 +636,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades' || section === 'invoices' || section === 'payouts' || section === 'reconciliation' || section === 'bookingadmin' || section === 'ledgersettings' || section === 'currencysettings' || section === 'reconsettings' || section === 'invoicingsettings' || section === 'bookingsettings') && (
+      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades' || section === 'invoices' || section === 'payouts' || section === 'reconciliation' || section === 'bookingadmin' || section === 'ledgersettings' || section === 'currencysettings' || section === 'reconsettings' || section === 'invoicingsettings' || section === 'bookingsettings' || section === 'places' || section === 'matching' || section === 'prediction' || section === 'routing' || section === 'aiusage' || section === 'knowledge' || section === 'evals' || section === 'agentruns' || section === 'geosettings' || section === 'locationsettings' || section === 'matchingsettings' || section === 'predictionsettings' || section === 'aigatewaysettings' || section === 'aidocssettings' || section === 'knowledgesettings' || section === 'agentssettings' || section === 'evalssettings') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}
@@ -641,6 +658,23 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'reconsettings' && <ReconSettingsPage projectId={project.id} />}
           {section === 'invoicingsettings' && <InvoicingSettingsPage projectId={project.id} />}
           {section === 'bookingsettings' && <BookingSettingsPage projectId={project.id} />}
+          {section === 'places' && <PlacesPage projectId={project.id} />}
+          {section === 'matching' && <MatchingPage projectId={project.id} />}
+          {section === 'prediction' && <PredictionPage projectId={project.id} />}
+          {section === 'routing' && <RoutingPage projectId={project.id} />}
+          {section === 'aiusage' && <AiUsagePage projectId={project.id} />}
+          {section === 'knowledge' && <KnowledgePage projectId={project.id} />}
+          {section === 'evals' && <EvalsPage projectId={project.id} />}
+          {section === 'agentruns' && <AgentRunsPage projectId={project.id} />}
+          {section === 'geosettings' && <GeoSettingsPage projectId={project.id} />}
+          {section === 'locationsettings' && <LocationSettingsPage projectId={project.id} />}
+          {section === 'matchingsettings' && <MatchingSettingsPage projectId={project.id} />}
+          {section === 'predictionsettings' && <PredictionSettingsPage projectId={project.id} />}
+          {section === 'aigatewaysettings' && <AiGatewaySettingsPage projectId={project.id} />}
+          {section === 'aidocssettings' && <AiDocumentsSettingsPage projectId={project.id} />}
+          {section === 'knowledgesettings' && <KnowledgeSettingsPage projectId={project.id} />}
+          {section === 'agentssettings' && <AgentsSettingsPage projectId={project.id} />}
+          {section === 'evalssettings' && <EvalsSettingsPage projectId={project.id} />}
         </Suspense>
       )}
 

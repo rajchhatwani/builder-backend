@@ -15,8 +15,8 @@ export const RAIL_GROUPS: RailGroup[] = [
   { id: 'ai', label: 'Build with AI', sections: ['intake', 'plan', 'build', 'approvals', 'see'] },
   { id: 'build', label: 'Build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'customfields', 'events', 'hookeffects'] },
   { id: 'secure', label: 'Secure', sections: ['auth', 'keycloak', 'suite', 'access', 'dependencies', 'compliance'] },
-  { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps', 'ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings'] },
-  { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics', 'search', 'ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin', 'documents', 'agentactions'] },
+  { id: 'connect', label: 'Connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps', 'ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings', 'geosettings', 'locationsettings', 'matchingsettings', 'predictionsettings', 'aigatewaysettings', 'aidocssettings', 'knowledgesettings', 'agentssettings', 'evalssettings'] },
+  { id: 'operate', label: 'Operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics', 'search', 'ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing', 'aiusage', 'knowledge', 'evals', 'agentruns'] },
   { id: 'ship', label: 'Ship', sections: ['deployment', 'generate', 'upgrades'] },
 ]
 

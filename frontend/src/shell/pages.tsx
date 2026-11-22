@@ -516,6 +516,159 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
       </>
     ),
   },
+  {
+    id: 'places',
+    label: 'Places & fences',
+    icon: (
+      <>
+        <path d="M12 21s-6-5.5-6-10a6 6 0 0112 0c0 4.5-6 10-6 10z" /><circle cx="12" cy="11" r="2" />
+      </>
+    ),
+  },
+  {
+    id: 'matching',
+    label: 'Matching',
+    icon: (
+      <>
+        <path d="M5 7h6M13 17h6M11 7l2 10" /><circle cx="5" cy="7" r="1" /><circle cx="19" cy="17" r="1" />
+      </>
+    ),
+  },
+  {
+    id: 'prediction',
+    label: 'Prediction',
+    icon: (
+      <>
+        <path d="M4 18l5-6 4 3 7-9" />
+      </>
+    ),
+  },
+  {
+    id: 'routing',
+    label: 'Route & ETA',
+    icon: (
+      <>
+        <circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h6a3 3 0 000-6h-4a3 3 0 010-6h6" />
+      </>
+    ),
+  },
+  {
+    id: 'aiusage',
+    label: 'AI usage',
+    icon: (
+      <>
+        <path d="M5 19V9M12 19V5M19 19v-7" />
+      </>
+    ),
+  },
+  {
+    id: 'knowledge',
+    label: 'Knowledge',
+    icon: (
+      <>
+        <path d="M5 4h10a4 4 0 014 4v12H9a4 4 0 01-4-4z" /><path d="M9 9h6" />
+      </>
+    ),
+  },
+  {
+    id: 'evals',
+    label: 'AI evals',
+    icon: (
+      <>
+        <path d="M5 12l4 4 10-10" />
+      </>
+    ),
+  },
+  {
+    id: 'agentruns',
+    label: 'Agent runs',
+    icon: (
+      <>
+        <circle cx="12" cy="8" r="3" /><path d="M5 20c0-4 3-6 7-6s7 2 7 6" />
+      </>
+    ),
+  },
+  {
+    id: 'geosettings',
+    label: 'Geo settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'locationsettings',
+    label: 'Location settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'matchingsettings',
+    label: 'Matching settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'predictionsettings',
+    label: 'Prediction settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'aigatewaysettings',
+    label: 'AI gateway settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'aidocssettings',
+    label: 'AI documents settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'knowledgesettings',
+    label: 'Knowledge settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'agentssettings',
+    label: 'Agents settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'evalssettings',
+    label: 'Evals settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
 ]
 
 export function findSection(id: AnySection) {

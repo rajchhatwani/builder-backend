@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "Operations pack, D14 live location store (generated routes under /location): the latest position per\nsubject, with a monotonic `seq` (older updates are ignored), a bounded history (`history_cap` rows per subject)\nand a latest-in-bounding-box query. Evaluates geofences when the `geo` block is declared too.",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "write_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "history_cap": {
+      "default": 100,
+      "title": "History Cap",
+      "type": "integer"
+    },
+    "max_subjects": {
+      "default": 100000,
+      "title": "Max Subjects",
+      "type": "integer"
+    }
+  },
+  "title": "SpecLocation",
+  "type": "object"
+}
