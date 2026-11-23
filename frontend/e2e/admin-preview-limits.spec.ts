@@ -1,13 +1,10 @@
-/** B3-10 admin page "Preview limits" (admin console, #/admin/previews), behind the single flag ui.shell=v2.
+/** B3-10 admin page "Preview limits" (admin console, #/admin/previews).
  *  NOT run by its author (ATLAS runs the Playwright stack). No screenshot baselines are asserted.
  *  The kill switch is turned on and off again, and the edited default is restored, so later specs see the platform defaults. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { ADMIN, adminApi, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-const flags = [{ name: 'ui.shell', value: 'v2' }]
-test.use({ storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: flags }] } })
 
 async function adminSignIn(page: Page) {
   await page.goto('/#/admin')

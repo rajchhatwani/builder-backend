@@ -1,0 +1,62 @@
+{
+  "additionalProperties": false,
+  "description": "AI pack, D35 knowledge library + RAG (generated under /ai/knowledge). Answers go\nthrough the gateway stage `stage`; retrieval is filtered by the caller's permissions.",
+  "properties": {
+    "stage": {
+      "default": "answer",
+      "title": "Stage",
+      "type": "string"
+    },
+    "manage_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Manage Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "chunk_chars": {
+      "default": 800,
+      "title": "Chunk Chars",
+      "type": "integer"
+    },
+    "max_sources": {
+      "default": 1000,
+      "title": "Max Sources",
+      "type": "integer"
+    },
+    "max_text_chars": {
+      "default": 500000,
+      "title": "Max Text Chars",
+      "type": "integer"
+    }
+  },
+  "title": "SpecAiKnowledge",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "stage",
+      "manage_roles",
+      "read_roles",
+      "chunk_chars",
+      "max_sources",
+      "max_text_chars"
+    ]
+  }
+}

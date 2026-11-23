@@ -59,6 +59,7 @@
     "app/schemas/tickets.py": "generated",
     "docker-compose.yml": "seeded",
     "docs/AUTHORIZATION.md": "generated",
+    "docs/IDENTITY-MIGRATION.md": "generated",
     "keycloak/clients.json": "generated",
     "pyproject.toml": "generated",
     "requirements-dev.txt": "generated",
@@ -74,6 +75,7 @@
     "tests/test_auth.py": "generated",
     "tests/test_authz.py": "generated",
     "tests/test_identity.py": "generated",
+    "tests/test_identity_migration.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tickets.py": "generated"
   }

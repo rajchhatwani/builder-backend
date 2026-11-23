@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { sendRequest } from '../workbench/sendRequest'
-import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
+import { PreviewSessionGate } from '../preview/PreviewSessionGate'
+import { usePreviewSession } from '../preview/usePreviewSession'
+import type { PreviewSession } from '../preview/previewSession'
 import { newIdempotencyKey } from '../ledger/ledgerLogic'
 import {
   addDays, bookingErrorMessage, buildGrid, cancellationNote, findOverlaps, formatDay, formatInstant, isActive, localParts, moveFocus, parseBookingJson, parseLocalInput,
@@ -20,10 +21,9 @@ const COLOR: Record<CellState, { bg: string; fg: string; border: string }> = {
 }
 
 /** Booking calendar for a generated project's booking pack (D12). Week grid in the resource's time zone, hold -> confirm -> cancel.
- *  Bearer token held in memory only (same mechanism as the Ledger explorer). The server is the only authority on availability. */
-export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, now = Date.now }: { projectId: string; origin?: string | null; doFetch?: typeof fetch; now?: () => number }) {
-  const [token, setToken] = useState('')
-  const [active, setActive] = useState('')
+ *  Uses the dashboard-supplied preview session (tokens kept in memory only, never shown). The server is the only authority on availability. */
+function BookingsPageBody({ session, now = Date.now }: { projectId: string; session: PreviewSession; now?: () => number }) {
+  const { request } = session
   const [resources, setResources] = useState<Load<Page<Resource>>>({ s: 'idle' })
   const [resourceId, setResourceId] = useState('')
   const [anchor, setAnchor] = useState('')
@@ -40,7 +40,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const [customer, setCustomer] = useState('')
   const [notes, setNotes] = useState('')
   const [reason, setReason] = useState('')
-  const tokenId = useId(), resId = useId(), custId = useId(), notesId = useId(), reasonId = useId()
+  const resId = useId(), custId = useId(), notesId = useId(), reasonId = useId()
   const loaded = useRef('')
   const cellRefs = useRef(new Map<string, HTMLButtonElement>())
 
@@ -48,14 +48,12 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const tz = resource?.timezone ?? 'UTC'
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
-    if (!origin) throw new Error('No preview API is configured')
-    const r = await sendRequest({ url: origin + path, origin, method, body: body === undefined ? undefined : JSON.stringify(body), bearer: active || undefined }, doFetch)
+    const r = await request(method, path, body)
     let json: unknown = null
     try { json = r.text ? parseBookingJson(r.text) : null } catch { json = null }
     return { status: r.status, json }
-  }, [origin, active, doFetch])
+  }, [request])
 
-  useEffect(() => { loaded.current = ''; setActive(''); setToken(''); setResources({ s: 'idle' }); setResourceId(''); setAnchor(''); setAvail({ s: 'idle' }); setBookings({ s: 'idle' }); setSelKey(null); setError(null); setNotice(null) }, [projectId])
 
   const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean, keep = false) => {
     if (!keep) set({ s: 'loading' })
@@ -67,14 +65,13 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   }, [call])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     void get<Page<Resource>>('/booking/resources?limit=200&active=true', (l) => {
       setResources(l)
       if (l.s === 'ok') setResourceId((cur) => (l.v.items.some((r) => r.id === cur) ? cur : l.v.items[0]?.id ?? ''))
     }, () => dead)
     return () => { dead = true }
-  }, [active, get])
+  }, [get])
 
   // pick the week that contains "today" in the resource zone once a resource is known
   useEffect(() => { if (resource && !anchor) setAnchor(localParts(now(), resource.timezone).date) }, [resource, anchor, now])
@@ -82,7 +79,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const week = useMemo(() => (anchor ? weekRange(anchor) : null), [anchor])
 
   useEffect(() => {
-    if (!active || !resource || !week) return
+    if (!resource || !week) return
     let dead = false
     const off = () => dead
     const { from, to } = weekInstants(week, resource.timezone)
@@ -94,7 +91,7 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
     if (resource.mode === 'slot') void get<Avail>(`/booking/resources/${encodeURIComponent(resource.id)}/availability?from=${week.from}&to=${week.to}&include_taken=true`, setAvail, off, keep)
     else setAvail({ s: 'ok', v: { slots: [] } })
     return () => { dead = true }
-  }, [active, resource, week, refresh, get])
+  }, [resource, week, refresh, get])
 
   const nowMs = now()
   const grid = useMemo(() => {
@@ -147,32 +144,15 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
   const confirm = (b: Booking) => act(() => call('POST', `/booking/bookings/${encodeURIComponent(b.id)}/confirm`), (x) => `Booking confirmed for ${formatInstant(x.starts_at, tz)}.`)
   const cancel = (b: Booking) => act(() => call('POST', `/booking/bookings/${encodeURIComponent(b.id)}/cancel`, reason.trim() ? { reason: reason.trim() } : {}), (x) => cancellationNote(x))
 
-  if (!origin) {
-    return (
-      <section aria-labelledby="bk-h" data-testid="bookings-page">
-        <h1 id="bk-h">Bookings</h1>
-        <p className="muted" data-testid="bookings-no-origin">No preview API is configured for this dashboard, so there is no calendar to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the booking pack on).</p>
-      </section>
-    )
-  }
-
   return (
-    <section aria-labelledby="bk-h" data-testid="bookings-page" className="stack">
-      <h1 id="bk-h">Bookings</h1>
-      <p className="muted">Week calendar of the running project&apos;s bookable resources. Create a hold, confirm it before it expires, or cancel. The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { loaded.current = ''; setActive(token); setRefresh((n) => n + 1) } }} data-testid="bookings-token-form">
-        <label htmlFor={tokenId}>Bearer token</label>
-        <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="bookings-token" />
-        <button type="submit" disabled={!token} data-testid="bookings-load">Load calendar</button>
-      </form>
-      {!active && <p className="muted" data-testid="bookings-notoken">Paste a bearer token for the project (a role allowed to read or make bookings) to load it.</p>}
+    <>
 
-      {active && resources.s === 'loading' && <p role="status" className="muted" data-testid="bookings-resources-loading">Loading resources…</p>}
-      {active && resources.s === 'error' && <p role="alert" className="error-text" data-testid="bookings-resources-error">{resources.m}</p>}
-      {active && resources.s === 'ok' && (resources.v.total ?? 0) > resources.v.items.length && <p role="alert" className="error-text" data-testid="bookings-resources-truncated">Only the first {resources.v.items.length} of {resources.v.total} resources are listed.</p>}
-      {active && resources.s === 'ok' && resources.v.items.length === 0 && <p className="muted" data-testid="bookings-resources-empty">No bookable resources yet. Create one with POST /booking/resources.</p>}
+      {resources.s === 'loading' && <p role="status" className="muted" data-testid="bookings-resources-loading">Loading resources…</p>}
+      {resources.s === 'error' && <p role="alert" className="error-text" data-testid="bookings-resources-error">{resources.m}</p>}
+      {resources.s === 'ok' && (resources.v.total ?? 0) > resources.v.items.length && <p role="alert" className="error-text" data-testid="bookings-resources-truncated">Only the first {resources.v.items.length} of {resources.v.total} resources are listed.</p>}
+      {resources.s === 'ok' && resources.v.items.length === 0 && <p className="muted" data-testid="bookings-resources-empty">No bookable resources yet. Create one with POST /booking/resources.</p>}
 
-      {active && resources.s === 'ok' && resource && week && (
+      {resources.s === 'ok' && resource && week && (
         <>
           <div className="hstack" role="group" aria-label="Calendar controls" data-testid="bookings-controls">
             <label htmlFor={resId}>Resource</label>
@@ -292,6 +272,20 @@ export function BookingsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fet
           </div>
         </>
       )}
+    </>
+  )
+}
+
+export function BookingsPage({ projectId, session, now }: { projectId: string; session?: PreviewSession; now?: () => number }) {
+  const own = usePreviewSession(projectId, { disabled: !!session })
+  const s = session ?? own
+  return (
+    <section aria-labelledby="bk-h" data-testid="bookings-page" className="stack">
+      <h1 id="bk-h">Bookings</h1>
+      <p className="muted">Week calendar of the running project&apos;s bookable resources. Create a hold, confirm it before it expires, or cancel.</p>
+      <PreviewSessionGate session={s} prefix="bookings">
+        <BookingsPageBody key={projectId} projectId={projectId} session={s} now={now}/>
+      </PreviewSessionGate>
     </section>
   )
 }

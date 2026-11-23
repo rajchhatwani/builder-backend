@@ -436,6 +436,34 @@ you fix the cause and requeue it: `await outbox.requeue_failed(session, event_id
 when `event_id` is omitted).
 
 {% endif %}
+{% if regulated %}
+## Regulated mode
+
+Some fields are protected: they are encrypted at rest with customer-managed keys (or tokenised), the API answers the
+authorised caller in plain text, and nothing else (history, events, webhooks, logs, search) ever holds the value.
+Keys come from `REGULATED_KEY_FILE` (mode 0600, one `<keyid> <base64 key>` per line, first line active) or
+`REGULATED_KEY_COMMAND`; see `.env.example`. **Rotation:** put the new key first, keep the old one below it, restart,
+run `python -m app.regulated.reencrypt` (it also moves the provider credentials; it exits non-zero while rows remain under an
+old key; every API and worker process caches the key ring, so restart them all first and again before removing the old key). A row whose key
+is gone cannot be read (it fails closed). A `searchable` field answers an equality filter (`?field=value`) through a blind
+index; note that the value then travels in the URL: the compose file turns the server's access log off, but your proxy's access
+log must not record query strings. The compose file mounts `REGULATED_KEY_FILE` (set it in `.env` to the key file on the
+host) read-only into every service that runs app code. The provider credential
+vault takes its master key from the same keyring when `PROVIDER_VAULT_KEY` is not set.
+
+{% endif %}
+{% if compliance %}
+## Compliance
+
+`/compliance/...` (roles in `app/compliance/settings.py`, default deny): **legal holds** (`POST/GET/DELETE /compliance/legal-holds`;
+a row under an active hold is never purged or anonymised), **retention** (`POST /compliance/retention/run {"dry_run": true}` or
+`python -m app.compliance.purge [--dry-run]` from a scheduler; every run is audited), **consent** per declared purpose
+(`/compliance/consents`, `/withdraw`, `/check`), **break-glass** emergency reads (`POST /compliance/break-glass` with a reason; the
+grant expires; every read with it is audited in `compliance_audit`) and a **de-identified export** (`POST /compliance/exports`:
+listed fields only, hashed fields use `COMPLIANCE_EXPORT_SALT`, rows without consent for the export purpose are left out).
+Audit rows hold ids and counts, never a field value. This is tooling, not a compliance certification.
+
+{% endif %}
 ## Not included
 
 {% if auth %}

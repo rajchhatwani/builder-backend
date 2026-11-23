@@ -10,7 +10,9 @@ import sqlalchemy as sa
 {% if target %}
 from httpx import AsyncClient
 {% endif %}
+{% if target %}
 from structlog.testing import capture_logs
+{% endif %}
 
 from app.core import redact
 {% if target %}

@@ -1,0 +1,169 @@
+"""Tests for the legacy sign-in window of a migrating app (generated, identity path b).
+
+Tokens this app signed before the move (HS256, issuer {{ migration.legacy_issuer }}) must reach the SAME
+local user while the window is open, must stop when it closes (the clock is faked, expiry fails
+closed), and legacy access AND refresh tokens must be refused after hub_only."""
+
+import base64
+import datetime as dt
+import hashlib
+import hmac
+import json
+import time
+import uuid
+from typing import Any
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.auth import config, identity, legacy
+from app.auth.models import AuthIdentity, AuthUser
+from app.db import session_factory
+from tests._auth_support import bearer, token
+
+pytestmark = pytest.mark.usefixtures("key_server")
+
+SECRET = "legacy-secret-" + "x" * 32
+ISSUER = {{ migration.legacy_issuer | pyrepr }}
+
+
+def _b64(raw: bytes) -> str:
+    return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
+
+
+def legacy_token(sub: str, *, secret: str = SECRET, header: dict[str, str] | None = None, **claims: Any) -> str:
+    now = int(time.time())
+    payload: dict[str, Any] = {"iss": ISSUER, "sub": sub, "roles": [], "type": "access", "iat": now, "exp": now + 300}
+    payload.update(claims)
+    head = _b64(json.dumps(header or {"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    body = _b64(json.dumps(payload, separators=(",", ":")).encode())
+    signature = _b64(hmac.new(secret.encode(), f"{head}.{body}".encode(), hashlib.sha256).digest())
+    return f"{head}.{body}.{signature}"
+
+
+@pytest.fixture(autouse=True)
+def _legacy_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("LEGACY_JWT_SECRET", SECRET)
+    monkeypatch.setattr(config, "LEGACY_STATE", "dual")
+    monkeypatch.setattr(config, "LEGACY_DUAL_UNTIL", (dt.datetime.now(dt.UTC) + dt.timedelta(days=30)).isoformat())
+    identity.HOOKS = identity.Hooks()
+
+
+async def _migrated_user(client: AsyncClient, email: str = "moved@example.com") -> tuple[uuid.UUID, str]:
+    """A user who first signed in through the hub, plus the legacy identity the import created."""
+    assert (await client.get("/auth/me", headers=bearer(token(email=email)))).status_code == 200
+    async with session_factory() as session:
+        user = (await session.execute(select(AuthUser).where(AuthUser.email == email))).scalar_one()
+        legacy_subject = str(uuid.uuid4())  # the old app's subject for this person
+        await identity.add_identity(
+            session, user.id, issuer=ISSUER, subject=legacy_subject, provider="builtin", email=email, email_verified=True
+        )
+        await session.commit()
+    return user.id, legacy_subject
+
+
+async def test_a_legacy_token_in_the_window_reaches_the_same_local_user(client: AsyncClient) -> None:
+    uid, subject = await _migrated_user(client)
+    via_legacy = await client.get("/auth/me", headers=bearer(legacy_token(subject)))
+    via_hub = await client.get("/auth/me", headers=bearer(token(email="moved@example.com")))
+    assert via_legacy.status_code == 200, via_legacy.text
+    assert via_hub.status_code == 200
+    assert via_legacy.json()["id"] == via_hub.json()["id"] == str(uid)
+    async with session_factory() as session:
+        rows = (await session.execute(select(AuthIdentity).where(AuthIdentity.user_id == uid))).scalars().all()
+        assert {r.issuer for r in rows} >= {ISSUER}
+        # (issuer, subject) stays unique: the second link of the same pair is ignored.
+        other = uuid.uuid4()
+        await identity.add_identity(session, other, issuer=ISSUER, subject=subject, provider="x", email=None, email_verified=False)
+        assert await identity.find_user_id(session, ISSUER, subject) == uid
+
+
+async def test_an_unknown_legacy_subject_never_creates_a_user(client: AsyncClient) -> None:
+    async with session_factory() as session:
+        before = len((await session.execute(select(AuthUser))).scalars().all())
+    assert (await client.get("/auth/me", headers=bearer(legacy_token(str(uuid.uuid4()))))).status_code == 401
+    async with session_factory() as session:
+        assert len((await session.execute(select(AuthUser))).scalars().all()) == before
+
+
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        {"secret": "another-secret-" + "y" * 32},
+        {"header": {"alg": "none", "typ": "JWT"}},
+        {"header": {"alg": "RS256", "typ": "JWT"}},
+        {"iss": "builtin:somebody-else"},
+        {"type": "refresh"},
+        {"exp": 1},
+        {"sub": ""},
+    ],
+)
+async def test_forged_or_malformed_legacy_tokens_are_refused(client: AsyncClient, mutate: dict[str, Any]) -> None:
+    _, subject = await _migrated_user(client)
+    args: dict[str, Any] = {"sub": subject, **mutate}
+    sub = args.pop("sub")
+    response = await client.get("/auth/me", headers=bearer(legacy_token(sub, **args)))
+    assert response.status_code == 401
+
+
+async def test_a_short_or_missing_legacy_secret_refuses_everything(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, subject = await _migrated_user(client)
+    for value in ("", "short"):
+        monkeypatch.setenv("LEGACY_JWT_SECRET", value)
+        assert (await client.get("/auth/me", headers=bearer(legacy_token(subject, secret=value)))).status_code == 401
+
+
+async def test_the_dual_window_expires_and_expiry_fails_closed(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, subject = await _migrated_user(client)
+    end = legacy.window_end()
+    assert end is not None
+    headers = bearer(legacy_token(subject))
+    monkeypatch.setattr(legacy, "_now", lambda: end - dt.timedelta(seconds=1))
+    assert (await client.get("/auth/me", headers=headers)).status_code == 200
+    monkeypatch.setattr(legacy, "_now", lambda: end)  # the window is half open: the end itself is closed
+    assert (await client.get("/auth/me", headers=headers)).status_code == 401
+    monkeypatch.setattr(legacy, "_now", lambda: end + dt.timedelta(days=1))
+    assert (await client.get("/auth/me", headers=headers)).status_code == 401
+    # a hub token is not affected by the window
+    assert (await client.get("/auth/me", headers=bearer(token(email="moved@example.com")))).status_code == 200
+    # an unreadable or timezone-less window refuses too
+    monkeypatch.setattr(legacy, "_now", lambda: end - dt.timedelta(days=1))
+    for bad in ("garbage", "2030-01-01T00:00:00", None):
+        monkeypatch.setattr(config, "LEGACY_DUAL_UNTIL", bad)
+        assert (await client.get("/auth/me", headers=headers)).status_code == 401
+
+
+async def test_legacy_read_only_allows_reads_only(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    _, subject = await _migrated_user(client)
+    monkeypatch.setattr(config, "LEGACY_STATE", "legacy_read_only")
+    monkeypatch.setattr(config, "LEGACY_DUAL_UNTIL", None)
+    assert (await client.get("/auth/me", headers=bearer(legacy_token(subject)))).status_code == 200
+    token_value = legacy_token(subject)
+    assert legacy.refusal("GET") is None and legacy.refusal("HEAD") is None
+    for method in ("POST", "PUT", "PATCH", "DELETE"):
+        assert legacy.refusal(method) is not None
+        with pytest.raises(legacy.LegacyRefused):
+            legacy.verify_access(token_value, method)
+
+
+async def test_hub_only_refuses_legacy_access_and_refresh_tokens(client: AsyncClient, monkeypatch: pytest.MonkeyPatch) -> None:
+    uid, subject = await _migrated_user(client)
+    monkeypatch.setattr(config, "LEGACY_STATE", "hub_only")
+    monkeypatch.setattr(config, "LEGACY_DUAL_UNTIL", None)
+    assert (await client.get("/auth/me", headers=bearer(legacy_token(subject)))).status_code == 401
+    for method in ("GET", "POST"):
+        assert legacy.refusal(method, "access") is not None
+        assert legacy.refusal(method, "refresh") is not None
+        with pytest.raises(legacy.LegacyRefused):
+            legacy.verify_access(legacy_token(subject), method)
+        with pytest.raises(legacy.LegacyRefused):
+            legacy.verify_access(legacy_token(subject, type="refresh"), method, kind="refresh")
+    me = await client.get("/auth/me", headers=bearer(token(email="moved@example.com")))
+    assert me.status_code == 200 and me.json()["id"] == str(uid)  # the hub sign-in still works
+
+
+async def test_legacy_refresh_tokens_are_never_accepted_even_in_the_window() -> None:
+    assert legacy.refusal("GET", "refresh") is not None
+    with pytest.raises(legacy.LegacyRefused):
+        legacy.verify_access(legacy_token(str(uuid.uuid4())), "GET", kind="refresh")

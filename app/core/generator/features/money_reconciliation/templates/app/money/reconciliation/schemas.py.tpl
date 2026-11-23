@@ -112,7 +112,8 @@ class MatchedPairOut(BaseModel):
 
 class ResultsOut(BaseModel):
     run: RunOut
-    matched: list[MatchedPairOut]
+    matched: list[MatchedPairOut]  # one page of the matched pairs (limit/offset); matched_total counts them all
+    matched_total: int
     unmatched_lines: list[LineOut]
     unmatched_entries: list[EntryRefOut]
     entries_truncated: bool

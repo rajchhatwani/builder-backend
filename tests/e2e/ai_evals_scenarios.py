@@ -285,3 +285,21 @@ async def test_another_tenant_sees_and_changes_nothing(http, people) -> None:  #
     assert (await http.get("/ai/usage", headers=b)).json()["calls_ok"] == 2 and (await http.get("/ai/usage", headers=people["admin"])).json()["calls_ok"] == 2
     tenants = {r[0] for r in await rows("SELECT DISTINCT tenant_id FROM ai_eval_runs")}
     assert len(tenants) == 2
+
+
+async def test_runs_with_an_identical_created_at_order_by_insertion(http, people) -> None:  # noqa: ANN001
+    admin = people["admin"]
+    made = [(await run_suite(http, admin, "guarded_basic"))["id"] for _ in range(5)]
+    await rows_exec("UPDATE ai_eval_runs SET created_at = '2030-01-01T00:00:00+00'")
+    by_seq = [str(r[0]) for r in await rows("SELECT id FROM ai_eval_runs ORDER BY seq DESC")]
+    assert sorted(by_seq) == sorted(made) and by_seq == made[::-1]  # seq follows insertion, the random uuid does not
+    listed = (await http.get("/ai/evals/runs", headers=admin)).json()["items"]
+    assert [r["id"] for r in listed] == by_seq
+    suites = {s["name"]: s for s in (await http.get("/ai/evals/suites", headers=admin)).json()}
+    assert suites["guarded_basic"]["latest"]["id"] == made[-1]
+
+
+async def rows_exec(sql: str) -> None:
+    async with session_factory() as session:
+        await session.execute(sa.text(sql))
+        await session.commit()

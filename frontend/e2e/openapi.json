@@ -1608,6 +1608,81 @@
     "title": "ApiEdgeWrite",
     "type": "object"
    },
+   "ApiPlatformRead": {
+    "properties": {
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ApiPlatformRead",
+    "type": "object"
+   },
+   "ApiPlatformWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "ApiPlatformWrite",
+    "type": "object"
+   },
    "ApiTokenCreate": {
     "properties": {
      "description": {
@@ -4113,6 +4188,81 @@
     "title": "CommitResult",
     "type": "object"
    },
+   "ComplianceRead": {
+    "properties": {
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "ComplianceRead",
+    "type": "object"
+   },
+   "ComplianceWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     }
+    },
+    "title": "ComplianceWrite",
+    "type": "object"
+   },
    "Coverage": {
     "properties": {
      "covered": {
@@ -6059,6 +6209,30 @@
      "size"
     ],
     "title": "FileInfo",
+    "type": "object"
+   },
+   "FixAction": {
+    "properties": {
+     "action": {
+      "enum": [
+       "open_upgrade",
+       "regenerate",
+       "redeclare_hook",
+       "none"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "route": {
+      "title": "Route",
+      "type": "string"
+     }
+    },
+    "required": [
+     "action",
+     "route"
+    ],
+    "title": "FixAction",
     "type": "object"
    },
    "GateRunResult": {
@@ -10208,6 +10382,81 @@
     "title": "OrganizationUpdate",
     "type": "object"
    },
+   "PacksRead": {
+    "properties": {
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "PacksRead",
+    "type": "object"
+   },
+   "PacksWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "packs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecPacks"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "PacksWrite",
+    "type": "object"
+   },
    "Page_AdminOrgRead_": {
     "properties": {
      "items": {
@@ -10857,6 +11106,37 @@
      "offset"
     ],
     "title": "Page[SpecOpRead]",
+    "type": "object"
+   },
+   "Page_UpgradeProposalSummary_": {
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/UpgradeProposalSummary"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset"
+    ],
+    "title": "Page[UpgradeProposalSummary]",
     "type": "object"
    },
    "PasswordChangeRequest": {
@@ -13855,6 +14135,81 @@
     "title": "RegistryProjectRead",
     "type": "object"
    },
+   "RegulatedRead": {
+    "properties": {
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "row_version": {
+      "default": 0,
+      "title": "Row Version",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     },
+     "version": {
+      "title": "Version",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "project_id",
+     "version"
+    ],
+    "title": "RegulatedRead",
+    "type": "object"
+   },
+   "RegulatedWrite": {
+    "additionalProperties": false,
+    "properties": {
+     "expected_version": {
+      "anyOf": [
+       {
+        "minimum": 0.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expected Version"
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "RegulatedWrite",
+    "type": "object"
+   },
    "RelationCreate": {
     "properties": {
      "from_entity_id": {
@@ -15320,6 +15675,69 @@
     "title": "ScimTokenRead",
     "type": "object"
    },
+   "Scorecard": {
+    "properties": {
+     "checks": {
+      "items": {
+       "$ref": "#/components/schemas/ScorecardCheck"
+      },
+      "title": "Checks",
+      "type": "array"
+     },
+     "passing": {
+      "title": "Passing",
+      "type": "boolean"
+     },
+     "score": {
+      "title": "Score",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "score",
+     "passing",
+     "checks"
+    ],
+    "title": "Scorecard",
+    "type": "object"
+   },
+   "ScorecardCheck": {
+    "properties": {
+     "detail": {
+      "title": "Detail",
+      "type": "string"
+     },
+     "fix": {
+      "$ref": "#/components/schemas/FixAction"
+     },
+     "group": {
+      "title": "Group",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "pass",
+       "warn",
+       "fail"
+      ],
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "group",
+     "status",
+     "detail",
+     "fix"
+    ],
+    "title": "ScorecardCheck",
+    "type": "object"
+   },
    "SeedEntityBody": {
     "additionalProperties": false,
     "properties": {
@@ -16374,6 +16792,16 @@
        }
       ]
      },
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "auth": {
       "anyOf": [
        {
@@ -16388,6 +16816,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecAuthorization"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
        },
        {
         "type": "null"
@@ -16546,6 +16984,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecRealtime"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
        },
        {
         "type": "null"
@@ -16642,6 +17090,16 @@
        }
       ]
      },
+     "api_platform": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecApiPlatform"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "auth": {
       "anyOf": [
        {
@@ -16656,6 +17114,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecAuthorization"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "compliance": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecCompliance"
        },
        {
         "type": "null"
@@ -16814,6 +17282,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/SpecRealtime"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "regulated": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecRegulated"
        },
        {
         "type": "null"
@@ -17548,6 +18026,57 @@
      }
     },
     "title": "SpecApiEdge",
+    "type": "object"
+   },
+   "SpecApiPlatform": {
+    "additionalProperties": false,
+    "description": "Public API platform (D49) and app platform (D50) of a generated project: scoped, hashed, expiring API keys\nwith sandbox / prod environments and per-key rate limits, and apps a tenant installs / uninstalls. Read-only in\nthis version. Cost-based limits, write scopes and socket mode are not built.",
+    "properties": {
+     "apps": {
+      "items": {
+       "$ref": "#/components/schemas/SpecPlatformApp"
+      },
+      "title": "Apps",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "entities": {
+      "items": {
+       "$ref": "#/components/schemas/SpecPublicEntity"
+      },
+      "title": "Entities",
+      "type": "array"
+     },
+     "key_ttl_days": {
+      "default": 90,
+      "maximum": 365.0,
+      "minimum": 1.0,
+      "title": "Key Ttl Days",
+      "type": "integer"
+     },
+     "rate_limit": {
+      "default": "60/minute",
+      "title": "Rate Limit",
+      "type": "string"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     },
+     "sandbox_rate_limit": {
+      "default": "20/minute",
+      "title": "Sandbox Rate Limit",
+      "type": "string"
+     }
+    },
+    "title": "SpecApiPlatform",
     "type": "object"
    },
    "SpecApiVersion": {
@@ -18323,6 +18852,95 @@
     "title": "SpecBookingWindow",
     "type": "object"
    },
+   "SpecBreakGlass": {
+    "additionalProperties": false,
+    "description": "Emergency read access (D45): a listed role asks with a reason, gets a grant that expires after `max_minutes`;\nevery read made with the grant is audited.",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "max_minutes": {
+      "default": 60,
+      "maximum": 240.0,
+      "minimum": 5.0,
+      "title": "Max Minutes",
+      "type": "integer"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecBreakGlass",
+    "type": "object"
+   },
+   "SpecCompliance": {
+    "additionalProperties": false,
+    "description": "Compliance runtime of a generated project: retention + legal hold (D42), consent / purpose of use (D44),\nbreak-glass (D45), de-identified export (D46). Control mapping + evidence (D47) is built from this block and\n`regulated` by the platform.",
+    "properties": {
+     "break_glass": {
+      "$ref": "#/components/schemas/SpecBreakGlass"
+     },
+     "consent_purposes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Consent Purposes",
+      "type": "array"
+     },
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "export_consent_purpose": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Export Consent Purpose"
+     },
+     "export_entities": {
+      "items": {
+       "$ref": "#/components/schemas/SpecExportEntity"
+      },
+      "title": "Export Entities",
+      "type": "array"
+     },
+     "export_fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecExportField"
+      },
+      "title": "Export Fields",
+      "type": "array"
+     },
+     "retention": {
+      "items": {
+       "$ref": "#/components/schemas/SpecRetentionRule"
+      },
+      "title": "Retention",
+      "type": "array"
+     },
+     "roles": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roles",
+      "type": "array"
+     }
+    },
+    "title": "SpecCompliance",
+    "type": "object"
+   },
    "SpecCurrency": {
     "additionalProperties": false,
     "description": "Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode\n(`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only.",
@@ -18763,6 +19381,62 @@
      }
     },
     "title": "SpecEvents",
+    "type": "object"
+   },
+   "SpecExportEntity": {
+    "additionalProperties": false,
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "subject_field": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Subject Field"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "SpecExportEntity",
+    "type": "object"
+   },
+   "SpecExportField": {
+    "additionalProperties": false,
+    "description": "De-identified export (D46): what happens to one field. Unlisted fields are dropped. `keep` is refused on a\ndirect identifier.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "treatment": {
+      "default": "drop",
+      "enum": [
+       "keep",
+       "drop",
+       "hash",
+       "generalise"
+      ],
+      "title": "Treatment",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "SpecExportField",
     "type": "object"
    },
    "SpecField": {
@@ -20837,6 +21511,40 @@
     "title": "SpecPermission",
     "type": "object"
    },
+   "SpecPlatformApp": {
+    "additionalProperties": false,
+    "description": "An app a tenant can install (D50): a slug, the entities (read scopes) it may ask for, and the signed event\ntypes it may receive.",
+    "properties": {
+     "events": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Events",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "scopes": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Scopes",
+      "type": "array"
+     },
+     "title": {
+      "default": "",
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name"
+    ],
+    "title": "SpecPlatformApp",
+    "type": "object"
+   },
    "SpecPolicy": {
     "additionalProperties": false,
     "description": "One authorization policy (abac / pbac). `when` is plain data, never code: see authz_engine.",
@@ -21034,6 +21742,33 @@
      }
     },
     "title": "SpecProviders",
+    "type": "object"
+   },
+   "SpecPublicEntity": {
+    "additionalProperties": false,
+    "description": "One entity a customer's integration may read through the public API (D49). Default deny: only the listed\n`fields` (plus `id`) leave the project; a field regulated mode protects is refused.",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "sandbox": {
+      "default": false,
+      "title": "Sandbox",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "entity"
+    ],
+    "title": "SpecPublicEntity",
     "type": "object"
    },
    "SpecQuota": {
@@ -21263,6 +21998,70 @@
     "title": "SpecRegistration",
     "type": "object"
    },
+   "SpecRegulated": {
+    "additionalProperties": false,
+    "description": "Regulated mode (D40), field encryption / tokenisation (D41), customer-managed keys (D43).",
+    "properties": {
+     "enabled": {
+      "default": false,
+      "title": "Enabled",
+      "type": "boolean"
+     },
+     "fields": {
+      "items": {
+       "$ref": "#/components/schemas/SpecRegulatedField"
+      },
+      "title": "Fields",
+      "type": "array"
+     },
+     "key_provider": {
+      "default": "file",
+      "enum": [
+       "env",
+       "file",
+       "command"
+      ],
+      "title": "Key Provider",
+      "type": "string"
+     }
+    },
+    "title": "SpecRegulated",
+    "type": "object"
+   },
+   "SpecRegulatedField": {
+    "additionalProperties": false,
+    "description": "One protected field. `searchable` adds a blind-index column `<field>_bidx` for equality filters\n(mode encrypt only).",
+    "properties": {
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     },
+     "field": {
+      "title": "Field",
+      "type": "string"
+     },
+     "mode": {
+      "default": "encrypt",
+      "enum": [
+       "encrypt",
+       "tokenise"
+      ],
+      "title": "Mode",
+      "type": "string"
+     },
+     "searchable": {
+      "default": false,
+      "title": "Searchable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "entity",
+     "field"
+    ],
+    "title": "SpecRegulatedField",
+    "type": "object"
+   },
    "SpecRelation": {
     "additionalProperties": false,
     "properties": {
@@ -21319,6 +22118,49 @@
      "to_seq"
     ],
     "title": "SpecRestore",
+    "type": "object"
+   },
+   "SpecRetentionRule": {
+    "additionalProperties": false,
+    "description": "Records of `entity` older than `days` (by `date_field`) are purged (or anonymised) by the retention run,\nexcept rows under a legal hold (D42).",
+    "properties": {
+     "action": {
+      "default": "purge",
+      "enum": [
+       "purge",
+       "anonymise"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "anonymise_fields": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Anonymise Fields",
+      "type": "array"
+     },
+     "date_field": {
+      "default": "created_at",
+      "title": "Date Field",
+      "type": "string"
+     },
+     "days": {
+      "maximum": 36500.0,
+      "minimum": 1.0,
+      "title": "Days",
+      "type": "integer"
+     },
+     "entity": {
+      "title": "Entity",
+      "type": "string"
+     }
+    },
+    "required": [
+     "entity",
+     "days"
+    ],
+    "title": "SpecRetentionRule",
     "type": "object"
    },
    "SpecRole": {
@@ -22080,9 +22922,55 @@
     "title": "SpecStorageSecurity",
     "type": "object"
    },
+   "SpecSuiteMigration": {
+    "additionalProperties": false,
+    "description": "Identity path (b): an existing app with its own sign-in moves its users to the suite hub.\n\nThe spec stays deterministic, so the dual window is two explicit instants (never \"now\"):\n`window_started_at` and `dual_until` (at most 90 days apart, checked by validation). The app\nreads the window from its generated config and refuses legacy tokens once it has passed.",
+    "properties": {
+     "dual_until": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dual Until"
+     },
+     "legacy_issuer": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Legacy Issuer",
+      "type": "string"
+     },
+     "state": {
+      "default": "legacy_read_only",
+      "title": "State",
+      "type": "string"
+     },
+     "window_started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Window Started At"
+     }
+    },
+    "required": [
+     "legacy_issuer"
+    ],
+    "title": "SpecSuiteMigration",
+    "type": "object"
+   },
    "SpecSuiteRef": {
     "additionalProperties": false,
-    "description": "Reserved: this app is one of several that share a sign-in hub. Empty (None on SpecAuth)\nfor every project that has not opted in; the generator ignores it for now.",
+    "description": "This app is one of several that share a sign-in hub (path a: a new member; path b: an\nexisting app moving in, see `migration`). Empty (None on SpecAuth) for every project that has\nnot opted in.",
     "properties": {
      "hub_issuer": {
       "anyOf": [
@@ -22100,6 +22988,16 @@
       "default": "none",
       "title": "Join State",
       "type": "string"
+     },
+     "migration": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SpecSuiteMigration"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "suite_id": {
       "maxLength": 63,
@@ -23693,6 +24591,243 @@
     "title": "SubscriptionStatus",
     "type": "string"
    },
+   "SuiteJoinImpact": {
+    "properties": {
+     "blockers": {
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Blockers",
+      "type": "array"
+     },
+     "claims_sub_readers": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Claims Sub Readers",
+      "type": "array"
+     },
+     "client_id": {
+      "title": "Client Id",
+      "type": "string"
+     },
+     "commands": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Commands",
+      "type": "array"
+     },
+     "current_provider": {
+      "title": "Current Provider",
+      "type": "string"
+     },
+     "hooks_scanned": {
+      "title": "Hooks Scanned",
+      "type": "boolean"
+     },
+     "hub_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hub Url"
+     },
+     "migration": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Migration"
+     },
+     "realm": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Realm"
+     },
+     "roles_to_client_roles": {
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Roles To Client Roles",
+      "type": "array"
+     },
+     "steps": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Steps",
+      "type": "array"
+     },
+     "suite_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Suite Id"
+     },
+     "tenants_to_organisations": {
+      "title": "Tenants To Organisations",
+      "type": "boolean"
+     },
+     "warnings": {
+      "items": {
+       "additionalProperties": {
+        "type": "string"
+       },
+       "type": "object"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "current_provider",
+     "suite_id",
+     "migration",
+     "realm",
+     "client_id",
+     "hub_url",
+     "roles_to_client_roles",
+     "tenants_to_organisations",
+     "claims_sub_readers",
+     "hooks_scanned",
+     "blockers",
+     "warnings",
+     "steps",
+     "commands"
+    ],
+    "title": "SuiteJoinImpact",
+    "type": "object"
+   },
+   "SuiteMigrationRead": {
+    "properties": {
+     "dual_until": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dual Until"
+     },
+     "join_state": {
+      "title": "Join State",
+      "type": "string"
+     },
+     "legacy_issuer": {
+      "title": "Legacy Issuer",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "suite_id": {
+      "title": "Suite Id",
+      "type": "string"
+     },
+     "window_started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Window Started At"
+     }
+    },
+    "required": [
+     "suite_id",
+     "join_state",
+     "state",
+     "legacy_issuer",
+     "dual_until",
+     "window_started_at"
+    ],
+    "title": "SuiteMigrationRead",
+    "type": "object"
+   },
+   "SuiteMigrationWrite": {
+    "additionalProperties": false,
+    "description": "The next state of the migration. The dual window is two explicit instants (the spec must\nstay deterministic): no default is taken from the clock.",
+    "properties": {
+     "dual_until": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dual Until"
+     },
+     "legacy_issuer": {
+      "maxLength": 512,
+      "minLength": 1,
+      "title": "Legacy Issuer",
+      "type": "string"
+     },
+     "state": {
+      "pattern": "^(legacy_read_only|dual|hub_only)$",
+      "title": "State",
+      "type": "string"
+     },
+     "window_started_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Window Started At"
+     }
+    },
+    "required": [
+     "state",
+     "legacy_issuer"
+    ],
+    "title": "SuiteMigrationWrite",
+    "type": "object"
+   },
    "TokenStore": {
     "description": "Backend used to persist refresh tokens in generated projects.",
     "enum": [
@@ -23809,6 +24944,244 @@
      "auth_token"
     ],
     "title": "TwilioSecretsWrite",
+    "type": "object"
+   },
+   "UpgradeProposalDetail": {
+    "properties": {
+     "auto_apply_eligible": {
+      "title": "Auto Apply Eligible",
+      "type": "boolean"
+     },
+     "base_generation_id": {
+      "format": "uuid",
+      "title": "Base Generation Id",
+      "type": "string"
+     },
+     "block_changes": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Block Changes",
+      "type": "array"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "created_by": {
+      "anyOf": [
+       {
+        "format": "uuid",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created By"
+     },
+     "decided_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided At"
+     },
+     "file_count": {
+      "title": "File Count",
+      "type": "integer"
+     },
+     "files": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Files",
+      "type": "array"
+     },
+     "from_generator_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "From Generator Version"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "kept": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Kept",
+      "type": "array"
+     },
+     "migrations": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Migrations",
+      "type": "array"
+     },
+     "patch_size": {
+      "title": "Patch Size",
+      "type": "integer"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "sbom_diff": {
+      "additionalProperties": true,
+      "title": "Sbom Diff",
+      "type": "object"
+     },
+     "scorecard": {
+      "additionalProperties": true,
+      "title": "Scorecard",
+      "type": "object"
+     },
+     "status": {
+      "enum": [
+       "open",
+       "applied",
+       "dismissed"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "to_generator_version": {
+      "title": "To Generator Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "base_generation_id",
+     "status",
+     "from_generator_version",
+     "to_generator_version",
+     "block_changes",
+     "file_count",
+     "auto_apply_eligible",
+     "created_at",
+     "decided_at",
+     "created_by",
+     "files",
+     "patch_size",
+     "sbom_diff",
+     "migrations",
+     "scorecard"
+    ],
+    "title": "UpgradeProposalDetail",
+    "type": "object"
+   },
+   "UpgradeProposalSummary": {
+    "properties": {
+     "auto_apply_eligible": {
+      "title": "Auto Apply Eligible",
+      "type": "boolean"
+     },
+     "base_generation_id": {
+      "format": "uuid",
+      "title": "Base Generation Id",
+      "type": "string"
+     },
+     "block_changes": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Block Changes",
+      "type": "array"
+     },
+     "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+     },
+     "decided_at": {
+      "anyOf": [
+       {
+        "format": "date-time",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Decided At"
+     },
+     "file_count": {
+      "title": "File Count",
+      "type": "integer"
+     },
+     "from_generator_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "From Generator Version"
+     },
+     "id": {
+      "format": "uuid",
+      "title": "Id",
+      "type": "string"
+     },
+     "project_id": {
+      "format": "uuid",
+      "title": "Project Id",
+      "type": "string"
+     },
+     "status": {
+      "enum": [
+       "open",
+       "applied",
+       "dismissed"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "to_generator_version": {
+      "title": "To Generator Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "project_id",
+     "base_generation_id",
+     "status",
+     "from_generator_version",
+     "to_generator_version",
+     "block_changes",
+     "file_count",
+     "auto_apply_eligible",
+     "created_at",
+     "decided_at"
+    ],
+    "title": "UpgradeProposalSummary",
     "type": "object"
    },
    "UsageDefaultRead": {
@@ -32591,6 +33964,194 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/api-platform": {
+   "get": {
+    "operationId": "get_api_platform",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiPlatformRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get public API keys, rate limits and installable apps (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_api_platform",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ApiPlatformWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ApiPlatformRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace public API keys, rate limits and installable apps",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/compliance": {
+   "get": {
+    "operationId": "get_compliance",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ComplianceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get retention, legal hold, consent, break-glass and de-identified export (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_compliance",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/ComplianceWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/ComplianceRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace retention, legal hold, consent, break-glass and de-identified export",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/events": {
    "get": {
     "operationId": "get_events",
@@ -33346,6 +34907,100 @@
     ]
    }
   },
+  "/projects/{project_id}/behavior/packs": {
+   "get": {
+    "operationId": "get_packs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PacksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get the domain packs (money, operations, booking, AI) and their settings (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_packs",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PacksWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PacksRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace the domain packs (money, operations, booking, AI) and their settings",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
   "/projects/{project_id}/behavior/providers": {
    "get": {
     "operationId": "get_providers",
@@ -33435,6 +35090,100 @@
      }
     },
     "summary": "Replace the provider adapters (no credentials)",
+    "tags": [
+     "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/behavior/regulated": {
+   "get": {
+    "operationId": "get_regulated",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RegulatedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get regulated mode and field protection (null when never saved)",
+    "tags": [
+     "behavior"
+    ]
+   },
+   "put": {
+    "operationId": "put_regulated",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/RegulatedWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/RegulatedRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Replace regulated mode and field protection",
     "tags": [
      "behavior"
     ]
@@ -34044,6 +35793,144 @@
     "summary": "Replace durable workflows",
     "tags": [
      "behavior"
+    ]
+   }
+  },
+  "/projects/{project_id}/compliance/controls": {
+   "get": {
+    "operationId": "get_controls_projects__project_id__compliance_controls_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "framework",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "enum": [
+          "soc2",
+          "hipaa",
+          "pci"
+         ],
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Framework"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "additionalProperties": true,
+         "title": "Response Get Controls Projects  Project Id  Compliance Controls Get",
+         "type": "object"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Control mapping of the spec for one framework",
+    "tags": [
+     "compliance"
+    ]
+   }
+  },
+  "/projects/{project_id}/compliance/evidence": {
+   "get": {
+    "operationId": "get_evidence_projects__project_id__compliance_evidence_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "framework",
+      "required": true,
+      "schema": {
+       "enum": [
+        "soc2",
+        "hipaa",
+        "pci"
+       ],
+       "title": "Framework",
+       "type": "string"
+      }
+     },
+     {
+      "description": "UTC stamp YYYY-MM-DDTHH:MM:SSZ written into the bundle. Default: derived from the spec hash, so the same spec gives identical bytes.",
+      "in": "query",
+      "name": "generated_at",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "UTC stamp YYYY-MM-DDTHH:MM:SSZ written into the bundle. Default: derived from the spec hash, so the same spec gives identical bytes.",
+       "title": "Generated At"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/zip": {}
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Evidence bundle (zip) for one framework",
+    "tags": [
+     "compliance"
     ]
    }
   },
@@ -39288,6 +41175,49 @@
     ]
    }
   },
+  "/projects/{project_id}/scorecard": {
+   "get": {
+    "operationId": "get_scorecard_projects__project_id__scorecard_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Scorecard"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Scorecard",
+    "tags": [
+     "upgrades"
+    ]
+   }
+  },
   "/projects/{project_id}/search": {
    "get": {
     "operationId": "search_project_projects__project_id__search_get",
@@ -40384,6 +42314,119 @@
     ]
    }
   },
+  "/projects/{project_id}/suite/join/impact": {
+   "get": {
+    "operationId": "join_impact_projects__project_id__suite_join_impact_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "workspace_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "format": "uuid",
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Workspace Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SuiteJoinImpact"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "What moving this app under its suite hub would change (spec level)",
+    "tags": [
+     "suite"
+    ]
+   }
+  },
+  "/projects/{project_id}/suite/migration": {
+   "put": {
+    "operationId": "put_migration_projects__project_id__suite_migration_put",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/SuiteMigrationWrite"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SuiteMigrationRead"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Move the suite migration forward (legacy_read_only, dual, hub_only)",
+    "tags": [
+     "suite"
+    ]
+   }
+  },
   "/projects/{project_id}/tokens": {
    "get": {
     "description": "List all active tokens pinned to this project. Owner only.",
@@ -40476,6 +42519,321 @@
     "summary": "Revoke Project Token",
     "tags": [
      "members"
+    ]
+   }
+  },
+  "/projects/{project_id}/upgrades": {
+   "get": {
+    "operationId": "list_upgrades_projects__project_id__upgrades_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "limit",
+      "required": false,
+      "schema": {
+       "default": 50,
+       "maximum": 200,
+       "minimum": 1,
+       "title": "Limit",
+       "type": "integer"
+      }
+     },
+     {
+      "in": "query",
+      "name": "offset",
+      "required": false,
+      "schema": {
+       "default": 0,
+       "minimum": 0,
+       "title": "Offset",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Page_UpgradeProposalSummary_"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Upgrades",
+    "tags": [
+     "upgrades"
+    ]
+   },
+   "post": {
+    "operationId": "create_upgrade_projects__project_id__upgrades_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UpgradeProposalDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create Upgrade",
+    "tags": [
+     "upgrades"
+    ]
+   }
+  },
+  "/projects/{project_id}/upgrades/{proposal_id}": {
+   "get": {
+    "operationId": "get_upgrade_projects__project_id__upgrades__proposal_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "proposal_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Proposal Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UpgradeProposalDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Upgrade",
+    "tags": [
+     "upgrades"
+    ]
+   }
+  },
+  "/projects/{project_id}/upgrades/{proposal_id}/applied": {
+   "post": {
+    "operationId": "mark_applied_projects__project_id__upgrades__proposal_id__applied_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "proposal_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Proposal Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UpgradeProposalDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Mark Applied",
+    "tags": [
+     "upgrades"
+    ]
+   }
+  },
+  "/projects/{project_id}/upgrades/{proposal_id}/dismiss": {
+   "post": {
+    "operationId": "dismiss_upgrade_projects__project_id__upgrades__proposal_id__dismiss_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "proposal_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Proposal Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/UpgradeProposalDetail"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Dismiss Upgrade",
+    "tags": [
+     "upgrades"
+    ]
+   }
+  },
+  "/projects/{project_id}/upgrades/{proposal_id}/patch": {
+   "get": {
+    "operationId": "get_patch_projects__project_id__upgrades__proposal_id__patch_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "project_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Project Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "proposal_id",
+      "required": true,
+      "schema": {
+       "format": "uuid",
+       "title": "Proposal Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "text/x-diff": {}
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Patch",
+    "tags": [
+     "upgrades"
     ]
    }
   },

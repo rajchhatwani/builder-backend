@@ -128,7 +128,10 @@ async def import_{{ e.table }}(
     repo = {{ e.name }}Repository(session{{ ", **access.repo_kwargs" if "create" in e.access_ops else "" }})
 {% if e.guarded %}
     hidden_write = _fx.hidden_write("{{ e.name }}", {{ ucall }})
-    hidden_read = _fx.hidden_read("{{ e.name }}", {{ ucall }})
+    hidden_read = _fx.hidden_read("{{ e.name }}", {{ ucall }}){{ " | frozenset(" ~ (e.protected_names | tuple_lit) ~ ")" if e.regulated else "" }}
+{% elif e.regulated %}
+    hidden_write = _EMPTY
+    hidden_read = frozenset({{ e.protected_names | tuple_lit }})  # protected values are never echoed in a rejected row
 {% else %}
     hidden_write = hidden_read = _EMPTY
 {% endif %}

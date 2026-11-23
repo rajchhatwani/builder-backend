@@ -12,4 +12,4 @@ build/
 htmlcov/
 final_test.env
 .bb-model-budget
-
+node_modules/

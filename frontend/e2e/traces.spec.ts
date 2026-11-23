@@ -4,10 +4,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 for (const [label, size] of [['desktop', { width: 1280, height: 800 }], ['phone', { width: 375, height: 700 }]] as const) {
   test(`traces (${label}): load example, open the rule span, land on Rules`, async ({ page, request }) => {

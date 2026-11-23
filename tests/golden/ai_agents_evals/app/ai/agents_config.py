@@ -82,6 +82,16 @@ ENTITIES: dict[str, dict[str, dict[str, object]]] = {'tickets': {'priority': {'e
 # An agent action writes a row only for an actor who holds one of them (the entity's own create check is not bypassed).
 CREATE_ROLES: dict[str, tuple[str, ...]] = {'tickets': ('admin', 'agent')}
 
+# table -> the entity's own repository (module, class), its entity name, and whether the entity is decided by abac / pbac
+# policies (needs a request context: an agent action on it is refused, `policy_unsupported`) or has field write rules.
+# An agent action creates a row through THAT repository's create lifecycle (hooks, state machine, events, numbering).
+ENTITY_RUNTIME: dict[str, dict[str, object]] = {'tickets': {'entity': 'Ticket',
+             'guarded': False,
+             'module': 'app.crud.tickets',
+             'numbered': False,
+             'policy': False,
+             'repository': 'TicketRepository'}}
+
 MAX_ARGS_BYTES = 4096
 MAX_CONTEXT_BYTES = 8192
 MAX_NOTE_CHARS = 2000

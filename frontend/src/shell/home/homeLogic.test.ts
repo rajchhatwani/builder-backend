@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectStatus } from '../../api/types'
-import { countLine, issueSection, nextStepView, railProblems, routeFor, SECTION_ROUTE } from './homeLogic'
+import { countLine, fixRoute, issueSection, nextStepView, railProblems, routeFor, SECTION_ROUTE } from './homeLogic'
 import { findSection } from '../pages'
 
 const SECTION_IDS = ['model', 'auth', 'authorization', 'payments', 'storage', 'observability', 'deployment', 'documents', 'state_machines', 'settings', 'history', 'hooks', 'seed']
@@ -58,5 +58,16 @@ describe('next step', () => {
 
   it('an unknown id still gives one usable step', () => {
     expect(nextStepView(step('brand_new', 'hooks'))).toMatchObject({ title: 'backend title', section: 'hooks' })
+  })
+})
+
+describe('fix links (parity with the old Overview)', () => {
+  it('Keycloak issues open the Keycloak page, other auth issues the Authentication page', () => {
+    expect(fixRoute({ path: 'auth.keycloak.realm', code: 'x' })).toBe('keycloak')
+    expect(fixRoute({ path: 'auth.keycloak', code: 'x' })).toBe('keycloak')
+    expect(fixRoute({ path: 'auth.provider', code: 'x' })).toBe('auth')
+    expect(fixRoute({ path: 'auth.roles[0]', code: 'x' })).toBe('access')
+    expect(fixRoute({ path: 'payments.provider', code: 'x' })).toBe('payments')
+    expect(fixRoute({ path: 'documents.templates', code: 'x' })).toBe('documents')
   })
 })

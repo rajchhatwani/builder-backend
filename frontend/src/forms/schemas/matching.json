@@ -1,0 +1,84 @@
+{
+  "$defs": {
+    "SpecMatchWeights": {
+      "additionalProperties": false,
+      "properties": {
+        "distance": {
+          "default": 1000,
+          "title": "Distance",
+          "type": "integer"
+        },
+        "load": {
+          "default": 0,
+          "title": "Load",
+          "type": "integer"
+        },
+        "rating": {
+          "default": 0,
+          "title": "Rating",
+          "type": "integer"
+        }
+      },
+      "title": "SpecMatchWeights",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Operations pack, D15 matching / assignment (generated routes under /matching): rank candidates for a\nrequest by rules (max distance, max load) and an integer score from the declared weights, assign with a\ndatabase guarantee of one active assignment per request, and solve a batch (exact for small inputs).",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "assign_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Assign Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "weights": {
+      "$ref": "#/$defs/SpecMatchWeights",
+      "default": {
+        "distance": 1000,
+        "load": 0,
+        "rating": 0
+      },
+      "x-ui": {
+        "label": "Score weights"
+      }
+    },
+    "max_distance_m": {
+      "default": 20000,
+      "title": "Max Distance M",
+      "type": "integer"
+    },
+    "max_load": {
+      "default": 10,
+      "title": "Max Load",
+      "type": "integer"
+    },
+    "offer_ttl_seconds": {
+      "default": 300,
+      "title": "Offer Ttl Seconds",
+      "type": "integer"
+    }
+  },
+  "title": "SpecMatching",
+  "type": "object"
+}

@@ -53,11 +53,14 @@ from app.core.suite_identity import (
     SUITE_REALM_PREFIX,
     suite_realm,
 )
+from app.core.suite_migration import window_problems
 from app.core.validation_ai import ai_tables, check_ai
 from app.core.validation_api_edge import API_EDGE_TABLES, api_edge_active, check_api_edge
 from app.core.validation_authorization import check_authorization
 from app.core.validation_behavior import check_state_machines
 from app.core.validation_booking import booking_tables, check_booking
+from app.core.validation_api_platform import check_api_platform
+from app.core.validation_compliance import check_compliance
 from app.core.validation_deploy import check_deployment
 from app.core.validation_documents import check_documents
 from app.core.validation_events import EV_TABLES, check_events, events_active
@@ -85,6 +88,7 @@ from app.core.validation_packs import (
 )
 from app.core.validation_payments import PAYMENTS_TABLES, check_payments, payments_active
 from app.core.validation_providers import PROVIDER_TABLES, check_providers, providers_active
+from app.core.validation_regulated import check_regulated
 from app.core.validation_realtime import (
     RT_TABLES,
     check_metrics_layer,
@@ -246,6 +250,9 @@ def validate(spec: Spec) -> list[ValidationIssue]:
     check_realtime(spec, ctx.add)
     check_metrics_layer(spec, entities_by_name, ctx.add)
     check_packs(spec, ctx.add)
+    check_regulated(spec, entities_by_name, ctx.add)
+    check_compliance(spec, entities_by_name, ctx.add)
+    check_api_platform(spec, entities_by_name, ctx.add)
     check_booking(spec, ctx.add)
     check_ai(spec, ctx.add)
     check_api_edge(spec, ctx.add)
@@ -1539,6 +1546,19 @@ def _check_suite(auth: SpecAuth, project_slug: str, ctx: _Ctx) -> None:
                 f"{p}.hub_issuer",
                 "hub_issuer_realm_mismatch",
                 f"must end with the realm path /realms/{realm}",
+            )
+    if suite.migration is not None:
+        for field_name, code, message in window_problems(suite.migration):
+            ctx.add(f"{p}.migration.{field_name}", code, message)
+        if auth.provider != AuthProvider.keycloak:
+            ctx.add(
+                f"{p}.migration",
+                "migration_requires_keycloak",
+                "a migration moves users to the hub: set auth.provider to keycloak",
+            )
+        if suite.join_state == "none":
+            ctx.add(
+                f"{p}.migration", "migration_requires_suite", "set join_state to planned or joined"
             )
     kc = auth.keycloak
     if kc is not None and auth.provider == AuthProvider.keycloak:

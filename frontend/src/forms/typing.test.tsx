@@ -79,3 +79,29 @@ describe('real inputs, one keystroke at a time', () => {
     expect(table.value).toBe('Item :: {{x}} :: right')
   })
 })
+
+describe('optional nullable object (x-ui.optional)', () => {
+  it('is off for null, switching on fills its defaults and off sets null', async () => {
+    const schema = {
+      type: 'object',
+      properties: { extra: { anyOf: [{ $ref: '#/$defs/E' }, { type: 'null' }], default: null, 'x-ui': { optional: true, label: 'Extra' } } },
+      $defs: { E: { type: 'object', properties: { n: { type: 'integer', default: 7 } } } },
+    }
+    const seen: unknown[] = []
+    const host = document.createElement('div')
+    document.body.appendChild(host)
+    const root = createRoot(host)
+    function Wrap() {
+      const [v, setV] = useState<unknown>({ extra: null })
+      return createElement(SchemaForm, { schema, value: v, onChange: (x: unknown) => { seen.push(x); setV(x) } })
+    }
+    await act(async () => { root.render(createElement(Wrap)) })
+    expect(host.querySelector('input[type=number]')).toBeNull()
+    const cb = host.querySelector<HTMLInputElement>('input[type=checkbox]')!
+    await act(async () => { cb.click() })
+    expect(seen.at(-1)).toEqual({ extra: { n: 7 } })
+    await act(async () => { host.querySelector<HTMLInputElement>('input[type=checkbox]')!.click() })
+    expect(seen.at(-1)).toEqual({ extra: null })
+    act(() => root.unmount()); host.remove()
+  })
+})

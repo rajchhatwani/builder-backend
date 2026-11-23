@@ -4,6 +4,9 @@
 import uuid as _uuid
 from typing import Any
 
+{% elif e.searchable_protected %}
+from typing import Any
+
 {% endif %}
 {% if e.guarded %}
 from app.auth.field_access import HiddenFieldsMixin
@@ -28,6 +31,9 @@ from app.models.{{ module }} import {{ cls }}
 {% endfor %}
 {% if realtime %}
 from app.realtime import hooks as _realtime_hooks
+{% endif %}
+{% if e.searchable_protected %}
+from app.regulated import crypto as _regulated_crypto
 {% endif %}
 {% if e.numbered %}
 from app.runtime_config import numbering as _numbering
@@ -97,6 +103,20 @@ class {{ e.name }}Repository({% if e.guarded %}HiddenFieldsMixin, {% endif %}_cr
     async def _apply(self, item_id: _uuid.UUID, data: dict[str, Any]) -> {{ e.name }}:
         _numbering.refuse_change(tuple(n[0] for n in self.numbered), data)
         return await super()._apply(item_id, data)
+{% endif %}
+{% if e.searchable_protected %}
+
+    # Equality filters on searchable protected fields go through the blind index (`<field>_bidx`), under every ring key.
+    blind_indexed = {{ e.searchable_protected | tuple_lit }}
+
+    def _conditions(self, filters: dict[str, Any], search: str | None) -> list[Any]:
+        plain = {k: v for k, v in filters.items() if k not in self.blind_indexed}
+        conditions = super()._conditions(plain, search)
+        for name in self.blind_indexed:
+            if name in filters:
+                hashes = _regulated_crypto.blind_indexes(self.model.__tablename__, name, str(filters[name]))
+                conditions.append(self._col(name + "_bidx").in_(hashes))
+        return conditions
 {% endif %}
 {% if e.events %}
 

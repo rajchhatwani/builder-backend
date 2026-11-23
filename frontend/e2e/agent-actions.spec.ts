@@ -3,11 +3,7 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
-import { V2_STATE, mockPreview } from './preview-mock'
-
-test.use({ storageState: V2_STATE })
-
-const TOKEN = 'e2e-agents-' + 'token-1'
+import { BEARER, SESSION, mockPreviewSession, signInPreview } from './preview-mock'
 
 test('agent actions: approve one proposal, reject another, mark the outcome', async ({ page, request }) => {
   const api = await signedInUser(page, request)
@@ -16,7 +12,7 @@ test('agent actions: approve one proposal, reject another, mark the outcome', as
   type P = { id: string; run_id: string; agent: string; action: string; kind: string; risk: string; args: Record<string, unknown>; allowed_autonomy: string; status: string; reason: string | null; result: unknown; error_code: string | null; outcome: string | null }
   const mk = (pid: string, action: string, risk: string, args: Record<string, unknown>): P => ({ id: pid, run_id: 'run1', agent: 'triage', action, kind: 'entity_create', risk, args, allowed_autonomy: 'auto', status: 'pending_approval', reason: null, result: null, error_code: null, outcome: null })
   const props: P[] = [mk('p1', 'create_ticket', 'high', { title: 'Refund order 1042', amount_minor: 2500 }), mk('p2', 'send_email', 'medium', { to: 'ops@example.com' })]
-  const seen = await mockPreview(page, (r) => {
+  const seen = await mockPreviewSession(page, id, (r) => {
     if (r.method === 'GET' && r.path === '/ai/agents/stats') {
       return { json: { agents: [{ agent: 'triage', runs: 2, proposals: 2, executed: 0, rejected: 0, pending: 2, outcome_success: 0, outcome_failure: 0, outcome_neutral: 0, success_rate_bp: null }] } }
     }
@@ -41,10 +37,8 @@ test('agent actions: approve one proposal, reject another, mark the outcome', as
 
   await page.goto(`/#/p/${id}/agentactions`)
   await expect(page.getByTestId('agentapprovals-page')).toBeVisible()
-  await expect(page.getByTestId('agentapprovals-notoken')).toBeVisible()
   expect(seen).toHaveLength(0)
-  await page.getByTestId('agentapprovals-token').fill(TOKEN)
-  await page.getByTestId('agentapprovals-load').click()
+  await signInPreview(page)
 
   await expect(page.getByTestId('agentapprovals-live')).toHaveText('2 Pending approval proposals, showing 1 to 2.')
   expect(seen.find((s) => s.path === '/ai/agents/proposals')!.search).toBe('?status=pending_approval&limit=20&offset=0')
@@ -82,7 +76,7 @@ test('agent actions: approve one proposal, reject another, mark the outcome', as
   expect(seen.find((s) => s.method === 'POST' && s.path === '/ai/agents/proposals/p1/outcome')!.body).toEqual({ outcome: 'success' })
   await expect(page.getByTestId('proposal-outcome-p1')).toHaveText('Outcome: Worked')
   expect(seen.filter((s) => s.method === 'POST')).toHaveLength(3)
-  expect(seen.every((s) => s.auth === `Bearer ${TOKEN}` && !s.search.includes(TOKEN))).toBe(true)
+  expect(seen.every((s) => s.auth === BEARER && s.previewToken === SESSION.previewToken && !s.search.includes(SESSION.jwt))).toBe(true)
 
   const axe = await new AxeBuilder({ page }).analyze()
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`), 'axe on the AI actions page').toEqual([])

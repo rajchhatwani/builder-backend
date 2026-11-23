@@ -10,11 +10,12 @@ from app.operations.points import Point, PointOut
 
 Shape = _t.Literal["circle", "polygon"]
 Mode = _t.Literal["drive", "walk", "bike"]
+NO_NUL = r"^[^\x00]*$"  # Postgres text cannot hold NUL: refuse it with a 422, not a 500
 
 
 class PlaceCreate(Point):
-    name: str = Field(min_length=1, max_length=200)
-    kind: str | None = Field(default=None, max_length=32)
+    name: str = Field(min_length=1, max_length=200, pattern=NO_NUL)
+    kind: str | None = Field(default=None, max_length=32, pattern=NO_NUL)
 
 
 class PlaceOut(PointOut):
@@ -36,7 +37,7 @@ class PlaceHits(BaseModel):
 class GeofenceCreate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1, max_length=200)
+    name: str = Field(min_length=1, max_length=200, pattern=NO_NUL)
     shape: Shape
     center: Point | None = None
     radius_m: StrictInt | None = Field(default=None, ge=1)

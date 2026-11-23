@@ -8,6 +8,8 @@ export interface SendInput {
   body?: string
   /** Held in memory by the caller only. Never logged, stored or returned. */
   bearer?: string
+  /** Platform preview access token, sent as X-Preview-Token (the proxy strips it). Memory only, never logged. */
+  previewToken?: string
 }
 export interface SendResult { status: number; text: string; ms: number }
 
@@ -18,6 +20,7 @@ export async function sendRequest(input: SendInput, doFetch: typeof fetch = fetc
   const headers: Record<string, string> = { Accept: 'application/json' }
   if (input.body !== undefined) headers['Content-Type'] = 'application/json'
   if (input.bearer) headers.Authorization = `Bearer ${input.bearer}`
+  if (input.previewToken) headers['X-Preview-Token'] = input.previewToken
   const ctl = new AbortController()
   const timer = setTimeout(() => ctl.abort(), REQUEST_TIMEOUT_MS)
   const t0 = performance.now()

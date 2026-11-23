@@ -14,7 +14,12 @@ the SQL cosine. Swap the class and re-index; the permission condition does not c
 
 ASK. Retrieve permitted chunks -> ONE gateway call on stage `knowledge.STAGE` (cost ledger, budget, idempotency like any
 call) whose messages carry only those chunks -> answer + citations of those chunks. With no permitted chunk the model is NOT
-called: grounded false, answer "", no citations, call_id null.
+called: grounded false, answer "", no citations, call_id null. ASK ROLE RULE: asking spends gateway budget, so the caller
+needs a gateway call role (packs.ai.gateway.roles.call_roles or manage_roles; empty call_roles = any signed-in user), the
+same gate as POST /ai/complete; otherwise 403 forbidden, before any retrieval.
+
+SOURCE CAP. `max_sources` is a resource cap on the TENANT total (also sources the caller cannot see). The limit_reached
+message carries no count, so it does not disclose how many invisible sources exist.
 """
 
 import hashlib
@@ -132,7 +137,8 @@ async def create_source(session: AsyncSession, user: _t.Any, body: _s.SourceIn) 
         raise AppError("content_too_large", f"the text is longer than {_config.MAX_TEXT_CHARS} characters", 422)
     count = await session.scalar(_scoped(_sa.select(_sa.func.count()).select_from(AiKnowledgeSource), AiKnowledgeSource, tenant))
     if (count or 0) >= _config.MAX_SOURCES:
-        raise AppError("limit_reached", f"at most {_config.MAX_SOURCES} sources", 422)
+        # the cap counts every source of the tenant, also ones the caller cannot see: no number in the message
+        raise AppError("limit_reached", "the knowledge base has reached its source limit", 422)
     pieces = chunk_text(body.text, _config.CHUNK_CHARS)
     if not pieces:
         raise AppError("validation_error", "the text has no content", 422)
@@ -244,6 +250,7 @@ async def search(session: AsyncSession, user: _t.Any, query: str, limit: int) ->
 
 
 async def ask(session: AsyncSession, user: _t.Any, body: _s.AskIn) -> _s.AskOut:
+    _gateway.require_call_role(user)  # asking spends gateway budget: same gate as /ai/complete (403 forbidden)
     hits = await search(session, user, body.question, body.limit)
     if not hits:  # nothing the caller may see matches: the model is not called at all
         return _s.AskOut(answer="", grounded=False, citations=[], call_id=None)

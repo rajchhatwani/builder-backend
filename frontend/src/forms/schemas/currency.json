@@ -1,0 +1,62 @@
+{
+  "$defs": {
+    "SpecTax": {
+      "additionalProperties": false,
+      "description": "Static tax rates (no network): name -> rate in basis points (1 bp = 0.01%), integers only.",
+      "properties": {
+        "rates_bp": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Rates Bp",
+          "type": "object",
+          "default": {},
+          "x-ui": {
+            "help": "JSON object: tax name -> rate in basis points (1 bp = 0.01%), integers only, e.g. {\"VAT\": 2000}"
+          }
+        }
+      },
+      "title": "SpecTax",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Money pack, D5 currency and tax helpers (generated app/money/*): ISO 4217 exponents, one rounding mode\n(`half_even`), largest-remainder allocation, a static tax adapter. Decimal and integers only.",
+  "properties": {
+    "currencies": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Currencies",
+      "type": "array",
+      "default": [
+        "USD"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "rounding": {
+      "default": "half_even",
+      "title": "Rounding",
+      "type": "string"
+    },
+    "tax": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecTax"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "x-ui": {
+        "optional": true,
+        "label": "Tax rates"
+      }
+    }
+  },
+  "title": "SpecCurrency",
+  "type": "object"
+}

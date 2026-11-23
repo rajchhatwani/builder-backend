@@ -6,10 +6,6 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createProjectViaApi, signedInUser, watchProblems, type Api } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 const FIXTURES = fileURLToPath(new URL('../../tests/fixtures/specs/', import.meta.url))
 
 /** seed_demo.json without its seed profiles: the journeys add their own. */

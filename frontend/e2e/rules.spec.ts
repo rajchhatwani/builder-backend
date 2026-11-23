@@ -5,10 +5,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { createProjectViaApi, importBrokenInvoiceFlow, importInvoiceFlow, signedInUser, watchProblems, type Api } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 const editor = (page: Page) => page.getByRole('textbox', { name: 'Expression' })
 const combo = (page: Page) => page.getByRole('combobox', { name: 'Expression' })

@@ -94,6 +94,21 @@ class AiAgentsModule:
                 if perm.entity == entity_name and perm.operation == "create":
                     roles.update(perm.roles)
             create_roles[table] = tuple(sorted(roles))
+        # table -> how to reach the entity's own repository (the same create path as its POST route) and what the
+        # agent runtime must refuse because it needs a request context (abac / pbac policy decisions)
+        runtime: dict[str, dict[str, object]] = {}
+        for table in sorted(tables):
+            ctx = next((e for e in project.entity_by_name.values() if e.table == table), None)
+            if ctx is None:
+                continue
+            runtime[table] = {
+                "module": f"app.crud.{ctx.table}",
+                "repository": f"{ctx.name}Repository",
+                "entity": ctx.name,
+                "policy": ctx.policy,
+                "guarded": ctx.guarded,
+                "numbered": bool(ctx.numbered),
+            }
         files: FileTree = {
             template.rsplit(".", 1)[0]: read_verbatim(_TEMPLATES, template) for template in _VERBATIM
         }
@@ -110,6 +125,7 @@ class AiAgentsModule:
             agents=pprint.pformat(agents, width=96, sort_dicts=True),
             entities=pprint.pformat(entities, width=96, sort_dicts=True),
             create_roles=pprint.pformat(create_roles, width=96, sort_dicts=True),
+            runtime=pprint.pformat(runtime, width=96, sort_dicts=True),
         )
         files["app/ai/agents_models.py"] = render_template(self._env, "app/ai/agents_models.py.j2", tenant=tenant)
         files["alembic/versions/0041_ai_agents.py"] = render_template(

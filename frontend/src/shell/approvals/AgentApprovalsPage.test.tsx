@@ -1,6 +1,7 @@
 import axe from 'axe-core'
 import { act, createElement } from 'react'
 import { describe, expect, it, vi } from 'vitest'
+import { readySession, stubSession } from '../preview/testSession'
 import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
 import { AgentApprovalsPage } from './AgentApprovalsPage'
 
@@ -29,11 +30,9 @@ function api(over: (m: string, url: string, body: unknown) => Response | undefin
   }) as unknown as typeof fetch
   return { f, calls }
 }
-const el = (f: typeof fetch, props: Record<string, unknown> = {}) => createElement(AgentApprovalsPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f, ...props })
+const el = (f: typeof fetch, props: Record<string, unknown> = {}) => createElement(AgentApprovalsPage, { projectId: 'p', session: readySession(f), ...props })
 async function load(f: typeof fetch, props: Record<string, unknown> = {}) {
   const host = await mount(el(f, props))
-  await setInput(q('agentapprovals-token') as HTMLInputElement, 'TOK')
-  await click(q('agentapprovals-load'))
   await flush()
   return host
 }
@@ -41,17 +40,17 @@ const key = async (e: Element, k: string) => { await act(async () => { e.dispatc
 const posts = (calls: ReturnType<typeof api>['calls']) => calls.filter((c) => c.m === 'POST')
 
 describe('AgentApprovalsPage', () => {
-  it('asks for a token first and sends it only as bearer', async () => {
+  it('loads the inbox straight away and shows no token or password input', async () => {
     const { f, calls } = api()
-    await mount(el(f))
-    expect(q('agentapprovals-notoken')).not.toBeNull(); expect(calls).toHaveLength(0)
-    await setInput(q('agentapprovals-token') as HTMLInputElement, 'TOK'); await click(q('agentapprovals-load'))
+    const host = await mount(el(f))
+    expect(host.querySelector('input[type=password]')).toBeNull()
+    expect(host.textContent ?? '').not.toMatch(/bearer|paste a/i)
+    expect(host.querySelector('[data-testid$="-token"],[data-testid$="-notoken"],[data-testid$="agentapprovals-load"]')).toBeNull()
     expect(calls[0].url).toMatch(/^http:\/\/gen\.test\/ai\/agents\/(proposals\?status=pending_approval&limit=20&offset=0|stats)$/)
-    expect(calls.every((c) => c.auth === 'Bearer TOK')).toBe(true)
     expect(calls.some((c) => c.url.endsWith('/ai/agents/stats'))).toBe(true)
   })
   it('shows the no-origin note', async () => {
-    const host = await mount(el(api().f, { origin: null }))
+    const host = await mount(el(api().f, { session: stubSession('no-origin') }))
     expect(host.querySelector('[data-testid="agentapprovals-no-origin"]')).not.toBeNull()
   })
   it('lists proposals with agent, action, risk, autonomy and read-only args', async () => {

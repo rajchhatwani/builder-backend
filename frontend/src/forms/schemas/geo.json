@@ -1,0 +1,79 @@
+{
+  "additionalProperties": false,
+  "description": "Operations pack, D13 geo (generated routes under /geo): places and geofences (circle, polygon) with a grid\ncell index, haversine distance in integer metres, nearest-N / within-radius queries, enter / exit evaluation and\ndeterministic FAKE geocoder / routing / ETA adapters (`provider` is always `fake`: no outbound calls).\nCoordinates are integer micro-degrees. `grid_cell_micro` is the index cell size (10000 = 0.01 degree).",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "write_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Write Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "provider": {
+      "default": "fake",
+      "title": "Provider",
+      "type": "string",
+      "x-ui": {
+        "hidden": true
+      }
+    },
+    "grid_cell_micro": {
+      "default": 10000,
+      "title": "Grid Cell Micro",
+      "type": "integer"
+    },
+    "max_places": {
+      "default": 100000,
+      "title": "Max Places",
+      "type": "integer"
+    },
+    "max_geofences": {
+      "default": 1000,
+      "title": "Max Geofences",
+      "type": "integer"
+    },
+    "max_polygon_vertices": {
+      "default": 200,
+      "title": "Max Polygon Vertices",
+      "type": "integer"
+    },
+    "max_radius_m": {
+      "default": 20000000,
+      "title": "Max Radius M",
+      "type": "integer"
+    }
+  },
+  "title": "SpecGeo",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "read_roles",
+      "write_roles",
+      "grid_cell_micro",
+      "max_places",
+      "max_geofences",
+      "max_polygon_vertices",
+      "max_radius_m",
+      "provider"
+    ]
+  }
+}

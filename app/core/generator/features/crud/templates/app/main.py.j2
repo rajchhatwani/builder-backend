@@ -48,6 +48,9 @@ from app.booking.router import router as _booking_router
 {% if history_router %}
 from app.change_history.router import router as _change_history_router
 {% endif %}
+{% if compliance %}
+from app.compliance.router import router as _compliance_router
+{% endif %}
 from app.config import get_settings
 {% if observability %}
 from app.core import telemetry
@@ -99,12 +102,19 @@ from app.notifications.router import router as _notifications_router
 from app.payments.lock import ensure_payments_lock
 from app.payments.router import router as _payments_router
 {% endif %}
+{% if api_platform %}
+from app.platform_api.public import router as _platform_public_router
+from app.platform_api.router import router as _platform_router
+{% endif %}
 {% if providers %}
 from app.providers import config as _providers_config
 from app.providers.router import router as _providers_router
 {% endif %}
 {% if realtime %}
 from app.realtime.router import router as _realtime_router
+{% endif %}
+{% if regulated %}
+from app.regulated import keys as _regulated_keys
 {% endif %}
 from app.routers._health import router as _health_router
 {% for e in entities %}
@@ -149,6 +159,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 {% endif %}
 {% if providers %}
     _providers_config.check_boot()  # production refuses a missing, short or placeholder PROVIDER_VAULT_KEY
+{% endif %}
+{% if regulated %}
+    _regulated_keys.check_boot()  # a missing, unreadable or group-readable key file stops the app here
 {% endif %}
 {% if storage %}
     _storage_config.get_storage_settings().check()  # unsafe or missing storage settings stop the app here
@@ -331,6 +344,13 @@ def create_app() -> FastAPI:
 {% endif %}
 {% if history_router %}
     app.include_router(_change_history_router)
+{% endif %}
+{% if compliance %}
+    app.include_router(_compliance_router)
+{% endif %}
+{% if api_platform %}
+    app.include_router(_platform_router)
+    app.include_router(_platform_public_router)
 {% endif %}
     include_custom_routers(app)
     return app

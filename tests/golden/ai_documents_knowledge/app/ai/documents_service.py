@@ -15,6 +15,9 @@
   correct / approve / reject it unless the spec sets allow_self_review (403 self_review_forbidden).
 * approve / reject are final and decided under a row lock (FOR UPDATE): of parallel decisions exactly one wins, the
   others get 409 document_closed. Approve refuses while a required field has no value (422 missing_required_fields).
+* ROLE RULE: registering a document spends gateway budget (the extraction call), so the caller needs a gateway call role
+  (packs.ai.gateway.roles.call_roles or manage_roles; empty call_roles = any signed-in user), the same gate as
+  POST /ai/complete; otherwise 403 forbidden, before anything is read or written.
 * Reads: reviewers (and readers) see the tenant's documents; a caller who may only upload sees only their own.
 """
 
@@ -241,6 +244,7 @@ async def _existing(
 
 
 async def create(session: AsyncSession, user: _t.Any, body: _s.DocumentIn) -> tuple[_s.DocumentOut, bool]:
+    _gateway.require_call_role(user)  # the extraction spends gateway budget: same gate as /ai/complete (403 forbidden)
     tenant = _gateway.tenant_of(user)
     caller: _uuid.UUID | None = getattr(user, "id", None)
     if body.kind not in _config.KINDS:

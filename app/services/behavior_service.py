@@ -70,6 +70,10 @@ BLOCKS = (
     "api_edge",
     "webhooks",
     "hook_effects",
+    "packs",
+    "regulated",
+    "compliance",
+    "api_platform",
 )
 SECTIONS = (SECTION, SETTINGS, SEQUENCES, LISTS, HISTORY, HOOKS, SEED, *BLOCKS)
 # Issue codes a block save is refused for: a secret must never be written to the spec.
@@ -470,6 +474,10 @@ def _block_models() -> dict[str, type[BaseModel]]:
         "api_edge": spec_models.SpecApiEdge,
         "webhooks": spec_models.SpecWebhooks,
         "hook_effects": spec_models.SpecHookEffects,
+        "packs": spec_models.SpecPacks,
+        "regulated": spec_models.SpecRegulated,
+        "compliance": spec_models.SpecCompliance,
+        "api_platform": spec_models.SpecApiPlatform,
     }
 
 

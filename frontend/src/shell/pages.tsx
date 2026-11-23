@@ -384,12 +384,288 @@ export const V2_SECTIONS: { id: V2Section; label: string; icon: ReactNode }[] = 
     ),
   },
   {
+    id: 'upgrades',
+    label: 'Upgrades',
+    icon: (
+      <>
+        <path d="M12 20V6M6 12l6-6 6 6" />
+        <path d="M5 21h14" />
+      </>
+    ),
+  },
+  {
+    id: 'apikeys',
+    label: 'API keys',
+    icon: (
+      <>
+        <circle cx="8" cy="15" r="4" />
+        <path d="M11 12l9-9M16 7l3 3M14 9l2 2" />
+      </>
+    ),
+  },
+  {
+    id: 'apps',
+    label: 'Apps',
+    icon: (
+      <>
+        <rect x="4" y="4" width="7" height="7" rx="1" />
+        <rect x="13" y="4" width="7" height="7" rx="1" />
+        <rect x="4" y="13" width="7" height="7" rx="1" />
+        <path d="M16.5 13v7M13 16.5h7" />
+      </>
+    ),
+  },
+  {
+    id: 'compliance',
+    label: 'Compliance',
+    icon: (
+      <>
+        <rect x="6" y="4" width="12" height="17" rx="2" />
+        <path d="M9 4h6v3H9zM9 14l2 2 4-4" />
+      </>
+    ),
+  },
+  {
     id: 'agentactions',
     label: 'AI actions',
     icon: (
       <>
         <path d="M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z" />
         <path d="M9 12l2 2 4-4" />
+      </>
+    ),
+  },
+  {
+    id: 'invoices',
+    label: 'Invoices',
+    icon: (
+      <>
+        <path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9 8h6M9 12h6" />
+      </>
+    ),
+  },
+  {
+    id: 'payouts',
+    label: 'Payouts',
+    icon: (
+      <>
+        <path d="M4 8h16v10H4z" /><path d="M12 5v6M9 8l3 3 3-3" />
+      </>
+    ),
+  },
+  {
+    id: 'reconciliation',
+    label: 'Reconciliation',
+    icon: (
+      <>
+        <path d="M4 8h12M12 4l4 4-4 4M20 16H8M12 12l-4 4 4 4" />
+      </>
+    ),
+  },
+  {
+    id: 'bookingadmin',
+    label: 'Booking setup',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M9 15h6" />
+      </>
+    ),
+  },
+  {
+    id: 'ledgersettings',
+    label: 'Ledger settings',
+    icon: (
+      <>
+        <path d="M5 4h14v16H5z" /><path d="M9 9h6M9 13h6" />
+      </>
+    ),
+  },
+  {
+    id: 'currencysettings',
+    label: 'Currency settings',
+    icon: (
+      <>
+        <circle cx="12" cy="12" r="8" /><path d="M12 8v8M9.5 10h4a1.5 1.5 0 010 3h-3a1.5 1.5 0 000 3h4" />
+      </>
+    ),
+  },
+  {
+    id: 'reconsettings',
+    label: 'Reconciliation settings',
+    icon: (
+      <>
+        <path d="M4 8h12M12 4l4 4-4 4" /><path d="M6 18h12" />
+      </>
+    ),
+  },
+  {
+    id: 'invoicingsettings',
+    label: 'Invoicing settings',
+    icon: (
+      <>
+        <path d="M6 3h12v18H6z" /><path d="M9 8h6M9 12h6M9 16h3" />
+      </>
+    ),
+  },
+  {
+    id: 'bookingsettings',
+    label: 'Booking settings',
+    icon: (
+      <>
+        <rect x="4" y="5" width="16" height="15" rx="2" /><path d="M4 10h16M8 3v4M16 3v4M10 15l2 2 3-3" />
+      </>
+    ),
+  },
+  {
+    id: 'places',
+    label: 'Places & fences',
+    icon: (
+      <>
+        <path d="M12 21s-6-5.5-6-10a6 6 0 0112 0c0 4.5-6 10-6 10z" /><circle cx="12" cy="11" r="2" />
+      </>
+    ),
+  },
+  {
+    id: 'matching',
+    label: 'Matching',
+    icon: (
+      <>
+        <path d="M5 7h6M13 17h6M11 7l2 10" /><circle cx="5" cy="7" r="1" /><circle cx="19" cy="17" r="1" />
+      </>
+    ),
+  },
+  {
+    id: 'prediction',
+    label: 'Prediction',
+    icon: (
+      <>
+        <path d="M4 18l5-6 4 3 7-9" />
+      </>
+    ),
+  },
+  {
+    id: 'routing',
+    label: 'Route & ETA',
+    icon: (
+      <>
+        <circle cx="6" cy="18" r="2" /><circle cx="18" cy="6" r="2" /><path d="M8 18h6a3 3 0 000-6h-4a3 3 0 010-6h6" />
+      </>
+    ),
+  },
+  {
+    id: 'aiusage',
+    label: 'AI usage',
+    icon: (
+      <>
+        <path d="M5 19V9M12 19V5M19 19v-7" />
+      </>
+    ),
+  },
+  {
+    id: 'knowledge',
+    label: 'Knowledge',
+    icon: (
+      <>
+        <path d="M5 4h10a4 4 0 014 4v12H9a4 4 0 01-4-4z" /><path d="M9 9h6" />
+      </>
+    ),
+  },
+  {
+    id: 'evals',
+    label: 'AI evals',
+    icon: (
+      <>
+        <path d="M5 12l4 4 10-10" />
+      </>
+    ),
+  },
+  {
+    id: 'agentruns',
+    label: 'Agent runs',
+    icon: (
+      <>
+        <circle cx="12" cy="8" r="3" /><path d="M5 20c0-4 3-6 7-6s7 2 7 6" />
+      </>
+    ),
+  },
+  {
+    id: 'geosettings',
+    label: 'Geo settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'locationsettings',
+    label: 'Location settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'matchingsettings',
+    label: 'Matching settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'predictionsettings',
+    label: 'Prediction settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'aigatewaysettings',
+    label: 'AI gateway settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'aidocssettings',
+    label: 'AI documents settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'knowledgesettings',
+    label: 'Knowledge settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'agentssettings',
+    label: 'Agents settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
+      </>
+    ),
+  },
+  {
+    id: 'evalssettings',
+    label: 'Evals settings',
+    icon: (
+      <>
+        <path d="M5 6h14M5 12h14M5 18h14" /><circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="12" r="1.5" /><circle cx="8" cy="18" r="1.5" />
       </>
     ),
   },

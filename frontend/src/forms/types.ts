@@ -8,6 +8,8 @@ export interface UiHint {
   /** 'csv' renders an array of strings as one comma-separated text box; 'textarea' a multi-line box. */
   widget?: 'csv' | 'textarea'
   label?: string
+  /** A nullable object that is off (null) until its switch is ticked; ticking fills the object's defaults. */
+  optional?: boolean
   /** Singular name for rows of an array ('List' -> legend 'List 1', button 'Add list'). */
   itemLabel?: string
   help?: string

@@ -113,6 +113,8 @@ def test_no_secret_is_written_and_actions_are_pinned(
     for path, text in files.items():
         if path.startswith(".github/workflows/"):
             for use in re.findall(r"uses:\s*(\S+)", text):
+                if use.startswith("./"):  # a reusable workflow in the same repo cannot carry a SHA (B1-035 deploy CI gate)
+                    continue
                 assert re.fullmatch(r"[\w./-]+@[0-9a-f]{40}", use), f"{path}: {use} is not pinned"
     # the trust is limited to one repository and one GitHub environment
     trust = "\n".join(t for p, t in files.items() if "bootstrap" in p)

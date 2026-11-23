@@ -4,7 +4,6 @@ import { onSessionLost } from '../../api/session'
 import { isMfaChallenge, type MfaChallenge, type UserAccount } from '../../api/types'
 import { MfaStep } from '../../components/MfaStep'
 import { useUi } from '../../components/Ui'
-import { shellV2Enabled } from '../../shell/flag'
 import { PreviewLimitsPage, showPreviewLimits } from './PreviewLimitsPage'
 import { SsoDomainsPage } from './SsoDomainsPage'
 import { OperationsPage } from './OperationsPage'
@@ -113,7 +112,7 @@ function AdminLogin({ onSignedIn }: { onSignedIn: (user: UserAccount) => void })
     <div className="auth-page admin-theme">
       <div className="card auth-card">
         <div className="admin-badge">Administration</div>
-        <h2>Admin sign in</h2>
+        <h1>Admin sign in</h1>
         <p className="muted small-text">
           For platform staff only. Customer accounts cannot sign in here.
         </p>
@@ -166,8 +165,8 @@ export function AdminApp({ section }: { section: AdminSection }) {
   if (user === undefined) return <p className="empty-state">Loading…</p>
   if (user === null) return <AdminLogin onSignedIn={setUser} />
 
-  // Preview limits: platform admins only, and only with ui.shell=v2.
-  const previewsOn = showPreviewLimits(user.platform_role, shellV2Enabled())
+  // Preview limits: platform admins only, and always.
+  const previewsOn = showPreviewLimits(user.platform_role)
   const readOnly = user.platform_role !== 'platform_admin'
   const sections = SECTIONS.filter((s) => (s.id !== 'previews' || previewsOn) && (s.id !== 'sso' || !readOnly))
   // #/admin/organizations/<id> opens one organization.

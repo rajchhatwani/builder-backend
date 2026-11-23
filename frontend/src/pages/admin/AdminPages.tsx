@@ -122,7 +122,7 @@ export function AdminOverview() {
         ))}
       </div>
       <div className="card">
-        <h3>What administrators can and cannot do</h3>
+        <h2>What administrators can and cannot do</h2>
         <ul>
           <li>Manage people: create, suspend, change platform role, reset passwords, end sessions.</li>
           <li>See project names, owners and sizes, and read the audit log.</li>
@@ -824,7 +824,7 @@ function SupportDigest() {
   }, [hours])
   return (
     <section className="card stack" data-testid="support-digest">
-      <h3>Support access digest</h3>
+      <h2>Support access digest</h2>
       <p className="muted small-text">
         Every "view as" session in the period, as the daily security digest reports it. The digest is sent by the
         scheduled job; this is a preview and sends nothing.
@@ -1291,7 +1291,7 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
 
       {!readOnly && (
         <section className="card stack">
-          <h3>Plan and limits</h3>
+          <h2>Plan and limits</h2>
           <div className="hstack">
             <select
               aria-label="Plan"
@@ -1331,7 +1331,7 @@ export function AdminOrgDetail({ id, readOnly }: { id: string; readOnly: boolean
 
       <section className="card stack">
         <div className="table-toolbar">
-          <h3>Single sign-on and security</h3>
+          <h2>Single sign-on and security</h2>
           {org.kind === 'team' && (
             <button className="outline small" disabled={checking} onClick={runSsoCheck}>
               {checking ? 'Checking…' : 'Check SSO'}

@@ -15,6 +15,7 @@ from app.models.documents_config import ProjectDocuments
 from app.models.entity import Entity
 from app.models.field import Field
 from app.models.generation import Generation
+from app.models.upgrade import UpgradeProposal  # noqa: F401
 from app.models.keycloak_config import ProjectKeycloakConfig
 from app.models.observability_config import ProjectObservability
 from app.models.payments_config import ProjectPaymentsConfig

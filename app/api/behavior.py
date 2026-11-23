@@ -153,6 +153,10 @@ def _block_routes() -> None:
         "api_edge": ("ApiEdge", "the API edge settings"),
         "webhooks": ("Webhooks", "webhooks out and in"),
         "hook_effects": ("HookEffects", "the effectful-hooks opt-in"),
+        "packs": ("Packs", "the domain packs (money, operations, booking, AI) and their settings"),
+        "regulated": ("Regulated", "regulated mode and field protection"),
+        "compliance": ("Compliance", "retention, legal hold, consent, break-glass and de-identified export"),
+        "api_platform": ("ApiPlatform", "public API keys, rate limits and installable apps"),
     }
     for key, (cls, what) in names.items():
         read, write = getattr(bs, cls + "Read"), getattr(bs, cls + "Write")

@@ -257,18 +257,23 @@ async def _lazy_expire(session: AsyncSession, tenant: Tenant, resource_id: _uuid
 # --- bookings: output and visibility -----------------------------------------------------------
 
 
+def _stale_hold(row: Booking) -> bool:
+    return row.status == "held" and row.hold_expires_at is not None and row.hold_expires_at <= _now()
+
+
 def _out(row: Booking, res: BookingResource) -> _s.BookingOut:
+    stale = _stale_hold(row)  # a hold past its TTL reads as expired before any sweep has run
     return _s.BookingOut(
         id=row.id,
         resource_id=row.resource_id,
         resource_name=res.name,
         kind=res.kind,
         mode=_t.cast(_s.Mode, res.mode),
-        status=_t.cast(_s.Status, row.status),
+        status=_t.cast(_s.Status, "expired" if stale else row.status),
         starts_at=row.starts_at,
         ends_at=row.ends_at,
         quantity=row.quantity,
-        hold_expires_at=row.hold_expires_at if row.status == "held" else None,
+        hold_expires_at=row.hold_expires_at if row.status == "held" and not stale else None,
         customer_id=row.customer_id,
         customer_ref=row.customer_ref,
         notes=row.notes,
@@ -277,7 +282,7 @@ def _out(row: Booking, res: BookingResource) -> _s.BookingOut:
         fee_currency=row.fee_currency,
         cancelled_at=row.cancelled_at,
         confirmed_at=row.confirmed_at,
-        expired_at=row.expired_at,
+        expired_at=row.hold_expires_at if stale else row.expired_at,
         created_at=row.created_at,
     )
 
@@ -301,7 +306,6 @@ async def _booking_out(session: AsyncSession, tenant: Tenant, row: Booking) -> _
 
 async def get_booking(session: AsyncSession, user: _t.Any, booking_id: _uuid.UUID) -> _s.BookingOut:
     tenant = tenant_of(user)
-    await _lazy_expire(session, tenant)
     return await _booking_out(session, tenant, await _booking(session, tenant, booking_id, user))
 
 
@@ -315,15 +319,21 @@ async def list_bookings(
     window_from: datetime | None,
     window_to: datetime | None,
 ) -> tuple[list[_s.BookingOut], int]:
-    tenant = tenant_of(user)
-    await _lazy_expire(session, tenant)
+    tenant = tenant_of(user)  # reads never sweep or commit: a stale hold is reported as expired by _out / the status filter
     base = _scoped(_sa.select(Booking), Booking, tenant)
     if not sees_all(user):
         base = base.where(Booking.customer_id == getattr(user, "id", None))
     if resource_id is not None:
         base = base.where(Booking.resource_id == resource_id)
     if status is not None:
-        base = base.where(Booking.status == status)
+        live = _sa.and_(Booking.status == "held", Booking.hold_expires_at > _now())
+        gone = _sa.and_(Booking.status == "held", Booking.hold_expires_at <= _now())
+        if status == "held":
+            base = base.where(live)
+        elif status == "expired":
+            base = base.where(_sa.or_(Booking.status == "expired", gone))
+        else:
+            base = base.where(Booking.status == status)
     if window_from is not None:
         base = base.where(Booking.ends_at > _utc(window_from))
     if window_to is not None:
@@ -360,7 +370,6 @@ async def availability(
     session: AsyncSession, user: _t.Any, resource_id: _uuid.UUID, first: date, last: date, include_taken: bool
 ) -> _s.AvailabilityOut:
     tenant = tenant_of(user)
-    await _lazy_expire(session, tenant, resource_id)
     res = await _resource(session, tenant, resource_id)
     if res.mode != "slot" or res.slot_minutes is None or res.schedule is None:
         raise AppError("not_slot_resource", "only a slot resource has an availability list (see /capacity)", 422)
@@ -393,7 +402,6 @@ async def capacity(
 ) -> _s.CapacityOut:
     tenant = tenant_of(user)
     start, end = _utc(starts_at), _utc(ends_at)
-    await _lazy_expire(session, tenant, resource_id)
     res = await _resource(session, tenant, resource_id)
     if res.mode == "slot":
         raise AppError("not_pool_resource", "a slot resource has an availability list instead", 422)
@@ -444,6 +452,12 @@ async def create_booking(session: AsyncSession, user: _t.Any, body: _s.BookingCr
             return None
         if existing.request_hash != fingerprint:
             raise AppError("idempotency_conflict", "this idempotency_key was already used for a different booking", 409)
+        if existing.status in ("expired", "cancelled"):
+            raise AppError(
+                "idempotency_key_spent",
+                f"that idempotency_key belongs to a booking that is now {existing.status}: use a new idempotency_key to book again",
+                409,
+            )
         return existing
 
     found = await replay()
@@ -551,6 +565,10 @@ async def confirm_booking(session: AsyncSession, user: _t.Any, booking_id: _uuid
     row = await _booking(session, tenant, booking_id, user, lock=True)
     _may_act(user, row)
     status_was, hold_until = row.status, row.hold_expires_at
+    if status_was == "confirmed":  # a retried confirm (lost response) is idempotent: 200 with the booking
+        done = await _booking_out(session, tenant, row)
+        await session.rollback()
+        return done
     if status_was == "held" and _rules.hold_expired(hold_until, _now()):
         await session.execute(
             _sa.update(Booking).where(Booking.id == booking_id).values(status="expired", expired_at=_now(), hold_expires_at=None)
@@ -580,6 +598,7 @@ async def cancel_booking(
     row = await _booking(session, tenant, booking_id, user, lock=True)
     _may_act(user, row)
     status_was, starts_at, hold_until = row.status, row.starts_at, row.hold_expires_at
+    by_manager_for_other = is_manager(user) and row.customer_id != getattr(user, "id", None)
     now = _now()
     if status_was == "held" and _rules.hold_expired(hold_until, now):
         await session.execute(
@@ -593,7 +612,8 @@ async def cancel_booking(
     if not _rules.can_cancel_now(status_was, starts_at, now):
         await session.rollback()
         raise AppError("invalid_transition", "that booking has already started", 409)
-    fee = _rules.cancellation_fee(status_was, starts_at, now, _config.FREE_CANCEL_HOURS, _config.CANCEL_FEE_MINOR)
+    # a manager cancelling someone else's booking (the clinic's decision) never charges the customer
+    fee = 0 if by_manager_for_other else _rules.cancellation_fee(status_was, starts_at, now, _config.FREE_CANCEL_HOURS, _config.CANCEL_FEE_MINOR)
     await session.execute(
         _sa.update(Booking)
         .where(Booking.id == booking_id)

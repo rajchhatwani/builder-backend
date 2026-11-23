@@ -28,6 +28,9 @@ from app.core.generator.features.metrics.module import metrics_definitions
 from app.core.generator.features.realtime.module import realtime_entities
 from app.core.generator.features.data_import.module import import_entities
 from app.core.validation_booking import booking_active
+from app.core.generator.features.api_platform.module import api_platform_enabled
+from app.core.generator.features.compliance.module import compliance_enabled
+from app.core.validation_regulated import regulated_active
 from app.core.generator.features.search.module import search_entities
 from app.core.generator.render import make_environment, read_verbatim, render_template
 from app.core.suite_identity import hub_base_url
@@ -128,6 +131,9 @@ class DockerModule:
             "search_entities": search_entities(project),
             "data_import": bool(import_entities(project)),
             "booking": booking_active(project.spec),
+            "regulated": regulated_active(project.spec),
+            "compliance": compliance_enabled(project),
+            "api_platform": api_platform_enabled(project),
             "realtime_entities": realtime_entities(project),
             "metric_defs": metrics_definitions(project),
             "provider_vault": providers_active(project.spec) and project.auth is not None,

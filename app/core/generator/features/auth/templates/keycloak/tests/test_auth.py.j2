@@ -417,11 +417,11 @@ def test_the_keycloak_url_must_be_a_clean_http_url(
 
 
 def test_issuer_and_key_url_are_built_from_the_settings(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "https://id.example.com/")
+    monkeypatch.setenv("KEYCLOAK_PUBLIC_URL", "{{ hub_base_url or 'https://id.example.com' }}/")
     monkeypatch.setenv("KEYCLOAK_INTERNAL_URL", "http://keycloak:8080")
     config.get_auth_settings.cache_clear()
     settings = config.get_auth_settings()
-    assert settings.issuer == f"https://id.example.com/realms/{config.REALM}"
+    assert settings.issuer == f"{{ hub_base_url or 'https://id.example.com' }}/realms/{config.REALM}"
     assert settings.jwks_url == (
         f"http://keycloak:8080/realms/{config.REALM}/protocol/openid-connect/certs"
     )

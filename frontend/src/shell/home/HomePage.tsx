@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api } from '../../api/client'
 import { link } from '../../components/Sidebar'
-import { countLine, issueSection, nextStepView, routeFor } from './homeLogic'
+import { countLine, fixRoute, nextStepView, routeFor } from './homeLogic'
 import { useProjectStatus } from './useProjectStatus'
 
 /** Home of the new shell: readiness board powered by GET /projects/{id}/status. */
@@ -89,7 +89,7 @@ export function HomePage({ projectId }: { projectId: string }) {
                       {issue.message}
                       <small className="muted"> · {issue.path}</small>
                     </span>
-                    <a className="button outline small" href={link(`/p/${projectId}/${routeFor(issueSection(issue))}`)}>
+                    <a className="button outline small" href={link(`/p/${projectId}/${fixRoute(issue)}`)}>
                       Fix
                     </a>
                   </li>

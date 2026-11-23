@@ -16,6 +16,8 @@ interface OverviewPanelProps {
   roleCount: number
   issues: ValidationIssue[] | null
   generationCount: number
+  /** New shell: shown under the Home board, so no page title and no second issue list (Home lists the issues). */
+  embedded?: boolean
 }
 
 /** Which section can fix an issue, judged by its path. */
@@ -54,6 +56,7 @@ export function OverviewPanel({
   roleCount,
   issues,
   generationCount,
+  embedded = false,
 }: OverviewPanelProps) {
   const problemCount = issues?.length ?? 0
 
@@ -133,14 +136,21 @@ export function OverviewPanel({
 
   return (
     <>
-      <div className="page-header">
-        <div>
-          <h1>Overview</h1>
-          <p>Work through these steps in any order. Come back here to see what is left.</p>
+      {embedded ? (
+        <section aria-labelledby="setup-checklist-title">
+          <h2 id="setup-checklist-title">Setup checklist</h2>
+          <p className="muted">Work through these steps in any order. Come back here to see what is left.</p>
+        </section>
+      ) : (
+        <div className="page-header">
+          <div>
+            <h1>Overview</h1>
+            <p>Work through these steps in any order. Come back here to see what is left.</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {issues !== null && problemCount > 0 && entityCount > 0 && (
+      {!embedded && issues !== null && problemCount > 0 && entityCount > 0 && (
         <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
           <div role="alert" data-variant="danger" style={{ marginBlockEnd: 'var(--space-3)' }}>
             {problemCount} {problemCount === 1 ? 'thing needs' : 'things need'} fixing before you can generate.

@@ -1,13 +1,11 @@
-/** F5-3: Operate > Bookings (new shell). Hold a free slot, confirm it, then cancel it and see the recorded fee.
+/** F5-3: Operate > Bookings (new shell). Sign in to the preview, hold a free slot, confirm it, then cancel it and see the recorded fee.
  *  The project API is mocked (see preview-mock.ts). Not run by its author; run with `npx playwright test e2e/bookings.spec.ts`. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
-import { V2_STATE, mockPreview } from './preview-mock'
+import { BEARER, SESSION, mockPreviewSession, signInPreview } from './preview-mock'
 
-test.use({ storageState: V2_STATE })
 
-const TOKEN = 'e2e-bookings-' + 'token-1'
 const RES = { id: 'r1', kind: 'practitioner', mode: 'slot', name: 'Dr A', timezone: 'UTC', slot_minutes: 30, capacity: 1, min_minutes: null, max_minutes: null, active: true }
 const addDays = (date: string, n: number) => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
 
@@ -19,7 +17,7 @@ test('bookings: hold a slot, confirm it, cancel it', async ({ page, request }) =
   let booking: Record<string, unknown> | null = null
   let slotKey = ''
   const slotIso = (date: string, hm: string) => `${date}T${hm}:00Z`
-  const seen = await mockPreview(page, (r) => {
+  const seen = await mockPreviewSession(page, id, (r) => {
     if (r.method === 'GET' && r.path === '/booking/resources') return { json: { items: [RES], total: 1, limit: 200, offset: 0 } }
     if (r.method === 'GET' && r.path === '/booking/resources/r1/availability') {
       const from = new URLSearchParams(r.search).get('from')!
@@ -55,10 +53,8 @@ test('bookings: hold a slot, confirm it, cancel it', async ({ page, request }) =
 
   await page.goto(`/#/p/${id}/bookings`)
   await expect(page.getByTestId('bookings-page')).toBeVisible()
-  await expect(page.getByTestId('bookings-notoken')).toBeVisible()
   expect(seen).toHaveLength(0)
-  await page.getByTestId('bookings-token').fill(TOKEN)
-  await page.getByTestId('bookings-load').click()
+  await signInPreview(page)
 
   await expect(page.getByTestId('bookings-tz')).toContainText('UTC')
   await expect(page.getByTestId('bookings-cell')).toHaveCount(2)
@@ -66,7 +62,7 @@ test('bookings: hold a slot, confirm it, cancel it', async ({ page, request }) =
   await expect(cell()).toHaveAttribute('data-state', 'free')
   const av = seen.find((s) => s.path === '/booking/resources/r1/availability')!
   expect(av.search).toContain('include_taken=true')
-  expect(seen.every((s) => s.auth === `Bearer ${TOKEN}` && !s.search.includes(TOKEN))).toBe(true)
+  expect(seen.every((s) => s.auth === BEARER && s.previewToken === SESSION.previewToken && !s.search.includes(SESSION.jwt))).toBe(true)
 
   // Hold.
   await cell().click()

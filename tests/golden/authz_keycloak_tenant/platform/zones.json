@@ -63,6 +63,7 @@
     "app/schemas/deals.py": "generated",
     "docker-compose.yml": "seeded",
     "docs/AUTHORIZATION.md": "generated",
+    "docs/IDENTITY-MIGRATION.md": "generated",
     "keycloak/clients.json": "generated",
     "keycloak/realm.json": "generated",
     "pyproject.toml": "generated",
@@ -82,6 +83,7 @@
     "tests/test_customers.py": "generated",
     "tests/test_deals.py": "generated",
     "tests/test_identity.py": "generated",
+    "tests/test_identity_migration.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tenancy.py": "generated"
   }

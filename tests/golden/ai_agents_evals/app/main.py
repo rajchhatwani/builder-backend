@@ -21,6 +21,7 @@ from app.config import get_settings
 from app.core.errors import register_exception_handlers, reject_nul_characters
 from app.core.logging import RequestIdMiddleware, configure_logging
 from app.db import engine
+from app.events.relay import start_relay, stop_relay
 from app.imports.router import router as _imports_router
 from app.routers._health import router as _health_router
 from app.routers.tickets import router as tickets_router
@@ -30,7 +31,11 @@ from app.routers.tickets import router as tickets_router
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     get_auth_settings()  # a missing secret stops the app here, with a clear message
     await ensure_provider_lock()  # refuses to start on a database used by another provider
-    yield
+    relay = start_relay()  # delivers outbox events; EVENTS_RELAY_ENABLED=false leaves it to `python -m app.events.relay`
+    try:
+        yield
+    finally:
+        await stop_relay(relay)
     await drain_deliveries()  # mails / SMS still queued when the app stops get their chance to leave
     await engine.dispose()
 

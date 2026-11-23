@@ -4,11 +4,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
-
 const mask = (page: Page) => [page.locator('nav[data-shell="v2"] .muted, nav[data-shell="v2"] [data-testid=shell-project]')]
 async function axeClean(page: Page, name: string) {
   const axe = await new AxeBuilder({ page }).analyze()
@@ -47,7 +42,6 @@ test('forms preview: three blocks render from schema, edit, show-when, list rows
   // 2. Lists: rows with nested rows, keyboard add/remove
   await page.getByRole('button', { name: 'Lists', exact: true }).click()
   await page.getByRole('button', { name: 'Add list' }).click()
-  await expect(page.getByLabel('Name')).toBeFocused().catch(() => undefined)
   await page.getByLabel('Name').fill('Priorities')
   await page.getByRole('button', { name: 'Add item' }).click()
   await page.getByLabel('Value').fill('high')

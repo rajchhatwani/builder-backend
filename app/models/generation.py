@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, ForeignKey, Index, String
+from sqlalchemy import DateTime, ForeignKey, Index, LargeBinary, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,6 +22,13 @@ class Generation(UUIDPrimaryKeyMixin, Base):
     spec_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     spec_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     file_manifest: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    # Upgrade engine base (CP-6E): generator and block versions at download time, and the zlib-compressed
+    # JSON of the generated + seeded files (never the custom zone). Older rows have none of these.
+    generator_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    block_versions: Mapped[dict[str, str]] = mapped_column(
+        JSONB, nullable=False, default=dict, server_default="{}"
+    )
+    file_blob: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=_utcnow
     )

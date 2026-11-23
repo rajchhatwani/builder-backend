@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../../api/client'
-import { sendRequest } from './sendRequest'
+import type { PreviewSession } from '../preview/previewSession'
 import {
   buildRequestUrl, generatePayload, parseOperations, pushHistory, redactBodyText, redactJson, redactPath,
   type HistoryEntry, type Operation,
@@ -11,7 +11,8 @@ type Shown = { kind: 'live'; status: number | null; text: string; ms: number; er
 
 /** Request console. Tokens live ONLY in this component's state (cleared on unmount); history is a React state
  *  array of redacted entries; nothing is written to any browser storage. Responses are rendered as text. */
-export function RequestConsole({ projectId, origin, doc }: { projectId: string; origin: string; doc: Record<string, unknown> }) {
+export function RequestConsole({ projectId, session, doc }: { projectId: string; session: Pick<PreviewSession, 'request' | 'base'>; doc: Record<string, unknown> }) {
+  const base = session.base ?? ''
   const ops = useMemo(() => parseOperations(doc), [doc])
   const [opId, setOpId] = useState('')
   const op: Operation | undefined = ops.find((o) => o.id === opId) ?? ops[0]
@@ -53,7 +54,7 @@ export function RequestConsole({ projectId, origin, doc }: { projectId: string; 
     setFormError('')
     let url: string
     try {
-      url = buildRequestUrl(origin, op.path, values, op.params)
+      url = buildRequestUrl(new URL(base).origin, op.path, values, op.params)
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Invalid request')
       return
@@ -63,15 +64,18 @@ export function RequestConsole({ projectId, origin, doc }: { projectId: string; 
       try { payload = JSON.stringify(JSON.parse(body)) } catch { setFormError('The body is not valid JSON'); return }
     }
     setSending(true)
-    const base = { id: ++seq.current, at: new Date().toLocaleTimeString(), method: op.method.toUpperCase(), path: redactPath(new URL(url).pathname + new URL(url).search), role: role || 'anonymous', authorization: token ? ('[redacted]' as const) : ('none' as const), requestBody: payload ? JSON.stringify(redactJson(JSON.parse(payload)), null, 2) : '' }
+    const entry = { id: ++seq.current, at: new Date().toLocaleTimeString(), method: op.method.toUpperCase(), path: redactPath(new URL(url).pathname + new URL(url).search), role: role || 'anonymous', authorization: token ? ('[redacted]' as const) : ('none' as const), requestBody: payload ? JSON.stringify(redactJson(JSON.parse(payload)), null, 2) : '' }
     try {
-      const r = await sendRequest({ url, origin, method: op.method.toUpperCase(), body: payload, bearer: token || undefined })
-      setShown({ kind: 'live', status: r.status, text: r.text, ms: r.ms, error: '' })
-      setHistory((h) => pushHistory(h, { ...base, status: r.status, ms: r.ms, responseBody: redactBodyText(r.text), error: '' }))
+      // base = <origin>/previews/{id}: the session adds it and the preview token; the role token replaces the session login
+      const t0 = performance.now()
+      const r = await session.request(op.method.toUpperCase(), new URL(url).pathname + new URL(url).search, payload === undefined ? undefined : JSON.parse(payload), { bearer: token || null })
+      const ms = Math.round(performance.now() - t0)
+      setShown({ kind: 'live', status: r.status, text: r.text, ms, error: '' })
+      setHistory((h) => pushHistory(h, { ...entry, status: r.status, ms, responseBody: redactBodyText(r.text), error: '' }))
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Request failed'
       setShown({ kind: 'live', status: null, text: '', ms: 0, error: msg })
-      setHistory((h) => pushHistory(h, { ...base, status: null, ms: 0, responseBody: '', error: msg }))
+      setHistory((h) => pushHistory(h, { ...entry, status: null, ms: 0, responseBody: '', error: msg }))
     } finally {
       setSending(false)
     }
@@ -129,7 +133,7 @@ export function RequestConsole({ projectId, origin, doc }: { projectId: string; 
         {formError && <div role="alert" data-variant="danger" className="bh-alert" data-testid="wb-form-error">{formError}</div>}
         <div className="bh-actions">
           <button type="submit" disabled={sending}>{sending ? 'Sending…' : 'Send request'}</button>
-          <small className="muted">Goes to <code>{origin}</code> only.</small>
+          <small className="muted">Goes to <code>{base}</code> only.</small>
         </div>
       </form>
 

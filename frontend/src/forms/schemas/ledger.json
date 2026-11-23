@@ -1,0 +1,44 @@
+{
+  "additionalProperties": false,
+  "description": "Money pack, D1 double-entry ledger (generated routes under /ledger). Amounts are integer minor units;\nevery transaction sums to zero per currency, enforced by the database. Needs `auth` and the `currency`\nblock. `read_roles` / `post_roles` name auth roles (empty list = any signed-in user).",
+  "properties": {
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "post_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Post Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "max_amount_minor": {
+      "default": 9007199254740991,
+      "title": "Max Amount Minor",
+      "type": "integer"
+    },
+    "max_entries": {
+      "default": 100,
+      "title": "Max Entries",
+      "type": "integer"
+    }
+  },
+  "title": "SpecLedger",
+  "type": "object"
+}

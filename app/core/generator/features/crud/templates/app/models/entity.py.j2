@@ -2,6 +2,9 @@
 @@ALIAS_IMPORTS@@
 
 from app.models import _base as _models_base
+{% if e.regulated %}
+from app.regulated import fieldtype as _rg
+{% endif %}
 {% if e.related_modules %}
 
 if _t.TYPE_CHECKING:
@@ -20,6 +23,9 @@ class {{ e.name }}(_models_base.Base):
     id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(_sa.Uuid(), primary_key=True, default=_uuid.uuid4)
 {% for f in e.fields %}
     {{ f.column }}
+{% endfor %}
+{% for line in e.extra_columns %}
+    {{ line }}
 {% endfor %}
 {% if e.custom %}
     custom_fields: _orm.Mapped[dict[str, _t.Any]] = _orm.mapped_column(

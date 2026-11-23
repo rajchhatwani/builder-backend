@@ -6,7 +6,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.generator import InvalidSpecError, generate
 from app.core.generator.archive import build_zip, manifest
 from app.core.generator.base import FileTree
+from app.core.generator.engine import module_registry
 from app.core.spec_models import Spec, SpecAuthSecrets, spec_hash
+from app.core.upgrade_engine import GENERATOR_VERSION, encode_blob
 from app.exceptions import AppError
 from app.models.generation import Generation
 from app.schemas.generation import (
@@ -216,11 +218,21 @@ class GenerationService:
                 status_code=409,
                 details=[plan_response_dict(resp)],
             )
+        base_files = files
+        if owner_secrets and spec.auth is not None:
+            # The stored base tree must never hold the owner's secrets: render it from the same spec without.
+            clean = spec.model_copy(deep=True)
+            assert clean.auth is not None
+            clean.auth.secrets = SpecAuthSecrets()
+            base_files = generate(clean)
         generation = Generation(
             project_id=project_id,
             spec_snapshot=spec.model_dump(mode="json"),
             spec_hash=spec_hash(spec),
             file_manifest=manifest(files),
+            generator_version=GENERATOR_VERSION,
+            block_versions={bid: m.version for bid, m in module_registry().items()},
+            file_blob=encode_blob(base_files),
         )
         self.session.add(generation)
         await self.session.commit()

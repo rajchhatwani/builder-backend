@@ -1,0 +1,255 @@
+"""Hostile tests for moving accounts between apps (generated, identity paths b and c).
+
+The link primitive must never link on an e-mail address alone, an unverified address or an
+untrusted issuer; the analysers must match only verified addresses, change nothing and never
+print a password hash; local user ids must survive every step."""
+
+import itertools
+import json
+import uuid
+from pathlib import Path
+from typing import Any
+
+import pytest
+from httpx import AsyncClient
+from sqlalchemy import func, select
+
+from app.auth import export, identity
+from app.auth.models import AuthIdentity, AuthUser
+from app.db import session_factory
+from tests._auth_support import sign_in
+
+pytestmark = pytest.mark.usefixtures("outbox")
+
+HUB_A = "https://hub-a.example/realms/a"
+HUB_B = "https://hub-b.example/realms/b"
+TRUSTED = frozenset({HUB_A, HUB_B})
+_N = itertools.count(1)  # each account gets its own phone number (sms variants need a unique one)
+HASH_PARTS = ("c2FsdHNhbHRzYWx0c2FsdA", "aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g", "scrypt$")
+
+
+def _proof(iss: str, sub: str, email: str, verified: Any = True) -> dict[str, Any]:
+    return {"iss": iss, "sub": sub, "email": email, "email_verified": verified}
+
+
+async def _account(client: AsyncClient, email: str) -> tuple[uuid.UUID, str, str]:
+    """A real local user and the (issuer, subject) its sign-in is linked to."""
+    await sign_in(client, email, n=next(_N))
+    async with session_factory() as session:
+        user = (await session.execute(select(AuthUser).where(AuthUser.email == email))).scalar_one()
+        row = (
+            await session.execute(select(AuthIdentity).where(AuthIdentity.user_id == user.id))
+        ).scalars().first()
+    assert row is not None
+    return user.id, row.issuer, row.subject
+
+
+async def _counts() -> tuple[int, int]:
+    async with session_factory() as session:
+        users = (await session.execute(select(func.count()).select_from(AuthUser))).scalar_one()
+        idents = (await session.execute(select(func.count()).select_from(AuthIdentity))).scalar_one()
+    return users, idents
+
+
+async def _link(user_id: uuid.UUID, a: dict[str, Any], b: dict[str, Any], trusted: Any = TRUSTED) -> bool:
+    async with session_factory() as session:
+        return await identity.link_verified(session, user_id, a, b, trusted)
+
+
+# --- the verified link primitive -----------------------------------------------------------
+
+
+async def test_a_link_needs_two_verified_proofs_from_trusted_issuers(client: AsyncClient) -> None:
+    uid, issuer, subject = await _account(client, "link-ok@example.com")
+    trusted = TRUSTED | {issuer}
+    before = await _counts()
+    assert await _link(
+        uid, _proof(issuer, subject, "Link-OK@example.com"), _proof(HUB_A, "hub-sub-1", "link-ok@example.com"), trusted
+    )
+    assert await _counts() == (before[0], before[1] + 1)  # one identity, no new user
+    async with session_factory() as session:
+        assert await identity.find_user_id(session, HUB_A, "hub-sub-1") == uid
+        assert (await session.get(AuthUser, uid)) is not None  # the local id is unchanged
+    # linking the same pair again is a no-op, not an error
+    assert not await _link(
+        uid, _proof(issuer, subject, "link-ok@example.com"), _proof(HUB_A, "hub-sub-1", "link-ok@example.com"), trusted
+    )
+    assert await _counts() == (before[0], before[1] + 1)
+
+
+@pytest.mark.parametrize(
+    ("a_verified", "b_verified"),
+    [(False, True), (True, False), (False, False), ("true", True), (True, "yes"), (None, True), (1, True)],
+)
+async def test_no_link_on_an_unverified_email(client: AsyncClient, a_verified: Any, b_verified: Any) -> None:
+    uid, issuer, subject = await _account(client, f"unv-{uuid.uuid4().hex[:6]}@example.com")
+    email = "shared@example.com"
+    before = await _counts()
+    with pytest.raises(identity.LinkRefused):
+        await _link(
+            uid, _proof(issuer, subject, email, a_verified), _proof(HUB_A, "hub-x", email, b_verified), TRUSTED | {issuer}
+        )
+    assert await _counts() == before
+
+
+async def test_no_link_for_an_untrusted_issuer(client: AsyncClient) -> None:
+    uid, issuer, subject = await _account(client, "untrusted@example.com")
+    email = "untrusted@example.com"
+    before = await _counts()
+    for trusted in (frozenset(), frozenset({issuer}), frozenset({HUB_A})):
+        with pytest.raises(identity.LinkRefused):
+            await _link(uid, _proof(issuer, subject, email), _proof(HUB_A, "hub-u", email), trusted)
+    with pytest.raises(identity.LinkRefused):
+        await _link(uid, _proof(issuer, subject, email), _proof("https://evil.example/realms/x", "e", email), TRUSTED | {issuer})
+    assert await _counts() == before
+
+
+async def test_an_email_match_alone_never_links(client: AsyncClient) -> None:
+    uid, issuer, subject = await _account(client, "victim@example.com")
+    other, other_issuer, other_subject = await _account(client, "attacker@example.com")
+    trusted = TRUSTED | {issuer, other_issuer}
+    before = await _counts()
+    # B claims the victim's address, but proof A belongs to the attacker's own account.
+    with pytest.raises(identity.LinkRefused):
+        await _link(uid, _proof(other_issuer, other_subject, "victim@example.com"), _proof(HUB_A, "evil", "victim@example.com"), trusted)
+    # Different addresses on the two proofs.
+    with pytest.raises(identity.LinkRefused):
+        await _link(uid, _proof(issuer, subject, "victim@example.com"), _proof(HUB_A, "evil", "attacker@example.com"), trusted)
+    # No e-mail at all on a proof.
+    with pytest.raises(identity.LinkRefused):
+        await _link(uid, _proof(issuer, subject, "victim@example.com"), {"iss": HUB_A, "sub": "evil", "email_verified": True}, trusted)
+    # The same identity twice is not a second proof.
+    with pytest.raises(identity.LinkRefused):
+        await _link(uid, _proof(issuer, subject, "victim@example.com"), _proof(issuer, subject, "victim@example.com"), trusted)
+    assert await _counts() == before
+    assert other != uid
+
+
+async def test_an_identity_belongs_to_one_user_only(client: AsyncClient) -> None:
+    uid, issuer, subject = await _account(client, "first@example.com")
+    other, other_issuer, other_subject = await _account(client, "second@example.com")
+    trusted = TRUSTED | {issuer, other_issuer}
+    assert await _link(uid, _proof(issuer, subject, "first@example.com"), _proof(HUB_B, "same-pair", "first@example.com"), trusted)
+    before = await _counts()
+    with pytest.raises(identity.LinkRefused, match="another user"):
+        await _link(other, _proof(other_issuer, other_subject, "first@example.com"), _proof(HUB_B, "same-pair", "first@example.com"), trusted)
+    assert await _counts() == before
+    async with session_factory() as session:
+        assert await identity.find_user_id(session, HUB_B, "same-pair") == uid  # (iss, sub) is unique
+        again = await session.execute(
+            select(func.count()).select_from(AuthIdentity).where(AuthIdentity.issuer == HUB_B, AuthIdentity.subject == "same-pair")
+        )
+        assert again.scalar_one() == 1
+
+
+async def test_trusted_issuers_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("AUTH_TRUSTED_ISSUERS", raising=False)
+    assert identity.trusted_issuers_from_env() == frozenset()
+    monkeypatch.setenv("AUTH_TRUSTED_ISSUERS", f" {HUB_A} , {HUB_B},,")
+    assert identity.trusted_issuers_from_env() == TRUSTED
+
+
+# --- the analysers: verified-only, read-only, no hashes ------------------------------------
+
+
+def _side(users: list[dict[str, Any]], tenants: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    records: list[dict[str, Any]] = [{"format": "identity-v1", "provider": "x", "issuer": "x"}]
+    records += [{"type": "tenant", **t} for t in tenants or []]
+    for user in users:
+        records.append({"type": "user", "is_active": True, **user})
+        records.append({"type": "credential", "user_id": user["id"], "algorithm": "scrypt", "n": 32768, "r": 8, "p": 1,
+                        "salt": HASH_PARTS[0], "hash": HASH_PARTS[1]})
+    return records
+
+
+def _lines(records: list[dict[str, Any]]) -> list[str]:
+    return [json.dumps(r) for r in records]
+
+
+MINE = _side(
+    [
+        {"id": "m1", "email": "Both@Example.com", "email_verified_at": "2026-01-01T00:00:00+00:00", "roles": ["admin"]},
+        {"id": "m2", "email": "pending@example.com", "email_verified_at": None, "roles": []},
+        {"id": "m3", "email": "only-mine@example.com", "email_verified_at": "2026-01-01T00:00:00+00:00", "roles": []},
+        {"id": "m4", "email": "oneside@example.com", "email_verified_at": "2026-01-01T00:00:00+00:00", "roles": []},
+    ],
+    [{"id": "t1", "name": "Acme", "external_ref": None}],
+)
+OTHER = _side(
+    [
+        {"id": "o1", "email": "both@example.com", "email_verified_at": "2026-02-01T00:00:00+00:00", "roles": ["member"]},
+        {"id": "o2", "email": "pending@example.com", "email_verified_at": None, "roles": []},
+        {"id": "o3", "email": "oneside@example.com", "email_verified_at": None, "roles": []},
+    ],
+    [{"id": "t9", "name": "acme", "external_ref": None}],
+)
+
+
+def test_overlap_matches_only_addresses_verified_on_both_sides() -> None:
+    report = export.overlap_report(export.load_records(_lines(MINE)), export.load_records(_lines(OTHER)))
+    assert [c["email"] for c in report["collisions"]] == ["both@example.com"]  # exactly the verified one
+    assert report["collisions"][0]["mine"] == ["m1"] and report["collisions"][0]["other"] == ["o1"]
+    assert report["role_conflicts"][0]["only_mine"] == ["admin"]
+    assert report["role_conflicts"][0]["only_other"] == ["member"]
+    assert report["tenant_slug_overlaps"] == ["acme"]
+    assert report["unverified"]["mine"] == ["m2"] and report["unverified"]["other"] == ["o2", "o3"]
+    assert report["unverified"]["same_address_on_both_sides"] == ["pending@example.com"]  # listed, never matched
+    assert "oneside@example.com" not in {c["email"] for c in report["collisions"]}  # verified on one side only
+    assert report["modified"] is False
+
+
+def test_no_analyser_output_contains_a_password_hash(tmp_path: Path) -> None:
+    mine, other, hub = tmp_path / "m.ndjson", tmp_path / "o.ndjson", tmp_path / "h.ndjson"
+    mine.write_text("\n".join(_lines(MINE)), encoding="utf-8")
+    other.write_text("\n".join(_lines(OTHER)), encoding="utf-8")
+    hub.write_text("\n".join(_lines(OTHER)), encoding="utf-8")
+    outputs = []
+    for argv in (
+        ["overlap", "--file", str(mine), "--other", str(other)],
+        ["impact", "--file", str(mine), "--hub-users", str(hub)],
+        ["keycloak-import", "--file", str(mine), "--client-id", "shop"],
+    ):
+        target = tmp_path / f"out-{argv[0]}.json"
+        assert export.main([*argv, "--out", str(target)]) == 0
+        outputs.append(target.read_text(encoding="utf-8"))
+    for text in outputs:
+        for needle in HASH_PARTS:
+            assert needle not in text
+        assert "password_hash" not in text and "credentials" not in text
+        json.loads(text)
+
+
+def test_the_keycloak_import_has_no_credentials_and_requires_a_new_password() -> None:
+    document = export.keycloak_import_file(export.load_records(_lines(MINE)), "shop")
+    by_id = {u["id"]: u for u in document["users"]}
+    assert set(by_id) == {"m1", "m2", "m3", "m4"}  # the local ids are the Keycloak ids
+    for user in document["users"]:
+        assert "credentials" not in user and "UPDATE_PASSWORD" in user["requiredActions"]
+    assert by_id["m1"]["emailVerified"] is True and "VERIFY_EMAIL" not in by_id["m1"]["requiredActions"]
+    assert by_id["m2"]["emailVerified"] is False and "VERIFY_EMAIL" in by_id["m2"]["requiredActions"]
+    assert by_id["m1"]["clientRoles"] == {"shop": ["admin"]}
+
+
+def test_impact_counts_users_duplicates_and_unverified_accounts() -> None:
+    report = export.impact_report(export.load_records(_lines(MINE)), export.load_records(_lines(OTHER)))
+    assert report["users"] == 4 and report["verified_email"] == 3
+    assert report["unverified"]["count"] == 1 and report["unverified"]["user_ids"] == ["m2"]
+    assert report["verified_duplicates_with_hub"] == {"count": 1, "emails": ["both@example.com"]}
+    assert report["unverified_with_a_hub_account"] == ["pending@example.com"]
+    assert report["roles"] == {"admin": 1}
+    assert report["tenants"][0]["name"] == "Acme"
+
+
+async def test_a_copy_relink_keeps_every_local_id(client: AsyncClient) -> None:
+    uid, issuer, subject = await _account(client, "relinked@example.com")
+    users_before = await _counts()
+    async with session_factory() as session:
+        added = await identity.copy_issuer(session, issuer, "https://hub-copy.example/realms/c")
+    assert added >= 1
+    async with session_factory() as session:
+        assert await identity.find_user_id(session, "https://hub-copy.example/realms/c", subject) == uid
+        assert await identity.find_user_id(session, issuer, subject) == uid  # the old identity stays
+    assert (await _counts())[0] == users_before[0]
+    async with session_factory() as session:
+        with pytest.raises(ValueError, match="refusing to merge"):
+            await identity.copy_issuer(session, issuer, "https://hub-copy.example/realms/c")

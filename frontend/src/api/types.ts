@@ -143,6 +143,28 @@ export interface Preview {
   files: PreviewFile[]
 }
 
+/** One preview sandbox of a project (GET /projects/{id}/previews). Not the code-file `Preview` above. */
+export interface PreviewInstance {
+  id: string
+  project_id: string
+  workspace_id: string | null
+  /** starting | running | stopping | sleeping | expired | failed | killed */
+  state: string
+  spec_hash: string
+  /** Relative: "/previews/{id}/" */
+  url_path: string
+  error?: string | null
+  created_at: string
+  last_request_at: string
+  expires_at: string
+  limits: Record<string, unknown>
+  is_preview?: boolean
+}
+/** Create and rotate-token answer: the access token is shown once. */
+export interface PreviewInstanceCreated extends PreviewInstance {
+  token: string
+}
+
 export interface GenerationSummary {
   id: string
   project_id: string
@@ -150,6 +172,27 @@ export interface GenerationSummary {
   file_count: number
   total_size: number
   created_at: string
+}
+
+// ── Upgrades + scorecard (CP-6E) ───────────────────────────────────
+export type ScorecardStatus = 'pass' | 'warn' | 'fail'
+export type FixActionKind = 'open_upgrade' | 'regenerate' | 'redeclare_hook' | 'none'
+export interface ScorecardCheck { id: string; group: string; status: ScorecardStatus; detail: string; fix: { action: FixActionKind; route: string } }
+export interface Scorecard { score: number; passing: boolean; checks: ScorecardCheck[] }
+export type UpgradeStatus = 'open' | 'applied' | 'dismissed'
+export interface UpgradeBlockChange { block: string; from: string | null; to: string | null; bump: string }
+export interface UpgradeFile { path: string; zone: string; change: string }
+export interface UpgradeSbomEntry { name: string; spec?: string | null; from?: string | null; to?: string | null }
+export interface UpgradeSbomDiff { added?: UpgradeSbomEntry[]; removed?: UpgradeSbomEntry[]; changed?: UpgradeSbomEntry[] }
+export interface UpgradeProposalSummary {
+  id: string; project_id: string; base_generation_id: string; status: UpgradeStatus
+  from_generator_version: string | null; to_generator_version: string
+  block_changes: Record<string, unknown>[]; file_count: number; auto_apply_eligible: boolean
+  created_at: string; decided_at: string | null
+}
+export interface UpgradeProposalDetail extends UpgradeProposalSummary {
+  created_by: string | null; files: Record<string, unknown>[]; patch_size: number
+  sbom_diff: Record<string, unknown>; migrations: Record<string, unknown>[]; scorecard: Record<string, unknown>; kept?: string[]
 }
 
 // ── Auth enums ──────────────────────────────────────────────────────

@@ -29,6 +29,12 @@ def _fake_directives(monkeypatch) -> None:  # noqa: ANN001
     monkeypatch.setattr(ai_config, "FAKE_DIRECTIVES", True)
 
 
+@pytest.fixture(autouse=True)
+def _call_roles(monkeypatch) -> None:  # noqa: ANN001
+    """The spec lets only admin call the gateway; uploading / asking now needs a call role, so these scenarios grant the uploader roles one."""
+    monkeypatch.setattr(ai_config, "CALL_ROLES", ("admin", "agent", "customer"))
+
+
 @pytest.fixture
 async def http(outbox) -> AsyncClient:  # noqa: ANN001, F811
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -420,3 +426,21 @@ async def test_the_body_is_bounded_before_it_is_parsed_into_the_gateway(http, pe
     assert r.status_code == 422 and error_code(r) == "validation_error"
     r = await upload(http, people["agent"], "x" * 380_001)
     assert r.status_code == 422 and error_code(r) == "content_too_large"
+
+
+# --- L5: documents create needs a gateway call role ----------------------------------------------------------------
+
+
+async def test_creating_a_document_needs_a_gateway_call_role_before_anything_is_written(http, people, monkeypatch) -> None:  # noqa: ANN001
+    agent = people["agent"]
+    monkeypatch.setattr(ai_config, "CALL_ROLES", ("admin",))
+    monkeypatch.setattr(ai_config, "MANAGE_ROLES", ("admin",))
+    for table in ("ai_documents", "ai_calls"):
+        before = (await rows(f"SELECT count(*) FROM {table}"))[0][0]
+        r = await upload(http, agent)  # the agent may upload, but holds no call role: the extraction would spend budget
+        assert r.status_code == 403 and error_code(r) == "forbidden", r.text
+        assert (await rows(f"SELECT count(*) FROM {table}"))[0][0] == before == 0
+    monkeypatch.setattr(ai_config, "CALL_ROLES", ("agent",))  # now the agent holds a call role
+    r = await upload(http, agent)
+    assert r.status_code == 201, r.text
+    assert (await rows("SELECT count(*) FROM ai_documents"))[0][0] == 1 and (await rows("SELECT count(*) FROM ai_calls"))[0][0] == 1

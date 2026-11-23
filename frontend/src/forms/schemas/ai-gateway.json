@@ -1,0 +1,248 @@
+{
+  "$defs": {
+    "SpecAiBudget": {
+      "additionalProperties": false,
+      "description": "Integer micro-USD (1 USD = 1_000_000) per `period` (day | month), and a cap for one call's worst case.",
+      "properties": {
+        "period": {
+          "default": "day",
+          "title": "Period",
+          "type": "string",
+          "x-ui": {
+            "help": "day or month."
+          }
+        },
+        "limit_micro_usd": {
+          "default": 1000000,
+          "title": "Limit Micro Usd",
+          "type": "integer",
+          "x-ui": {
+            "help": "Integer micro-USD (1 USD = 1,000,000). The price table is an estimate."
+          }
+        },
+        "per_call_cap_micro_usd": {
+          "default": 100000,
+          "title": "Per Call Cap Micro Usd",
+          "type": "integer",
+          "x-ui": {
+            "help": "Integer micro-USD: the cap on one call's worst case."
+          }
+        }
+      },
+      "title": "SpecAiBudget",
+      "type": "object"
+    },
+    "SpecAiProvider": {
+      "additionalProperties": false,
+      "description": "A model provider of the AI gateway. `kind` is only `fake` for now (deterministic, no network). `byo_key_env` is\nthe NAME of the environment variable that would hold a bring-your-own key: data only, nothing reads it yet.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "kind": {
+          "default": "fake",
+          "title": "Kind",
+          "type": "string",
+          "x-ui": {
+            "help": "Only fake (deterministic, no network) exists for now."
+          }
+        },
+        "byo_key_env": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Byo Key Env",
+          "x-ui": {
+            "help": "The NAME of an environment variable that would hold your own key. Never type a key here."
+          }
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "SpecAiProvider",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "kind",
+          "byo_key_env"
+        ]
+      }
+    },
+    "SpecAiRoles": {
+      "additionalProperties": false,
+      "description": "Empty list = any signed-in user (same convention as the booking pack).",
+      "properties": {
+        "call_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Call Roles",
+          "type": "array",
+          "default": [],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "read_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Read Roles",
+          "type": "array",
+          "default": [
+            "admin"
+          ],
+          "x-ui": {
+            "widget": "csv"
+          }
+        },
+        "manage_roles": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Manage Roles",
+          "type": "array",
+          "default": [
+            "admin"
+          ],
+          "x-ui": {
+            "widget": "csv"
+          }
+        }
+      },
+      "title": "SpecAiRoles",
+      "type": "object"
+    },
+    "SpecAiStage": {
+      "additionalProperties": false,
+      "description": "One stage of the per-stage router: stage name -> provider + model + output cap (+ optional fallback model).",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "model": {
+          "title": "Model",
+          "type": "string"
+        },
+        "max_output_tokens": {
+          "default": 512,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "fallback_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fallback Model"
+        }
+      },
+      "required": [
+        "name",
+        "provider",
+        "model"
+      ],
+      "title": "SpecAiStage",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "provider",
+          "model",
+          "max_output_tokens",
+          "fallback_model"
+        ]
+      }
+    }
+  },
+  "additionalProperties": false,
+  "description": "AI pack, D33 LLM gateway (generated routes under /ai, tables under app/ai). Needs `auth` with rbac. A call is\nrouted by stage, its worst-case cost is reserved against the budget before the provider runs, then settled.\n`zero_retention`: prompts and outputs are never stored (hash and token counts only).",
+  "properties": {
+    "providers": {
+      "items": {
+        "$ref": "#/$defs/SpecAiProvider"
+      },
+      "title": "Providers",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Provider"
+      }
+    },
+    "region": {
+      "default": "eu",
+      "title": "Region",
+      "type": "string",
+      "x-ui": {
+        "help": "Where the AI data is handled (a label, for example eu)."
+      }
+    },
+    "zero_retention": {
+      "default": false,
+      "title": "Zero Retention",
+      "type": "boolean"
+    },
+    "stages": {
+      "items": {
+        "$ref": "#/$defs/SpecAiStage"
+      },
+      "title": "Stages",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Stage"
+      }
+    },
+    "budget": {
+      "$ref": "#/$defs/SpecAiBudget",
+      "default": {
+        "period": "day",
+        "limit_micro_usd": 1000000,
+        "per_call_cap_micro_usd": 100000
+      }
+    },
+    "roles": {
+      "$ref": "#/$defs/SpecAiRoles",
+      "default": {
+        "call_roles": [],
+        "read_roles": [
+          "admin"
+        ],
+        "manage_roles": [
+          "admin"
+        ]
+      }
+    }
+  },
+  "title": "SpecAiGateway",
+  "type": "object",
+  "x-ui": {
+    "order": [
+      "region",
+      "zero_retention",
+      "providers",
+      "stages",
+      "budget",
+      "roles"
+    ]
+  }
+}

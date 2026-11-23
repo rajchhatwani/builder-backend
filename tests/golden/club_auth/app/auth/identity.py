@@ -10,8 +10,9 @@ read `claims["sub"]` itself: the subject is not a user id.
 
 import dataclasses
 import datetime as dt
+import os
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Collection
 from typing import Any, Literal
 
 import sqlalchemy as sa
@@ -150,6 +151,107 @@ async def add_identity(
         )
         .on_conflict_do_nothing(index_elements=["issuer", "subject"])
     )
+
+
+async def copy_issuer(session: AsyncSession, old: str, new: str) -> int:
+    """Give every identity of one issuer a twin at another (same subjects, same local users) and
+    keep the old ones: both sign-ins reach the same user while a migration is open. Refuses when
+    the new issuer already has identities. Returns how many were added."""
+    existing = await session.execute(
+        sa.select(sa.func.count()).select_from(AuthIdentity).where(AuthIdentity.issuer == new)
+    )
+    if existing.scalar_one():
+        raise ValueError(f"identities already exist for {new}; refusing to merge")
+    rows = (
+        await session.execute(
+            sa.select(AuthIdentity).where(AuthIdentity.issuer == old).order_by(AuthIdentity.subject)
+        )
+    ).scalars().all()
+    for row in rows:
+        await add_identity(
+            session,
+            row.user_id,
+            issuer=new,
+            subject=row.subject,
+            provider=row.provider,
+            email=row.email_at_link,
+            email_verified=row.email_verified,
+        )
+    await session.commit()
+    return len(rows)
+
+
+class LinkRefused(Exception):
+    """A verified link was refused. The message names the rule that stopped it."""
+
+
+def trusted_issuers_from_env() -> frozenset[str]:
+    """Issuers whose proofs may be used to link accounts: AUTH_TRUSTED_ISSUERS, comma separated.
+    Empty means nobody is trusted (links are refused)."""
+    raw = os.environ.get("AUTH_TRUSTED_ISSUERS", "")
+    return frozenset(part.strip() for part in raw.split(",") if part.strip())
+
+
+def _proof(claims: dict[str, Any], trusted: Collection[str], which: str) -> tuple[str, str, str]:
+    issuer, subject, email = claims.get("iss"), claims.get("sub"), claims.get("email")
+    if not isinstance(issuer, str) or not issuer or issuer not in trusted:
+        raise LinkRefused(f"proof {which}: issuer is not trusted")
+    if not subject_is_valid(subject):
+        raise LinkRefused(f"proof {which}: bad subject")
+    if claims.get("email_verified") is not True:
+        raise LinkRefused(f"proof {which}: the e-mail address is not verified")
+    if not isinstance(email, str) or not email.strip():
+        raise LinkRefused(f"proof {which}: no e-mail address")
+    return issuer, str(subject), email.strip().casefold()
+
+
+async def link_verified(
+    session: AsyncSession,
+    user_id: uuid.UUID,
+    claims_a: dict[str, Any],
+    claims_b: dict[str, Any],
+    trusted_issuers: Collection[str],
+) -> bool:
+    """Link a second identity (proof B) to an existing local user whose identity is proof A.
+
+    Both proofs must be verified token claims from TRUSTED issuers, carry `email_verified` true
+    and the same e-mail address; A must already be linked to `user_id`; B must not belong to
+    anyone else. An e-mail address alone never links anything. Returns True when a link was
+    added and False when B was already linked to this user. Every link is logged (user, issuers)
+    and nothing is changed when any rule fails."""
+    issuer_a, subject_a, email_a = _proof(claims_a, trusted_issuers, "A")
+    issuer_b, subject_b, email_b = _proof(claims_b, trusted_issuers, "B")
+    if email_a != email_b:
+        raise LinkRefused("the two proofs name different e-mail addresses")
+    if (issuer_a, subject_a) == (issuer_b, subject_b):
+        raise LinkRefused("both proofs are the same identity")
+    if await find_user_id(session, issuer_a, subject_a) != user_id:
+        raise LinkRefused("proof A is not linked to this user")
+    owner = await find_user_id(session, issuer_b, subject_b)
+    if owner == user_id:
+        return False
+    if owner is not None:
+        raise LinkRefused("that identity is already linked to another user")
+    await add_identity(
+        session,
+        user_id,
+        issuer=issuer_b,
+        subject=subject_b,
+        provider="verified_link",
+        email=email_b,
+        email_verified=True,
+    )
+    if await find_user_id(session, issuer_b, subject_b) != user_id:  # lost a race
+        await session.rollback()
+        raise LinkRefused("that identity is already linked to another user")
+    await session.commit()
+    logger.info(
+        "identity_linked_verified",
+        user_id=str(user_id),
+        issuer_a=issuer_a,
+        issuer_b=issuer_b,
+    )
+    return True
 
 
 async def note_seen(session: AsyncSession, issuer: str, subject: str) -> None:

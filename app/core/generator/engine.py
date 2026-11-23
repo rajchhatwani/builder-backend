@@ -9,6 +9,8 @@ from app.core.generator.features.auth.module import AuthModule
 from app.core.generator.features.authz.module import AuthzModule
 from app.core.generator.features.change_history.module import ChangeHistoryModule
 from app.core.generator.features.data_import.module import DataImportModule
+from app.core.generator.features.api_platform.module import ApiPlatformModule
+from app.core.generator.features.compliance.module import ComplianceModule
 from app.core.generator.features.crud.module import CrudModule
 from app.core.generator.features.deploy.module import DeployModule
 from app.core.generator.features.docker.module import DockerModule
@@ -39,6 +41,7 @@ from app.core.generator.features.observability.module import ObservabilityModule
 from app.core.generator.features.payments.module import PaymentsModule
 from app.core.generator.features.providers.module import ProvidersModule
 from app.core.generator.features.realtime.module import RealtimeModule
+from app.core.generator.features.regulated.module import RegulatedModule
 from app.core.generator.features.runtime_config.module import RuntimeConfigModule
 from app.core.generator.features.search.module import SearchModule
 from app.core.generator.features.seed.module import SeedModule
@@ -102,6 +105,9 @@ def default_modules() -> list[FeatureModule]:
         OperationsLocationModule(),
         OperationsMatchingModule(),
         OperationsPredictionModule(),
+        RegulatedModule(),
+        ComplianceModule(),
+        ApiPlatformModule(),
     ]
 
 

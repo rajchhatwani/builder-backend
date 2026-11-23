@@ -234,7 +234,12 @@ async def test_the_database_itself_refuses_overlaps_and_illegal_changes(http, pe
     with pytest.raises(sa.exc.IntegrityError) as raised:
         await execute(insert, **args)
     assert "ex_bookings_no_overlap" in str(raised.value)
-    await execute(insert, **{**args, "s": "cancelled"})  # a cancelled booking never blocks
+    with pytest.raises(sa.exc.DBAPIError):  # a booking can only start held or confirmed
+        await execute(insert, **{**args, "s": "cancelled"})
+    later = {**args, "a": t + timedelta(hours=5), "b": t + timedelta(hours=6)}
+    await execute(insert, **later)
+    await execute("update bookings set status = 'cancelled' where starts_at = :a", a=later["a"])  # confirmed -> cancelled is legal
+    await execute(insert, **later)  # a cancelled booking never blocks
     await execute(insert, **{**args, "x": False})  # only exclusive (slot / range) rows are in the constraint
     with pytest.raises(sa.exc.DBAPIError):  # a cancelled booking is frozen, times are immutable
         await execute("update bookings set status = 'confirmed' where status = 'cancelled'")
@@ -347,7 +352,8 @@ async def test_the_state_machine(http, people) -> None:  # noqa: ANN001
     confirmed = await http.post(f"/booking/bookings/{b['id']}/confirm", headers=c1)
     assert confirmed.status_code == 200 and confirmed.json()["status"] == "confirmed"
     assert confirmed.json()["hold_expires_at"] is None and confirmed.json()["confirmed_at"] is not None
-    assert error_shape(await http.post(f"/booking/bookings/{b['id']}/confirm", headers=c1)) == "invalid_transition"
+    again = await http.post(f"/booking/bookings/{b['id']}/confirm", headers=c1)  # re-confirming a confirmed booking is a no-op
+    assert again.status_code == 200 and again.json()["status"] == "confirmed"
     cancelled = await http.post(f"/booking/bookings/{b['id']}/cancel", json={"reason": "moved"}, headers=c1)
     assert cancelled.status_code == 200 and cancelled.json()["status"] == "cancelled" and cancelled.json()["cancelled_at"] is not None
     for path in ("confirm", "cancel"):
@@ -397,7 +403,7 @@ async def test_create_is_idempotent_per_key_and_body(http, people) -> None:  # n
     # the replay still works after the booking changed state, and another caller's key is separate
     assert (await http.post(f"/booking/bookings/{first.json()['id']}/cancel", headers=c1)).status_code == 200
     replay = await book(http, c1, doc["id"], start, idempotency_key="k-1", notes="hello")
-    assert replay.status_code == 200 and replay.json()["status"] == "cancelled"
+    assert replay.status_code == 409 and error_shape(replay) == "idempotency_key_spent"  # a cancelled booking's key is spent
     assert (await book(http, c2, doc["id"], start, idempotency_key="k-1")).status_code == 201
     assert await scalar("select count(*) from bookings") == 2
 

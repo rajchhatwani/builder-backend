@@ -101,6 +101,7 @@
       }
     ]
   },
+  "events": {"enabled": true, "adapter": "in_process", "retention_days": 14},
   "packs": {
     "ai": {
       "gateway": {

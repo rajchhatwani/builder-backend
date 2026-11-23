@@ -1,13 +1,9 @@
-/** F5-2: Operate > Map (new shell). Paste a token, load live positions, open a subject's details.
+/** F5-2: Operate > Map (new shell). Sign in to the preview, load live positions, open a subject's details.
  *  The project API is mocked (see preview-mock.ts). Not run by its author; run with `npx playwright test e2e/map.spec.ts`. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
-import { V2_STATE, mockPreview } from './preview-mock'
-
-test.use({ storageState: V2_STATE })
-
-const TOKEN = 'e2e-map-' + 'token-1'
+import { BEARER, SESSION, mockPreviewSession, signInPreview } from './preview-mock'
 
 test('map: load positions, geofence and place, open a subject and see where it is', async ({ page, request }) => {
   const api = await signedInUser(page, request)
@@ -21,7 +17,7 @@ test('map: load positions, geofence and place, open a subject and see where it i
   const FENCES = [{ id: 'g1', name: 'Depot', shape: 'circle', center: { lat_micro: 40_000_000, lng_micro: -74_000_000 }, radius_m: 500, vertices: null }]
   const PLACES = [{ id: 'pl1', name: 'HQ', kind: 'office', lat_micro: 40_500_000, lng_micro: -73_500_000, lat: '', lng: '' }]
   const ASG = [{ id: 'as1', request_ref: 'R-9', candidate_id: 'van-1', status: 'offered', score: 812, distance_m: 640, expires_at: ago(-60) }]
-  const seen = await mockPreview(page, (r) => {
+  const seen = await mockPreviewSession(page, id, (r) => {
     if (r.method !== 'GET') return undefined
     if (r.path === '/location/positions') return { json: { items: POS, truncated: false } }
     if (r.path === '/geo/geofences') return { json: { items: FENCES, total: 1, limit: 200, offset: 0 } }
@@ -33,10 +29,8 @@ test('map: load positions, geofence and place, open a subject and see where it i
 
   await page.goto(`/#/p/${id}/map`)
   await expect(page.getByTestId('map-page')).toBeVisible()
-  await expect(page.getByTestId('map-notoken')).toBeVisible()
-  expect(seen).toHaveLength(0)
-  await page.getByTestId('map-token').fill(TOKEN)
-  await page.getByTestId('map-load').click()
+  expect(seen).toHaveLength(0) // nothing is asked of the project API before the preview sign-in
+  await signInPreview(page)
 
   await expect(page.getByTestId('map-list-item')).toHaveCount(2)
   await expect(page.getByTestId('map-marker')).toHaveCount(2)
@@ -51,7 +45,7 @@ test('map: load positions, geofence and place, open a subject and see where it i
   expect(seen.some((s) => s.path === '/geo/geofences')).toBe(true)
   expect(seen.some((s) => s.path === '/geo/places')).toBe(true)
   expect(seen.find((s) => s.path === '/matching/assignments')!.search).toContain('status=offered')
-  expect(seen.every((s) => s.method === 'GET' && s.auth === `Bearer ${TOKEN}` && !s.search.includes(TOKEN))).toBe(true)
+  expect(seen.every((s) => s.method === 'GET' && s.auth === BEARER && s.previewToken === SESSION.previewToken && !s.search.includes(SESSION.jwt))).toBe(true)
 
   // Open van-1 from the list: inside the Depot fence, with an open offer.
   await page.locator('[data-testid="map-list-item"][data-subject="van-1"]').click()

@@ -13,6 +13,7 @@ from pathlib import Path
 from app.core import observability as obs
 from app.core.generator.base import FileTree, ModuleManifest
 from app.core.generator.context import ProjectCtx
+from app.core.generator.features.regulated.module import protected_field_names
 from app.core.generator.render import make_environment, render_template
 from app.core.spec_models import SpecObservability
 from app.core.validation_observability import observability_active
@@ -33,7 +34,7 @@ def template_context(project: ProjectCtx, block: SpecObservability) -> dict[str,
         "metrics": block.metrics,
         "db_spans": block.db_spans,
         "exclude_paths": tuple(block.exclude_paths),
-        "extra_redact_keys": tuple(sorted(set(block.extra_redact_keys))),
+        "extra_redact_keys": tuple(sorted({*block.extra_redact_keys, *protected_field_names(project.spec)})),
         "local_stack": block.local_stack,
         "expected_rps": block.expected_rps,
         "recommended_ratio": obs.recommended_sample_ratio(block.expected_rps),

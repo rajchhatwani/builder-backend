@@ -428,7 +428,7 @@ export function PaymentsPanel({ project, entities, roles, authEnabled, issues, o
 
       {!config && (
         <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
-          <h3>What you get</h3>
+          <h2>What you get</h2>
           <ul className="benefit-list">
             <li>
               <strong>Card details never touch your server.</strong> The payer pays on the provider's own page, which keeps

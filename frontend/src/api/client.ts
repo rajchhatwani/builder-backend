@@ -116,6 +116,9 @@ import type {
   Field,
   FieldInput,
   GenerationSummary,
+  Scorecard,
+  UpgradeProposalDetail,
+  UpgradeProposalSummary,
   KeycloakConfig,
   KeycloakImpact,
   KeycloakWrite,
@@ -130,6 +133,8 @@ import type {
   Page,
   PermissionEntry,
   Preview,
+  PreviewInstance,
+  PreviewInstanceCreated,
   PreviewLimits,
   PreviewLimitsWrite,
   PreviewOrgLimits,
@@ -392,6 +397,12 @@ export const api = {
     }),
   listSpecOps: (projectId: string, limit = 200, offset = 0) =>
     request<Page<SpecOp>>(`/projects/${projectId}/spec/ops?limit=${limit}&offset=${offset}`),
+  listPreviews: (projectId: string) => request<PreviewInstance[]>(`/projects/${projectId}/previews`),
+  createPreview: (projectId: string) =>
+    request<PreviewInstanceCreated>(`/projects/${projectId}/previews`, { method: 'POST', body: JSON.stringify({}) }),
+  /** A fresh access token (shown once); the previous one stops working. */
+  rotatePreviewToken: (projectId: string, previewId: string) =>
+    request<PreviewInstanceCreated>(`/projects/${projectId}/previews/${previewId}/rotate-token`, { method: 'POST' }),
   getAccessMatrix: (projectId: string) => request<AccessMatrix>(`/projects/${projectId}/access/matrix`),
   diffAccess: (projectId: string, body: AccessDiffRequest) =>
     request<AccessDiff>(`/projects/${projectId}/access/diff`, { method: 'POST', body: JSON.stringify(body) }),
@@ -686,6 +697,24 @@ export const api = {
     request<Page<GenerationSummary>>(
       `/projects/${projectId}/generations?limit=${limit}&offset=${offset}`,
     ),
+
+  // ── Upgrades + scorecard (CP-6E; builder routes) ──
+  getScorecard: (projectId: string) => request<Scorecard>(`/projects/${projectId}/scorecard`),
+  listUpgrades: (projectId: string, limit = 50, offset = 0) =>
+    request<Page<UpgradeProposalSummary>>(`/projects/${projectId}/upgrades?limit=${limit}&offset=${offset}`),
+  createUpgrade: (projectId: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades`, { method: 'POST' }),
+  getUpgrade: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}`),
+  /** The proposal as a git patch (text/x-diff). */
+  async getUpgradePatch(projectId: string, uid: string): Promise<string> {
+    const response = await fetchWithRefresh(() => fetch(`${BASE_URL}/projects/${projectId}/upgrades/${uid}/patch`, { credentials: 'include', headers: authHeader('app') }))
+    if (!response.ok) {
+      const raw = (await response.json().catch(() => null)) as Partial<ApiErrorBody> | null
+      throw new ApiError(response.status, { code: raw?.code ?? 'bad_response', message: raw?.message ?? 'The patch could not be loaded', details: [] })
+    }
+    return response.text()
+  },
+  dismissUpgrade: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}/dismiss`, { method: 'POST' }),
+  markUpgradeApplied: (projectId: string, uid: string) => request<UpgradeProposalDetail>(`/projects/${projectId}/upgrades/${uid}/applied`, { method: 'POST' }),
 
   /** Downloads the generated project zip and records a generation. */
   async downloadZip(projectId: string, fallbackName: string): Promise<{ blob: Blob; filename: string }> {
@@ -1233,6 +1262,18 @@ export const api = {
   /** CSV of imported records for one entity (viewer; the server caps it at 10000 rows). */
   exportImportRecordsCsv: (projectId: string, entity: string) =>
     downloadBlob(`/projects/${projectId}/imports/records/export.csv?entity=${encodeURIComponent(entity)}`, `${entity}.csv`),
+  /** CP-6C: control mapping of the compliance spec (soc2 | hipaa | pci; none = all). The answer is checked by the caller. */
+  getComplianceControls: (projectId: string, framework?: string) =>
+    request<unknown>(`/projects/${projectId}/compliance/controls${framework ? `?framework=${encodeURIComponent(framework)}` : ''}`),
+  /** CP-6C: evidence bundle (zip; the framework is required by the server). A 200 that is HTML or JSON is a proxy page, not the bundle. */
+  downloadComplianceEvidence: async (projectId: string, framework: string) => {
+    const r = await downloadBlob(
+      `/projects/${projectId}/compliance/evidence?framework=${encodeURIComponent(framework)}`,
+      `evidence-${framework}.zip`,
+    )
+    if (/html|json/i.test(r.blob.type)) throw new ApiError(200, { code: 'bad_response', message: 'The server did not send an evidence file', details: [] })
+    return r
+  },
   /** Self-host kit zip (code + compose + guide). */
   downloadSelfHostKit: (projectId: string, fallbackName: string) =>
     downloadBlob(`/projects/${projectId}/generate/self-host-kit`, fallbackName),

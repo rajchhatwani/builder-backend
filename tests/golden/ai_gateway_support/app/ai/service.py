@@ -12,6 +12,9 @@
   check is a ledger row (ai_calls).
 * Idempotent per (caller, idempotency_key): the same key and body is ONE call, also when sent in parallel (the second
   request waits for the first and returns its result). A call that ended in `error` does not occupy the key.
+* The provider call has a hard timeout (PROVIDER_TIMEOUT_SECONDS, below the stale window). A cancellation (client
+  disconnect) or any other failure between reserve and settle releases the reservation at once from an independent
+  session (error_code `cancelled`), then re-raises.
 * A reservation older than STALE_RESERVATION_SECONDS (a crashed worker) is released as `abandoned` the next time the
   period is locked.
 * ZERO_RETENTION: prompt and output text are never written to the database, only the hash and the token counts.
@@ -61,6 +64,14 @@ def _now() -> datetime:
 
 def has_role(user: _t.Any, roles: tuple[str, ...]) -> bool:
     return not roles or bool(effective_roles(user.roles) & set(roles))
+
+
+def require_call_role(user: _t.Any) -> None:
+    """The gateway call gate: a caller needs one of call_roles or manage_roles (empty group = any signed-in user). Used by
+    /ai/complete and by every feature that spends gateway budget on the caller's behalf (documents create, knowledge ask)."""
+    groups = (_config.CALL_ROLES, _config.MANAGE_ROLES)
+    if all(groups) and not any(has_role(user, g) for g in groups):
+        raise AppError("forbidden", "you do not have permission to do that", 403)
 
 
 def _fingerprint(*parts: object) -> str:
@@ -178,6 +189,25 @@ async def _replay(session: AsyncSession, tenant: Tenant, call_id: _uuid.UUID) ->
         if time.monotonic() > deadline:
             raise AppError("call_in_progress", "the first call with this idempotency_key is still running", 409)
         await asyncio.sleep(50 / 1000)  # poll every 50 ms
+
+
+async def _release_reservation(tenant: Tenant, start: date, call_id: _uuid.UUID, worst: int, code: str) -> None:
+    """Release a reservation from an INDEPENDENT session (the request session may be cancelled or broken). A no-op when the
+    call already left `reserved` (settled, or released as abandoned). Awaited under asyncio.shield by the caller."""
+    from app.db import session_factory  # lazy: only on the failure path
+
+    async with session_factory() as own:
+        period = await _lock_period(own, tenant, start)
+        row = (
+            await own.execute(
+                _sa.select(AiCall).where(AiCall.id == call_id).with_for_update().execution_options(populate_existing=True)
+            )
+        ).scalar_one_or_none()
+        if row is not None and row.status == "reserved":
+            period.reserved_micro_usd = max(0, period.reserved_micro_usd - worst)
+            row.reserved_micro_usd = 0
+            row.status, row.error_code, row.finished_at = "error", code, _now()
+        await own.commit()
 
 
 # --- the call ----------------------------------------------------------------------------------------------
@@ -299,46 +329,55 @@ async def complete(session: AsyncSession, user: _t.Any, body: _s.CompleteIn, *, 
             raise
         return await _replay(session, tenant, again)
 
-    # 2. the provider call, outside any lock; the primary model first, then the optional fallback
-    used_model, fallback_used, result = primary, False, None
-    for index, model in enumerate(models):
-        try:
-            result = await _providers.complete(kind, model, contents, max_out, body.response_format == "json", index > 0, _config.FAKE_DIRECTIVES)
-        except Exception:  # noqa: BLE001 - any provider failure releases the reservation
-            continue
-        used_model, fallback_used = model, index > 0
-        break
+    try:
+        # 2. the provider call, outside any lock; the primary model first, then the optional fallback
+        used_model, fallback_used, result = primary, False, None
+        for index, model in enumerate(models):
+            try:
+                result = await asyncio.wait_for(
+                    _providers.complete(kind, model, contents, max_out, body.response_format == "json", index > 0, _config.FAKE_DIRECTIVES),
+                    timeout=_config.PROVIDER_TIMEOUT_SECONDS,
+                )
+            except Exception:  # noqa: BLE001 - any provider failure releases the reservation
+                continue
+            used_model, fallback_used = model, index > 0
+            break
 
-    # 3. settle (or release) under the same lock
-    period = await _lock_period(session, tenant, start)
-    row = (
-        await session.execute(
-            _sa.select(AiCall).where(AiCall.id == call_id).with_for_update().execution_options(populate_existing=True)
-        )
-    ).scalar_one()
-    if row.status != "reserved":  # released as abandoned while the provider was running
+        # 3. settle (or release) under the same lock
+        period = await _lock_period(session, tenant, start)
+        row = (
+            await session.execute(
+                _sa.select(AiCall).where(AiCall.id == call_id).with_for_update().execution_options(populate_existing=True)
+            )
+        ).scalar_one()
+        if row.status != "reserved":  # released as abandoned while the provider was running
+            await session.commit()
+            raise AppError("call_expired", "the reservation of this call expired before the provider answered", 409)
+        period.reserved_micro_usd = max(0, period.reserved_micro_usd - worst)
+        row.reserved_micro_usd = 0
+        row.finished_at = _now()
+        if result is None:
+            row.status, row.error_code = "error", "provider_error"
+            await session.commit()
+            raise AppError("provider_error", "the model provider failed; nothing was charged", 502)
+        cost = min(cost_micro_usd(used_model, result.input_tokens, result.output_tokens), worst)  # never above the reservation
+        row.model, row.fallback_used = used_model, fallback_used
+        row.input_tokens, row.output_tokens, row.cost_micro_usd = result.input_tokens, result.output_tokens, cost
+        period.spent_micro_usd += cost
+        if body.response_format == "json" and _parse_json(result.text) is None:
+            row.status, row.error_code = "error", "invalid_output"
+            await session.commit()
+            raise AppError("invalid_output", "the model did not return a JSON object", 502)
+        row.status = "ok"
+        row.output_text = result.text if keep_text else None
+        out = _out(row, result.text, False)
         await session.commit()
-        raise AppError("call_expired", "the reservation of this call expired before the provider answered", 409)
-    period.reserved_micro_usd = max(0, period.reserved_micro_usd - worst)
-    row.reserved_micro_usd = 0
-    row.finished_at = _now()
-    if result is None:
-        row.status, row.error_code = "error", "provider_error"
-        await session.commit()
-        raise AppError("provider_error", "the model provider failed; nothing was charged", 502)
-    cost = min(cost_micro_usd(used_model, result.input_tokens, result.output_tokens), worst)  # never above the reservation
-    row.model, row.fallback_used = used_model, fallback_used
-    row.input_tokens, row.output_tokens, row.cost_micro_usd = result.input_tokens, result.output_tokens, cost
-    period.spent_micro_usd += cost
-    if body.response_format == "json" and _parse_json(result.text) is None:
-        row.status, row.error_code = "error", "invalid_output"
-        await session.commit()
-        raise AppError("invalid_output", "the model did not return a JSON object", 502)
-    row.status = "ok"
-    row.output_text = result.text if keep_text else None
-    out = _out(row, result.text, False)
-    await session.commit()
-    return out
+        return out
+    except AppError:  # every AppError of the settle step is raised after its own commit
+        raise
+    except BaseException:  # CancelledError (client disconnect), a DB error, a timeout: never leave the reservation held
+        await asyncio.shield(_release_reservation(tenant, start, call_id, worst, "cancelled"))
+        raise
 
 
 # --- reads ---------------------------------------------------------------------------------------------------

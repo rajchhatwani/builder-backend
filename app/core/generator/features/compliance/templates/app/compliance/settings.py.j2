@@ -1,0 +1,27 @@
+"""Compliance settings (generated from the spec: change them in the builder). Plain data, no secret."""
+
+from typing import Any
+
+# Roles that administer legal holds, retention runs, consent and exports. Nobody else gets in (default deny).
+ROLES: tuple[str, ...] = {{ roles }}
+
+# entity -> where its model lives
+ENTITIES: dict[str, dict[str, str]] = {{ entities }}
+
+# retention rules: entity, days, date_field, action (purge | anonymise), anonymise_fields
+RETENTION: list[dict[str, Any]] = {{ retention }}
+
+CONSENT_PURPOSES: tuple[str, ...] = {{ purposes }}
+
+BREAK_GLASS: dict[str, Any] = {{ break_glass }}
+
+# export: entity -> {"subject_field": field whose value is the consent subject}; field -> keep | drop | hash | generalise
+EXPORT_ENTITIES: dict[str, dict[str, Any]] = {{ export_entities }}
+EXPORT_FIELDS: dict[str, dict[str, str]] = {{ export_fields }}
+EXPORT_CONSENT_PURPOSE: str | None = {{ export_consent_purpose | pyrepr }}
+
+# multi-tenant project: holds, grants, audit rows and reads belong to the caller's tenant; a user without one is refused
+TENANT_SCOPED: bool = {{ tenant_scoped | pyrepr }}
+
+# fields regulated mode protects, per entity: an export may only hash or drop them
+PROTECTED: dict[str, tuple[str, ...]] = {{ protected }}

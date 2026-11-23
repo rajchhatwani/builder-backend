@@ -4,10 +4,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, importInvoiceFlow, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 for (const viewport of [{ name: 'desktop', width: 1280, height: 800 }, { name: 'phone', width: 375, height: 700 }]) {
   test(`specdiff: snapshot shows no differences, an older baseline shows the entity as added (${viewport.name})`, async ({ page, request }) => {

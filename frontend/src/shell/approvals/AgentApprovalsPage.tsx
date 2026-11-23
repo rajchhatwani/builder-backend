@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react'
-import { sendRequest } from '../workbench/sendRequest'
-import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
+import { PreviewSessionGate } from '../preview/PreviewSessionGate'
+import { usePreviewSession } from '../preview/usePreviewSession'
+import type { PreviewSession } from '../preview/previewSession'
 import {
   OUTCOMES, OUTCOME_LABEL, STATUSES, STATUS_LABEL, approvalErrorMessage, argsText, canAcknowledge, canDecide, canHandOff, canMarkOutcome, canReject, moveRow, pageInfo,
   riskColors, riskLabel, successRate, type AgentStat, type Proposal, type Run,
@@ -12,10 +13,9 @@ const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 const LIMIT = 20
 
 /** AI action approvals for a generated project's agents pack (D37): inbox of proposals, decide, record outcomes, per-agent stats.
- *  Bearer token held in memory only. The server enforces roles, autonomy and self-approval; every refusal is shown, never hidden. */
-export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch }: { projectId: string; origin?: string | null; doFetch?: typeof fetch }) {
-  const [token, setToken] = useState('')
-  const [active, setActive] = useState('')
+ *  Uses the dashboard-supplied preview session (tokens kept in memory only, never shown). The server enforces roles, autonomy and self-approval; every refusal is shown, never hidden. */
+function AgentApprovalsPageBody({ session }: { projectId: string; session: PreviewSession }) {
+  const { request } = session
   const [status, setStatus] = useState('pending_approval')
   const [offset, setOffset] = useState(0)
   const [list, setList] = useState<Load<Page<Proposal>>>({ s: 'idle' })
@@ -28,25 +28,22 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
   const [runs, setRuns] = useState<Record<string, Run | string>>({})
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [notice, setNotice] = useState<string | null>(null)
-  const tokenId = useId(), statusId = useId(), textId = useId()
+  const statusId = useId(), textId = useId()
   const loadedKey = useRef('')
   const rowRefs = useRef(new Map<number, HTMLButtonElement>())
 
   const call = useCallback(async (method: string, path: string, body?: unknown) => {
-    if (!origin) throw new Error('No preview API is configured')
-    const r = await sendRequest({ url: origin + path, origin, method, body: body === undefined ? undefined : JSON.stringify(body), bearer: active || undefined }, doFetch)
+    const r = await request(method, path, body)
     let json: unknown = null
     try { json = r.text ? JSON.parse(r.text) : null } catch { json = null }
     return { status: r.status, json }
-  }, [origin, active, doFetch])
+  }, [request])
 
-  useEffect(() => { loadedKey.current = ''; setActive(''); setToken(''); setList({ s: 'idle' }); setStats({ s: 'idle' }); setErrors({}); setNotice(null); setOffset(0); setForms(null); setRuns({}) }, [projectId])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     // same status and page as the last load: refresh in place so the rows (focus, scroll) stay mounted
-    const key = `${active}|${status}|${offset}`
+    const key = `${status}|${offset}`
     if (loadedKey.current !== key) setList({ s: 'loading' })
     loadedKey.current = key
     void (async () => {
@@ -58,10 +55,9 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
       } catch (e) { if (!dead) setList({ s: 'error', m: msg(e, 'Could not reach the agents API') }) }
     })()
     return () => { dead = true }
-  }, [active, status, offset, refresh, call])
+  }, [status, offset, refresh, call])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     setStats({ s: 'loading' })
     void (async () => {
@@ -74,7 +70,7 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
       } catch (e) { if (!dead) setStats({ s: 'error', m: msg(e, 'Could not reach the agents API') }) }
     })()
     return () => { dead = true }
-  }, [active, refresh, call])
+  }, [refresh, call])
 
   const items = list.s === 'ok' ? list.v.items : []
   const total = list.s === 'ok' ? list.v.total ?? items.length : 0
@@ -112,27 +108,10 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
     } catch (e) { setRuns((m) => ({ ...m, [p.run_id]: msg(e, 'Could not reach the agents API') })) }
   }
 
-  if (!origin) {
-    return (
-      <section aria-labelledby="aa-h" data-testid="agentapprovals-page">
-        <h1 id="aa-h">AI action approvals</h1>
-        <p className="muted" data-testid="agentapprovals-no-origin">No preview API is configured for this dashboard, so there is no approval inbox to read yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the AI agents pack on).</p>
-      </section>
-    )
-  }
-
   return (
-    <section aria-labelledby="aa-h" data-testid="agentapprovals-page" className="stack">
-      <h1 id="aa-h">AI action approvals</h1>
-      <p className="muted">Actions your AI agents propose. Nothing runs until you approve it, and the autonomy dial may still refuse. The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="agentapprovals-token-form">
-        <label htmlFor={tokenId}>Bearer token</label>
-        <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="agentapprovals-token" />
-        <button type="submit" disabled={!token} data-testid="agentapprovals-load">Load inbox</button>
-      </form>
-      {!active && <p className="muted" data-testid="agentapprovals-notoken">Paste a bearer token for the project (a role allowed to read or approve agent actions) to load the inbox.</p>}
+    <>
 
-      {active && stats.s === 'ok' && stats.v.length > 0 && (
+      {stats.s === 'ok' && stats.v.length > 0 && (
         <ul role="list" aria-label="Agent statistics" data-testid="agent-stats" className="hstack" style={{ listStyle: 'none', padding: 0, margin: 0, flexWrap: 'wrap' }}>
           {stats.v.map((a) => (
             <li key={a.agent} data-testid={`agent-stat-${a.agent}`} className="small-text">
@@ -141,9 +120,9 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
           ))}
         </ul>
       )}
-      {active && stats.s === 'error' && <p role="alert" className="error-text" data-testid="agent-stats-error">Statistics unavailable: {stats.m}</p>}
+      {stats.s === 'error' && <p role="alert" className="error-text" data-testid="agent-stats-error">Statistics unavailable: {stats.m}</p>}
 
-      {active && (
+      {(
         <div className="hstack" role="group" aria-label="Inbox controls">
           <label htmlFor={statusId}>Status</label>
           <select id={statusId} value={status} onChange={(e) => { setStatus(e.target.value); setOffset(0); setRowFocus(0); setForms(null) }} data-testid="agentapprovals-status">
@@ -153,15 +132,15 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
         </div>
       )}
       <p role="status" aria-live="polite" className="small-text muted" data-testid="agentapprovals-live">
-        {active && list.s === 'ok' ? `${total} ${STATUS_LABEL[status] ?? status} proposal${total === 1 ? '' : 's'}${total > 0 ? `, showing ${pg.from} to ${pg.to}` : ''}.` : ''}
+        {list.s === 'ok' ? `${total} ${STATUS_LABEL[status] ?? status} proposal${total === 1 ? '' : 's'}${total > 0 ? `, showing ${pg.from} to ${pg.to}` : ''}.` : ''}
       </p>
       {notice && <p role="status" data-testid="agentapprovals-notice">{notice}</p>}
 
-      {active && list.s === 'loading' && <p className="muted" data-testid="agentapprovals-loading">Loading proposals…</p>}
-      {active && list.s === 'error' && <p role="alert" className="error-text" data-testid="agentapprovals-error">{list.m}</p>}
-      {active && list.s === 'ok' && items.length === 0 && <p className="muted" data-testid="agentapprovals-empty">No proposals with status {STATUS_LABEL[status] ?? status}.</p>}
+      {list.s === 'loading' && <p className="muted" data-testid="agentapprovals-loading">Loading proposals…</p>}
+      {list.s === 'error' && <p role="alert" className="error-text" data-testid="agentapprovals-error">{list.m}</p>}
+      {list.s === 'ok' && items.length === 0 && <p className="muted" data-testid="agentapprovals-empty">No proposals with status {STATUS_LABEL[status] ?? status}.</p>}
 
-      {active && list.s === 'ok' && items.length > 0 && (
+      {list.s === 'ok' && items.length > 0 && (
         <div className="stack">
           <ul role="list" aria-label="Proposals" data-testid="proposal-list" style={{ listStyle: 'none', padding: 0, margin: 0 }} className="stack">
             {items.map((p, i) => {
@@ -222,6 +201,20 @@ export function AgentApprovalsPage({ projectId, origin = PREVIEW_ORIGIN, doFetch
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+export function AgentApprovalsPage({ projectId, session }: { projectId: string; session?: PreviewSession }) {
+  const own = usePreviewSession(projectId, { disabled: !!session })
+  const s = session ?? own
+  return (
+    <section aria-labelledby="aa-h" data-testid="agentapprovals-page" className="stack">
+      <h1 id="aa-h">AI action approvals</h1>
+      <p className="muted">Actions your AI agents propose. Nothing runs until you approve it, and the autonomy dial may still refuse.</p>
+      <PreviewSessionGate session={s} prefix="agentapprovals">
+        <AgentApprovalsPageBody key={projectId} projectId={projectId} session={s} />
+      </PreviewSessionGate>
     </section>
   )
 }

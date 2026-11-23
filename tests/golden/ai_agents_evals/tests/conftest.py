@@ -24,7 +24,7 @@ def _require_test_database() -> None:
 @pytest.fixture(autouse=True)
 async def _clean_database(_require_test_database: None) -> None:
     async with engine.begin() as connection:
-        await connection.execute(text("TRUNCATE TABLE ai_agent_proposals, ai_agent_runs, ai_budget_periods, ai_calls, ai_eval_runs, auth_identities, auth_invitations, auth_refresh_tokens, auth_sessions, auth_tenants, auth_users, auth_verification_codes, tickets CASCADE"))
+        await connection.execute(text("TRUNCATE TABLE ai_agent_proposals, ai_agent_runs, ai_budget_periods, ai_calls, ai_eval_runs, auth_identities, auth_invitations, auth_refresh_tokens, auth_sessions, auth_tenants, auth_users, auth_verification_codes, ev_handled, ev_outbox, tickets CASCADE"))
 
 
 @pytest.fixture

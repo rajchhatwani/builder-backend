@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
-import { sendRequest } from '../workbench/sendRequest'
-import { PREVIEW_ORIGIN } from '../workbench/previewOrigin'
+import { PreviewSessionGate } from '../preview/PreviewSessionGate'
+import { usePreviewSession } from '../preview/usePreviewSession'
+import type { PreviewSession } from '../preview/previewSession'
 import {
   VIEW_H, VIEW_W, WORLD, ageSeconds, boxQuery, clusterByGrid, dataPoints, fitBounds, formatAge, formatPoint, freshness, geoErrorMessage,
   geofencesContaining, makeProjection, zoomBounds,
@@ -15,12 +16,9 @@ const msg = (e: unknown, f: string) => (e instanceof Error ? e.message : f)
 const FRESH_COLOR: Record<string, string> = { fresh: '#1a7f37', aging: '#9a6700', stale: '#6e7781' }
 
 /** Map view for a generated project's operations pack (geo D13, location D14, matching D15). Pure SVG: no tiles, no map library,
- *  no network besides the project API. Bearer token held in memory only, same mechanism as the Ledger explorer. */
-export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, pollMs = 10_000, now = Date.now }: {
-  projectId: string; origin?: string | null; doFetch?: typeof fetch; pollMs?: number; now?: () => number
-}) {
-  const [token, setToken] = useState('')
-  const [active, setActive] = useState('')
+ *  no network besides the project API. Uses the dashboard-supplied preview session (tokens kept in memory only, never shown). */
+function MapPageBody({ session, pollMs = 10_000, now = Date.now }: { projectId: string; session: PreviewSession; pollMs?: number; now?: () => number }) {
+  const { request } = session
   const [positions, setPositions] = useState<Load<Page<Position>>>({ s: 'idle' })
   const [fences, setFences] = useState<Load<Page<Geofence>>>({ s: 'idle' })
   const [places, setPlaces] = useState<Load<Page<Place>>>({ s: 'idle' })
@@ -31,20 +29,17 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
   const [refresh, setRefresh] = useState(0)
   const [auto, setAuto] = useState(false)
   const [stamp, setStamp] = useState(0)
-  const tokenId = useId()
   const autoId = useId()
   const nowRef = useRef(now)
   nowRef.current = now
 
   const call = useCallback(async (path: string) => {
-    if (!origin) throw new Error('No preview API is configured')
-    const r = await sendRequest({ url: origin + path, origin, method: 'GET', bearer: active || undefined }, doFetch)
+    const r = await request('GET', path)
     let json: unknown = null
     try { json = r.text ? JSON.parse(r.text) : null } catch { json = null }
     return { status: r.status, json }
-  }, [origin, active, doFetch])
+  }, [request])
 
-  useEffect(() => { setActive(''); setToken(''); setPositions({ s: 'idle' }); setFences({ s: 'idle' }); setPlaces({ s: 'idle' }); setAssignments({ s: 'idle' }); setSelected(null); setBox(WORLD); setView(null); setAuto(false) }, [projectId])
 
   const get = useCallback(async <T,>(path: string, set: (l: Load<T>) => void, off: () => boolean, keep: boolean) => {
     if (!keep) set({ s: 'loading' })
@@ -61,7 +56,6 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
   }, [call])
 
   useEffect(() => {
-    if (!active) return
     let dead = false
     const off = () => dead
     const keep = positions.s === 'ok' // background refreshes keep the markers on screen
@@ -71,11 +65,11 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
     void get<Page<Assignment>>('/matching/assignments?limit=100&status=offered', setAssignments, off, assignments.s === 'ok')
     return () => { dead = true }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, refresh, box, get])
+  }, [refresh, box, get])
 
   // auto-poll: only while the tab is visible; coming back refreshes once
   useEffect(() => {
-    if (!auto || !active) return
+    if (!auto) return
     let timer: ReturnType<typeof setInterval> | null = null
     const start = () => { if (timer === null) timer = setInterval(() => setRefresh((n) => n + 1), pollMs) }
     const stop = () => { if (timer !== null) { clearInterval(timer); timer = null } }
@@ -83,7 +77,7 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
     if (!document.hidden) start()
     document.addEventListener('visibilitychange', onVis)
     return () => { stop(); document.removeEventListener('visibilitychange', onVis) }
-  }, [auto, active, pollMs])
+  }, [auto, pollMs])
 
   const posItems = positions.s === 'ok' ? positions.v.items : []
   const fenceItems = fences.s === 'ok' ? fences.v.items : []
@@ -101,27 +95,10 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
   const selAsg = sel ? asgItems.filter((a) => a.candidate_id === sel.subject_id) : []
   const reload = () => setRefresh((n) => n + 1)
 
-  if (!origin) {
-    return (
-      <section aria-labelledby="map-h" data-testid="map-page">
-        <h1 id="map-h">Map</h1>
-        <p className="muted" data-testid="map-no-origin">No preview API is configured for this dashboard, so there is nothing to show on the map yet (set <code>VITE_PREVIEW_API_ORIGIN</code> to a running generated project with the operations pack on).</p>
-      </section>
-    )
-  }
-
   return (
-    <section aria-labelledby="map-h" data-testid="map-page" className="stack">
-      <h1 id="map-h">Map</h1>
-      <p className="muted">Live positions, places and geofences of the running project, drawn on a plain canvas (no map tiles are loaded). The token stays in this page only.</p>
-      <form className="hstack" onSubmit={(e) => { e.preventDefault(); if (token) { setActive(token); setRefresh((n) => n + 1) } }} data-testid="map-token-form">
-        <label htmlFor={tokenId}>Bearer token</label>
-        <input id={tokenId} type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} data-testid="map-token" />
-        <button type="submit" disabled={!token} data-testid="map-load">Load map</button>
-      </form>
-      {!active && <p className="muted" data-testid="map-notoken">Paste a bearer token for the project (a role allowed to read locations and geofences) to load it.</p>}
+    <>
 
-      {active && (
+      {(
         <>
           <div className="hstack" role="group" aria-label="Map controls" data-testid="map-controls">
             <button type="button" className="outline" onClick={reload} data-testid="map-refresh">Refresh</button>
@@ -238,6 +215,20 @@ export function MapPage({ projectId, origin = PREVIEW_ORIGIN, doFetch = fetch, p
           </div>
         </>
       )}
+    </>
+  )
+}
+
+export function MapPage({ projectId, session, pollMs, now }: { projectId: string; session?: PreviewSession; pollMs?: number; now?: () => number }) {
+  const own = usePreviewSession(projectId, { disabled: !!session })
+  const s = session ?? own
+  return (
+    <section aria-labelledby="map-h" data-testid="map-page" className="stack">
+      <h1 id="map-h">Map</h1>
+      <p className="muted">Live positions, places and geofences of the running project, drawn on a plain canvas (no map tiles are loaded).</p>
+      <PreviewSessionGate session={s} prefix="map">
+        <MapPageBody key={projectId} projectId={projectId} session={s} pollMs={pollMs} now={now}/>
+      </PreviewSessionGate>
     </section>
   )
 }

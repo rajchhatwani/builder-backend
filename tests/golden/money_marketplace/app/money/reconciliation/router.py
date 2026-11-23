@@ -87,9 +87,22 @@ async def unmatch(run_id: _uuid.UUID, match_id: _uuid.UUID, session: SessionDep,
     return await _svc.unmatch(session, user, run_id, match_id)
 
 
-@router.get("/runs/{run_id}/results", response_model=_s.ResultsOut)
-async def results(run_id: _uuid.UUID, session: SessionDep, user: Reader) -> _s.ResultsOut:
-    return await _svc.results(session, user, run_id)
+@router.get(
+    "/runs/{run_id}/results",
+    response_model=_s.ResultsOut,
+    description=(
+        "The reconciliation picture. `matched` is one page of the matched pairs (limit up to 200, default 100, with offset); "
+        "`matched_total` is their full count and `summary` always covers every pair."
+    ),
+)
+async def results(
+    run_id: _uuid.UUID,
+    session: SessionDep,
+    user: Reader,
+    limit: _t.Annotated[int, Query(ge=1, le=200)] = 100,
+    offset: Offset = 0,
+) -> _s.ResultsOut:
+    return await _svc.results(session, user, run_id, limit, offset)
 
 
 @router.post("/runs/{run_id}/close", response_model=_s.RunOut)

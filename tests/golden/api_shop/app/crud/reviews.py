@@ -1,0 +1,15 @@
+"""Repository for Review (generated). Add custom queries by subclassing in your own module."""
+
+from app.crud import _base as _crud_base
+from app.models.reviews import Review
+
+
+class ReviewRepository(_crud_base.Repository[Review]):
+    model = Review
+    soft_delete = False
+    filterable = ()
+    sortable = ("created_at",)
+    searchable = ()
+    eager = ()
+    references = {}
+    many_to_many = {}

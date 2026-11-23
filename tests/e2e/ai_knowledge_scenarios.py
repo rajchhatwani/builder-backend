@@ -49,6 +49,12 @@ def sent(monkeypatch) -> list[list[str]]:  # noqa: ANN001
     return seen
 
 
+@pytest.fixture(autouse=True)
+def _call_roles(monkeypatch) -> None:  # noqa: ANN001
+    """The spec lets only admin call the gateway; uploading / asking now needs a call role, so these scenarios grant the uploader roles one."""
+    monkeypatch.setattr(ai_config, "CALL_ROLES", ("admin", "agent", "customer"))
+
+
 @pytest.fixture
 async def http(outbox) -> AsyncClient:  # noqa: ANN001, F811
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -324,3 +330,38 @@ async def test_source_validation_and_roles(http, people) -> None:  # noqa: ANN00
     for path, body in (("/ai/knowledge/search", {"query": ""}), ("/ai/knowledge/search", {"query": "a", "limit": 21}), ("/ai/knowledge/ask", {"question": "a", "limit": 11})):
         r = await http.post(path, json=body, headers=admin)
         assert r.status_code == 422 and error_code(r) == "validation_error"
+
+
+# --- L5 / L4: ask needs a gateway call role, the source cap is a tenant total without a count ---------------------
+
+
+async def test_ask_needs_a_gateway_call_role_before_any_retrieval(http, people, library, monkeypatch) -> None:  # noqa: ANN001
+    from app.ai import knowledge_service
+
+    monkeypatch.setattr(ai_config, "CALL_ROLES", ("admin",))
+    monkeypatch.setattr(ai_config, "MANAGE_ROLES", ("admin",))
+    real = knowledge_service.search
+    searched: list[str] = []
+
+    async def spy(session, user, query, limit):  # noqa: ANN001, ANN202
+        searched.append(query)
+        return await real(session, user, query, limit)
+
+    monkeypatch.setattr(knowledge_service, "search", spy)
+    r = await ask(http, people["customer"], "refund policy")  # may read the library, holds no call role
+    assert r.status_code == 403 and error_code(r) == "forbidden", r.text
+    assert searched == [] and (await rows("SELECT count(*) FROM ai_calls"))[0][0] == 0
+    ok = await ask(http, people["admin"], "refund policy")
+    assert ok.status_code == 200 and ok.json()["grounded"] is True and searched == ["refund policy"]
+    assert (await rows("SELECT count(*) FROM ai_calls"))[0][0] == 1
+
+
+async def test_the_source_cap_counts_every_tenant_source_and_the_message_carries_no_count(http, people, monkeypatch) -> None:  # noqa: ANN001
+    from app.ai import knowledge_config
+
+    await add_source_as_agent(http, people)  # an owner-only source the admin cannot see
+    monkeypatch.setattr(knowledge_config, "MAX_SOURCES", 1)
+    r = await http.post("/ai/knowledge/sources", json={"title": "t", "text": "another source", "owner_only": True}, headers=people["admin"])
+    assert r.status_code == 422 and error_code(r) == "limit_reached", r.text
+    assert not any(ch.isdigit() for ch in r.json()["message"]), r.json()["message"]
+    assert (await rows("SELECT count(*) FROM ai_knowledge_sources"))[0][0] == 1

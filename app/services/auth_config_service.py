@@ -87,7 +87,7 @@ class AuthConfigService:
             app_name=data.app_name,
             app_url=data.app_url,
             email_templates=data.email_templates,
-            suite=data.suite.model_dump() if data.suite else None,
+            suite=data.suite.model_dump(mode="json") if data.suite else None,
         )
         self.session.add(config)
         try:
@@ -114,7 +114,9 @@ class AuthConfigService:
             updates["sms_config"] = sms.model_dump() if sms is not None else None
 
         if "suite" in updates and updates["suite"] is not None:
-            updates["suite"] = data.suite.model_dump() if data.suite else None
+            updates["suite"] = data.suite.model_dump(mode="json") if data.suite else None
+        if "suite" in updates:
+            check_migration_change(config.suite, updates["suite"])
 
         async def write() -> None:
             for key, value in updates.items():
@@ -148,3 +150,19 @@ class AuthConfigService:
                 message=("sms_provider and sms_config are required when sms_otp_enabled is true"),
                 status_code=422,
             )
+
+
+def check_migration_change(
+    old_suite: dict[str, Any] | None, new_suite: dict[str, Any] | None
+) -> None:
+    """The migration state moves forward only, on every write path (not just PUT /suite/migration)."""
+    from datetime import UTC, datetime
+
+    from app.core.spec_models import SpecSuiteRef
+    from app.core.suite_migration import migration_change_problem
+
+    old = SpecSuiteRef.model_validate(old_suite).migration if old_suite else None
+    new = SpecSuiteRef.model_validate(new_suite).migration if new_suite else None
+    problem = migration_change_problem(old, new, datetime.now(UTC))
+    if problem is not None:
+        raise AppError("invalid_transition", problem, 409)

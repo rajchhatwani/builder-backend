@@ -49,4 +49,5 @@ async def test_viewer_download_has_no_decrypted_secret_owner_still_gets_them(
 
     got = await owner.get(f"/projects/{p}/generate/download")
     assert got.status_code == 200, got.text
-    assert seen == [None, PASSWORD]  # owner path unchanged
+    # owner path unchanged; the stored base tree is rendered again from a spec without the secrets (CP-6E)
+    assert seen == [None, PASSWORD, None]

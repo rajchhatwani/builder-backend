@@ -592,7 +592,11 @@ class SpecService:
         config.email_verification_required = auth.registration.email_verification_required
         config.invite_only = auth.registration.invite_only
         config.multi_tenant = auth.multi_tenant
-        config.suite = auth.suite.model_dump() if auth.suite else None
+        from app.services.auth_config_service import check_migration_change
+
+        new_suite = auth.suite.model_dump(mode="json") if auth.suite else None
+        check_migration_change(config.suite, new_suite)
+        config.suite = new_suite
         config.deletion_mode = DeletionMode(auth.deletion_mode)
         config.smtp_config = auth.smtp.model_dump() if auth.smtp else None
         config.sms_provider = SmsProvider(auth.sms_provider) if auth.sms_provider else None

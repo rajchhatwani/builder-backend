@@ -68,6 +68,7 @@
     "app/search/router.py": "generated",
     "app/search/service.py": "generated",
     "docker-compose.yml": "seeded",
+    "docs/IDENTITY-MIGRATION.md": "generated",
     "pyproject.toml": "generated",
     "requirements-dev.txt": "generated",
     "requirements.txt": "generated",
@@ -80,6 +81,7 @@
     "tests/test_access.py": "generated",
     "tests/test_auth.py": "generated",
     "tests/test_identity.py": "generated",
+    "tests/test_identity_migration.py": "generated",
     "tests/test_provider_lock.py": "generated",
     "tests/test_tickets.py": "generated"
   }

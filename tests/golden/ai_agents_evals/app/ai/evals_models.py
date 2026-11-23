@@ -17,6 +17,8 @@ class AiEvalRun(_models_base.Base):
     id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
         _sa.Uuid(), primary_key=True, default=_uuid.uuid4, server_default=_sa.text("gen_random_uuid()")
     )
+    # monotonic tiebreak: two runs with the same created_at order by insertion (the uuid id is random)
+    seq: _orm.Mapped[int] = _orm.mapped_column(_sa.BigInteger(), _sa.Identity(), nullable=False)
     tenant_id: _orm.Mapped[_uuid.UUID] = _orm.mapped_column(
         _sa.ForeignKey("auth_tenants.id", name="fk_ai_eval_runs_tenant_id_auth_tenants", ondelete="RESTRICT"),
         nullable=False,

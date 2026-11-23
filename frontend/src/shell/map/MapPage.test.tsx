@@ -2,7 +2,8 @@ import axe from 'axe-core'
 import { createElement } from 'react'
 import { act } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { click, flush, mount, q, qa, setInput } from '../ai/testUtils'
+import { readySession, stubSession } from '../preview/testSession'
+import { click, flush, mount, q, qa } from '../ai/testUtils'
 import { MapPage } from './MapPage'
 
 const NOW = Date.parse('2026-01-01T12:00:00Z')
@@ -38,11 +39,9 @@ function api(over: (url: string) => Response | undefined = () => undefined) {
   }) as unknown as typeof fetch
   return { f, calls }
 }
-const el = (f: typeof fetch, extra: Record<string, unknown> = {}) => createElement(MapPage, { projectId: 'p', origin: 'http://gen.test', doFetch: f, now: () => NOW, ...extra })
+const el = (f: typeof fetch, extra: Record<string, unknown> = {}) => createElement(MapPage, { projectId: 'p', session: readySession(f), now: () => NOW, ...extra })
 async function load(f: typeof fetch, extra: Record<string, unknown> = {}) {
   const host = await mount(el(f, extra))
-  await setInput(q('map-token') as HTMLInputElement, 'TOK')
-  await click(q('map-load'))
   return host
 }
 const setHidden = (h: boolean) => {
@@ -54,7 +53,7 @@ const wait = (ms: number) => act(async () => { await new Promise((r) => setTimeo
 describe('MapPage', () => {
   it('explains when no preview origin is configured and fetches nothing', async () => {
     const { f } = api()
-    await mount(createElement(MapPage, { projectId: 'p', origin: null, doFetch: f }))
+    await mount(createElement(MapPage, { projectId: 'p', session: stubSession('no-origin') }))
     expect(q('map-no-origin')).not.toBeNull()
     expect(f).not.toHaveBeenCalled()
   })
@@ -65,15 +64,13 @@ describe('MapPage', () => {
     expect(q('map-fences-error')).not.toBeNull()
   })
 
-  it('asks for a token, then loads all four feeds with a Bearer header and the box query', async () => {
+  it('loads all four feeds straight away with the box query and shows no token or password input', async () => {
     const { f, calls } = api()
-    await mount(el(f))
-    expect(q('map-notoken')).not.toBeNull()
-    expect(f).not.toHaveBeenCalled()
-    expect((q('map-token') as HTMLInputElement).type).toBe('password')
-    await setInput(q('map-token') as HTMLInputElement, 'TOK')
-    await click(q('map-load'))
-    expect(calls.every((c) => c.auth === 'Bearer TOK' && c.url.startsWith('http://gen.test/'))).toBe(true)
+    const host = await mount(el(f))
+    expect(host.querySelector('input[type=password]')).toBeNull()
+    expect(host.textContent ?? '').not.toMatch(/bearer|paste a/i)
+    expect(host.querySelector('[data-testid$="-token"],[data-testid$="-notoken"],[data-testid$="map-load"]')).toBeNull()
+    expect(calls.every((c) => c.url.startsWith('http://gen.test/'))).toBe(true)
     const pc = calls.find((c) => c.url.includes('/location/positions'))!
     expect(pc.url).toContain('min_lat_micro=-90000000&min_lng_micro=-180000000&max_lat_micro=90000000&max_lng_micro=180000000&limit=500')
     expect(calls.some((c) => c.url.includes('/geo/geofences'))).toBe(true)

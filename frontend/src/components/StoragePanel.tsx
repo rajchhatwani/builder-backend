@@ -294,7 +294,7 @@ export function StoragePanel({ project, roles, authEnabled, issues, onChanged }:
 
       {!config && (
         <div className="card" style={{ marginBlockEnd: 'var(--space-6)' }}>
-          <h3>What you get</h3>
+          <h2>What you get</h2>
           <ul className="benefit-list">
             <li>
               <strong>Any file type, scanned before it is stored.</strong> Every upload goes through ClamAV first. If the scanner is down the

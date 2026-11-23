@@ -1,0 +1,236 @@
+{
+  "$defs": {
+    "SpecBookingCancellation": {
+      "additionalProperties": false,
+      "description": "Free cancellation until `free_until_hours` before the start; later a flat `fee_minor` (integer minor units\nof `currency`, recorded only).",
+      "properties": {
+        "free_until_hours": {
+          "default": 24,
+          "title": "Free Until Hours",
+          "type": "integer"
+        },
+        "fee_minor": {
+          "default": 0,
+          "title": "Fee Minor",
+          "type": "integer"
+        },
+        "currency": {
+          "default": "USD",
+          "title": "Currency",
+          "type": "string"
+        }
+      },
+      "title": "SpecBookingCancellation",
+      "type": "object"
+    },
+    "SpecBookingKind": {
+      "additionalProperties": false,
+      "description": "A kind of bookable resource. `slot`: fixed `slot_minutes` slots on a weekly `schedule` (keys mon..sun) in\n`timezone`; `range`: any time range of `min_minutes..max_minutes` (one booking at a time); `pool`: a quantity\nfrom `capacity` units over a time range. Resources of the kind are created at run time and inherit these.",
+      "properties": {
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "slot",
+            "range",
+            "pool"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "title": "Timezone",
+          "type": "string"
+        },
+        "slot_minutes": {
+          "default": 30,
+          "title": "Slot Minutes",
+          "type": "integer",
+          "x-ui": {
+            "showWhen": {
+              "field": "mode",
+              "equals": "slot"
+            }
+          }
+        },
+        "schedule": {
+          "additionalProperties": {
+            "items": {
+              "$ref": "#/$defs/SpecBookingWindow"
+            },
+            "type": "array"
+          },
+          "title": "Schedule",
+          "type": "object",
+          "default": {},
+          "x-ui": {
+            "showWhen": {
+              "field": "mode",
+              "equals": "slot"
+            },
+            "help": "JSON object: weekday (mon..sun) -> list of windows, e.g. {\"mon\": [{\"start\": \"09:00\", \"end\": \"17:00\"}]}"
+          }
+        },
+        "capacity": {
+          "default": 1,
+          "title": "Capacity",
+          "type": "integer",
+          "x-ui": {
+            "showWhen": {
+              "field": "mode",
+              "equals": "pool"
+            }
+          }
+        },
+        "min_minutes": {
+          "default": 15,
+          "title": "Min Minutes",
+          "type": "integer",
+          "x-ui": {
+            "showWhen": {
+              "field": "mode",
+              "in": [
+                "range",
+                "pool"
+              ]
+            }
+          }
+        },
+        "max_minutes": {
+          "default": 43200,
+          "title": "Max Minutes",
+          "type": "integer",
+          "x-ui": {
+            "showWhen": {
+              "field": "mode",
+              "in": [
+                "range",
+                "pool"
+              ]
+            }
+          }
+        }
+      },
+      "required": [
+        "name",
+        "mode"
+      ],
+      "title": "SpecBookingKind",
+      "type": "object",
+      "x-ui": {
+        "order": [
+          "name",
+          "mode",
+          "timezone",
+          "slot_minutes",
+          "capacity",
+          "min_minutes",
+          "max_minutes",
+          "schedule"
+        ]
+      }
+    },
+    "SpecBookingWindow": {
+      "additionalProperties": false,
+      "description": "One opening window of a weekday, local wall-clock `HH:MM` (end is exclusive).",
+      "properties": {
+        "start": {
+          "title": "Start",
+          "type": "string"
+        },
+        "end": {
+          "title": "End",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "title": "SpecBookingWindow",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Booking pack, D12 reservation engine (generated routes under /booking, tables under app/booking). Needs\n`auth` with rbac. A booking starts as a hold of `hold_ttl_seconds`; `own_only` limits callers who are not\nin `manage_roles` to their own bookings. Empty role list = any signed-in user.",
+  "properties": {
+    "kinds": {
+      "items": {
+        "$ref": "#/$defs/SpecBookingKind"
+      },
+      "title": "Kinds",
+      "type": "array",
+      "default": [],
+      "x-ui": {
+        "itemLabel": "Kind"
+      }
+    },
+    "hold_ttl_seconds": {
+      "default": 600,
+      "title": "Hold Ttl Seconds",
+      "type": "integer"
+    },
+    "max_horizon_days": {
+      "default": 365,
+      "title": "Max Horizon Days",
+      "type": "integer"
+    },
+    "cancellation": {
+      "$ref": "#/$defs/SpecBookingCancellation",
+      "default": {
+        "free_until_hours": 24,
+        "fee_minor": 0,
+        "currency": "USD"
+      }
+    },
+    "read_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Read Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "book_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Book Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "manage_roles": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Manage Roles",
+      "type": "array",
+      "default": [
+        "admin"
+      ],
+      "x-ui": {
+        "widget": "csv"
+      }
+    },
+    "own_only": {
+      "default": false,
+      "title": "Own Only",
+      "type": "boolean"
+    }
+  },
+  "title": "SpecBookingPack",
+  "type": "object"
+}
