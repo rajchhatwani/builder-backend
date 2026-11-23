@@ -150,9 +150,13 @@ INSTRUCTIONS = (
     "Then list_projects, and work with get_project_status after every step: it lists what is "
     "still missing and the one next step.\n"
     "SCOPES on the Bearer API token (bb_pat_...): mcp:read (all read tools), mcp:write "
-    "(create_project, model, roles, permissions, behaviour; needs editor role), mcp:generate (generate_project), mcp:preview (create/get/kill_preview, get_preview_logs), "
+    "(create_project, model, roles, permissions, behaviour, set_config_section, define_metric, define_report, run_report; needs editor role), mcp:generate (generate_project), mcp:preview (create/get/kill_preview, get_preview_logs), "
     "mcp:destructive (removals, put_packs, confirming access-widening edits). Every tool also "
     "needs MCP enabled for your project membership.\n"
+    "CONFIG: get_config_section / set_config_section save the non-secret settings of payments, "
+    "storage, documents, observability and deployment (credentials and the payments/storage "
+    "on-switch stay in the dashboard); list_metrics / define_metric / get_metric_value and "
+    "list_reports / define_report / run_report cover the metrics layer.\n"
     "SAFETY: destructive tools default to dry_run=true: show the user the summary and only "
     "repeat with dry_run=false after they agree. Section replacements (set_section, "
     "put_behavior_block, set_authorization) replace the whole block: read it first.\n"
@@ -171,6 +175,7 @@ def build_mcp_server(session_factory: Any) -> Any:
 
     from mcp.types import ToolAnnotations
 
+    from app.services.mcp_config import McpConfigService
     from app.services.mcp_extra import McpExtra as McpService
     from app.services.mcp_preview import McpPreviewService
 
@@ -768,6 +773,166 @@ def build_mcp_server(session_factory: Any) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_PREVIEW)
             return await McpPreviewService(db).kill_preview(
                 principal, uuid.UUID(project_id), uuid.UUID(preview_id)
+            )
+
+    # ── Config + metrics tools (non-secret settings; secrets stay in the dashboard) ──
+
+    @tool(
+        description=(
+            "Read the saved settings of one section: payments, storage, documents, observability "
+            "or deployment (never any secret). saved=false means nothing was saved yet. Example: "
+            '{"project_id": "<uuid>", "section": "observability"}. Requires mcp:read.'
+        )
+    )
+    async def get_config_section(
+        project_id: str,
+        section: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpConfigService(db).get_config_section(
+                principal, uuid.UUID(project_id), section
+            )
+
+    @tool(
+        description=(
+            "Save the NON-SECRET settings of payments, storage, documents, observability or "
+            "deployment (same validation as the dashboard; the whole section is replaced, so read "
+            "get_config_section first). Keys that look like credentials or values shaped like keys "
+            "are refused (secret_not_allowed): the user enters secrets in the dashboard. Saving "
+            "never switches payments/storage on; that is a confirmed switch in the dashboard. "
+            "documents/observability/deployment accept expected_version to avoid lost updates. "
+            'Example: {"project_id": "<uuid>", "section": "observability", "value": '
+            '{"sample_ratio": 0.2}}. Requires mcp:write and editor+ role.'
+        )
+    )
+    async def set_config_section(
+        project_id: str,
+        section: str,
+        value: dict[str, Any],
+        expected_version: int | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpConfigService(db).set_config_section(
+                principal, uuid.UUID(project_id), section, value, expected_version
+            )
+
+    @tool(
+        description=(
+            "List the project's metric definitions (the metrics layer: one definition serves the "
+            'live API value and reports). Example: {"project_id": "<uuid>"}. Requires mcp:read.'
+        )
+    )
+    async def list_metrics(
+        project_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpConfigService(db).list_metrics(principal, uuid.UUID(project_id))
+
+    @tool(
+        description=(
+            "Create or update (by key) a metric definition: {entity, agg: count|sum|avg|min|max, "
+            "field, label, filter, group_by}. Updating bumps the version for every report using "
+            'it. Example: {"project_id": "<uuid>", "key": "total_amount", "definition": '
+            '{"label": "Total", "entity": "Order", "agg": "sum", "field": "amount"}}. '
+            "Requires mcp:write and editor+ role."
+        )
+    )
+    async def define_metric(
+        project_id: str,
+        key: str,
+        definition: dict[str, Any],
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpConfigService(db).define_metric(
+                principal, uuid.UUID(project_id), key, definition
+            )
+
+    @tool(
+        description=(
+            "Live value of one metric (redacted for your project role like the dashboard). "
+            'Example: {"project_id": "<uuid>", "key": "total_amount"}. Requires mcp:read.'
+        )
+    )
+    async def get_metric_value(
+        project_id: str,
+        key: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpConfigService(db).get_metric_value(
+                principal, uuid.UUID(project_id), key
+            )
+
+    @tool(
+        description=(
+            "List the project's scheduled reports (name, metric keys, cron schedule, timezone). "
+            'Example: {"project_id": "<uuid>"}. Requires mcp:read.'
+        )
+    )
+    async def list_reports(
+        project_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpConfigService(db).list_reports(principal, uuid.UUID(project_id))
+
+    @tool(
+        description=(
+            "Create a scheduled report over existing metric keys (5-field cron schedule), or "
+            "update one when report_id is given. Example: "
+            '{"project_id": "<uuid>", "name": "Daily", "metric_keys": ["total_amount"], '
+            '"schedule": "0 6 * * *", "timezone": "UTC"}. Requires mcp:write and editor+ role.'
+        )
+    )
+    async def define_report(
+        project_id: str,
+        name: str,
+        metric_keys: list[str],
+        schedule: str,
+        timezone: str = "UTC",
+        enabled: bool = True,
+        report_id: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpConfigService(db).define_report(
+                principal,
+                uuid.UUID(project_id),
+                name,
+                metric_keys,
+                schedule,
+                timezone,
+                enabled,
+                uuid.UUID(report_id) if report_id else None,
+            )
+
+    @tool(
+        description=(
+            "Run a report now and store the run (counts toward the org's reports.runs usage). "
+            'Example: {"project_id": "<uuid>", "report_id": "<uuid from list_reports>"}. '
+            "Requires mcp:write and editor+ role."
+        )
+    )
+    async def run_report(
+        project_id: str,
+        report_id: str,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpConfigService(db).run_report(
+                principal, uuid.UUID(project_id), uuid.UUID(report_id)
             )
 
     @mcp.prompt(

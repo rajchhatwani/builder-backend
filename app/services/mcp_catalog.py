@@ -198,6 +198,55 @@ TOOL_HELP: dict[str, dict[str, Any]] = {
         "example": ('{"project_id": "<uuid>", "packs": {"booking": {}}, "dry_run": true}'),
         "next": ["validate_spec", "get_project_status"],
     },
+    "get_config_section": {
+        "scope": "mcp:read",
+        "example": '{"project_id": "<uuid>", "section": "observability"}',
+        "next": ["set_config_section", "validate_spec"],
+    },
+    "set_config_section": {
+        "scope": "mcp:write",
+        "example": (
+            '{"project_id": "<uuid>", "section": "observability", '
+            '"value": {"sample_ratio": 0.2}, "expected_version": 0}'
+        ),
+        "next": ["validate_spec", "list_secrets_needed"],
+    },
+    "list_metrics": {
+        "scope": "mcp:read",
+        "example": '{"project_id": "<uuid>"}',
+        "next": ["define_metric", "get_metric_value"],
+    },
+    "define_metric": {
+        "scope": "mcp:write",
+        "example": (
+            '{"project_id": "<uuid>", "key": "total_amount", "definition": '
+            '{"label": "Total", "entity": "Order", "agg": "sum", "field": "amount"}}'
+        ),
+        "next": ["get_metric_value", "define_report"],
+    },
+    "get_metric_value": {
+        "scope": "mcp:read",
+        "example": '{"project_id": "<uuid>", "key": "total_amount"}',
+        "next": ["define_report", "list_metrics"],
+    },
+    "list_reports": {
+        "scope": "mcp:read",
+        "example": '{"project_id": "<uuid>"}',
+        "next": ["define_report", "run_report"],
+    },
+    "define_report": {
+        "scope": "mcp:write",
+        "example": (
+            '{"project_id": "<uuid>", "name": "Daily", "metric_keys": ["total_amount"], '
+            '"schedule": "0 6 * * *", "timezone": "UTC"}'
+        ),
+        "next": ["run_report", "list_reports"],
+    },
+    "run_report": {
+        "scope": "mcp:write",
+        "example": '{"project_id": "<uuid>", "report_id": "<uuid>"}',
+        "next": ["list_reports", "validate_spec"],
+    },
     "create_preview": {
         "scope": "mcp:preview",
         "example": '{"project_id": "<uuid>"}',
@@ -236,6 +285,12 @@ SECTION_TOOLS: dict[str, str | None] = {
     "authorization": "set_authorization (+ create_role, update_role, set_permissions)",
     **{s: "apply_op with op_type set_section" for s in _OP_SECTIONS},
     **{b: "put_behavior_block" for b in BLOCKS},
+    **{
+        c: "set_config_section (settings only; credentials and the payments/storage on-switch "
+        "stay in the dashboard)"
+        for c in ("payments", "storage", "documents", "observability", "deployment")
+    },
+    "metrics_layer": "define_metric / define_report (+ list_metrics, list_reports, run_report)",
     "packs": "put_packs (destructive scope, dry run by default)",
 }
 
@@ -419,6 +474,17 @@ _PLAYBOOK: list[dict[str, Any]] = [
         "goal": "Add domain packs (money, operations, booking, ai) if the app needs them",
         "tools": ["describe_platform", "put_packs"],
         "notes": "put_packs is destructive-scoped and dry_run defaults to true.",
+    },
+    {
+        "goal": "Configure payments, storage, documents, observability, deployment; add metrics and "
+        "reports",
+        "tools": [
+            "get_config_section", "set_config_section", "list_metrics", "define_metric",
+            "get_metric_value", "list_reports", "define_report", "run_report",
+        ],
+        "notes": "set_config_section saves non-secret settings only and replaces the whole section "
+        "(read get_config_section first); credentials and the payments/storage on-switch are the "
+        "user's, in the dashboard. Keys that look like secrets are refused.",
     },
     {
         "goal": "Check everything is consistent",

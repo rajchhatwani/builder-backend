@@ -138,6 +138,7 @@ tests/api/test_mcp.py
 tests/api/test_mcp_extra.py
 tests/api/test_mcp_catalog.py
 tests/api/test_mcp_lifecycle.py
+tests/api/test_mcp_config.py
 tests/api/test_mcp_preview.py
 tests/api/test_mcp_secrets_tools.py
 tests/api/test_migration_drift.py

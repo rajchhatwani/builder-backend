@@ -73,7 +73,9 @@ def test_describe_platform_comes_from_real_registries() -> None:
     by = {s["section"]: s for s in d["sections"]}
     assert by["auth"]["edit_with"] == "set_auth_config"
     assert by["events"]["edit_with"] == "put_behavior_block"
-    assert by["payments"]["mcp_editable"] is False  # said honestly, not hidden
+    assert by["payments"]["edit_with"].startswith("set_config_section")  # settings only, said so
+    assert by["metrics_layer"]["mcp_editable"] is True
+    assert by["features"]["mcp_editable"] is False  # said honestly, not hidden
     assert "credentials" in " ".join(d["limits"]["cannot_do"]).lower()
     assert set(d["limits"]["scopes"]) == {
         "mcp:read", "mcp:write", "mcp:generate", "mcp:preview", "mcp:destructive"
