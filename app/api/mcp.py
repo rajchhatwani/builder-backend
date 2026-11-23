@@ -149,8 +149,8 @@ INSTRUCTIONS = (
     "describe_platform (what the platform can and cannot do, from the live registries). "
     "Then list_projects, and work with get_project_status after every step: it lists what is "
     "still missing and the one next step.\n"
-    "SCOPES on the Bearer API token (bb_pat_...): mcp:read (all read tools), mcp:write (model, "
-    "roles, permissions, behaviour; needs editor role), mcp:generate (generate_project), "
+    "SCOPES on the Bearer API token (bb_pat_...): mcp:read (all read tools), mcp:write "
+    "(create_project, model, roles, permissions, behaviour; needs editor role), mcp:generate (generate_project), "
     "mcp:destructive (removals, put_packs, confirming access-widening edits). Every tool also "
     "needs MCP enabled for your project membership.\n"
     "SAFETY: destructive tools default to dry_run=true: show the user the summary and only "
@@ -325,7 +325,8 @@ def build_mcp_server(session_factory: Any) -> Any:
     @tool(
         description=(
             "The dashboard's readiness board: what is configured, issues per section, and the "
-            "one next step. Use it at the end to tell the user what they still have to fill in."
+            "one next step, plus `missing` (what is left, who can do it: tool or human) and "
+            "`secrets_needed`. Use it at the end to tell the user what they still have to fill in."
         )
     )
     async def get_project_status(project_id: str, ctx: Context) -> dict[str, Any]:
@@ -333,11 +334,36 @@ def build_mcp_server(session_factory: Any) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_project_status(principal, uuid.UUID(project_id))
 
-    @tool(description="Roles and the entity x operation permission matrix of a project.")
-    async def list_roles_and_permissions(project_id: str, ctx: Context) -> dict[str, Any]:
+    @tool(
+        description=(
+            "What only a human can enter for this project (SMTP/SMS, Stripe, Keycloak/Okta, "
+            "storage and cloud keys ...): names and where to enter them in the dashboard, "
+            "NEVER values. Derived from what the spec currently turns on."
+        )
+    )
+    async def list_secrets_needed(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
-            return await McpService(db).list_roles_and_permissions(principal, uuid.UUID(project_id))
+            return await McpService(db).list_secrets_needed(principal, uuid.UUID(project_id))
+
+    @tool(
+        description=(
+            "Roles (with self_assignable, invite_only, position) and the entity x operation "
+            "permission matrix of a project. Optional filters: entity (name; unknown = 404) and "
+            "role (keep only permission rows that list that role)."
+        )
+    )
+    async def list_roles_and_permissions(
+        project_id: str,
+        entity: str | None = None,
+        role: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
+            return await McpService(db).list_roles_and_permissions(
+                principal, uuid.UUID(project_id), entity, role
+            )
 
     @tool(description="Past code generations of a project (id, spec hash, file count, time).")
     async def list_generations(
@@ -350,6 +376,34 @@ def build_mcp_server(session_factory: Any) -> Any:
             return await McpService(db).list_generations(principal, uuid.UUID(project_id), limit)
 
     # ── Write tools (scope: mcp:write, requires editor+ role) ────────────────────────
+
+    @tool(
+        description=(
+            "Create a new project (you become its owner, MCP is enabled for you). Only name is "
+            "required; slug is derived from the name (an explicit slug that is taken is a 409); "
+            "organization_id picks the organisation (default: yours). Counts against the plan's "
+            "project quota (project_limit, 402) like the dashboard. Refused for an API token "
+            "pinned to one project. Requires mcp:write."
+        )
+    )
+    async def create_project(
+        name: str,
+        description: str = "",
+        slug: str | None = None,
+        organization_id: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            org_id: uuid.UUID | None = None
+            if organization_id:
+                try:
+                    org_id = uuid.UUID(organization_id)
+                except ValueError as exc:
+                    raise AppError(
+                        "invalid_input", "organization_id is not a valid uuid", 422
+                    ) from exc
+            return await McpService(db).create_project(principal, name, description, slug, org_id)
 
     @tool(
         description=("Create a new entity in a project. Requires mcp:write scope and editor+ role.")
@@ -431,17 +485,43 @@ def build_mcp_server(session_factory: Any) -> Any:
     @tool(
         description=(
             "Create a role. role keys: name, label, is_default, self_assignable, invite_only, "
-            "inherits_from. Requires mcp:write and editor+."
+            "inherits_from, position. upsert=true updates the role instead when the name "
+            "already exists (same keys except name). Requires mcp:write and editor+."
         )
     )
     async def create_role(
         project_id: str,
         role: dict[str, Any],
+        upsert: bool = False,
+        confirm_weakening: bool = False,
         ctx: Context = None,  # type: ignore[assignment]
     ) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
-            return await McpService(db).create_role(principal, uuid.UUID(project_id), role)
+            return await McpService(db).create_role(
+                principal, uuid.UUID(project_id), role, upsert, confirm_weakening
+            )
+
+    @tool(
+        description=(
+            "Change an existing role by name. changes keys: label, is_default, self_assignable, "
+            "invite_only, inherits_from, position (other keys are refused with unknown_keys). "
+            "An edit that gives a role more access needs confirm_weakening=true plus the "
+            "mcp:destructive scope. Requires mcp:write and editor+."
+        )
+    )
+    async def update_role(
+        project_id: str,
+        name: str,
+        changes: dict[str, Any],
+        confirm_weakening: bool = False,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
+            return await McpService(db).update_role(
+                principal, uuid.UUID(project_id), name, changes, confirm_weakening
+            )
 
     @tool(
         description=(
@@ -625,9 +705,9 @@ def build_mcp_server(session_factory: Any) -> Any:
     def build_a_backend(what_to_build: str = "a backend for my idea") -> str:
         return (
             f"Build {what_to_build} with the BackendBuilder tools only. Call get_started and "
-            "describe_platform first, then follow the playbook step by step: list_projects, "
-            "data model, auth and roles, permissions, behaviour, packs, validate_spec, "
-            "generate_project. Call get_project_status after each step. Never put credentials "
+            "describe_platform first, then follow the playbook step by step: list_projects "
+            "(create_project if none exists), data model, auth and roles, permissions, behaviour, "
+            "packs, validate_spec, generate_project. Call get_project_status after each step. Never put credentials "
             "in arguments: finish by telling the user which secrets they must enter in the "
             "dashboard. Use dry_run first for every destructive tool and ask before applying."
         )

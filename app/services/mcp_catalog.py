@@ -66,6 +66,11 @@ TOOL_HELP: dict[str, dict[str, Any]] = {
         "example": '{"project_id": "<uuid>"}',
         "next": ["get_project_status"],
     },
+    "list_secrets_needed": {
+        "scope": "mcp:read",
+        "example": '{"project_id": "<uuid>"}',
+        "next": ["get_project_status", "generate_project"],
+    },
     "validate_spec": {
         "scope": "mcp:read",
         "example": '{"project_id": "<uuid>"}',
@@ -126,10 +131,20 @@ TOOL_HELP: dict[str, dict[str, Any]] = {
         ),
         "next": ["set_authorization", "validate_spec"],
     },
+    "create_project": {
+        "scope": "mcp:write",
+        "example": '{"name": "Clinic", "description": "Booking backend"}',
+        "next": ["create_entity", "get_project_status"],
+    },
     "create_role": {
         "scope": "mcp:write",
         "example": '{"project_id": "<uuid>", "role": {"name": "doctor", "label": "Doctor"}}',
         "next": ["set_permissions", "set_auth_config"],
+    },
+    "update_role": {
+        "scope": "mcp:write",
+        "example": '{"project_id": "<uuid>", "name": "doctor", "changes": {"invite_only": true}}',
+        "next": ["list_roles_and_permissions", "set_permissions"],
     },
     "set_auth_config": {
         "scope": "mcp:write",
@@ -198,7 +213,7 @@ SECTION_TOOLS: dict[str, str | None] = {
     "relations": "add_relation / apply_op (add_relation, update_relation)",
     "features": None,
     "auth": "set_auth_config",
-    "authorization": "set_authorization (+ create_role, set_permissions)",
+    "authorization": "set_authorization (+ create_role, update_role, set_permissions)",
     **{s: "apply_op with op_type set_section" for s in _OP_SECTIONS},
     **{b: "put_behavior_block" for b in BLOCKS},
     "packs": "put_packs (destructive scope, dry run by default)",
@@ -214,7 +229,7 @@ CANNOT_DO = [
 
 SCOPES = {
     "mcp:read": "read specs, status, history",
-    "mcp:write": "change the model, roles, permissions, behaviour (editor role or higher)",
+    "mcp:write": "create projects, change the model, roles, permissions, behaviour (editor role or higher)",
     "mcp:generate": "render the project zip",
     "mcp:destructive": "removes, packs rewrite, confirming access-widening edits (dry run first)",
 }
@@ -352,9 +367,9 @@ _PLAYBOOK: list[dict[str, Any]] = [
     },
     {
         "goal": "Pick the project to work in",
-        "tools": ["list_projects", "get_project_status"],
-        "notes": "No create_project tool yet: if the list is empty, ask the user to create a "
-        "project in the dashboard and enable MCP for their membership.",
+        "tools": ["list_projects", "create_project", "get_project_status"],
+        "notes": "If list_projects is empty call create_project (name only is enough), then "
+        "continue with the returned id.",
     },
     {
         "goal": "Model the data (entities, fields, relations)",
@@ -363,7 +378,7 @@ _PLAYBOOK: list[dict[str, Any]] = [
     },
     {
         "goal": "Turn on sign-in and create roles",
-        "tools": ["set_auth_config", "create_role", "get_auth_model"],
+        "tools": ["set_auth_config", "create_role", "update_role", "get_auth_model"],
         "notes": "Send email_magic_link_enabled=false until the user has entered SMTP in the "
         "dashboard.",
     },
@@ -396,9 +411,9 @@ _PLAYBOOK: list[dict[str, Any]] = [
     },
     {
         "goal": "Tell the user what only a human can do",
-        "tools": ["get_project_status"],
-        "notes": "Credentials (SMTP/SMS, Stripe, GitHub, Okta/Keycloak) are entered in the "
-        "dashboard, never over MCP. Preview tools are not available yet.",
+        "tools": ["list_secrets_needed", "get_project_status"],
+        "notes": "Call list_secrets_needed (and read `missing` in get_project_status): credentials "
+        "(SMTP/SMS, Stripe, Okta/Keycloak) are entered in the dashboard, never over MCP. Preview tools are not available yet.",
     },
 ]
 
@@ -471,6 +486,23 @@ _ERROR_HINTS: dict[str, tuple[str, list[str]]] = {
     "validation_error": (
         "Fix the fields named in `details`; list_op_types shows each payload schema.",
         ["list_op_types", "validate_spec"],
+    ),
+    "pinned_token": (
+        "This API token is pinned to one project. Use an unpinned token to create projects.",
+        [],
+    ),
+    "unknown_keys": (
+        "Use only the listed keys.",
+        ["get_auth_model", "list_roles_and_permissions"],
+    ),
+    "conflict": (
+        "That name or slug is already taken; pick another one (or omit slug to derive a free one).",
+        ["list_projects", "list_roles_and_permissions"],
+    ),
+    "project_limit": (
+        "The organisation's plan allows no more projects. Ask the user to upgrade the plan or "
+        "remove a project in the dashboard; use an existing project meanwhile.",
+        ["list_projects"],
     ),
     "email_not_verified": ("The user must verify their e-mail in the dashboard.", []),
 }

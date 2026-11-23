@@ -17,6 +17,7 @@ Security invariants enforced here:
 import uuid
 from typing import Any
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -256,6 +257,11 @@ class McpService:
         result: str = "ok",
         extra: dict[str, object] | None = None,
     ) -> None:
+        # A guarded write (roles, permissions, auth config) expires every object in the session,
+        # including the caller's user row; reading it lazily would raise MissingGreenlet and the
+        # tool would report a generic error although the write was saved. Reload it explicitly.
+        if sa_inspect(principal.user).expired_attributes:
+            await self.db.refresh(principal.user)
         await audit_service.record(
             self.db,
             action="mcp.tool_call",

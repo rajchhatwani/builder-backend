@@ -137,6 +137,8 @@ tests/api/test_keycloak.py
 tests/api/test_mcp.py
 tests/api/test_mcp_extra.py
 tests/api/test_mcp_catalog.py
+tests/api/test_mcp_lifecycle.py
+tests/api/test_mcp_secrets_tools.py
 tests/api/test_migration_drift.py
 tests/api/test_nul_input.py
 tests/api/test_observability.py
@@ -414,3 +416,4 @@ tests/unit/test_pack_form_schemas.py
 tests/unit/test_pack_form_schemas_ops.py
 tests/api/test_packs_block.py
 tests/unit/test_pack_form_schemas_ai.py
+tests/unit/test_mcp_secrets.py
