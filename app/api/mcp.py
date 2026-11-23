@@ -18,25 +18,34 @@ Security:
 The MCP Starlette app is built once via build_mcp_app() and mounted in app/main.py.
 """
 
+import functools
+import json
 import uuid
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core import platform_authz as authz
 from app.exceptions import AppError
+from app.services import mcp_catalog as catalog
 from app.services.access_service import Principal, principal_from_api_token
 
 try:
     from mcp.server.mcpserver import Context, MCPServer
+    from mcp.server.mcpserver.exceptions import ToolError
 
     _MCP_AVAILABLE = True
 except ImportError:  # pragma: no cover
     _MCP_AVAILABLE = False
     MCPServer = None  # type: ignore[assignment,misc]
+    ToolError = None  # type: ignore[assignment,misc]
     Context = None  # type: ignore[assignment,misc]
+
+
+_F = TypeVar("_F", bound=Callable[..., Any])
 
 
 # ── Lifespan context ──────────────────────────────────────────────────────────────────
@@ -133,12 +142,30 @@ def mcp_allowed_hosts(settings: Any) -> list[str]:
     return hosts
 
 
-def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
-    """Build and return the MCP Starlette app. Called once at startup in app/main.py."""
-    if settings is None:
-        from app.config import get_settings
+INSTRUCTIONS = (
+    "BackendBuilder MCP server: build a complete backend (data model, roles, permissions, "
+    "behaviour, domain packs) and generate it, without knowing the platform beforehand.\n"
+    "FIRST: call get_started (ordered playbook, names the exact tool per step) and "
+    "describe_platform (what the platform can and cannot do, from the live registries). "
+    "Then list_projects, and work with get_project_status after every step: it lists what is "
+    "still missing and the one next step.\n"
+    "SCOPES on the Bearer API token (bb_pat_...): mcp:read (all read tools), mcp:write (model, "
+    "roles, permissions, behaviour; needs editor role), mcp:generate (generate_project), "
+    "mcp:destructive (removals, put_packs, confirming access-widening edits). Every tool also "
+    "needs MCP enabled for your project membership.\n"
+    "SAFETY: destructive tools default to dry_run=true: show the user the summary and only "
+    "repeat with dry_run=false after they agree. Section replacements (set_section, "
+    "put_behavior_block, set_authorization) replace the whole block: read it first.\n"
+    "SECRETS: credentials (SMTP/SMS, Stripe, GitHub, Twilio, Okta/Keycloak keys) are never set "
+    "or returned here; any secret-looking value is refused. Tell the user to enter them in the "
+    "dashboard.\n"
+    "ERRORS: every failure is JSON {error: {code, message, status, hint, next_tools}}: follow "
+    "hint and next_tools. Prompt `build-a-backend` gives a ready-made brief."
+)
 
-        settings = get_settings()
+
+def build_mcp_server(session_factory: Any) -> Any:
+    """The MCPServer with every tool and prompt registered (no HTTP transport)."""
     if not _MCP_AVAILABLE:  # pragma: no cover
         raise RuntimeError("mcp package not installed; run: uv add 'mcp>=2.0'")
 
@@ -148,52 +175,93 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
 
     mcp = MCPServer(
         name="BackendBuilder",
-        instructions=(
-            "BackendBuilder MCP server. "
-            "Start with list_projects to discover projects you have access to. "
-            "All tools are project-scoped. "
-            "Authenticate with a Bearer API token (mcp:read scope required; "
-            "mcp:write for write tools; mcp:generate for generate_project; "
-            "mcp:destructive for removes and for confirming access-widening edits). "
-            "You can create or change the data model, roles and permissions, sign-in settings, "
-            "authorization policies and behaviour (state machines, hooks, settings, jobs, "
-            "workflows, events, webhooks ...). Use get_project_status to see what is still missing. "
-            "Credentials (SMTP/SMS/Stripe/GitHub/Okta keys) are never set here: tell the user to "
-            "enter them in the dashboard."
-        ),
+        instructions=INSTRUCTIONS,
         lifespan=_make_lifespan(session_factory),
     )
+
+    def tool(description: str, annotations: Any = None) -> Callable[[_F], _F]:
+        """mcp.tool + purpose/example/next hint in the description + uniform error shape."""
+
+        def deco(fn: _F) -> _F:
+            @functools.wraps(fn)
+            async def guarded(*a: Any, **kw: Any) -> Any:
+                try:
+                    return await fn(*a, **kw)
+                except AppError as exc:
+                    raise ToolError(json.dumps(catalog.error_payload(exc), default=str)) from exc
+                except ValueError as exc:
+                    if "badly formed hexadecimal UUID" not in str(exc):
+                        raise
+                    err = AppError("invalid_project_id", "project_id is not a valid uuid", 422)
+                    raise ToolError(json.dumps(catalog.error_payload(err))) from exc
+
+            mcp.tool(
+                name=fn.__name__,
+                description=catalog.with_help(fn.__name__, description),
+                annotations=annotations,
+            )(guarded)
+            return fn
+
+        return deco
 
     # ── Read tools (scope: mcp:read) ──────────────────────────────────────────────────
 
     def _lifespan(ctx: "Context") -> McpLifespan:
         return ctx.request_context.lifespan_context  # type: ignore[return-value]
 
-    @mcp.tool(description="List all projects where you have MCP access enabled.")
+    @tool(
+        description=(
+            "What this platform can build and what it cannot, from the live registries: Spec "
+            "sections and the tool that edits each, domain packs (money, operations, booking, "
+            "ai) with their parts, behaviour blocks, spec op types, every tool with scope, and "
+            "limits. Optional topic: sections|packs|blocks|op_types|tools|limits. Call this "
+            "first if you know nothing about the platform."
+        )
+    )
+    async def describe_platform(
+        topic: str | None = None,
+        ctx: Context = None,  # type: ignore[assignment]
+    ) -> dict[str, Any]:
+        async with _lifespan(ctx).session_factory() as db:
+            await _auth(ctx, db, authz.SCOPE_MCP_READ)
+        return catalog.describe_platform(topic)
+
+    @tool(
+        description=(
+            "Ordered playbook from an empty organisation to a generated backend, naming the "
+            "exact tool for each step, plus the rules (secrets, dry runs, errors)."
+        )
+    )
+    async def get_started(ctx: Context = None) -> dict[str, Any]:  # type: ignore[assignment]
+        async with _lifespan(ctx).session_factory() as db:
+            await _auth(ctx, db, authz.SCOPE_MCP_READ)
+        return catalog.get_started()
+
+    @tool(description="List all projects where you have MCP access enabled.")
     async def list_projects(ctx: Context) -> list[dict[str, Any]]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).list_projects(principal)
 
-    @mcp.tool(description="Get the full spec for a project (entities, fields, relations, config).")
+    @tool(description="Get the full spec for a project (entities, fields, relations, config).")
     async def get_project_spec(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_project_spec(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Get the data model (entities, fields, relations) for a project.")
+    @tool(description="Get the data model (entities, fields, relations) for a project.")
     async def get_data_model(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_data_model(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Get the generated project's OpenAPI 3.1 spec.")
+    @tool(description="Get the generated project's OpenAPI 3.1 spec.")
     async def get_openapi(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_openapi(principal, uuid.UUID(project_id))
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get authentication configuration for a project (provider, flows, token format)."
         )
@@ -203,7 +271,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_auth_model(principal, uuid.UUID(project_id))
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get the frontend contract: routes, auth flow, pagination conventions, "
             "error shapes, and roles. Use this to wire up a dashboard correctly."
@@ -214,7 +282,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_frontend_contract(principal, uuid.UUID(project_id))
 
-    @mcp.tool(
+    @tool(
         description=(
             "Get deployment configuration for a project "
             "(cloud, region, environments). No secrets returned."
@@ -225,21 +293,23 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_deploy_info(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Validate the spec and return a list of issues.")
+    @tool(description="Validate the spec and return a list of issues.")
     async def validate_spec(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).validate_spec(principal, uuid.UUID(project_id))
 
-    @mcp.tool(
-        description="List the spec operation types with their payload schemas and which are destructive."
+    @tool(
+        description=(
+            "List the spec operation types with their payload schemas and which are destructive."
+        )
     )
     async def list_op_types(project_id: str, ctx: Context) -> list[dict[str, Any]]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).list_op_types(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Recent spec changes (who/what/when), newest last. limit<=50.")
+    @tool(description="Recent spec changes (who/what/when), newest last. limit<=50.")
     async def list_spec_history(
         project_id: str,
         limit: int = 20,
@@ -252,7 +322,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), limit, offset
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "The dashboard's readiness board: what is configured, issues per section, and the "
             "one next step. Use it at the end to tell the user what they still have to fill in."
@@ -263,13 +333,13 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).get_project_status(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Roles and the entity x operation permission matrix of a project.")
+    @tool(description="Roles and the entity x operation permission matrix of a project.")
     async def list_roles_and_permissions(project_id: str, ctx: Context) -> dict[str, Any]:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_READ)
             return await McpService(db).list_roles_and_permissions(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Past code generations of a project (id, spec hash, file count, time).")
+    @tool(description="Past code generations of a project (id, spec hash, file count, time).")
     async def list_generations(
         project_id: str,
         limit: int = 10,
@@ -281,7 +351,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
 
     # ── Write tools (scope: mcp:write, requires editor+ role) ────────────────────────
 
-    @mcp.tool(
+    @tool(
         description=("Create a new entity in a project. Requires mcp:write scope and editor+ role.")
     )
     async def create_entity(
@@ -296,7 +366,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), name, description
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Add a field to an entity. field dict keys: name (str), type (string|integer|boolean|"
             "float|decimal|date|datetime|text|uuid|json|enum), required (bool, default false), "
@@ -315,7 +385,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), entity_name, field
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Add a relation between entities. relation dict keys: "
             "kind (one_to_many|many_to_many|one_to_one), "
@@ -333,7 +403,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
             return await McpService(db).add_relation(principal, uuid.UUID(project_id), relation)
 
-    @mcp.tool(
+    @tool(
         description=(
             "Save one entry of the role permission matrix: which roles may do `operation` "
             "(list|get|create|update|replace|delete|head) on an entity. Roles must exist "
@@ -358,7 +428,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 confirm_weakening,
             )  # fmt: skip
 
-    @mcp.tool(
+    @tool(
         description=(
             "Create a role. role keys: name, label, is_default, self_assignable, invite_only, "
             "inherits_from. Requires mcp:write and editor+."
@@ -373,7 +443,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
             return await McpService(db).create_role(principal, uuid.UUID(project_id), role)
 
-    @mcp.tool(
+    @tool(
         description=(
             "Create or update sign-in settings (enabled, token lifetimes, registration rules, "
             "magic link, rate limits, app_name ...). Only the keys you send change. First "
@@ -396,7 +466,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), config, confirm_weakening
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Replace the authorization block (model, policies, attachments, field_access) like "
             "the dashboard's Authorization page. Read get_project_spec first and send the whole "
@@ -416,7 +486,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), authorization, confirm_weakening
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Apply ONE typed spec operation (see list_op_types for the payload schemas): "
             "add_entity, update_entity, add_field, update_field, add_relation, update_relation, "
@@ -439,7 +509,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), op_type, payload, dry_run=dry_run
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Save one behaviour block: events, providers, notifications, jobs, workflows, "
             "api_edge, webhooks (hook_effects: project owner only). `value` is the block as in "
@@ -460,7 +530,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 principal, uuid.UUID(project_id), block, value, expected_version
             )
 
-    @mcp.tool(
+    @tool(
         description=(
             "Undo your own most recent MCP change. Refuses if the latest change was made by "
             "someone else or in the dashboard."
@@ -474,7 +544,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_WRITE)
             return await McpService(db).undo_last_change(principal, uuid.UUID(project_id))
 
-    @mcp.tool(description="Redo the change you just undid (same ownership rule as undo).")
+    @tool(description="Redo the change you just undid (same ownership rule as undo).")
     async def redo_last_change(
         project_id: str,
         ctx: Context = None,  # type: ignore[assignment]
@@ -485,7 +555,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
 
     # ── Destructive tools (scope: mcp:destructive; editor+; dry run by default) ────────
 
-    @mcp.tool(
+    @tool(
         description=(
             "DESTRUCTIVE. Apply remove_entity | remove_field | remove_relation | "
             "remove_custom_field | replace_spec. Data in generated apps that depends on what you "
@@ -510,7 +580,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
                 dry_run=dry_run, confirm_weakening=confirm_weakening, destructive=True,
             )  # fmt: skip
 
-    @mcp.tool(
+    @tool(
         description=(
             "DESTRUCTIVE. Set the domain packs block (money, operations, booking, ai) as in "
             "get_project_spec; it replaces `packs`. Implemented as a whole-spec rewrite, so "
@@ -533,7 +603,7 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
 
     # ── Generate tool (scope: mcp:generate) ──────────────────────────────────────────
 
-    @mcp.tool(
+    @tool(
         description=(
             "Generate the project zip. Returns a download_url to fetch the zip "
             "with your API token. Requires mcp:generate scope and editor+ role. "
@@ -547,6 +617,31 @@ def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
         async with _lifespan(ctx).session_factory() as db:
             principal = await _auth(ctx, db, authz.SCOPE_MCP_GENERATE)
             return await McpService(db).generate_project(principal, uuid.UUID(project_id))
+
+    @mcp.prompt(
+        name="build-a-backend",
+        description="Brief for building a whole backend from an empty project using only tools.",
+    )
+    def build_a_backend(what_to_build: str = "a backend for my idea") -> str:
+        return (
+            f"Build {what_to_build} with the BackendBuilder tools only. Call get_started and "
+            "describe_platform first, then follow the playbook step by step: list_projects, "
+            "data model, auth and roles, permissions, behaviour, packs, validate_spec, "
+            "generate_project. Call get_project_status after each step. Never put credentials "
+            "in arguments: finish by telling the user which secrets they must enter in the "
+            "dashboard. Use dry_run first for every destructive tool and ask before applying."
+        )
+
+    return mcp
+
+
+def build_mcp_app(session_factory: Any, settings: Any = None) -> Any:
+    """Build and return the MCP Starlette app. Called once at startup in app/main.py."""
+    if settings is None:
+        from app.config import get_settings
+
+        settings = get_settings()
+    mcp = build_mcp_server(session_factory)
 
     # Build and return the Starlette app (streamable HTTP transport).
     # The outer FastAPI app mounts this under `/mcp`, so the inner path is just `/`

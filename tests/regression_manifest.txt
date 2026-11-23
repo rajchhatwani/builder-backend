@@ -136,6 +136,7 @@ tests/api/test_impersonation.py
 tests/api/test_keycloak.py
 tests/api/test_mcp.py
 tests/api/test_mcp_extra.py
+tests/api/test_mcp_catalog.py
 tests/api/test_migration_drift.py
 tests/api/test_nul_input.py
 tests/api/test_observability.py
