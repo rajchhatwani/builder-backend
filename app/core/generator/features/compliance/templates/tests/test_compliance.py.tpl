@@ -305,7 +305,7 @@ async def _bg_row(authed: AsyncClient) -> tuple[str, uuid.UUID, dict[str, str]]:
     values: dict[str, Any] = {}
     for column in model.__table__.columns:
         kind = column.type.impl if isinstance(column.type, sa.types.TypeDecorator) else column.type
-        if isinstance(kind, sa.String | sa.Text) and not column.foreign_keys and not column.primary_key:
+        if isinstance(kind, sa.String | sa.Text) and not column.foreign_keys and not column.primary_key and not column.name.endswith("_bidx"):
             if column.name in settings.PROTECTED.get(entity, ()) or any(f in column.name.lower() for f in IDENTIFIER_FRAGMENTS):
                 values[column.name] = markers[column.name] = _marker()
     async with session_factory() as session:
@@ -396,7 +396,7 @@ async def _export_row(authed: AsyncClient, entity: str, subject_consent: str | N
     values: dict[str, Any] = {}
     for column in model.__table__.columns:
         kind = column.type.impl if isinstance(column.type, sa.types.TypeDecorator) else column.type
-        if isinstance(kind, sa.String | sa.Text) and not column.foreign_keys and not column.primary_key:
+        if isinstance(kind, sa.String | sa.Text) and not column.foreign_keys and not column.primary_key and not column.name.endswith("_bidx"):
             if column.name in settings.PROTECTED.get(entity, ()) or any(f in column.name.lower() for f in IDENTIFIER_FRAGMENTS):
                 values[column.name] = markers[column.name] = _marker()
     async with session_factory() as session:

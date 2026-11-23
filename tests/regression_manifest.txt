@@ -396,6 +396,7 @@ tests/api/test_regulated_block.py
 tests/e2e/test_regulated_stack.py
 tests/unit/test_compliance_spec.py
 tests/e2e/test_compliance_stack.py
+tests/e2e/test_clinic_demo.py
 tests/unit/test_compliance_controls.py
 tests/api/test_compliance_routes.py
 tests/unit/test_api_platform_spec.py

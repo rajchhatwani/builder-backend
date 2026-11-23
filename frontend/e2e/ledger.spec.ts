@@ -1,13 +1,11 @@
-/** F5-1: Operate > Ledger (new shell). Paste a token, load the books, post a balanced entry, see the balances move.
+/** F5-1: Operate > Ledger (new shell). Sign in to the preview, load the books, post a balanced entry, see the balances move.
  *  The project API is mocked (see preview-mock.ts). Not run by its author; run with `npx playwright test e2e/ledger.spec.ts`. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
-import { V2_STATE, mockPreview } from './preview-mock'
+import { BEARER, SESSION, mockPreviewSession, signInPreview } from './preview-mock'
 
-test.use({ storageState: V2_STATE })
 
-const TOKEN = 'e2e-ledger-' + 'token-1'
 const ACCTS = [
   { id: 'a1', code: '1000', name: 'Cash', kind: 'asset', currency: 'USD', exponent: 2 },
   { id: 'a2', code: '4000', name: 'Sales', kind: 'income', currency: 'USD', exponent: 2 },
@@ -28,7 +26,7 @@ test('ledger: post a balanced transaction, the balances and history follow', asy
     })
     return { items, totals: [{ currency: 'USD', sum_minor: items.reduce((s, b) => s + b.balance_minor, 0) }] }
   }
-  const seen = await mockPreview(page, (r) => {
+  const seen = await mockPreviewSession(page, id, (r) => {
     if (r.method === 'GET' && r.path === '/ledger/accounts') return { json: { items: ACCTS, total: 2, limit: 200, offset: 0 } }
     if (r.method === 'GET' && r.path === '/ledger/balances') return { json: balances() }
     if (r.method === 'GET' && r.path === '/ledger/transactions') return { json: { items: [...txs].reverse(), total: txs.length, limit: 20, offset: 0 } }
@@ -53,16 +51,14 @@ test('ledger: post a balanced transaction, the balances and history follow', asy
 
   await page.goto(`/#/p/${id}/ledger`)
   await expect(page.getByTestId('ledger-page')).toBeVisible()
-  await expect(page.getByTestId('ledger-notoken')).toBeVisible()
   expect(seen).toHaveLength(0) // nothing is fetched before a token is given
-  await page.getByTestId('ledger-token').fill(TOKEN)
-  await page.getByTestId('ledger-load').click()
+  await signInPreview(page)
 
   await expect(page.getByTestId('ledger-account-row')).toHaveCount(2)
   await expect(page.getByTestId('ledger-transactions-state-empty')).toBeVisible()
   await expect(page.getByTestId('ledger-balance-row')).toHaveCount(2)
   await expect(page.getByTestId('ledger-balance-check')).toHaveAttribute('data-ok', 'true')
-  expect(seen.every((s) => s.auth === `Bearer ${TOKEN}` && !s.search.includes(TOKEN))).toBe(true)
+  expect(seen.every((s) => s.auth === BEARER && s.previewToken === SESSION.previewToken && !s.search.includes(SESSION.jwt))).toBe(true)
 
   // An unbalanced draft is called out before anything is sent.
   const accounts = page.getByTestId('ledger-line-account')

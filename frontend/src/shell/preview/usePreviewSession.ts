@@ -80,24 +80,25 @@ export function usePreviewSession(projectId: string, opts: Options = {}): Previe
     return () => { gen.current++; clear() }
   }, [connect, disabled])
 
-  const send = useCallback(async (method: string, path: string, body: unknown, withJwt: boolean): Promise<SessionResponse> => {
+  const send = useCallback(async (method: string, path: string, body: unknown, bearer: string | undefined): Promise<SessionResponse> => {
     const b = baseRef.current
     const tok = previewToken.current
     if (!b || !origin || !tok) throw new Error('No preview session. Connect to a preview first.')
     const r = await sendRequest({
       url: joinPreviewUrl(b, path), origin, method, body: body === undefined ? undefined : JSON.stringify(body),
-      previewToken: tok, bearer: withJwt ? (jwt.current ?? undefined) : undefined,
+      previewToken: tok, bearer,
     }, doFetch)
     return { status: r.status, text: r.text }
   }, [origin, doFetch])
 
-  const request = useCallback(async (method: string, path: string, body?: unknown) => {
-    const r = await send(method, path, body, true)
+  const request = useCallback(async (method: string, path: string, body?: unknown, o?: { bearer?: string | null }) => {
+    const own = o?.bearer === undefined
+    const r = await send(method, path, body, own ? (jwt.current ?? undefined) : (o.bearer ?? undefined))
     if (r.status === 401) {
       if (isPreviewTokenRefusal(r.status, r.text)) {
         previewToken.current = null; jwt.current = null
         void connectRef.current()
-      } else if (jwt.current) {
+      } else if (own && jwt.current) {
         jwt.current = null
         setStatus('needs-signin')
       }
@@ -107,7 +108,7 @@ export function usePreviewSession(projectId: string, opts: Options = {}): Previe
 
   const signIn = useCallback(async (email: string, password: string): Promise<string | null> => {
     try {
-      const r = await send('POST', '/auth/login', { email, password }, false)
+      const r = await send('POST', '/auth/login', { email, password }, undefined)
       if (isPreviewTokenRefusal(r.status, r.text)) { previewToken.current = null; void connectRef.current(); return 'The preview access token expired. Reconnecting; try again.' }
       const t = r.status >= 200 && r.status < 300 ? parseAccessToken(r.text) : null
       if (!t) return appErrorMessage(r.status, r.text)
@@ -119,7 +120,7 @@ export function usePreviewSession(projectId: string, opts: Options = {}): Previe
 
   const register = useCallback(async (email: string, password: string): Promise<string | null> => {
     try {
-      const r = await send('POST', '/auth/register', { email, password }, false)
+      const r = await send('POST', '/auth/register', { email, password }, undefined)
       if (r.status < 200 || r.status >= 300) return appErrorMessage(r.status, r.text)
     } catch (e) { return e instanceof Error ? e.message : 'Could not reach the preview app' }
     const m = await signIn(email, password)

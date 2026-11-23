@@ -428,7 +428,7 @@ export function PreviewLimitsPage({ readOnly }: { readOnly: boolean }) {
   )
 }
 
-/** Nav entries and routes for preview limits exist only for platform admins and only with the single flag ui.shell=v2. */
-export function showPreviewLimits(role: PlatformRole | undefined, shellV2: boolean): boolean {
-  return shellV2 && role === 'platform_admin'
+/** Nav entries and routes for preview limits exist only for platform admins. */
+export function showPreviewLimits(role: PlatformRole | undefined): boolean {
+  return role === 'platform_admin'
 }

@@ -177,11 +177,10 @@ describe('PreviewLimitsPage', () => {
 })
 
 describe('showPreviewLimits', () => {
-  it('is hidden from non-admins and without the v2 flag', () => {
-    expect(showPreviewLimits('platform_admin', true)).toBe(true)
-    expect(showPreviewLimits('platform_support', true)).toBe(false)
-    expect(showPreviewLimits('customer', true)).toBe(false)
-    expect(showPreviewLimits(undefined, true)).toBe(false)
-    expect(showPreviewLimits('platform_admin', false)).toBe(false)
+  it('is shown to platform admins only', () => {
+    expect(showPreviewLimits('platform_admin')).toBe(true)
+    expect(showPreviewLimits('platform_support')).toBe(false)
+    expect(showPreviewLimits('customer')).toBe(false)
+    expect(showPreviewLimits(undefined)).toBe(false)
   })
 })

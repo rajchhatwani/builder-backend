@@ -61,6 +61,20 @@ describe('usePreviewSession', () => {
     expect(rotatePreviewToken).toHaveBeenCalledTimes(1)
     expect(rotatePreviewToken).toHaveBeenCalledWith('p', 'a')
   })
+  it('request: opts.bearer replaces the app login (string) or sends none (null); the preview token is always sent', async () => {
+    listPreviews.mockResolvedValue([pv('a', 'running')])
+    const { f, seen } = fakeFetch(okLogin)
+    await mount(createElement(Probe, { projectId: 'p', doFetch: f }))
+    await act(async () => { await cur.signIn('a@b.c', 'password1') })
+    await act(async () => { await cur.request('GET', '/x') })
+    await act(async () => { await cur.request('GET', '/y', undefined, { bearer: 'ROLE' }) })
+    await act(async () => { await cur.request('GET', '/z', undefined, { bearer: null }) })
+    const by = (u: string) => seen.find((s) => s.url.endsWith(u))!.headers
+    expect(by('/x').Authorization).toBe('Bearer JWT1')
+    expect(by('/y').Authorization).toBe('Bearer ROLE')
+    expect(by('/z').Authorization).toBeUndefined()
+    for (const u of ['/x', '/y', '/z']) expect(by(u)['X-Preview-Token']).toBe('PT1')
+  })
   it('picks a sleeping preview', async () => {
     listPreviews.mockResolvedValue([pv('z', 'sleeping')])
     await mount(createElement(Probe, { projectId: 'p' }))

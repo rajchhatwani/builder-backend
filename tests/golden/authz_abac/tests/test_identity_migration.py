@@ -4,6 +4,7 @@ The link primitive must never link on an e-mail address alone, an unverified add
 untrusted issuer; the analysers must match only verified addresses, change nothing and never
 print a password hash; local user ids must survive every step."""
 
+import itertools
 import json
 import uuid
 from pathlib import Path
@@ -23,6 +24,7 @@ pytestmark = pytest.mark.usefixtures("outbox")
 HUB_A = "https://hub-a.example/realms/a"
 HUB_B = "https://hub-b.example/realms/b"
 TRUSTED = frozenset({HUB_A, HUB_B})
+_N = itertools.count(1)  # each account gets its own phone number (sms variants need a unique one)
 HASH_PARTS = ("c2FsdHNhbHRzYWx0c2FsdA", "aGFzaGhhc2hoYXNoaGFzaGhhc2hoYXNoaGFzaGhhc2g", "scrypt$")
 
 
@@ -32,7 +34,7 @@ def _proof(iss: str, sub: str, email: str, verified: Any = True) -> dict[str, An
 
 async def _account(client: AsyncClient, email: str) -> tuple[uuid.UUID, str, str]:
     """A real local user and the (issuer, subject) its sign-in is linked to."""
-    await sign_in(client, email)
+    await sign_in(client, email, n=next(_N))
     async with session_factory() as session:
         user = (await session.execute(select(AuthUser).where(AuthUser.email == email))).scalar_one()
         row = (

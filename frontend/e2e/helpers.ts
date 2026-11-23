@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
+import AxeBuilder from '@axe-core/playwright'
 import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
 export const API = `http://localhost:${process.env.E2E_API_PORT ?? '8765'}`
@@ -129,14 +130,17 @@ export async function setPlanAsAdmin(request: APIRequestContext, orgId: string, 
   expect(r.status(), await r.text()).toBe(200)
 }
 
-/** The neutral invoice-approval example (one entity, one state machine, auth on). */
-export async function importInvoiceFlow(api: Api, projectId: string) {
+/** Imports one of the neutral spec fixtures of tests/fixtures/specs (the whole spec, validated by the server). */
+export async function importFixture(api: Api, projectId: string, file: string) {
   const { readFileSync } = await import('node:fs')
   const { fileURLToPath } = await import('node:url')
   const dir = fileURLToPath(new URL('../../tests/fixtures/specs/', import.meta.url))
-  const r = await api.put(`/projects/${projectId}/spec`, JSON.parse(readFileSync(dir + 'flow_invoices.json', 'utf8')))
+  const r = await api.put(`/projects/${projectId}/spec`, JSON.parse(readFileSync(dir + file, 'utf8')))
   expect(r.status(), await r.text()).toBe(200)
 }
+
+/** The neutral invoice-approval example (one entity, one state machine, auth on). */
+export const importInvoiceFlow = (api: Api, projectId: string) => importFixture(api, projectId, 'flow_invoices.json')
 
 /** The invoice example, then two guards that do not compile (unknown field `bogus_field`, dangling `amount <= `),
  *  written through the behaviour API (which accepts work in progress; PUT /spec refuses them). */
@@ -160,4 +164,10 @@ export async function adminApi(request: APIRequestContext) {
     get: (path: string) => request.get(`${API}${path}`, { headers }),
     put: (path: string, data?: unknown) => request.put(`${API}${path}`, { data, headers }),
   }
+}
+
+/** axe on the current page: zero violations (the failure text names the rule and the nodes). */
+export async function expectAxeClean(page: Page, name: string) {
+  const axe = await new AxeBuilder({ page }).analyze()
+  expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`), `axe on ${name}`).toEqual([])
 }

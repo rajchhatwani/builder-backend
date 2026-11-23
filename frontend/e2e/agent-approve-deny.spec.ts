@@ -3,10 +3,6 @@
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, seedPendingApproval, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 async function waitingRun(page: Parameters<typeof signedInUser>[0], request: Parameters<typeof signedInUser>[1], kind: 'B' | 'D', subject: string, payload: Record<string, unknown>, flags: string[] = []) {
   const api = await signedInUser(page, request)

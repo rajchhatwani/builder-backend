@@ -4,12 +4,10 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page, type TestInfo } from '@playwright/test'
 import { createProjectViaApi, importInvoiceFlow, signedInUser } from './helpers'
+import { SESSION, mockPreviewSession } from './preview-mock'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
 const PREVIEW = process.env.E2E_PREVIEW_ORIGIN ?? 'http://localhost:8799'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
+const WEB = process.env.E2E_WEB_PORT ?? '5199'
 
 const OPENAPI = {
   openapi: '3.1.0',
@@ -25,6 +23,7 @@ const OPENAPI = {
     },
   },
 }
+const PFX = `/previews/${SESSION.previewId}`
 const CORS = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': '*' }
 
 /** Desktop: the top-bar button. Phone: the top bar scrolls off-screen, so use the Ctrl+K palette command. */
@@ -44,13 +43,19 @@ async function openWorkbench(page: Page, info: TestInfo) {
   }
 }
 
-async function mockPreview(page: Page, seen: { auth: (string | undefined)[]; hosts: string[] }) {
+/** The builder side (preview list, token rotation) comes from mockPreviewSession; the generated app answers on <PREVIEW>/previews/<id>/...
+ *  and, like the real proxy, only with the preview token. The bare origin must never be called (it answers 404 and is recorded in seen.bare). */
+async function mockPreview(page: Page, projectId: string, seen: { auth: (string | undefined)[]; hosts: string[]; bare: string[] }) {
+  await mockPreviewSession(page, projectId, () => undefined)
   await page.route(`${PREVIEW}/**`, async (route) => {
     const req = route.request()
     if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: CORS })
-    seen.auth.push(req.headers().authorization)
     const path = new URL(req.url()).pathname
-    if (path === '/openapi.json') return route.fulfill({ json: OPENAPI, headers: CORS })
+    if (!path.startsWith(`${PFX}/`)) { seen.bare.push(path); return route.fulfill({ status: 404, headers: CORS, json: { detail: 'Not Found' } }) }
+    if (req.headers()['x-preview-token'] !== SESSION.previewToken) return route.fulfill({ status: 401, headers: CORS, json: { detail: 'Invalid preview token' } })
+    seen.auth.push(req.headers().authorization)
+    const rel = path.slice(PFX.length)
+    if (rel === '/openapi.json') return route.fulfill({ json: OPENAPI, headers: CORS })
     if (req.method() === 'POST') return route.fulfill({ status: 422, headers: CORS, json: { detail: [{ msg: 'Field required', token: 'LEAK-ME' }] } })
     return route.fulfill({ status: 200, headers: CORS, contentType: 'text/html', body: '<img src=x onerror="window.__xss=1">' })
   })
@@ -61,9 +66,9 @@ test('workbench: console sends as a role to the preview origin only, history red
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Workbench Project')
   await importInvoiceFlow(api, id) // declares roles: without them the token/redaction checks below would pass vacuously
-  const seen = { auth: [] as (string | undefined)[], hosts: [] as string[] }
+  const seen = { auth: [] as (string | undefined)[], hosts: [] as string[], bare: [] as string[] }
   page.on('request', (r) => seen.hosts.push(new URL(r.url()).origin))
-  await mockPreview(page, seen)
+  await mockPreview(page, id, seen)
 
   await page.goto(`/#/p/${id}/overview`)
   await openWorkbench(page, info)
@@ -90,6 +95,7 @@ test('workbench: console sends as a role to the preview origin only, history red
   await page.getByRole('button', { name: 'Send request' }).click()
   await expect(page.getByTestId('wb-status')).toHaveText('422')
   expect(seen.auth.at(-1)).toBe('Bearer E2E-SECRET-TOKEN')
+  expect(seen.bare, 'nothing was requested from the bare preview origin').toEqual([])
 
   // history: two entries, secrets redacted (response "token" key, bearer value)
   await expect(page.getByTestId('wb-history').locator('li')).toHaveCount(2)
@@ -114,10 +120,10 @@ test('workbench: API reference renders with Scalar (lazy), keyboard close with E
   test.setTimeout(90_000)
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Workbench Ref')
-  const seen = { auth: [] as (string | undefined)[], hosts: [] as string[] }
+  const seen = { auth: [] as (string | undefined)[], hosts: [] as string[], bare: [] as string[] }
   const scalarChunks: string[] = []
   page.on('request', (r) => { if (/ScalarView/.test(r.url())) scalarChunks.push(r.url()) })
-  await mockPreview(page, seen)
+  await mockPreview(page, id, seen)
 
   await page.goto(`/#/p/${id}/overview`)
   await openWorkbench(page, info)
@@ -137,9 +143,20 @@ test('workbench: API reference renders with Scalar (lazy), keyboard close with E
 test('workbench: preview API down shows an error with retry', async ({ page, request }, info) => {
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Workbench Down')
-  await page.route(`${PREVIEW}/**`, (route) => route.abort())
+  await mockPreviewSession(page, id, () => undefined)
+  await page.route(`${PREVIEW}${PFX}/**`, (route) => route.abort())
   await page.goto(`/#/p/${id}/overview`)
   await openWorkbench(page, info)
   await expect(page.getByTestId('wb-error')).toContainText('Could not reach the preview API')
   await expect(page.getByTestId('wb-error').getByRole('button', { name: 'Retry' })).toBeVisible()
+})
+
+test('workbench: no preview shows the start prompt instead of an error', async ({ page, request }, info) => {
+  const api = await signedInUser(page, request)
+  const id = await createProjectViaApi(api, 'Workbench None')
+  await mockPreviewSession(page, id, () => undefined, { none: true })
+  await page.goto(`/#/p/${id}/overview`)
+  await openWorkbench(page, info)
+  await expect(page.getByTestId('preview-session-none')).toBeVisible()
+  await expect(page.getByTestId('wb-error')).toHaveCount(0)
 })

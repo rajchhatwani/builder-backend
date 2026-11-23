@@ -11,7 +11,7 @@ function FixAction({ check, projectId, busy, onOpenUpgrade }: { check: Scorecard
   if (check.status === 'pass') return null
   switch (check.fix.action) {
     case 'open_upgrade':
-      return <button type="button" disabled={busy} onClick={onOpenUpgrade} aria-label={`Create an upgrade proposal to fix ${check.id}`} data-testid="fix-open-upgrade">Create upgrade proposal</button>
+      return <button type="button" disabled={busy} onClick={onOpenUpgrade} aria-label={`Create upgrade proposal to fix ${check.id}`} data-testid="fix-open-upgrade">Create upgrade proposal</button>
     case 'regenerate':
       return <a href={`#/p/${projectId}/generate`} data-testid="fix-regenerate">Regenerate and download the project</a>
     case 'redeclare_hook':
@@ -127,7 +127,7 @@ function Detail({ projectId, id, onChanged }: { projectId: string; id: string; o
           <p className="hstack">
             <button type="button" onClick={() => saveBlob(new Blob([patch.v], { type: 'text/x-diff' }), patchFilename(p.id))} data-testid="download-patch">Download patch</button>
             <code data-testid="apply-command">{applyCommand(p.id)}</code>
-            <button type="button" className="outline" onClick={() => void copy(applyCommand(p.id))} aria-label="Copy the git apply command" data-testid="copy-command">Copy command</button>
+            <button type="button" className="outline" onClick={() => void copy(applyCommand(p.id))} aria-label="Copy command for git apply" data-testid="copy-command">Copy command</button>
           </p>
           <p role="status" aria-live="polite">{copied && <small data-testid="copied">{copied}</small>}</p>
         </>

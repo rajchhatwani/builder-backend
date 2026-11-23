@@ -110,7 +110,7 @@ function ControlsPanel({ projectId, refresh }: { projectId: string; refresh: num
                       <td>
                         {c.reason}
                         {c.status === 'unmet' && (
-                          <> <button type="button" className="ghost small" onClick={goSettings} data-testid="goto-settings" aria-label={`Open the compliance settings to fix ${c.id}`}>Switch it on in Settings</button></>
+                          <> <button type="button" className="ghost small" onClick={goSettings} data-testid="goto-settings" aria-label={`Switch it on in Settings to fix ${c.id}`}>Switch it on in Settings</button></>
                         )}
                       </td>
                       <td>{c.evidence.length === 0 ? <span className="muted">None</span> : <ul>{c.evidence.map((e, i) => <li key={i}>{evidenceLabel(e)}</li>)}</ul>}</td>

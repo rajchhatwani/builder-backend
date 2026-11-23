@@ -1,21 +1,16 @@
-/** F1-2: Home readiness board (new shell only). Parity of issue messages with the old Overview, the one
+/** F1-2: Home readiness board (new shell only). The
  *  Next step, "Not now" for sign-in, rail badges from the same status call, error + retry, screenshots + axe.
  *  Refresh baselines with `npx playwright test e2e/home.spec.ts --update-snapshots`. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { createProjectViaApi, importBrokenInvoiceFlow, importInvoiceFlow, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
-
 const importClean = importInvoiceFlow
 const importBroken = importBrokenInvoiceFlow
 
 const maskOf = (page: Page) => [page.locator('nav[data-shell="v2"] .muted, nav[data-shell="v2"] [data-testid=shell-project]')]
 
-test('home: issue messages are the same as the old Overview (parity), board shows banner, one next step, 13 sections', async ({ page, request }, info) => {
+test('home: board shows banner, one next step, 13 sections', async ({ page, request }, info) => {
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Broken Invoices')
   await importBroken(api, id)
@@ -63,16 +58,6 @@ test('home: issue messages are the same as the old Overview (parity), board show
     .evaluateAll((els) => els.map((e) => (e.firstChild?.textContent ?? '').trim()))
   expect(boardMessages).toEqual(status.issues.map((i: { message: string }) => i.message))
 
-  // PARITY: the old Overview (flag off) lists the very same messages
-  await page.evaluate(() => localStorage.setItem('ui.shell', 'v1'))
-  await page.reload()
-  await expect(page.locator('nav[data-shell="v2"]')).toHaveCount(0)
-  await expect(page.locator('.issue-list li').first()).toBeVisible()
-  const oldMessages = await page
-    .locator('.issue-list li > span')
-    .evaluateAll((els) => els.map((e) => (e.firstChild?.textContent ?? '').trim()))
-  expect(oldMessages.length).toBeGreaterThanOrEqual(2)
-  expect(boardMessages).toEqual(oldMessages)
   watch.assertNone()
 })
 

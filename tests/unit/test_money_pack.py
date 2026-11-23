@@ -144,6 +144,8 @@ def test_packless_specs_render_no_money_code_and_keep_their_hash() -> None:
     # hash as computed before the `packs` field existed: dump without it
     dump = spec.model_dump(mode="json")
     dump.pop("packs")
+    for later in ("regulated", "compliance", "api_platform"):  # blocks added after packs; None = omitted from the hash
+        assert dump.pop(later) is None
     import hashlib
 
     legacy = hashlib.sha256(json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")).hexdigest()

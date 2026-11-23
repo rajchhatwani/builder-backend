@@ -4,16 +4,12 @@
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signInViaUi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-const V2 = { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] }
-test.use({ storageState: V2 })
-
 test('a change in one window appears in the other without reload', async ({ page, browser, request }) => {
   test.setTimeout(90_000)
   const api = await signedInUser(page, request) // window A
   const id = await createProjectViaApi(api, 'Realtime Project')
 
-  const ctxB = await browser.newContext({ storageState: V2, viewport: { width: 1280, height: 800 } })
+  const ctxB = await browser.newContext({ viewport: { width: 1280, height: 800 } })
   const pageB = await ctxB.newPage()
   try {
     await signInViaUi(pageB, api.email)

@@ -40,6 +40,8 @@ def test_spec_hash_is_unchanged_without_the_block() -> None:
     dump = spec.model_dump(mode="json")
     dump.pop("regulated")
     dump.pop("packs")
+    dump.pop("compliance")
+    dump.pop("api_platform")
     import hashlib
 
     canonical = json.dumps(dump, sort_keys=True, separators=(",", ":"), ensure_ascii=True)

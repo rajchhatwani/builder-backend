@@ -113,7 +113,8 @@ dialog form {
   border-block-end: 2px solid transparent;
   margin-block-end: -2px;
   background: none;
-  color: var(--muted-foreground);
+  /* muted-foreground on a muted tint is 4.39:1 (axe needs 4.5); mix toward the foreground */
+  color: color-mix(in srgb, var(--muted-foreground) 80%, var(--foreground));
   font-weight: var(--font-medium);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
@@ -259,6 +260,10 @@ details.auth-section > .auth-section-body {
   color: var(--muted-foreground);
 }
 
+.muted > code {
+  color: var(--foreground); /* inline code inside muted text failed contrast (axe) */
+}
+
 .small-text {
   font-size: var(--text-7);
 }
@@ -267,33 +272,6 @@ details.auth-section > .auth-section-body {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-}
-
-.sidebar-back {
-  display: block;
-  padding: var(--space-2) var(--space-3);
-  font-size: var(--text-7);
-  color: var(--muted-foreground);
-  text-decoration: none;
-}
-
-.sidebar-back:hover {
-  color: var(--foreground);
-}
-
-.sidebar-project {
-  padding: var(--space-1) var(--space-3) var(--space-3);
-  overflow-wrap: anywhere;
-}
-
-/* Org breadcrumb above the project name (§8.1). */
-.sidebar-org {
-  display: block;
-  text-decoration: none;
-}
-
-.sidebar-org:hover {
-  text-decoration: underline;
 }
 
 /* Org waiting for deletion, in the sidebar's org switcher. */
@@ -851,7 +829,7 @@ body.is-viewing .wb-drawer {
   white-space: nowrap;
 }
 
-/* ── New shell (flag ui.shell=v2) ─────────────────────────────────────────── */
+/* ── Project shell ─────────────────────────────────────────── */
 [data-topnav][data-shell='v2'] .branding {
   display: flex;
   align-items: center;

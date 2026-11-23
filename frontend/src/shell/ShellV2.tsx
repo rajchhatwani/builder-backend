@@ -26,7 +26,7 @@ export const isPaletteKey = (e: Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'key
 export const anotherModalOpen = (doc: Document) =>
   doc.querySelector('dialog[open], [role="dialog"], [aria-modal="true"]') !== null
 
-/** New shell (flag ui.shell=v2): top bar, grouped rail, Ctrl+K. Uses the same Oat page frame as the
+/** Project shell: top bar, grouped rail, Ctrl+K. Uses the same Oat page frame as the
  *  old Layout (nav[data-topnav], aside[data-sidebar], main); the old panels are mounted unchanged as children. */
 export function ShellV2({ project, section, problems, on = {}, onShare, org, children }: Props) {
   const { theme, toggle } = useTheme()

@@ -4,10 +4,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 async function axeClean(page: Page, name: string) {
   const axe = await new AxeBuilder({ page }).analyze()
@@ -60,6 +56,8 @@ test('notifications: empty, example, edit, preview, validation, save, matrix, lo
   // example mode never writes to the project (a real block is saved with PUT /behavior/notifications)
   await expect(page.getByRole('alert').filter({ hasText: 'nothing is saved' })).toBeVisible()
 
+  // a failed save leaves the draft dirty and locks the channel select: discard first
+  await page.getByRole('button', { name: 'Discard changes' }).click()
   // another channel has no subject
   await page.getByLabel('Channel').selectOption('sms')
   await expect(page.getByLabel('Subject')).toHaveCount(0)

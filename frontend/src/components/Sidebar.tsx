@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { api } from '../api/client'
 import { notifyOrgsChanged, onOrgsChanged } from '../api/orgEvents'
-import type { Organization, Project } from '../api/types'
+import type { Organization } from '../api/types'
 import { NewOrgDialog } from './NewOrgDialog'
 import { useUi } from './Ui'
 
@@ -19,7 +19,7 @@ export type Section =
   | 'integrations'
   | 'generate'
 
-/** Pages that exist only in the new shell (flag ui.shell=v2); the old sidebar never lists them. */
+/** Pages beyond the twelve classic sections. */
 export type V2Section = 'machines' | 'rules' | 'permissions' | 'specdiff' | 'import' | 'customfields' | 'events' | 'apiedge' | 'hookeffects' | 'notiftypes' | 'settings' | 'history' | 'hooks' | 'seed' | 'forms' | 'timeline' | 'notifications' | 'webhooks' | 'providers' | 'jobs' | 'workers' | 'workflows' | 'traces' | 'metrics' | 'suite' | 'intake' | 'plan' | 'build' | 'approvals' | 'see' | 'search' | 'dependencies' | 'ledger' | 'map' | 'bookings' | 'agentactions' | 'compliance' | 'apikeys' | 'apps' | 'upgrades' | 'invoices' | 'payouts' | 'reconciliation' | 'bookingadmin' | 'ledgersettings' | 'currencysettings' | 'reconsettings' | 'invoicingsettings' | 'bookingsettings' | 'places' | 'matching' | 'prediction' | 'routing' | 'aiusage' | 'knowledge' | 'evals' | 'agentruns' | 'geosettings' | 'locationsettings' | 'matchingsettings' | 'predictionsettings' | 'aigatewaysettings' | 'aidocssettings' | 'knowledgesettings' | 'agentssettings' | 'evalssettings'
 
 export const SECTIONS: { id: Section; label: string; icon: ReactNode }[] = [
@@ -298,62 +298,6 @@ export function ProjectsSidebar() {
           window.location.hash = link(`/org/${encodeURIComponent(org.slug)}`)
         }}
       />
-    </nav>
-  )
-}
-
-interface ProjectSidebarProps {
-  project: Project
-  section: Section | V2Section
-  /** Number of problems per section, shown as a badge. */
-  problems: Partial<Record<Section, number>>
-  /** Sections that are switched on, shown with a dot. */
-  on?: Partial<Record<Section, boolean>>
-  /** Opens the dialog listing who can access the project. */
-  onShare?: () => void
-  /** The organization the project belongs to, shown as a breadcrumb (§8.1). */
-  org?: Organization | null
-}
-
-/** Sidebar inside a project: one entry per step of building the backend. */
-export function ProjectSidebar({ project, section, problems, on = {}, onShare, org }: ProjectSidebarProps) {
-  return (
-    <nav>
-      <a className="sidebar-back" href={link('/')}>
-        ← All projects
-      </a>
-      <div className="sidebar-project">
-        {org && (
-          <a
-            className="muted small-text sidebar-org"
-            href={link(`/org/${encodeURIComponent(org.slug)}/projects`)}
-            title="Organization this project belongs to"
-          >
-            {orgLabel(org)} ›
-          </a>
-        )}
-        <strong>{project.name}</strong>
-        {onShare && (
-          <button className="ghost small" onClick={onShare} title="Who can access this project">
-            Share
-          </button>
-        )}
-      </div>
-      <ul>
-        {SECTIONS.map((s) => (
-          <li key={s.id}>
-            <a
-              href={link(`/p/${project.id}/${s.id}`)}
-              aria-current={section === s.id ? 'page' : undefined}
-            >
-              <Icon>{s.icon}</Icon>
-              <span>{s.label}</span>
-              {!!problems[s.id] && <span className="count-badge">{problems[s.id]}</span>}
-              {!problems[s.id] && on[s.id] && <span className="on-dot" title="On" />}
-            </a>
-          </li>
-        ))}
-      </ul>
     </nav>
   )
 }

@@ -1,18 +1,13 @@
 /** F2-2 / F2-3: Connect pages (payments, file uploads, provider integrations, webhooks) and Operate pages
  *  (jobs and schedules, workers, workflows, observability, deploy) in the new shell.
  *  NOT run by its author (ATLAS runs the Playwright stack). No screenshot baselines are asserted.
- *  All new pages follow the single flag ui.shell=v2. The webhooks live panel needs VITE_PREVIEW_API_ORIGIN; this spec accepts
- *  either state (panel, or the "no preview API" note) because the stack may or may not set it. */
+ *  The webhooks live panel needs VITE_PREVIEW_API_ORIGIN, which stack.sh always sets. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test, type Page } from '@playwright/test'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-// One flag (ui.shell=v2) turns every new page on.
-const flags = [{ name: 'ui.shell', value: 'v2' }]
-test.use({ storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: flags }] } })
 
 const FIXTURES = fileURLToPath(new URL('../../tests/fixtures/specs/', import.meta.url))
 /** The populated pages are fed by answering GET /spec and GET /behavior/<block> with the blocks of a neutral fixture
@@ -74,7 +69,7 @@ test('connect: webhooks and provider integrations as editable block forms, keybo
   await expect(page.getByRole('heading', { level: 1, name: 'Webhooks' })).toBeVisible()
   await expect.poll(() => formValues(page)).toContain('order.created')
   await expect.poll(() => formValues(page)).toContain('payments')
-  await expect(page.getByTestId('wh-live').or(page.getByTestId('wh-no-origin'))).toBeVisible()
+  await expect(page.getByTestId('wh-live')).toBeVisible() // stack.sh builds with VITE_PREVIEW_API_ORIGIN
   await axeBothThemes(page, `${info.project.name} webhooks`)
 
   await open(page, id, 'providers', 'Provider integrations')
@@ -93,10 +88,8 @@ test('connect: webhooks and provider integrations as editable block forms, keybo
   await expect(page.getByRole('heading', { level: 1, name: 'Webhooks' })).toBeVisible()
 
   // the live panel (when a preview API exists) starts closed: a password field for the token, never prefilled
-  if (await page.getByTestId('wh-live').count()) {
-    await expect(page.getByLabel('Admin bearer token')).toHaveAttribute('type', 'password')
-    await expect(page.getByLabel('Admin bearer token')).toHaveValue('')
-  }
+  await expect(page.getByLabel('Admin bearer token')).toHaveAttribute('type', 'password')
+  await expect(page.getByLabel('Admin bearer token')).toHaveValue('')
 
   // the browser keeps no secret: nothing credential-like in storage
   const stored = await page.evaluate(() => JSON.stringify({ ...localStorage }) + JSON.stringify({ ...sessionStorage }))
@@ -170,15 +163,17 @@ test('operate: jobs, workers and workflows from the spec; observability and depl
   await axeNow(page, `${info.project.name} observability`)
   // never saved: Enabled is off and the other fields are hidden (show-when) until it is ticked
   await page.getByLabel('Enabled').check()
-  await page.getByLabel('Service name').fill('orders-api')
+  await page.locator('[data-schema-form]').getByLabel('Service name').fill('orders-api')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByTestId('save-note')).toContainText('Saved (version')
   expect((await (await api.get(`/projects/${id}/observability`)).json()).service_name).toBe('orders-api')
 
   // deploy form (versioned)
   await open(page, id, 'deployment', 'Deploy')
+  // deployment opens on Guided setup (the v1 layout); the generated form is the other tab
+  await page.getByRole('tab', { name: 'Settings form' }).click()
   await expect(page.locator('[data-schema-form]')).toBeVisible()
-  await page.getByLabel('Region').fill('eu-west-1')
+  await page.locator('[data-schema-form]').getByLabel('Region').fill('eu-west-1')
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByTestId('save-note')).toContainText('Saved (version')
   expect((await (await api.get(`/projects/${id}/deployment`)).json()).region).toBe('eu-west-1')

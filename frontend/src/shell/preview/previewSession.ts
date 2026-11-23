@@ -13,7 +13,8 @@ export interface PreviewSession {
   /** Raw preview state (running, sleeping, ...) for messages; null when there is no preview. */
   previewState: string | null
   error: string | null
-  request: (method: string, path: string, body?: unknown) => Promise<SessionResponse>
+  /** `opts.bearer` replaces the session's app login for this one call (a string), or sends no Authorization (null). */
+  request: (method: string, path: string, body?: unknown, opts?: { bearer?: string | null }) => Promise<SessionResponse>
   start: () => Promise<void>
   /** Resolve to null on success or a readable message. */
   signIn: (email: string, password: string) => Promise<string | null>

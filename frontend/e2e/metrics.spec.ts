@@ -5,10 +5,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { API, createProjectViaApi, importInvoiceFlow, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 const CSV = 'invoice_no,amount,po_amount,status\nINV-1,100.10,100,draft\nINV-2,200.20,200,draft\nINV-3,300.30,300,draft\n'
 const MAPPING = { invoice_no: 'invoice_no', amount: 'amount', po_amount: 'po_amount', status: 'status' }

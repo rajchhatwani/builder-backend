@@ -1,18 +1,14 @@
-/** F1-1: the new shell (flag ui.shell=v2). Rail groups, Ctrl+K, deep links, screenshots + axe.
- *  Baselines here are for the NEW shell only; the old-shell ones live in visual.spec.ts.
+/** F1-1: the project shell. Rail groups, Ctrl+K, deep links, screenshots + axe.
  *  Refresh with `npx playwright test e2e/shell-v2.spec.ts --update-snapshots`. */
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { SECTION_IDS, createProjectViaApi, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
+const GROUPS = ['Build with AI', 'Build', 'Secure', 'Connect', 'Operate', 'Ship']
+/** Links per rail group, from src/shell/groups.ts (CP-6I): 1+5+13+6+26+24+3 = 78 sections. A section added or removed there must change this too. */
+const RAIL_COUNTS: Record<string, number> = { home: 1, ai: 5, build: 13, secure: 6, connect: 26, operate: 24, ship: 3 }
 
-const GROUPS = ['Build', 'Secure', 'Connect', 'Operate', 'Ship']
-
-test('new shell: grouped rail, deep links, Ctrl+K, flag off restores the old shell', async ({ page, request }, info) => {
+test('shell: grouped rail, deep links, Ctrl+K', async ({ page, request }, info) => {
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Shell Project')
   const watch = watchProblems(page)
@@ -25,8 +21,13 @@ test('new shell: grouped rail, deep links, Ctrl+K, flag off restores the old she
     for (const g of GROUPS) await expect(rail.getByText(g, { exact: true })).toBeVisible()
     await expect(rail.getByRole('link', { name: 'Map' })).toBeVisible()
   }
-  // every old section id (plus the v2-only State machines page) is reachable from the rail and keeps its deep link
-  expect(await rail.locator('a[href^="#/p/"]').count()).toBe(SECTION_IDS.length + 40) // (+7 in Cycle 5: Search, Ledger, Map, Bookings, Documents, AI actions + one more CP-5V/5A page) + FX-10 coverage pages; B1-043 de-duplicated one rail entry (5, CP-4F3), Forms preview (F2-1), State machines (F1-4), Settings, Change history (F1-6A), Hooks (F1-5), Seed data (F1-6B), Rules (F1-3), History timeline (F2-4), Notifications (F2-6), Webhooks, Provider integrations, Jobs, Workers, Workflows (F2-2/F2-3), Describe your app, Review the plan, Build progress (F3), Approvals, See it work (F3-4, F3-7), Access matrix (F4-4), Import (F4-1), Traces, Visual spec diff, Metrics & reports, Suite identity (CP-4E), Compliance (CP-6C), API keys and Apps (CP-6D), Upgrades (CP-6E)
+  // every section (the twelve original ids plus all later pages) is reachable from the rail and keeps its deep link
+  expect(SECTION_IDS).toHaveLength(12)
+  for (const [group, n] of Object.entries(RAIL_COUNTS)) {
+    await expect(rail.locator(`[data-rail-group=${group}] a[href^="#/p/"]`), `rail group ${group}`).toHaveCount(n)
+  }
+  await expect(rail.locator('a[href^="#/p/"]')).toHaveCount(Object.values(RAIL_COUNTS).reduce((a, b) => a + b, 0))
+  for (const sec of SECTION_IDS) await expect(rail.locator(`a[href="#/p/${id}/${sec}"]`), `rail link ${sec}`).toHaveCount(1)
 
   await page.goto(`/#/p/${id}/model`)
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
@@ -45,15 +46,9 @@ test('new shell: grouped rail, deep links, Ctrl+K, flag off restores the old she
   await expect(page.getByRole('combobox', { name: 'Search commands' })).toHaveCount(0)
 
   watch.assertNone()
-
-  // turning the flag off brings the old shell back unchanged
-  await page.evaluate(() => localStorage.setItem('ui.shell', 'v1'))
-  await page.reload()
-  await expect(page.locator('nav[data-shell="v2"]')).toHaveCount(0)
-  await expect(page.getByRole('link', { name: '← All projects' })).toBeVisible()
 })
 
-test('new shell: screenshots and axe', async ({ page, request }, info) => {
+test('shell: screenshots and axe', async ({ page, request }, info) => {
   test.setTimeout(120_000)
   const api = await signedInUser(page, request)
   const id = await createProjectViaApi(api, 'Shell Visual')

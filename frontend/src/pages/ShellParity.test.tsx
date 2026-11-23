@@ -82,7 +82,7 @@ afterEach(async () => {
 const src = (rel: string) => readFileSync(join(process.cwd(), 'src', rel), 'utf8')
 const apiCalls = (text: string) => new Set([...text.matchAll(/\bapi\.([a-zA-Z]+)\(/g)].map((m) => m[1]))
 
-describe('shell parity (F6-8): the old panels are reachable in v2', () => {
+describe('shell parity (F6-8): the old panels are reachable in the shell', () => {
   const panels: Record<string, string> = {
     OverviewPanel: 'components/OverviewPanel.tsx',
     PaymentsPanel: 'components/PaymentsPanel.tsx',
@@ -92,29 +92,19 @@ describe('shell parity (F6-8): the old panels are reachable in v2', () => {
     DeploymentPanel: 'components/DeploymentPanel.tsx',
   }
 
-  it('every old panel is rendered in a v2 branch of ProjectWorkspace, and every api method it calls is called from a v2 page', () => {
+  it('every old panel is rendered by ProjectWorkspace, and every api method it calls is reachable from the shell', () => {
     const ws = src('pages/ProjectWorkspace.tsx')
-    // v2 branches = lines of JSX gated by `v2` or inside the v2 tab blocks; the lazy form pages are v2 only.
-    const v2Blocks = ws.split(/\n(?=\s{6}\{)/).filter((b) => /\bv2\b/.test(b.split('\n')[0]) && !/!v2/.test(b.split('\n')[0]))
-    const v2Text = v2Blocks.join('\n')
+    const v2Text = ws
     const reachable = new Set<string>()
     for (const [name, file] of Object.entries(panels)) {
-      expect(v2Text, `${name} rendered in a v2 block`).toContain(`<${name}`)
+      expect(v2Text, `${name} rendered by ProjectWorkspace`).toContain(`<${name}`)
       for (const m of apiCalls(src(file))) reachable.add(m)
     }
     expect(reachable.size).toBeGreaterThan(12)
-    // Each method is reachable because the panel component is rendered by a v2 block (checked above); also assert the
+    // Each method is reachable because the panel component is rendered by ProjectWorkspace (checked above); also assert the
     // method names the owner listed as known gaps are among them.
     for (const m of ['switchPayments', 'switchStorage', 'listFields', 'deploymentIssues', 'observabilityIssues', 'documentsIssues', 'documentsLibrary', 'previewDocument']) {
       expect(reachable.has(m), m).toBe(true)
-    }
-  })
-
-  it('no v2 page tells the user to go back to the classic shell', () => {
-    for (const f of ['shell/connect/ConfigPages.tsx', 'shell/home/HomePage.tsx', 'pages/ProjectWorkspace.tsx']) {
-      const text = src(f)
-      const v2Only = f === 'pages/ProjectWorkspace.tsx' ? text.replace(/[^\n]*classic[^\n]*\n/g, (l) => (/\/\/|\*/.test(l) ? '' : l)) : text
-      expect(v2Only.toLowerCase(), f).not.toContain('use the classic shell')
     }
   })
 
@@ -135,7 +125,7 @@ describe('shell parity (F6-8): the old panels are reachable in v2', () => {
     })
   }
 
-  it('deployment opens on the Guided setup (v1 layout) and keeps the form one tab away', async () => {
+  it('deployment opens on the Guided setup and keeps the form one tab away', async () => {
     await mount('deployment')
     expect(visibleH1()[0]?.textContent).toBe('Deploy')
     expect([...host.querySelectorAll('.tab-btn')].find((b) => b.getAttribute('aria-selected') === 'true')?.textContent).toBe('Guided setup')

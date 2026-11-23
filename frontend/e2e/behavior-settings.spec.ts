@@ -6,10 +6,6 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createProjectViaApi, signedInUser, watchProblems, type Api } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 const FIXTURES = fileURLToPath(new URL('../../tests/fixtures/specs/', import.meta.url))
 
 async function importFixture(api: Api, projectId: string, file: string) {
@@ -32,7 +28,7 @@ test('settings: edit a setting, a sequence and a list, save, reload, still there
   const watch = watchProblems(page)
 
   await page.goto(`/#/p/${id}/overview`)
-  if (info.project.name === 'desktop') await page.locator('aside[data-sidebar]').getByRole('link', { name: 'Settings' }).click()
+  if (info.project.name === 'desktop') await page.locator('aside[data-sidebar]').getByRole('link', { name: 'Settings', exact: true }).click()
   else await page.goto(`/#/p/${id}/settings`)
   await expect(page).toHaveURL(new RegExp(`#/p/${id}/settings$`))
   await expect(page.getByRole('heading', { level: 1, name: 'Settings' })).toBeVisible()

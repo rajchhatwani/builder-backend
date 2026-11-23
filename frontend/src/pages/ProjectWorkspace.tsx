@@ -24,14 +24,13 @@ import { PaymentsPanel } from '../components/PaymentsPanel'
 import { StoragePanel } from '../components/StoragePanel'
 import { Layout } from '../components/Layout'
 import { MembersDialog } from '../components/MembersDialog'
-import { OverviewPanel, sectionForIssue } from '../components/OverviewPanel'
+import { OverviewPanel } from '../components/OverviewPanel'
 import { AuthorizationPanel } from '../components/AuthorizationPanel'
 import { DeploymentPanel } from '../components/DeploymentPanel'
 import { DocumentsPanel } from '../components/DocumentsPanel'
 import { ObservabilityPanel } from '../components/ObservabilityPanel'
-import { ProjectSidebar, ProjectsSidebar, type Section } from '../components/Sidebar'
+import { ProjectsSidebar, type Section } from '../components/Sidebar'
 import { useQueryClient } from '@tanstack/react-query'
-import { shellV2Enabled } from '../shell/flag'
 import { railProblems } from '../shell/home/homeLogic'
 import { statusKey, useProjectStatus } from '../shell/home/useProjectStatus'
 import { ShellV2 } from '../shell/ShellV2'
@@ -58,7 +57,7 @@ const ApiEdgePage = lazy(() => import('../shell/connect/SpecBlockPages').then((m
 const HookEffectsPage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.HookEffectsPage })))
 const NotificationTypesPage = lazy(() => import('../shell/connect/SpecBlockPages').then((m) => ({ default: m.NotificationTypesPage })))
 const ImportPage = lazy(() => import('../shell/import/ImportPage').then((m) => ({ default: m.ImportPage })))
-// F2-2 / F2-3 pages: own chunks. All sit behind the single flag ui.shell=v2.
+// F2-2 / F2-3 pages: own chunks. 
 const PaymentsFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.PaymentsFormPage })))
 const StorageFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.StorageFormPage })))
 const ObservabilityFormPage = lazy(() => import('../shell/connect/ConfigPages').then((m) => ({ default: m.ObservabilityFormPage })))
@@ -68,7 +67,7 @@ const ProvidersPage = lazy(() => import('../shell/connect/ProvidersPage').then((
 const JobsPage = lazy(() => import('../shell/operate/JobsPage').then((m) => ({ default: m.JobsPage })))
 const WorkersPage = lazy(() => import('../shell/operate/WorkersPage').then((m) => ({ default: m.WorkersPage })))
 const WorkflowsPage = lazy(() => import('../shell/operate/WorkflowsPage').then((m) => ({ default: m.WorkflowsPage })))
-// F3 pages (intake, plan review, build view): own chunk, same single flag.
+// F3 pages (intake, plan review, build view): own chunk, 
 const IntakePage = lazy(() => import('../shell/ai/IntakePage').then((m) => ({ default: m.IntakePage })))
 const PlanReviewPage = lazy(() => import('../shell/ai/PlanReviewPage').then((m) => ({ default: m.PlanReviewPage })))
 const ApprovalsPage = lazy(() => import('../shell/ai/ApprovalsPage').then((m) => ({ default: m.ApprovalsPage })))
@@ -172,13 +171,10 @@ function PageTitle({ title, children }: { title: string; children: string }) {
   )
 }
 
-/** Old shell by default; the new one when flag ui.shell=v2 is on. The panels inside are the same either way. */
 function Frame({
-  v2,
   children,
   ...props
 }: {
-  v2: boolean
   project: Project
   section: AnySection
   problems: Partial<Record<AnySection, number>>
@@ -187,8 +183,7 @@ function Frame({
   org: Organization | null
   children: ReactNode
 }) {
-  if (v2) return <ShellV2 {...props}>{children}</ShellV2>
-  return <Layout sidebar={<ProjectSidebar {...props} />}>{children}</Layout>
+  return <ShellV2 {...props}>{children}</ShellV2>
 }
 
 export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) {
@@ -216,7 +211,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   const [authTab, setAuthTab] = useState<'settings' | 'fields'>('settings')
   const [docTab, setDocTab] = useState<'queue' | 'templates'>('queue')
-  // v2 settings pages: the generated form or the guided setup (the old panel: switch preview, sizing, issues).
+  // Settings pages: the generated form or the guided setup (the old panel: switch preview, sizing, issues).
   // The tab lives in the route hash (?tab=form|guided) so it survives a reload and can be linked to.
   const tabParam = useHashParam('tab')
   const cfgTab = (sec: string): CfgTab => (tabParam === 'form' || tabParam === 'guided' ? tabParam : sec === 'deployment' ? 'guided' : 'form')
@@ -225,9 +220,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
   }
   const org = useProjectOrg(project?.organization_id)
   // New shell only: one status call feeds the rail badges and the Home board (shared Query cache).
-  const v2 = shellV2Enabled()
   const queryClient = useQueryClient()
-  const statusQuery = useProjectStatus(projectId, v2)
+  const statusQuery = useProjectStatus(projectId)
 
   // Newest load wins: a slow answer to an older load must not overwrite (or break) a newer one.
   const loadSeq = useRef(0)
@@ -297,8 +291,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   // Anything that reloads the project data (panel saves, moving between sections) also refreshes the status.
   useEffect(() => {
-    if (v2 && modelVersion > 0) void queryClient.invalidateQueries({ queryKey: statusKey(projectId) })
-  }, [v2, modelVersion, projectId, queryClient])
+    if (modelVersion > 0) void queryClient.invalidateQueries({ queryKey: statusKey(projectId) })
+  }, [modelVersion, projectId, queryClient])
 
   // Auth, role and permission panels save by themselves, so re-check whenever the user moves on.
   useEffect(() => {
@@ -353,15 +347,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
     )
   }
 
-  let problems: Partial<Record<AnySection, number>> = {}
-  if (v2) {
-    problems = railProblems(statusQuery.data)
-  } else {
-    for (const issue of issues ?? []) {
-      const s = sectionForIssue(issue)
-      problems[s] = (problems[s] ?? 0) + 1
-    }
-  }
+  const problems: Partial<Record<AnySection, number>> = railProblems(statusQuery.data)
 
   const keycloakOn = auth?.provider === 'keycloak' && auth.enabled
   const paymentsOn = payments?.enabled === true
@@ -369,7 +355,6 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
 
   return (
     <Frame
-      v2={v2}
       project={project}
       section={section}
       problems={problems}
@@ -378,30 +363,14 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
       org={org}
     >
       {errorBanner}
-      {section === 'overview' && v2 && (
+      {section === 'overview' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <HomePage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'overview' && v2 && (
+      {section === 'overview' && (
         <OverviewPanel
           embedded
-          projectId={project.id}
-          entityCount={entities.length}
-          authEnabled={auth?.enabled ?? false}
-          keycloakOn={keycloakOn}
-          keycloakSaved={keycloak !== null}
-          paymentsOn={paymentsOn}
-          paymentsSaved={payments !== null}
-          storageOn={storageOn}
-          storageSaved={storage !== null}
-          roleCount={roles.length}
-          issues={issues}
-          generationCount={generationCount}
-        />
-      )}
-      {section === 'overview' && !v2 && (
-        <OverviewPanel
           projectId={project.id}
           entityCount={entities.length}
           authEnabled={auth?.enabled ?? false}
@@ -428,7 +397,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <AccessPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'traces' && v2 && (
+      {section === 'traces' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <TracesPage projectId={project.id} />
         </Suspense>
@@ -438,17 +407,17 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <SpecDiffPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'metrics' && v2 && (
+      {section === 'metrics' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <MetricsPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'suite' && v2 && (
+      {section === 'suite' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <SuitePage projectId={project.id} />
         </Suspense>
       )}
-      {v2 && (section === 'events' || section === 'apiedge' || section === 'hookeffects' || section === 'notiftypes') && (
+      {(section === 'events' || section === 'apiedge' || section === 'hookeffects' || section === 'notiftypes') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'events' && <EventsPage projectId={project.id} />}
           {section === 'apiedge' && <ApiEdgePage projectId={project.id} />}
@@ -456,7 +425,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           {section === 'notiftypes' && <NotificationTypesPage projectId={project.id} />}
         </Suspense>
       )}
-      {section === 'customfields' && v2 && (
+      {section === 'customfields' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <CustomFieldsPage projectId={project.id} />
         </Suspense>
@@ -471,17 +440,17 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           <HooksPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'timeline' && v2 && (
+      {section === 'timeline' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <TimelinePage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'notifications' && v2 && (
+      {section === 'notifications' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <NotificationsPage projectId={project.id} />
         </Suspense>
       )}
-      {section === 'forms' && v2 && (
+      {section === 'forms' && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           <FormsPreviewPage />
         </Suspense>
@@ -540,7 +509,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'payments' && v2 && (
+      {section === 'payments' && (
         <>
           <SubTabs tabs={CFG_TABS} value={cfgTab('payments')} onChange={setCfgTab} />
           <div hidden={cfgTab('payments') !== 'form'}>
@@ -558,23 +527,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           </div>
         </>
       )}
-      {section === 'payments' && !v2 && (
-        <>
-          <PageTitle title="Payments">
-            Take card payments through a hosted checkout, with refunds, an audit trail and servers sized for your traffic.
-          </PageTitle>
-          <PaymentsPanel
-            project={project}
-            entities={entities}
-            roles={roles}
-            authEnabled={auth?.enabled ?? false}
-            issues={issues}
-            onChanged={load}
-          />
-        </>
-      )}
 
-      {section === 'storage' && v2 && (
+      {section === 'storage' && (
         <>
           <SubTabs tabs={CFG_TABS} value={cfgTab('storage')} onChange={setCfgTab} />
           <div hidden={cfgTab('storage') !== 'form'}>
@@ -591,21 +545,6 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
               <StoragePanel project={project} roles={roles} authEnabled={auth?.enabled ?? false} issues={issues} onChanged={load} />
             </>
           </div>
-        </>
-      )}
-      {section === 'storage' && !v2 && (
-        <>
-          <PageTitle title="File uploads">
-            Accept files of any type, scanned for malware before they are stored in S3 or a MinIO-compatible bucket, with
-            role-based access and an audit trail.
-          </PageTitle>
-          <StoragePanel
-            project={project}
-            roles={roles}
-            authEnabled={auth?.enabled ?? false}
-            issues={issues}
-            onChanged={load}
-          />
         </>
       )}
 
@@ -626,7 +565,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'observability' && v2 && (
+      {section === 'observability' && (
         <>
           <SubTabs tabs={CFG_TABS} value={cfgTab('observability')} onChange={setCfgTab} />
           <div hidden={cfgTab('observability') !== 'form'}>
@@ -644,16 +583,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           </div>
         </>
       )}
-      {section === 'observability' && !v2 && (
-        <>
-          <PageTitle title="Observability">
-            Traces, metrics and trace-correlated logs from your generated backend, through OpenTelemetry, with secrets kept out.
-          </PageTitle>
-          <ObservabilityPanel projectId={project.id} onChanged={load} />
-        </>
-      )}
 
-      {section === 'documents' && v2 && (
+      {section === 'documents' && (
         <SubTabs
           tabs={[
             { id: 'queue', label: 'Review queue' },
@@ -663,15 +594,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           onChange={setDocTab}
         />
       )}
-      {section === 'documents' && v2 && docTab === 'templates' && (
-        <>
-          <PageTitle title="Documents">
-            Generate invoices, receipts, statements, certificates and more as PDFs: ten ready-made templates you can edit, with totals recomputed on the server.
-          </PageTitle>
-          <DocumentsPanel projectId={project.id} onChanged={load} />
-        </>
-      )}
-      {section === 'documents' && !v2 && (
+      {section === 'documents' && docTab === 'templates' && (
         <>
           <PageTitle title="Documents">
             Generate invoices, receipts, statements, certificates and more as PDFs: ten ready-made templates you can edit, with totals recomputed on the server.
@@ -680,7 +603,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </>
       )}
 
-      {section === 'deployment' && v2 && (
+      {section === 'deployment' && (
         <>
           <SubTabs tabs={CFG_TABS} value={cfgTab('deployment')} onChange={setCfgTab} />
           <div hidden={cfgTab('deployment') !== 'form'}>
@@ -698,16 +621,8 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
           </div>
         </>
       )}
-      {section === 'deployment' && !v2 && (
-        <>
-          <PageTitle title="Deploy">
-            GitHub Actions pipelines and Terraform that put your backend on AWS, Azure or Google Cloud, with no stored cloud credentials.
-          </PageTitle>
-          <DeploymentPanel projectId={project.id} onChanged={load} />
-        </>
-      )}
 
-      {v2 && (section === 'webhooks' || section === 'providers' || section === 'jobs' || section === 'workers' || section === 'workflows') && (
+      {(section === 'webhooks' || section === 'providers' || section === 'jobs' || section === 'workers' || section === 'workflows') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'webhooks' && <WebhooksPage projectId={project.id} />}
           {section === 'providers' && <ProvidersPage projectId={project.id} />}
@@ -717,7 +632,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'intake' || section === 'plan' || section === 'build' || section === 'approvals' || section === 'see') && (
+      {(section === 'intake' || section === 'plan' || section === 'build' || section === 'approvals' || section === 'see') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'intake' && <IntakePage projectId={project.id} />}
           {section === 'plan' && <PlanReviewPage projectId={project.id} />}
@@ -727,7 +642,7 @@ export function ProjectWorkspace({ projectId, section }: ProjectWorkspaceProps) 
         </Suspense>
       )}
 
-      {v2 && (section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades' || section === 'invoices' || section === 'payouts' || section === 'reconciliation' || section === 'bookingadmin' || section === 'ledgersettings' || section === 'currencysettings' || section === 'reconsettings' || section === 'invoicingsettings' || section === 'bookingsettings' || section === 'places' || section === 'matching' || section === 'prediction' || section === 'routing' || section === 'aiusage' || section === 'knowledge' || section === 'evals' || section === 'agentruns' || section === 'geosettings' || section === 'locationsettings' || section === 'matchingsettings' || section === 'predictionsettings' || section === 'aigatewaysettings' || section === 'aidocssettings' || section === 'knowledgesettings' || section === 'agentssettings' || section === 'evalssettings') && (
+      {(section === 'search' || section === 'dependencies' || section === 'ledger' || section === 'map' || section === 'bookings' || section === 'documents' || section === 'agentactions' || section === 'compliance' || section === 'apikeys' || section === 'apps' || section === 'upgrades' || section === 'invoices' || section === 'payouts' || section === 'reconciliation' || section === 'bookingadmin' || section === 'ledgersettings' || section === 'currencysettings' || section === 'reconsettings' || section === 'invoicingsettings' || section === 'bookingsettings' || section === 'places' || section === 'matching' || section === 'prediction' || section === 'routing' || section === 'aiusage' || section === 'knowledge' || section === 'evals' || section === 'agentruns' || section === 'geosettings' || section === 'locationsettings' || section === 'matchingsettings' || section === 'predictionsettings' || section === 'aigatewaysettings' || section === 'aidocssettings' || section === 'knowledgesettings' || section === 'agentssettings' || section === 'evalssettings') && (
         <Suspense fallback={<p className="empty-state">Loading…</p>}>
           {section === 'search' && <SearchPage projectId={project.id} />}
           {section === 'dependencies' && <DependenciesPage projectId={project.id} />}

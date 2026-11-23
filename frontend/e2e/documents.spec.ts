@@ -4,11 +4,8 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, signedInUser, watchProblems } from './helpers'
-import { V2_STATE, mockPreview } from './preview-mock'
+import { BEARER, SESSION, mockPreviewSession, signInPreview } from './preview-mock'
 
-test.use({ storageState: V2_STATE })
-
-const TOKEN = 'e2e-documents-' + 'token-1'
 const TEXT = 'Invoice No: INV-0042\nTotal due: 1,250.00 USD\nDate: 2026-03-01'
 const at = (quote: string) => ({ page: 1, start: TEXT.indexOf(quote), end: TEXT.indexOf(quote) + quote.length, quote })
 
@@ -24,7 +21,7 @@ test('documents: correct a low-confidence field, approve the document', async ({
   ]
   const doc = { id: 'd1', kind: 'invoice', title: 'Invoice ACME 0042', status: 'needs_review', call_id: null, reject_reason: null, content: TEXT, fields }
   const summary = () => ({ id: doc.id, kind: doc.kind, title: doc.title, status: doc.status, fields: doc.fields })
-  const seen = await mockPreview(page, (r) => {
+  const seen = await mockPreviewSession(page, id, (r) => {
     if (r.method === 'GET' && r.path === '/ai/documents') {
       const st = new URLSearchParams(r.search).get('status')
       const items = doc.status === st ? [summary()] : []
@@ -47,10 +44,8 @@ test('documents: correct a low-confidence field, approve the document', async ({
 
   await page.goto(`/#/p/${id}/documents`)
   await expect(page.getByTestId('documents-page')).toBeVisible()
-  await expect(page.getByTestId('documents-notoken')).toBeVisible()
   expect(seen).toHaveLength(0)
-  await page.getByTestId('documents-token').fill(TOKEN)
-  await page.getByTestId('documents-load').click()
+  await signInPreview(page)
 
   await expect(page.getByTestId('documents-live')).toHaveText('1 Needs review document, showing 1 to 1.')
   expect(seen.find((s) => s.path === '/ai/documents')!.search).toBe('?status=needs_review&limit=20&offset=0')
@@ -91,7 +86,7 @@ test('documents: correct a low-confidence field, approve the document', async ({
   await page.getByTestId('status-filter').selectOption('approved')
   await expect(page.getByTestId('document-row-d1')).toBeVisible()
   expect(seen.some((s) => s.path === '/ai/documents' && s.search.startsWith('?status=approved'))).toBe(true)
-  expect(seen.every((s) => s.auth === `Bearer ${TOKEN}` && !s.search.includes(TOKEN))).toBe(true)
+  expect(seen.every((s) => s.auth === BEARER && s.previewToken === SESSION.previewToken && !s.search.includes(SESSION.jwt))).toBe(true)
 
   const axe = await new AxeBuilder({ page }).include('[data-testid="documents-page"]').analyze()
   expect(axe.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target.join(' ')).join(' | ')}`), 'axe on the documents queue').toEqual([])

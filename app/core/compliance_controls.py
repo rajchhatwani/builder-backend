@@ -411,6 +411,18 @@ CONTROLS: tuple[Control, ...] = (
 )
 
 
+def _test_dict(ref: TestRef, spec: Spec) -> dict[str, str]:
+    """The catalogue names the per-entity generated tests after the `customers` table; the generator names them after
+    each entity's own table, so point the reference at a table the spec really has (a clinic has `patients`)."""
+    out = ref.as_dict()
+    if ref.where == GENERATED and "_customers_" in ref.name and spec.auth is not None:
+        gated = {p.entity for p in spec.auth.permissions}
+        table = next((e.table_name for e in spec.entities if e.name in gated), None)
+        if table:
+            out["name"] = ref.name.replace("_customers_", f"_{table}_")
+    return out
+
+
 def evaluate(control: Control, spec: Spec) -> dict[str, Any]:
     status, reason = control.check(spec) if control.applies(spec) else ("not_applicable", "not applicable to this spec")
     return {
@@ -421,5 +433,5 @@ def evaluate(control: Control, spec: Spec) -> dict[str, Any]:
         "status": status,
         "reason": reason,
         "evidence": control.evidence(spec),
-        "tests": [t.as_dict() for t in control.tests],
+        "tests": [_test_dict(t, spec) for t in control.tests],
     }

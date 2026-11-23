@@ -4,10 +4,6 @@ import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 import { createProjectViaApi, importInvoiceFlow, signedInUser, watchProblems } from './helpers'
 
-const WEB = process.env.E2E_WEB_PORT ?? '5199'
-test.use({
-  storageState: { cookies: [], origins: [{ origin: `http://localhost:${WEB}`, localStorage: [{ name: 'ui.shell', value: 'v2' }] }] },
-})
 
 const CSV = 'invoice_no,amount,po_amount,status\nINV-1,100,100,draft\nINV-2,200,200,draft\nINV-3,abc,300,draft\n'
 

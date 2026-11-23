@@ -59,7 +59,9 @@ async def test_import_creates_rows_and_rejects_the_bad_one(http, people) -> None
 async def test_reupload_is_idempotent_and_in_file_repeats_are_duplicates(http, people) -> None:  # noqa: ANN001
     await upload(http, people["c1"], THREE)
     again = await upload(http, people["c1"], THREE)
-    assert again["counts"] == {"total": 3, "created": 0, "duplicate": 2, "rejected": 1}
+    # customers and admin see different rows, so the import never answers "duplicate" for an existing row (B1-035):
+    # the re-upload creates nothing and every row is rejected with the generic reason
+    assert again["counts"] == {"total": 3, "created": 0, "duplicate": 0, "rejected": 3}
     repeated = await upload(http, people["c1"], "title\nGamma\nGamma\n")
     assert repeated["counts"] == {"total": 2, "created": 1, "duplicate": 1, "rejected": 0}
     assert await titles(http, people["c1"]) == ["Alpha", "Beta", "Gamma"]
@@ -173,7 +175,7 @@ async def test_m2_dedupe_is_exact_beyond_any_scan_cap(http, people, monkeypatch)
     first = await upload(http, people["c1"], body)
     assert first["counts"]["created"] == 10
     again = await upload(http, people["c1"], body + "Extra\n")
-    assert again["counts"] == {"total": 11, "created": 1, "duplicate": 10, "rejected": 0}
+    assert again["counts"] == {"total": 11, "created": 1, "duplicate": 0, "rejected": 10}  # existing rows: generic reject (B1-035)
     other = await upload(http, people["admin"], body)  # another owner's scope: not a duplicate
     assert other["counts"]["created"] == 10
     monkeypatch.setattr(service, "MAX_PROBE_ROWS", 2)  # a probe that would be cut off refuses, never truncates
