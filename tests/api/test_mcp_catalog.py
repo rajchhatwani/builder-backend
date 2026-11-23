@@ -76,7 +76,7 @@ def test_describe_platform_comes_from_real_registries() -> None:
     assert by["payments"]["mcp_editable"] is False  # said honestly, not hidden
     assert "credentials" in " ".join(d["limits"]["cannot_do"]).lower()
     assert set(d["limits"]["scopes"]) == {
-        "mcp:read", "mcp:write", "mcp:generate", "mcp:destructive"
+        "mcp:read", "mcp:write", "mcp:generate", "mcp:preview", "mcp:destructive"
     }  # fmt: skip
     for s in d["sections"]:  # every named tool exists
         if s["edit_with"]:

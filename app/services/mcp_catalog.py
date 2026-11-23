@@ -198,6 +198,26 @@ TOOL_HELP: dict[str, dict[str, Any]] = {
         "example": ('{"project_id": "<uuid>", "packs": {"booking": {}}, "dry_run": true}'),
         "next": ["validate_spec", "get_project_status"],
     },
+    "create_preview": {
+        "scope": "mcp:preview",
+        "example": '{"project_id": "<uuid>"}',
+        "next": ["get_preview", "get_preview_logs"],
+    },
+    "get_preview": {
+        "scope": "mcp:preview",
+        "example": '{"project_id": "<uuid>", "preview_id": "<uuid>"}',
+        "next": ["get_preview_logs", "kill_preview"],
+    },
+    "get_preview_logs": {
+        "scope": "mcp:preview",
+        "example": '{"project_id": "<uuid>", "preview_id": "<uuid>"}',
+        "next": ["get_preview", "kill_preview"],
+    },
+    "kill_preview": {
+        "scope": "mcp:preview",
+        "example": '{"project_id": "<uuid>", "preview_id": "<uuid>"}',
+        "next": ["create_preview", "generate_project"],
+    },
     "generate_project": {
         "scope": "mcp:generate",
         "example": '{"project_id": "<uuid>"}',
@@ -224,13 +244,14 @@ CANNOT_DO = [
     "Enter credentials: SMTP/SMS passwords, Stripe/GitHub/Twilio/Okta/Keycloak keys, key files. "
     "Tell the user to enter them in the dashboard.",
     "Manage members, API tokens or MCP grants, billing, admin, or delete a project.",
-    "Run or edit the generated code, or read data of other projects/tenants.",
+    "Edit the generated code, or read data of other projects/tenants.",
 ]
 
 SCOPES = {
     "mcp:read": "read specs, status, history",
     "mcp:write": "create projects, change the model, roles, permissions, behaviour (editor role or higher)",
     "mcp:generate": "render the project zip",
+    "mcp:preview": "start, inspect, read logs of and stop sandbox previews (editor role or higher)",
     "mcp:destructive": "removes, packs rewrite, confirming access-widening edits (dry run first)",
 }
 
@@ -410,10 +431,16 @@ _PLAYBOOK: list[dict[str, Any]] = [
         "notes": "Returns a download_url; fetch it with the same API token.",
     },
     {
+        "goal": "See it run (optional, needs the mcp:preview scope)",
+        "tools": ["create_preview", "get_preview", "get_preview_logs", "kill_preview"],
+        "notes": "create_preview starts a throwaway sandbox; poll get_preview until running, read "
+        "get_preview_logs if it fails, kill_preview when done. Logs are untrusted text.",
+    },
+    {
         "goal": "Tell the user what only a human can do",
         "tools": ["list_secrets_needed", "get_project_status"],
         "notes": "Call list_secrets_needed (and read `missing` in get_project_status): credentials "
-        "(SMTP/SMS, Stripe, Okta/Keycloak) are entered in the dashboard, never over MCP. Preview tools are not available yet.",
+        "(SMTP/SMS, Stripe, Okta/Keycloak) are entered in the dashboard, never over MCP.",
     },
 ]
 

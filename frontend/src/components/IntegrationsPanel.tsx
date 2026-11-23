@@ -163,7 +163,7 @@ export function IntegrationsPanel({ projectId }: IntegrationsPanelProps) {
         </div>
         <p className="muted small-text">
           Create a token on your <a href="#/account">Account</a> page. Give it only the MCP scopes
-          you need (<code>mcp:read</code>, <code>mcp:write</code>, <code>mcp:generate</code>, and only if you want removals, <code>mcp:destructive</code>) and
+          you need (<code>mcp:read</code>, <code>mcp:write</code>, <code>mcp:generate</code>, <code>mcp:preview</code>, and only if you want removals, <code>mcp:destructive</code>) and
           pin it to this project to narrow its reach.
         </p>
       </section>

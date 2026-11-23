@@ -69,7 +69,7 @@ if [ "$slow" -eq 1 ] && nonempty slow.txt; then
 elif nonempty slow.txt; then echo "IMPACT slow-e2e: NOT RUN ($(wc -l < "$OUT/slow.txt") file(s) selected; add --slow)"; fi
 
 # ---- frontend ----
-if nonempty tsc.flag; then step tsc tsc npm --prefix frontend exec -- tsc --noEmit; fi
+if nonempty tsc.flag; then step tsc tsc npm --prefix frontend exec -- tsc -b frontend; fi
 if nonempty vitest.txt; then
   mapfile -t f < "$OUT/vitest.txt"
   step "vitest-related(${#f[@]})" vitest bash -c 'cd frontend && npx vitest related --run "$@"' _ "${f[@]}"

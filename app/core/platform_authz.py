@@ -18,6 +18,8 @@ SCOPE_GENERATE = "generate"
 SCOPE_MCP_READ = "mcp:read"
 SCOPE_MCP_WRITE = "mcp:write"
 SCOPE_MCP_GENERATE = "mcp:generate"
+# Start, inspect and stop throwaway sandbox previews of a project (never reaches the platform itself).
+SCOPE_MCP_PREVIEW = "mcp:preview"
 # Removes/rewrites model data and confirms access-widening edits; never granted by default.
 SCOPE_MCP_DESTRUCTIVE = "mcp:destructive"
 VALID_SCOPES = frozenset(
@@ -28,6 +30,7 @@ VALID_SCOPES = frozenset(
         SCOPE_MCP_READ,
         SCOPE_MCP_WRITE,
         SCOPE_MCP_GENERATE,
+        SCOPE_MCP_PREVIEW,
         SCOPE_MCP_DESTRUCTIVE,
     }
 )
