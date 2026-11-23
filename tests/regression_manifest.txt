@@ -419,3 +419,4 @@ tests/unit/test_pack_form_schemas_ops.py
 tests/api/test_packs_block.py
 tests/unit/test_pack_form_schemas_ai.py
 tests/unit/test_mcp_secrets.py
+tests/api/test_mcp_journey.py
