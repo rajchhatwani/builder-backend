@@ -61,9 +61,9 @@ export function SettingsSection({ title, description, children }: { title: strin
   )
 }
 
-export function ConflictBanner({ onReload }: { onReload: () => void }) {
+export function ConflictBanner({ onReload, children }: { onReload: () => void; children?: ReactNode }) {
   const t = useT()
-  return <Alert tone="warning" action={<Button onClick={onReload}>{t('common.reload')}</Button>}>{t('common.conflict')}</Alert>
+  return <Alert tone="warning" action={<Button onClick={onReload}>{t('common.reload')}</Button>}>{children ?? t('common.conflict')}</Alert>
 }
 
 export function ReadOnlyNote({ children }: { children?: ReactNode }) {

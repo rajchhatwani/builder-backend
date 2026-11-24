@@ -10,19 +10,20 @@ import { Row, Stack } from './layout'
 type DialogProps = {
   title: string
   description?: string
-  trigger: ReactElement
+  trigger?: ReactElement
   children: ReactNode
   actions?: ReactNode
   open?: boolean
   onOpenChange?: (open: boolean) => void
   sheet?: boolean
+  closeLabel?: string
 }
 
-export function Dialog({ title, description, trigger, children, actions, open, onOpenChange, sheet }: DialogProps) {
+export function Dialog({ title, description, trigger, children, actions, open, onOpenChange, sheet, closeLabel }: DialogProps) {
   const t = useT()
   return (
     <DialogBase.Root open={open} onOpenChange={onOpenChange}>
-      <DialogBase.Trigger asChild>{trigger}</DialogBase.Trigger>
+      {trigger && <DialogBase.Trigger asChild>{trigger}</DialogBase.Trigger>}
       <DialogBase.Portal>
         <DialogBase.Overlay className="v2-overlay" />
         <DialogBase.Content className="v2-dialog" data-sheet={sheet || undefined}>
@@ -34,7 +35,7 @@ export function Dialog({ title, description, trigger, children, actions, open, o
             {children}
             <Row className="v2-dialog-actions">
               {actions}
-              <DialogBase.Close asChild><Button>{t('common.close')}</Button></DialogBase.Close>
+              <DialogBase.Close asChild><Button>{closeLabel ?? t('common.close')}</Button></DialogBase.Close>
             </Row>
           </Stack>
         </DialogBase.Content>

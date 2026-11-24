@@ -1,0 +1,6 @@
+.v2-guided-columns { align-items: start; grid-template-columns: minmax(0, 1fr); }
+.v2-guided-list { padding-inline-start: var(--s5); }
+.v2-scope-removed { text-decoration: line-through; }
+@container viewport (width > 62.5em) {
+  .v2-guided-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

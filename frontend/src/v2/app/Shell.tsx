@@ -5,7 +5,7 @@ import { useLanguage, useT } from '../i18n'
 import { advancedGroups, guidedSections, isGuidedSection, statusSection } from '../projectNavigation'
 import { Badge, Breadcrumb, Button, Menu, Row, Sheet, Stack } from '../ui'
 import { LanguageSuggestion } from './LanguageSwitcher'
-import { screens } from './routeScreens'
+import { screens, sectionScreen } from './routeScreens'
 import { useTheme } from './theme'
 
 type StatusData = ReturnType<typeof useProjectStatus>['data']
@@ -23,8 +23,8 @@ function ProjectNavigation({ projectId, guided, data, onNavigate }: {
       <Link key={id} to={status ? '/projects/$projectId/overview' : '/projects/$projectId/$section'}
         params={{ projectId, section: id }} preload="intent" activeOptions={{ exact: true }}
         onClick={onNavigate}
-        onMouseEnter={status ? screens.status.preload : screens.unavailable.preload}
-        onFocus={status ? screens.status.preload : screens.unavailable.preload}>
+        onMouseEnter={status ? screens.status.preload : sectionScreen(id).preload}
+        onFocus={status ? screens.status.preload : sectionScreen(id).preload}>
         {t(`nav.${id}`)}
         {!!marker?.issue_count && <Badge tone="danger">{t('status.problems', { count: marker.issue_count })}</Badge>}
         {!marker?.issue_count && marker?.configured && (id === 'payments' || id === 'storage') && (

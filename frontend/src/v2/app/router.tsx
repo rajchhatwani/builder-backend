@@ -6,7 +6,7 @@ import { isProjectSection } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { Shell } from './Shell'
 import { LazyError, ScreenSkeleton } from './lazy'
-import { screens } from './routeScreens'
+import { screens, sectionScreen } from './routeScreens'
 
 type KitSearch = {
   state?: 'loading' | 'empty' | 'error'
@@ -15,6 +15,8 @@ type KitSearch = {
   filter: string
   sort?: 'descending' | 'ascending'
 }
+
+type SectionSearch = { run?: string; phase?: number; workspace?: string; page?: number; approval?: string }
 
 export const routePaths = {
   index: '/',
@@ -58,11 +60,33 @@ const status = createRoute({
   },
 })
 const section = createRoute({
-  getParentRoute: () => root, path: routePaths.section, component: screens.unavailable.Component,
+  getParentRoute: () => root, path: routePaths.section, component: ProjectSection,
+  validateSearch: (search): SectionSearch => ({
+    approval: typeof search.approval === 'string' ? search.approval : undefined,
+    page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
+    run: typeof search.run === 'string' ? search.run : undefined,
+    phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
+    workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
+  }),
+  loaderDeps: ({ search }) => ({ run: search.run }),
+  loader: ({ context, params, deps, preload }) => {
+    if (preload && (params.section === 'intake' || params.section === 'plan')) {
+      void import('../features/guided/api/guided').then(({ mapOptions, approvalOptions }) => {
+        if (params.section === 'intake') void context.queryClient.prefetchQuery(mapOptions(params.projectId))
+        else void context.queryClient.prefetchQuery(approvalOptions(params.projectId, deps.run))
+      }, () => undefined)
+    }
+  },
   beforeLoad: ({ params }) => {
     if (!isProjectSection(params.section)) throw redirect({ to: routePaths.status, params: { projectId: params.projectId } })
   },
 })
+function ProjectSection() {
+  const { projectId, section: name } = section.useParams()
+  const Screen = sectionScreen(name).Component
+  return <Screen key={projectId} />
+}
+
 export const routeTree = root.addChildren([index, projects, signIn, kit, project, status, section])
 
 export function createAppRouter(queryClient: QueryClient, history?: ReturnType<typeof createRouter>['history']) {

@@ -39,3 +39,36 @@ export const validators = {
     if (max !== undefined && amount > max) return issue('maximum', { max })
   },
 }
+
+export const guidedLimits = {
+  prompt: 60_000, item: 600, coveredBy: 200, answer: 2_000, note: 500, scopeName: 120,
+  scopeItems: 100, files: 5, fileBytes: 5 * 1024 * 1024, totalBytes: 12 * 1024 * 1024,
+}
+export const documentAccept = '.pdf,.docx,.xlsx,.txt,.md'
+
+export function intakeDocuments(existing: File[], picked: File[]) {
+  const files = [...existing]
+  const errors: ValidationIssue[] = []
+  let total = files.reduce((size, file) => size + file.size, 0)
+  for (const file of picked) {
+    const extension = file.name.slice(file.name.lastIndexOf('.')).toLowerCase()
+    const key = !documentAccept.split(',').includes(extension) ? 'documentType'
+      : !file.size ? 'documentEmpty'
+      : file.size > guidedLimits.fileBytes ? 'documentSize'
+      : files.length >= guidedLimits.files ? 'documentCount'
+      : total + file.size > guidedLimits.totalBytes ? 'documentTotal' : undefined
+    if (key) errors.push(issue(key, { name: file.name }))
+    else {
+      files.push(file)
+      total += file.size
+    }
+  }
+  return { files, errors }
+}
+
+export function planNameChecks(existing: string[], kept: number): Validator[] {
+  return [
+    name => existing.includes(name.trim()) ? issue('scopeDuplicate') : undefined,
+    () => kept >= guidedLimits.scopeItems ? issue('scopeLimit', { max: guidedLimits.scopeItems }) : undefined,
+  ]
+}

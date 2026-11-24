@@ -7,7 +7,7 @@ import { createAppRouter, routePaths } from './app/router'
 import { projectKeys } from './features/projects/api/status'
 import { detectLanguage } from './i18n'
 import { desktopSections, guidedSections, isProjectSection, projectPath, statusSection } from './projectNavigation'
-import { defaultLimits, validators } from './validators'
+import { defaultLimits, guidedLimits, validators } from './validators'
 
 const openapi = JSON.parse(readFileSync(resolve(__dirname, '../../e2e/openapi.json'), 'utf8'))
 const client = new QueryClient()
@@ -84,4 +84,15 @@ describe('language and validation contracts', () => {
     expect(validators.length(nameLimit)('a'.repeat(nameLimit + 1))?.key).toBe('validation.maxLength')
     expect(validators.length(descriptionLimit)('a'.repeat(descriptionLimit + 1))?.key).toBe('validation.maxLength')
   })
+})
+
+it('keeps the guided field limits within the published schemas', () => {
+  const schemas = openapi.components.schemas
+  expect(guidedLimits.item).toBeLessThanOrEqual(schemas.ItemUpdate.properties.text.anyOf[0].maxLength)
+  expect(guidedLimits.coveredBy).toBeLessThanOrEqual(schemas.ItemUpdate.properties.covered_by.anyOf[0].maxLength)
+  expect(guidedLimits.answer).toBeLessThanOrEqual(schemas.QuestionAnswer.properties.answer.anyOf[0].maxLength)
+  expect(guidedLimits.note).toBeLessThanOrEqual(schemas.ApprovalDecision.properties.note.anyOf[0].maxLength)
+  const scope = schemas.ApprovalDecision.properties.plan.anyOf[0].additionalProperties
+  expect(guidedLimits.scopeName).toBeLessThanOrEqual(scope.items.maxLength)
+  expect(guidedLimits.scopeItems).toBeLessThanOrEqual(scope.maxItems)
 })

@@ -61,7 +61,7 @@ it('switches modes through the URL and shows the selected Guided destination', a
   const projectId = '95ff34eb-4d07-4a60-8669-aaf1cf5442ca'
   const router = renderPath(`/projects/${projectId}/overview`)
   fireEvent.click(await screen.findByRole('button', { name: 'Guided' }))
-  expect(await screen.findByRole('heading', { name: 'Describe' })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: 'Describe what you want built' })).toBeTruthy()
   expect(router.state.location.pathname).toBe(`/projects/${projectId}/intake`)
   expect(screen.getByRole('button', { name: 'Guided' }).getAttribute('aria-pressed')).toBe('true')
 })
