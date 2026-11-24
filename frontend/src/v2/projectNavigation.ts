@@ -38,6 +38,10 @@ export type SectionSearch = {
   preview?: string
   entity?: string
   file?: string
+  openFiles?: string[]
+  source?: 'manifest' | 'kit'
+  q?: string
+  line?: number
   tool?: string
   view?: string
   role?: string

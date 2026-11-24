@@ -73,6 +73,7 @@ export function Shell() {
     else void navigate({ to: '/projects/$projectId/$section', params: { projectId, section: guidedSections[0] } })
   }
 
+  const editor = section === 'code'
   const advancedProject = !guided && projectId
   const { data } = useProjectStatus(projectId ?? '')
 
@@ -81,7 +82,7 @@ export function Shell() {
       <a className="v2-skip" href="#v2-main">{t('shell.skip')}</a>
       <header className="v2-top">
         <Row className="v2-top-inner" gap={3}>
-          {advancedProject && <MobileProjectNavigation projectId={advancedProject} data={data} />}
+          {advancedProject && !editor && <MobileProjectNavigation projectId={advancedProject} data={data} />}
           <Link to="/projects" preload="intent" className="v2-brand"><span aria-hidden />{t('shell.product')}</Link>
           {projectId && <Breadcrumb items={[{ id: 'projects', content: <Link to="/projects">{t('shell.projects')}</Link> }, {
             id: 'project', content: t('shell.projectId', { id: projectId }),
@@ -101,10 +102,10 @@ export function Shell() {
           ]} />
         </Row>
       </header>
-      <div className="v2-shell-body" data-rail={Boolean(advancedProject) || undefined}>
-        {advancedProject && <aside className="v2-rail"><ProjectNavigation projectId={advancedProject} guided={false} data={data} /></aside>}
+      <div className="v2-shell-body" data-rail={Boolean(advancedProject && !editor) || undefined} data-editor={editor || undefined}>
+        {advancedProject && !editor && <aside className="v2-rail"><ProjectNavigation projectId={advancedProject} guided={false} data={data} /></aside>}
         <main id="v2-main" tabIndex={-1} className="v2-main">
-          <Stack gap={5}>
+          <Stack gap={editor ? 0 : 5}>
             <LanguageSuggestion />
             {guided && projectId && <ProjectNavigation projectId={projectId} guided data={data} />}
             <Outlet />

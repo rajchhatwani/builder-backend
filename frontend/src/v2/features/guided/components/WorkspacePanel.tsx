@@ -1,7 +1,9 @@
+import { Link } from '@tanstack/react-router'
+import { openInEditor } from '../../../patterns/editorLink'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useT } from '../../../i18n'
 import { SettingsSection } from '../../../patterns'
-import { Alert, Badge, Card, Row, Skeleton, Stack } from '../../../ui'
+import { Alert, Badge, Button, Card, Row, Skeleton, Stack } from '../../../ui'
 import { deliveryLimits } from '../../../validators'
 import { deliveryApi, filesOptions } from '../api/delivery'
 import { guidedKeys, useGuidedWorkspaces } from '../api/guided'
@@ -76,7 +78,7 @@ export function DraftFiles({ projectId, workspace, run }: { projectId: string; w
       ? <GuidedLoadError error={files.error} retry={() => void files.refetch()} label={t('build.fileError')} />
       : files.data.length === 0 ? <p>{t('build.noFiles')}</p>
       : <Stack>{files.data.map(file => <Row key={file.path} className="v2-spread">
-        <ProjectLink projectId={projectId} section="code" search={{ run, workspace, file: file.path }}>{file.path}</ProjectLink>
+        <Button asChild><Link {...openInEditor({ projectId, run, workspace, path: file.path })}>{file.path}</Link></Button>
         <Badge>{t(file.editable ? 'build.custom' : 'common.readOnly')}</Badge>
       </Row>)}</Stack>}
   </SettingsSection>

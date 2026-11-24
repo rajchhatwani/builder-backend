@@ -30,6 +30,12 @@
   --s10: 40px;
   --s12: 48px;
   --touch: 44px;
+  --editor-explorer-width: 15.625rem;
+  --editor-explorer-tablet: 13rem;
+  --editor-panel-height: 10.625rem;
+  --editor-surface-height: 24rem;
+  --editor-minimum-height: 36rem;
+  --editor-text-small: .75rem;
   --border: 1px;
   --focus: 2px;
   --radius: 4px;

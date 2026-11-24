@@ -9,6 +9,8 @@ import { Shell } from './Shell'
 import { LazyError, ScreenSkeleton } from './lazy'
 import { screens, sectionScreen } from './routeScreens'
 
+export { openInEditor } from '../features/editor/routes'
+
 type KitSearch = {
   state?: 'loading' | 'empty' | 'error'
   tab?: 'second'
@@ -69,6 +71,10 @@ const section = createRoute({
     preview: typeof search.preview === 'string' ? search.preview : undefined,
     entity: typeof search.entity === 'string' ? search.entity : undefined,
     file: typeof search.file === 'string' ? search.file : undefined,
+    openFiles: Array.isArray(search.openFiles) ? [...new Set(search.openFiles.filter((file): file is string => typeof file === 'string'))] : undefined,
+    source: search.source === 'manifest' || search.source === 'kit' ? search.source : undefined,
+    q: typeof search.q === 'string' ? search.q : undefined,
+    line: typeof search.line === 'number' && Number.isSafeInteger(search.line) && search.line > 0 ? search.line : undefined,
     tool: typeof search.tool === 'string' ? search.tool : undefined,
     view: typeof search.view === 'string' ? search.view : undefined,
     role: typeof search.role === 'string' ? search.role : undefined,
@@ -79,9 +85,17 @@ const section = createRoute({
     phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
     workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
   }),
-  loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history }),
+  loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
+    if (params.section === 'code' && (typeof document === 'undefined' || document.body.clientWidth >= 700)) {
+      void import('../features/editor/api/editor').then(({ filesOptions, manifestOptions, kitOptions }) => {
+        const id = params.projectId
+        if (deps.workspace) void context.queryClient.prefetchQuery(filesOptions(id, deps.workspace))
+        else if (deps.source === 'manifest') void context.queryClient.prefetchQuery(manifestOptions(id))
+        else void context.queryClient.prefetchQuery(kitOptions(id))
+      }, () => undefined)
+    }
     if (params.section === 'intake' || params.section === 'plan') {
       void import('../features/guided/api/guided').then(({ mapOptions, approvalOptions }) => {
         if (params.section === 'intake') void context.queryClient.prefetchQuery(mapOptions(params.projectId))

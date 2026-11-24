@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { confirmMatches, describePayload, effectiveState, gateDInfo, KIND_LABEL, RISK_LABEL } from '../../../shell/ai/approvalLogic'
 import { useT } from '../../i18n'
 import { ConflictBanner, PageHeader, ReadOnlyNote, SettingsSection } from '../../patterns'
+import { openInEditor } from '../../patterns/editorLink'
 import { Alert, Badge, Button, Card, CodeBlock, EmptyState, Field, Input, Row, Select, Skeleton, Stack, Table, Tabs, Textarea } from '../../ui'
 import { guidedLimits, isUuid, validators } from '../../validators'
 import { inboxOptions, reviewOptions, runOptions, useApprovalDecision, useRunAction } from './api/delivery'
@@ -166,7 +167,7 @@ function DecisionCard({ projectId, item, role, verified, reviewer, reload }: {
       {run.isPending && <Skeleton />}
       {run.isError && <GuidedLoadError error={run.error} label={t('build.loadError')} retry={() => void run.refetch()} />}
       {detail.files.map((file, index) => workspace
-        ? <Row key={index}><ProjectLink projectId={projectId} section="code" search={{ run: item.run_id, workspace, file }}>{file}</ProjectLink></Row>
+        ? <Row key={index}><Button asChild><Link {...openInEditor({ projectId, path: file, workspace, run: item.run_id })}>{file}</Link></Button></Row>
         : <p key={index}>{file}</p>)}
     </SettingsSection>}
     {item.kind === 'C' && <p>{detail.gateHash ? t('approval.gateReport', { hash: detail.gateHash }) : t('approval.noReport')}</p>}

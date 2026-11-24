@@ -6,8 +6,10 @@ import type { Tone } from '../ui'
 export * from './Form'
 export * from './DataTable'
 
-export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error }: {
-  trigger: ReactElement
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, open: controlledOpen, onOpenChange }: {
+  trigger?: ReactElement
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   title: string
   description: string
   action: string
@@ -15,7 +17,9 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   pending?: boolean
   error?: string
 }) {
-  const [open, setOpen] = useState(false)
+  const [localOpen, setLocalOpen] = useState(false)
+  const open = controlledOpen ?? localOpen
+  const setOpen = onOpenChange ?? setLocalOpen
   const [working, setWorking] = useState(false)
   const [failed, setFailed] = useState(false)
   const t = useT()
@@ -61,9 +65,9 @@ export function SettingsSection({ title, description, children }: { title: strin
   )
 }
 
-export function ConflictBanner({ onReload, children }: { onReload: () => void; children?: ReactNode }) {
+export function ConflictBanner({ onReload, action, children }: { onReload?: () => void; action?: ReactNode; children?: ReactNode }) {
   const t = useT()
-  return <Alert tone="warning" action={<Button onClick={onReload}>{t('common.reload')}</Button>}>{children ?? t('common.conflict')}</Alert>
+  return <Alert tone="warning" action={action ?? (onReload && <Button onClick={onReload}>{t('common.reload')}</Button>)}>{children ?? t('common.conflict')}</Alert>
 }
 
 export function ReadOnlyNote({ children }: { children?: ReactNode }) {

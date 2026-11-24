@@ -19,10 +19,10 @@ export function Tabs({ label, value, onChange, items }: {
   )
 }
 
-export function Breadcrumb({ items }: { items: { id: string; content: ReactNode }[] }) {
+export function Breadcrumb({ items, label }: { items: { id: string; content: ReactNode }[]; label?: string }) {
   const t = useT()
   return (
-    <nav aria-label={t('common.breadcrumb')}>
+    <nav aria-label={label ?? t('common.breadcrumb')}>
       <ol className="v2-breadcrumb">
         {items.map((item, index) => (
           <li key={item.id} aria-current={index === items.length - 1 ? 'page' : undefined}>

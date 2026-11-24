@@ -30,3 +30,11 @@
   .v2-phone-only { display: block; }
   .v2-phone-hidden { display: none; }
 }
+
+.v2-shell:has([data-editor]) { display: flex; flex-direction: column; }
+.v2-shell-body[data-editor] { flex: 1; min-block-size: 0; }
+.v2-shell-body[data-editor] > .v2-main { display: grid; max-inline-size: none; padding: 0; }
+@container viewport (width >= 43.75em) {
+  .v2-shell:has([data-editor]) { block-size: 100dvb; }
+  .v2-shell-body[data-editor] > .v2-main > .v2-stack { min-block-size: 0; }
+}

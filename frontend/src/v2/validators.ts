@@ -76,3 +76,10 @@ export function planNameChecks(existing: string[], kept: number): Validator[] {
 export const deliveryLimits = { goal: 8000, workspace: 100, checkpoint: 100, proposalRole: 40 }
 
 export const isUuid = (value: string) => /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)
+
+const workspaceFileBytes = 256 * 1024
+
+export function validateWorkspaceContent(content: string) {
+  if (content.includes('\0')) return 'editor.fileNul'
+  if (new TextEncoder().encode(content).byteLength > workspaceFileBytes) return 'editor.fileLimit'
+}
