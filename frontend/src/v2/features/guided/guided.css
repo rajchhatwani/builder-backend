@@ -4,3 +4,10 @@
 @container viewport (width > 62.5em) {
   .v2-guided-columns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+.v2-delivery-tiles { grid-template-columns: repeat(auto-fit, minmax(min(100%, calc(var(--s12) * 3)), 1fr)); }
+:is([data-testid="build-page"], [data-testid="approvals-page"], [data-testid="seeit-page"]) summary {
+  min-block-size: var(--touch);
+  align-content: center;
+  cursor: pointer;
+}

@@ -27,3 +27,23 @@ export function statusSection(id: string): ProjectSection {
 export function projectPath(projectId: string, section: ProjectSection = 'overview') {
   return `/projects/${encodeURIComponent(projectId)}/${section}`
 }
+
+export type SectionSearch = {
+  tab?: string
+  kind?: string
+  risk?: string
+  decision?: string
+  owner?: string
+  history?: number
+  preview?: string
+  entity?: string
+  file?: string
+  tool?: string
+  view?: string
+  role?: string
+  run?: string
+  phase?: number
+  workspace?: string
+  page?: number
+  approval?: string
+}

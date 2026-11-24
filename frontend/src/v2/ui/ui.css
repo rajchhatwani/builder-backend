@@ -117,3 +117,5 @@ textarea.v2-control { resize: vertical; }
   .v2-table td { padding: 0; border: 0; }
   .v2-cell-label { display: block; color: var(--muted); font-size: var(--text-sm); }
 }
+
+.v2-progress { inline-size: 100%; accent-color: var(--accent); }

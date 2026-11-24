@@ -72,3 +72,7 @@ export function planNameChecks(existing: string[], kept: number): Validator[] {
     () => kept >= guidedLimits.scopeItems ? issue('scopeLimit', { max: guidedLimits.scopeItems }) : undefined,
   ]
 }
+
+export const deliveryLimits = { goal: 8000, workspace: 100, checkpoint: 100, proposalRole: 40 }
+
+export const isUuid = (value: string) => /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(value)

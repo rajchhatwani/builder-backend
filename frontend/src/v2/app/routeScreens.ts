@@ -3,6 +3,9 @@ import { lazyScreen } from './lazy'
 export const screens = {
   intake: lazyScreen(() => import('../features/guided/IntakeScreen')),
   plan: lazyScreen(() => import('../features/guided/PlanScreen')),
+  build: lazyScreen(() => import('../features/guided/BuildScreen')),
+  approvals: lazyScreen(() => import('../features/guided/ApprovalsScreen')),
+  see: lazyScreen(() => import('../features/guided/SeeScreen')),
   kit: lazyScreen(() => import('./KitScreen')),
   status: lazyScreen(() => import('../features/projects/StatusScreen')),
   projects: lazyScreen(() => import('./EntryScreens').then(module => ({ default: module.ProjectsScreen }))),
@@ -11,6 +14,6 @@ export const screens = {
 }
 
 export function sectionScreen(section: string) {
-  if (section === 'intake' || section === 'plan') return screens[section]
+  if (section === 'intake' || section === 'plan' || section === 'build' || section === 'approvals' || section === 'see') return screens[section]
   return screens.unavailable
 }
