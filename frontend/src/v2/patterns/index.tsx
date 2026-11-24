@@ -1,0 +1,99 @@
+import { useState } from 'react'
+import type { ReactElement, ReactNode } from 'react'
+import { useT } from '../i18n'
+import { Alert, Badge, Button, Card, Dialog, Row, Spinner, Stack } from '../ui'
+import type { Tone } from '../ui'
+export * from './Form'
+export * from './DataTable'
+
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error }: {
+  trigger: ReactElement
+  title: string
+  description: string
+  action: string
+  onConfirm: () => void | Promise<void>
+  pending?: boolean
+  error?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const t = useT()
+  const busy = Boolean(pending || working)
+  return (
+    <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen}
+      actions={<Button variant="danger" disabled={busy} onClick={async () => {
+        setWorking(true)
+        setFailed(false)
+        try {
+          await onConfirm()
+          setOpen(false)
+        } catch {
+          setFailed(true)
+        } finally {
+          setWorking(false)
+        }
+      }}>{busy && <Spinner />}{action}</Button>}>
+      {(error || failed) && <Alert tone="danger">{error ?? t('common.actionFailed')}</Alert>}
+    </Dialog>
+  )
+}
+
+export function PageHeader({ title, description, actions }: { title: string; description?: string; actions?: ReactNode }) {
+  return (
+    <header>
+      <Stack gap={1}>
+        <Row className="v2-spread"><h1>{title}</h1>{actions}</Row>
+        {description && <p className="v2-muted">{description}</p>}
+      </Stack>
+    </header>
+  )
+}
+
+export function SettingsSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <Card>
+      <Stack gap={4}>
+        <Stack gap={1}><h2>{title}</h2>{description && <p className="v2-muted">{description}</p>}</Stack>
+        {children}
+      </Stack>
+    </Card>
+  )
+}
+
+export function ConflictBanner({ onReload }: { onReload: () => void }) {
+  const t = useT()
+  return <Alert tone="warning" action={<Button onClick={onReload}>{t('common.reload')}</Button>}>{t('common.conflict')}</Alert>
+}
+
+export function ReadOnlyNote({ children }: { children?: ReactNode }) {
+  const t = useT()
+  return <Alert>{children ?? t('common.readOnly')}</Alert>
+}
+
+export function RoleGate({ allowed, children, fallback = <ReadOnlyNote /> }: { allowed: boolean; children: ReactNode; fallback?: ReactNode }) {
+  return allowed ? children : fallback
+}
+
+export function ListRow({ title, detail, actions }: { title: ReactNode; detail?: ReactNode; actions?: ReactNode }) {
+  return <Row className="v2-spread"><Stack gap={1}><strong>{title}</strong>{detail && <span className="v2-muted">{detail}</span>}</Stack>{actions}</Row>
+}
+
+export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode }) {
+  return <Badge tone={tone}>{children}</Badge>
+}
+
+export function SaveBar({ dirty, pending, saved, readOnly, onSave, onDiscard }: {
+  dirty: boolean; pending?: boolean; saved?: boolean; readOnly?: boolean; onSave: () => void; onDiscard: () => void
+}) {
+  const t = useT()
+  return (
+    <Row className="v2-save-bar v2-spread">
+      <span role="status">{pending ? t('common.saving') : dirty ? t('common.unsaved') : saved ? t('common.saved') : ''}</span>
+      <Row>
+        <Button disabled={!dirty || pending} onClick={onDiscard}>{t('common.discard')}</Button>
+        <Button variant="primary" disabled={!dirty || pending || readOnly} onClick={onSave}>{t('common.save')}</Button>
+      </Row>
+    </Row>
+  )
+}

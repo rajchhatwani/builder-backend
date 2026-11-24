@@ -1,0 +1,32 @@
+.v2-shell { min-block-size: 100dvb; overflow-wrap: anywhere; }
+.v2-top { border-block-end: var(--border) solid var(--line); background: var(--canvas); padding: var(--s2) var(--s4); }
+.v2-top-inner { justify-content: space-between; }
+.v2-brand { display: inline-flex; min-block-size: var(--touch); align-items: center; gap: var(--s2); color: var(--ink); font-weight: var(--semibold); text-decoration: none; }
+.v2-brand span { inline-size: var(--s4); block-size: var(--s4); background: var(--ink); border-radius: var(--radius); }
+.v2-shell-body { display: grid; grid-template-columns: minmax(0, 1fr); min-block-size: 85dvb; }
+.v2-rail { display: none; border-inline-end: var(--border) solid var(--line); background: var(--canvas); padding: var(--s3); }
+.v2-main { inline-size: 100%; max-inline-size: var(--content-width); justify-self: center; padding: clamp(var(--s4), 3cqi, var(--s8)); }
+.v2-main:focus { outline: none; }
+.v2-nav a { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-block-size: var(--touch); padding-inline: var(--s2); border-radius: var(--radius); color: var(--ink); text-decoration: none; }
+.v2-nav a:hover { background: var(--inset); }
+.v2-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-bg); font-weight: var(--semibold); }
+.v2-nav-heading { color: var(--muted); font-size: var(--text-sm); padding: var(--s2); }
+.v2-on-dot { inline-size: var(--s2); block-size: var(--s2); background: var(--success); border-radius: var(--pill); }
+.v2-skip { position: fixed; z-index: var(--z-toast); inset: var(--s2) auto auto var(--s2); padding: var(--s3); background: var(--surface); }
+.v2-skip:not(:focus) { clip-path: inset(50%); }
+.v2-screen-placeholder { min-block-size: var(--screen-placeholder); }
+.v2-step-list { display: flex; flex-wrap: wrap; gap: var(--s3); padding: 0; list-style-position: inside; }
+.v2-step-list [aria-current] { color: var(--accent); font-weight: var(--semibold); }
+.v2-phone-only { display: none; }
+@container viewport (width >= 43.75em) {
+  .v2-shell-body[data-rail] { grid-template-columns: var(--rail-width) minmax(0, 1fr); }
+  .v2-rail { display: block; }
+  .v2-rail-toggle { display: none; }
+}
+@container viewport (width > 62.5em) {
+  .v2-top { padding-inline: var(--s6); }
+}
+@container viewport (width < 43.75em) {
+  .v2-phone-only { display: block; }
+  .v2-phone-hidden { display: none; }
+}

@@ -4,20 +4,17 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Backend Builder</title>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
+    <title>Backbone</title>
     <script>
-      // Prevent a flash of the wrong theme before React mounts.
-      (function () {
-        var t = localStorage.getItem('theme');
-        if (t) {
-          document.documentElement.style.colorScheme = t;
-          document.documentElement.setAttribute('data-theme', t);
-        }
-      })();
+      try {
+        const theme = localStorage.getItem('theme');
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+      } catch {}
     </script>
   </head>
   <body>
-    <div id="root" data-sidebar-layout></div>
+    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

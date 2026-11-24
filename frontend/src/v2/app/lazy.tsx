@@ -1,0 +1,23 @@
+import { lazy, Suspense } from 'react'
+import type { ComponentType } from 'react'
+import { useT } from '../i18n'
+import { Alert, Button, Card, ErrorBoundary, Skeleton } from '../ui'
+
+export function ScreenSkeleton({ label }: { label?: string }) {
+  return <Card className="v2-screen-placeholder"><Skeleton lines={8} label={label} /></Card>
+}
+
+export function LazyError() {
+  const t = useT()
+  return <Alert tone="danger" action={<Button onClick={() => location.reload()}>{t('common.reload')}</Button>}>{t('common.crash')}</Alert>
+}
+
+export function lazyScreen(load: () => Promise<{ default: ComponentType }>) {
+  const Screen = lazy(load)
+  return {
+    preload: () => load().catch(() => undefined),
+    Component: function LazyScreen() {
+      return <ErrorBoundary fallback={() => <LazyError />}><Suspense fallback={<ScreenSkeleton />}><Screen /></Suspense></ErrorBoundary>
+    },
+  }
+}

@@ -1,0 +1,7 @@
+.v2-spread { justify-content: space-between; }
+.v2-save-bar { border-block-start: var(--border) solid var(--line); padding-block: var(--s3); }
+.v2-data-table { container: data-table / inline-size; }
+.v2-mobile-sort { display: none; }
+@container data-table (width < 43.75em) {
+  .v2-mobile-sort { display: flex; }
+}
