@@ -91,7 +91,7 @@ export type FieldAttributes = { id: string; 'aria-describedby'?: string; 'aria-i
 
 export function Field({ id, label, hint, error, children }: {
   id?: string
-  label: ReactNode
+  label?: ReactNode
   hint?: ReactNode
   error?: ReactNode
   children: (attributes: FieldAttributes) => ReactNode
@@ -102,7 +102,7 @@ export function Field({ id, label, hint, error, children }: {
   const errorId = error ? `${fieldId}-error` : undefined
   return (
     <Stack gap={1}>
-      <label className="v2-label" htmlFor={fieldId}>{label}</label>
+      {label && <label className="v2-label" htmlFor={fieldId}>{label}</label>}
       {children({ id: fieldId, 'aria-invalid': error ? true : undefined, 'aria-describedby': [hintId, errorId].filter(Boolean).join(' ') || undefined })}
       {hint && <span id={hintId} className="v2-muted v2-small">{hint}</span>}
       {error && <span id={errorId} role="alert" className="v2-field-error v2-small">{error}</span>}

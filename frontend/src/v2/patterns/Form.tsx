@@ -9,6 +9,7 @@ export type FormField = {
   name: string
   label: string
   hint?: string
+  ownLabel?: boolean
   validate?: Validator[]
   validateWith?: (value: string, data: FormData) => ValidationIssue | undefined
   control: (attributes: FieldAttributes & { name: string; disabled?: boolean }) => ReactNode
@@ -20,10 +21,11 @@ function firstIssue(field: FormField, data: FormData) {
   return field.validate?.map(validate => validate(value)).find(Boolean) ?? field.validateWith?.(value, data)
 }
 
-export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps, actions, children }: {
+export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps, actions, children, layout }: {
   fields: FormField[]
   actions?: ReactNode
   children?: ReactNode
+  layout?: (fields: Record<string, ReactNode>) => ReactNode
   onSubmit: (values: FormData) => void
   submitLabel: string
   pending?: boolean
@@ -56,31 +58,33 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
     onSubmit(data)
   }
 
+  const controls = fields.map(field => {
+    const fieldId = `${id}-${field.name}`
+    const error = errors[field.name] ?? (Object.hasOwn(edited, field.name) && edited[field.name] === serverErrors?.[field.name] ? undefined : serverErrors?.[field.name])
+    return [field.name, (
+      <div key={field.name} onChange={() => setEdited(current => ({ ...current, [field.name]: serverErrors?.[field.name] }))}
+        onBlur={event => {
+          const form = event.currentTarget.closest('form')
+          if (!form || event.currentTarget.contains(event.relatedTarget)) return
+          const issue = firstIssue(field, new FormData(form))
+          setErrors(previous => {
+            const next = { ...previous }
+            if (issue) next[field.name] = issue
+            else delete next[field.name]
+            return next
+          })
+        }}>
+        <Field id={fieldId} label={field.ownLabel ? undefined : field.label} hint={field.hint} error={error && t(error.key, { ...error.values, field: field.label })}>
+          {attributes => field.control({ ...attributes, name: field.name, disabled: readOnly || pending })}
+        </Field>
+      </div>
+    )] as const
+  })
+
   return (
     <form noValidate onSubmit={submit} aria-busy={pending}>
       <Stack>
-        {fields.map(field => {
-          const fieldId = `${id}-${field.name}`
-          const error = errors[field.name] ?? (Object.hasOwn(edited, field.name) && edited[field.name] === serverErrors?.[field.name] ? undefined : serverErrors?.[field.name])
-          return (
-            <div key={field.name} onChange={() => setEdited(current => ({ ...current, [field.name]: serverErrors?.[field.name] }))}
-              onBlur={event => {
-                const form = event.currentTarget.closest('form')
-                if (!form || event.currentTarget.contains(event.relatedTarget)) return
-                const issue = firstIssue(field, new FormData(form))
-                setErrors(previous => {
-                  const next = { ...previous }
-                  if (issue) next[field.name] = issue
-                  else delete next[field.name]
-                  return next
-                })
-              }}>
-              <Field id={fieldId} label={field.label} hint={field.hint} error={error && t(error.key, { ...error.values, field: field.label })}>
-                {attributes => field.control({ ...attributes, name: field.name, disabled: readOnly || pending })}
-              </Field>
-            </div>
-          )
-        })}
+        {layout ? layout(Object.fromEntries(controls)) : controls.map(([, control]) => control)}
         {children}
         {formError && <Alert tone="danger">{formError}</Alert>}
         {!submitProps?.hidden && <Row><Button {...submitProps} type="submit" variant={submitProps?.variant ?? "primary"} disabled={readOnly || pending || submitProps?.disabled}>{pending && <Spinner />}{submitLabel}</Button>{actions}</Row>}

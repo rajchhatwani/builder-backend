@@ -8,7 +8,7 @@ import { safeEntryNext } from '../features/entry/entryLinks'
 import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
-import { defaultSectionSearch, isBehaviorSection, isProjectSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -177,9 +177,18 @@ const status = createRoute({
 const section = createRoute({
   getParentRoute: () => root, path: routePaths.section, component: ProjectSection,
   validateSearch: projectSectionSearch,
-  loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace }),
+  loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace, tab: search.tab }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
+    if (isSecureSection(params.section)) {
+      void screens[params.section].preload()
+      void import('../features/secure/api/security').then(({ authOptions, keycloakOptions, fieldsOptions }) => {
+        const id = params.projectId
+        void context.queryClient.prefetchQuery(authOptions(id))
+        if (params.section !== 'auth') void context.queryClient.prefetchQuery(keycloakOptions(id))
+        else if (deps.tab === 'fields') void context.queryClient.prefetchQuery(fieldsOptions(id, deps.page ?? 1))
+      }, () => undefined)
+    }
     if (params.section === 'diagrams') {
       void screens.diagrams.preload()
       void import('../features/diagrams/api/diagrams').then(({ specOptions }) =>
@@ -237,7 +246,7 @@ function ProjectSection() {
     const Screen = screens.diagrams.Component
     return <Screen key={projectId} projectId={projectId} viewer={workspace.role === 'viewer'} />
   }
-  if (isBehaviorSection(name)) {
+  if (isBehaviorSection(name) || isSecureSection(name)) {
     const Screen = screens[name].Component
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
       roleError={workspace.roleError} retryRole={workspace.retryRole} />

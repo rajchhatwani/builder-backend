@@ -17,6 +17,10 @@ export const behaviorSections = ['hooks', 'hookeffects', 'events', 'settings', '
 export const isBehaviorSection = (section: string): section is typeof behaviorSections[number] =>
   behaviorSections.some(name => name === section)
 
+const secureSections = ['auth', 'keycloak', 'suite'] as const
+export const isSecureSection = (section: string): section is typeof secureSections[number] =>
+  secureSections.some(name => name === section)
+
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]

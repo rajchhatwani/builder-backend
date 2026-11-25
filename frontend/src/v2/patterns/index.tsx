@@ -6,7 +6,7 @@ import type { Tone } from '../ui'
 export * from './Form'
 export * from './DataTable'
 
-export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, open: controlledOpen, onOpenChange }: {
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, open: controlledOpen, onOpenChange }: {
   trigger?: ReactElement
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -16,6 +16,8 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   onConfirm: () => void | Promise<void>
   pending?: boolean
   error?: string
+  children?: ReactNode
+  disabled?: boolean
 }) {
   const [localOpen, setLocalOpen] = useState(false)
   const open = controlledOpen ?? localOpen
@@ -26,7 +28,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   const busy = Boolean(pending || working)
   return (
     <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen}
-      actions={<Button variant="danger" disabled={busy} onClick={async () => {
+      actions={<Button variant="danger" disabled={busy || disabled} onClick={async () => {
         setWorking(true)
         setFailed(false)
         try {
@@ -38,6 +40,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
           setWorking(false)
         }
       }}>{busy && <Spinner />}{action}</Button>}>
+      {children}
       {(error || failed) && <Alert tone="danger">{error ?? t('common.actionFailed')}</Alert>}
     </Dialog>
   )

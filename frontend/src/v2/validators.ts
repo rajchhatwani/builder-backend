@@ -213,3 +213,47 @@ export function looksSecretName(name: string) {
 export const publicBehaviorName = format(value => !looksSecretName(value), 'publicBehaviorName')
 export const sequencePrefix = format(value => /^[A-Za-z0-9_/\-]{1,20}$/.test(value), 'sequencePrefix')
 export const settingDecimal = format(value => /^-?[0-9]{1,18}(\.[0-9]{1,8})?$/.test(value), 'settingDecimal')
+
+export const signInRate = format(value => /^[1-9][0-9]{0,5}\/([1-9][0-9]{0,3})?(second|minute|hour|day)s?$/.test(value), 'signInRate')
+export const signInSmsSender = (provider: string) => format(value => /^\+[1-9]\d{7,14}$/.test(value) ||
+  (provider === 'aws_sns' && /^[A-Za-z0-9]{1,11}$/.test(value)), 'signInSmsSender')
+export const signInLine = format(value => !/[\r\n]/.test(value), 'signInLine')
+export const signInFieldName = (reserved: readonly string[]) => format(value =>
+  /^[a-z][a-z0-9_]*$/.test(value) && !reserved.includes(value), 'signInFieldName')
+export const signInEnumChoices = format(value => {
+  const values = value.split('\n').map(item => item.trim()).filter(Boolean)
+  return values.length > 0 && values.length <= 50 && new Set(values).size === values.length &&
+    values.every(item => /^[A-Za-z0-9_.-]{1,64}$/.test(item))
+}, 'signInEnumChoices')
+export const orderedNumber = (min: string, max: string): ValidationIssue | undefined =>
+  min && max && Number(min) > Number(max) ? issue('signInBounds') : undefined
+
+export function secureAddress(value: string, local = false) {
+  if (value.length > 2000 || /[\s"'<>\x60\x5c*\x00-\x1f\x7f#]/.test(value)) return undefined
+  try {
+    const url = new URL(value)
+    return url.port !== '0' && /^https?:\/\//.test(value) && (url.protocol === 'https:' ||
+      (local && url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) &&
+      !url.username && !url.password && !/^[^:]+:\/\/[^/?]*@/.test(value) ? url : undefined
+  } catch { return undefined }
+}
+export const keycloakRedirects = format(value => {
+  const lines = value.split('\n').map(line => line.trim()).filter(Boolean)
+  return lines.length <= 20 && lines.length === new Set(lines).size && lines.every(line => !!secureAddress(line, true))
+}, 'keycloakRedirects')
+export const keycloakRealm = format(value => /^[a-z0-9][a-z0-9-]{0,62}$/.test(value) && value !== 'master', 'keycloakRealm')
+export const keycloakClient = format(value => /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(value), 'keycloakClient')
+export const keycloakAlias = format(value => /^[a-z][a-z0-9-]{0,30}$/.test(value), 'keycloakAlias')
+export const keycloakProviderClient = format(value => !/[\s\u0000-\u001f\u007f]/.test(value), 'keycloakProviderClient')
+export const keycloakEndpoint = format(value => !!secureAddress(value), 'keycloakEndpoint')
+export const suiteIdentifier = format(value => /^[a-z0-9][a-z0-9-]{0,55}$/.test(value) && !value.endsWith('-'), 'suiteIdentifier')
+export const suiteIssuer = (realm: string) => format(value => {
+  const url = secureAddress(value, true)
+  return !!url && !value.includes('?') && url.pathname.replace(/\/$/, '').endsWith('/realms/' + realm)
+}, 'suiteIssuer')
+export const signInObject = format(value => {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+  } catch { return false }
+}, 'signInObject')
