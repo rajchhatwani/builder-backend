@@ -5,3 +5,7 @@
 @container data-table (width < 43.75em) {
   .v2-mobile-sort { display: flex; }
 }
+
+.v2-command-list { list-style: none; padding: 0; max-block-size: 45dvb; overflow: auto; }
+.v2-command-list [role="option"] { min-block-size: var(--touch); align-content: center; padding: var(--s2) var(--s3); border-radius: var(--radius); cursor: pointer; }
+.v2-command-list [aria-selected="true"] { background: var(--accent-bg); color: var(--accent); }

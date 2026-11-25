@@ -17,9 +17,10 @@ import { consoleReducer, logReducer } from '../state/preview'
 import type { Credential } from '../state/preview'
 import { ConfirmAction } from './DeliveryControls'
 import { GuidedLoadError } from './GuidedFeedback'
+import { usePreviewToolSearch } from './usePreviewToolSearch'
 
 const route = '/projects/$projectId/$section'
-const Scalar = lazy(() => import('../../../../shell/workbench/ScalarView'))
+export const Scalar = lazy(() => import('../../../../shell/workbench/ScalarView'))
 type Connection = { preview: Preview; credential: Credential }
 
 export function PreviewTools({ preview, credential, entity, entities, doc, write }: Connection & {
@@ -149,11 +150,11 @@ function PreviewLogs({ preview, credential }: Connection) {
   </Stack>
 }
 
-function RequestConsole({ preview, credential, doc, write }: Connection & { doc: unknown; write: boolean }) {
+export function RequestConsole({ preview, credential, doc, write }: Connection & { doc: unknown; write: boolean }) {
   const t = useT()
-  const search = useSearch({ from: route })
-  const navigate = useNavigate({ from: route })
-  const { projectId } = useParams({ from: route })
+  const search = useSearch({ strict: false })
+  const updateSearch = usePreviewToolSearch()
+  const { projectId = '' } = useParams({ strict: false })
   const roles = useQuery(rolesOptions(projectId))
   const role = search.role ?? (credential.bearer ? 'session' : 'anonymous')
   const userRole = roles.data?.find(item => item.name === role)
@@ -165,13 +166,13 @@ function RequestConsole({ preview, credential, doc, write }: Connection & { doc:
     {!chosen ? <p>{t('preview.noOperations')}</p> : <>
       <Field label={t('preview.endpoint')}>{attrs => <Select triggerProps={attrs} value={chosen.id} options={choices.map(op => ({
         value: op.id, label: t('preview.operation', { method: op.method.toUpperCase(), path: op.path }),
-      }))} onValueChange={tool => void navigate({ search: previous => ({ ...previous, tool }) })} />}</Field>
+      }))} onValueChange={tool => updateSearch({ tool })} />}</Field>
       <Field label={t('preview.actAs')}>{attrs => <Select triggerProps={attrs} value={role}
         options={[
           ...(credential.bearer ? [{ value: 'session', label: t('preview.useIdentity') }] : []),
           { value: 'anonymous', label: t('preview.noRole') },
           ...(roles.data ?? []).map(item => ({ value: item.name, label: item.label || item.name })),
-        ]} onValueChange={role => { setToken(''); void navigate({ search: previous => ({ ...previous, role }) }) }} />}</Field>
+        ]} onValueChange={role => { setToken(''); updateSearch({ role }) }} />}</Field>
       {roles.isPending && <Skeleton lines={2} />}
       {roles.isError && <GuidedLoadError error={roles.error} label={t('preview.rolesError')} retry={() => void roles.refetch()} />}
       {userRole && <Field label={t('preview.roleToken', { role: userRole.name })} hint={t('preview.roleHint')}>{attrs =>

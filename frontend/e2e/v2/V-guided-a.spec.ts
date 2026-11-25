@@ -54,7 +54,7 @@ async function mock(page: Page, screen: Screen, state: State, role = 'owner', ch
   let start: unknown
   let current = approval
   const paused = new Promise<void>(resolve => { release = resolve })
-  await page.route(url => url.port === '8000' && (url.pathname.startsWith('/account/') || url.pathname.startsWith(`${root}/`)), async route => {
+  await page.route(url => url.port === '8000' && (url.pathname.startsWith('/account/') || url.pathname === root || url.pathname.startsWith(`${root}/`)), async route => {
     const url = new URL(route.request().url())
     const method = route.request().method()
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers })
@@ -67,6 +67,8 @@ async function mock(page: Page, screen: Screen, state: State, role = 'owner', ch
     }
     if (path === '/account/refresh') return reply({ access_token: 'fixture' })
     if (path === '/account/me') return reply({ id: 'user', platform_role: 'customer', email_verified_at: '2026-11-01T00:00:00Z' })
+    // Guided screens stay usable with the project ID when metadata is unavailable.
+    if (path === root) return route.fulfill({ status: 503, headers, json: { code: 'fixture', details: [] } })
     if (path === `${root}/status`) return reply({ sections: [] })
     if (path === `${root}/members`) return reply([{ user_id: 'user', name: 'Pat Reviewer', role }])
     if (path === `${root}/workspaces`) return reply([{ id: workspace, name: 'Review workspace', state: 'active' }])
@@ -101,6 +103,7 @@ for (const screen of ['intake', 'plan'] as const) {
       try {
         await page.goto(`${root}/${screen}`)
         await expect(page.getByRole('heading', { name: screen === 'intake' ? 'Describe what you want built' : 'Review the plan' })).toBeVisible()
+        await expect(page.getByText('We could not load this project.', { exact: true })).toHaveCount(0)
         if (state === 'normal') {
           await expect(page.getByTestId(screen === 'intake' ? 'start-build' : 'plan-approve')).toBeEnabled()
           if (screen === 'intake') await expect(page.getByRole('combobox', { name: 'Workspace' })).toBeEnabled()

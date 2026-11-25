@@ -16,7 +16,11 @@ export function normalizeEntryAddress() {
     target = '/' + path + (params.size ? '?' + params.toString() : '')
   }
 
-  if (fragment.startsWith('/invite/') || pathname.startsWith('/invite/')) {
+  const projectLink = fragment.match(/^\/p\/([^/?#]+)(?:\/([a-z0-9_-]+))?(\?[^#]*)?$/)
+  if (projectLink) {
+    const [, id, section, query] = projectLink
+    target = '/projects/' + id + '/' + (section ?? 'overview') + (query ?? '')
+  } else if (fragment.startsWith('/invite/') || pathname.startsWith('/invite/')) {
     const token = inviteTokenFrom(fragment.startsWith('/invite/') ? hash : pathname)
     setEntryInvitation(token || '!')
     target = '/invitations'

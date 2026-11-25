@@ -2,15 +2,18 @@
 export const guidedSections = ['intake', 'plan', 'build', 'approvals', 'see'] as const
 export const advancedGroups = [
   { id: 'home', sections: ['overview', 'code'] },
-  { id: 'build', sections: ['model', 'machines', 'settings', 'history', 'hooks', 'seed', 'specdiff'] },
-  { id: 'secure', sections: ['auth', 'keycloak', 'access'] },
-  { id: 'connect', sections: ['payments', 'storage', 'documents', 'import'] },
-  { id: 'operate', sections: ['observability', 'logs', 'metrics'] },
-  { id: 'ship', sections: ['generate', 'deployment', 'upgrades'] },
+  { id: 'build', sections: ['model', 'machines', 'rules', 'permissions', 'specdiff', 'hooks', 'settings', 'history', 'timeline', 'seed', 'customfields', 'events', 'hookeffects'] },
+  { id: 'secure', sections: ['auth', 'keycloak', 'suite', 'access', 'dependencies', 'compliance'] },
+  { id: 'connect', sections: ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps',
+    'ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings', 'geosettings', 'locationsettings',
+    'matchingsettings', 'predictionsettings', 'aigatewaysettings', 'aidocssettings', 'knowledgesettings', 'agentssettings', 'evalssettings'] },
+  { id: 'operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'logs', 'metrics', 'search', 'ledger', 'invoices', 'payouts', 'reconciliation', 'map',
+    'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing', 'aiusage', 'knowledge', 'evals', 'agentruns'] },
+  { id: 'ship', sections: ['deployment', 'generate', 'upgrades'] },
   { id: 'diagrams', sections: ['diagrams'] },
 ] as const
 
-export const desktopSections = ['code', 'model', 'machines', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
+export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]
 export const projectSections = new Set<string>([...guidedSections, ...advancedGroups.flatMap(group => [...group.sections]), ...desktopSections])
@@ -43,6 +46,7 @@ export type SectionSearch = {
   q?: string
   line?: number
   tool?: string
+  workbench?: 'console' | 'reference'
   view?: string
   role?: string
   run?: string
@@ -50,4 +54,10 @@ export type SectionSearch = {
   workspace?: string
   page?: number
   approval?: string
+}
+
+export function defaultSectionSearch(section: string): SectionSearch {
+  if (section === 'deployment') return { tab: 'guided' }
+  if (section === 'payments' || section === 'storage' || section === 'observability') return { tab: 'form' }
+  return {}
 }

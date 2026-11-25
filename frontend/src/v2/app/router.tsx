@@ -1,13 +1,12 @@
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
-import { PreviewCredentials } from '../features/guided/components/PreviewCredentials'
 import { orgSearch } from '../features/entry/orgSearch'
 import { sessionOptions, organizationsOptions } from '../features/entry/api/entry'
 import { accountSearch, projectSearch } from '../features/entry/entrySearch'
 import { safeEntryNext } from '../features/entry/entryLinks'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
-import { isProjectSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isProjectSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -134,37 +133,40 @@ const project = createRoute({
   getParentRoute: () => root, path: routePaths.project,
   beforeLoad: ({ params }) => { throw redirect({ to: routePaths.status, params }) },
 })
+const projectSectionSearch = (search: Record<string, unknown>): SectionSearch => ({
+  tab: typeof search.tab === 'string' ? search.tab : undefined,
+  kind: typeof search.kind === 'string' ? search.kind : undefined,
+  risk: typeof search.risk === 'string' ? search.risk : undefined,
+  decision: typeof search.decision === 'string' ? search.decision : undefined,
+  owner: typeof search.owner === 'string' ? search.owner : undefined,
+  preview: typeof search.preview === 'string' ? search.preview : undefined,
+  entity: typeof search.entity === 'string' ? search.entity : undefined,
+  file: typeof search.file === 'string' ? search.file : undefined,
+  openFiles: Array.isArray(search.openFiles) ? [...new Set(search.openFiles.filter((file): file is string => typeof file === 'string'))] : undefined,
+  source: search.source === 'manifest' || search.source === 'kit' ? search.source : undefined,
+  q: typeof search.q === 'string' ? search.q : undefined,
+  line: typeof search.line === 'number' && Number.isSafeInteger(search.line) && search.line > 0 ? search.line : undefined,
+  tool: typeof search.tool === 'string' ? search.tool : undefined,
+  workbench: search.workbench === 'console' || search.workbench === 'reference' ? search.workbench : undefined,
+  view: typeof search.view === 'string' ? search.view : undefined,
+  role: typeof search.role === 'string' ? search.role : undefined,
+  history: typeof search.history === 'number' && Number.isSafeInteger(search.history) && search.history > 1 ? search.history : undefined,
+  approval: typeof search.approval === 'string' ? search.approval : undefined,
+  page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
+  run: typeof search.run === 'string' ? search.run : undefined,
+  phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
+  workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
+})
+
 const status = createRoute({
-  getParentRoute: () => root, path: routePaths.status, component: screens.status.Component,
+  getParentRoute: () => root, path: routePaths.status, component: screens.status.Component, validateSearch: projectSectionSearch,
   loader: ({ context, params, preload }) => {
     if (preload) void context.queryClient.prefetchQuery(statusOptions(params.projectId))
   },
 })
 const section = createRoute({
   getParentRoute: () => root, path: routePaths.section, component: ProjectSection,
-  validateSearch: (search): SectionSearch => ({
-    tab: typeof search.tab === 'string' ? search.tab : undefined,
-    kind: typeof search.kind === 'string' ? search.kind : undefined,
-    risk: typeof search.risk === 'string' ? search.risk : undefined,
-    decision: typeof search.decision === 'string' ? search.decision : undefined,
-    owner: typeof search.owner === 'string' ? search.owner : undefined,
-    preview: typeof search.preview === 'string' ? search.preview : undefined,
-    entity: typeof search.entity === 'string' ? search.entity : undefined,
-    file: typeof search.file === 'string' ? search.file : undefined,
-    openFiles: Array.isArray(search.openFiles) ? [...new Set(search.openFiles.filter((file): file is string => typeof file === 'string'))] : undefined,
-    source: search.source === 'manifest' || search.source === 'kit' ? search.source : undefined,
-    q: typeof search.q === 'string' ? search.q : undefined,
-    line: typeof search.line === 'number' && Number.isSafeInteger(search.line) && search.line > 0 ? search.line : undefined,
-    tool: typeof search.tool === 'string' ? search.tool : undefined,
-    view: typeof search.view === 'string' ? search.view : undefined,
-    role: typeof search.role === 'string' ? search.role : undefined,
-    history: typeof search.history === 'number' && Number.isSafeInteger(search.history) && search.history > 1 ? search.history : undefined,
-    approval: typeof search.approval === 'string' ? search.approval : undefined,
-    page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
-    run: typeof search.run === 'string' ? search.run : undefined,
-    phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
-    workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
-  }),
+  validateSearch: projectSectionSearch,
   loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
@@ -197,14 +199,20 @@ const section = createRoute({
       }, () => undefined)
     }
   },
-  beforeLoad: ({ params }) => {
-    if (!isProjectSection(params.section)) throw redirect({ to: routePaths.status, params: { projectId: params.projectId } })
+  beforeLoad: ({ params, search }) => {
+    if (!isProjectSection(params.section)) throw redirect({
+      to: routePaths.status, params: { projectId: params.projectId }, search: { preview: search.preview }, replace: true,
+    })
+    const defaults = defaultSectionSearch(params.section)
+    if (!search.tab && defaults.tab) throw redirect({
+      to: routePaths.section, params, search: { ...search, ...defaults }, replace: true,
+    })
   },
 })
 function ProjectSection() {
-  const { projectId, section: name } = section.useParams()
+  const { section: name } = section.useParams()
   const Screen = sectionScreen(name).Component
-  return <PreviewCredentials key={projectId}><Screen /></PreviewCredentials>
+  return <Screen />
 }
 
 export const routeTree = root.addChildren([index, projects, newProject, account, signIn, login, signin, signup, verifyEmail, ssoComplete, ssoAlias, invitations, organization, kit, project, status, section])

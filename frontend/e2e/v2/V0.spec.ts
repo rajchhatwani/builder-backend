@@ -15,13 +15,12 @@ const sections = [
 ] as const
 
 type State = 'normal' | 'loading' | 'empty' | 'error'
-type Screen = 'kit' | 'status'
 const states: State[] = ['normal', 'loading', 'empty', 'error']
-const screenshots: Record<State, (page: Page, screen: Screen) => Promise<void>> = {
-  normal: (page, screen) => expect(page).toHaveScreenshot(`${screen}-normal.png`, { fullPage: true }),
-  loading: (page, screen) => expect(page).toHaveScreenshot(`${screen}-loading.png`, { fullPage: true }),
-  empty: (page, screen) => expect(page).toHaveScreenshot(`${screen}-empty.png`, { fullPage: true }),
-  error: (page, screen) => expect(page).toHaveScreenshot(`${screen}-error.png`, { fullPage: true }),
+const screenshots: Record<State, (page: Page) => Promise<void>> = {
+  normal: page => expect(page).toHaveScreenshot('kit-normal.png', { fullPage: true }),
+  loading: page => expect(page).toHaveScreenshot('kit-loading.png', { fullPage: true }),
+  empty: page => expect(page).toHaveScreenshot('kit-empty.png', { fullPage: true }),
+  error: page => expect(page).toHaveScreenshot('kit-error.png', { fullPage: true }),
 }
 
 async function mockStatus(page: Page, state: State, writeError?: number) {
@@ -47,6 +46,18 @@ async function mockStatus(page: Page, state: State, writeError?: number) {
     if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
     return route.fulfill({ status: 200, headers, json: { access_token: 'fixture', id: 'fixture-user' } })
   })
+  await page.route(url => url.port === '8000' && url.pathname.startsWith(`/projects/${projectId}`)
+    && !url.pathname.startsWith(statusPath), async route => {
+    const headers = { 'access-control-allow-origin': 'http://localhost:5299', 'access-control-allow-credentials': 'true',
+      'access-control-allow-methods': 'GET, POST, OPTIONS', 'access-control-allow-headers': 'authorization, content-type' }
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
+    const path = new URL(route.request().url()).pathname.slice(`/projects/${projectId}`.length)
+    if (path === '') return route.fulfill({ headers, json: { id: projectId, name: 'Inventory', version: 2 } })
+    if (path === '/members') return route.fulfill({ headers, json: [{ user_id: 'fixture-user', role: 'editor' }] })
+    if (path === '/generations' || path === '/roles') return route.fulfill({ headers, json: { items: [], total: 0 } })
+    if (path === '/presence/heartbeat') return route.fulfill({ status: 204, headers })
+    return route.fulfill({ status: 404, headers, json: { code: 'not_found', details: [] } })
+  })
   await page.route(url => url.pathname.startsWith(statusPath), async route => {
     const headers = { 'access-control-allow-origin': 'http://localhost:5299', 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization' }
     const method = route.request().method()
@@ -63,12 +74,11 @@ async function mockStatus(page: Page, state: State, writeError?: number) {
   return release
 }
 
-async function checkPage(page: Page, screen: Screen, state: State) {
+async function checkPage(page: Page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined))
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(await page.evaluate(() => window.innerWidth))
   const results = await new AxeBuilder({ page }).analyze()
   expect(results.violations.map(({ id, nodes }) => ({ id, targets: nodes.map(node => node.target) }))).toEqual([])
-  await screenshots[state](page, screen)
 }
 
 test.beforeEach(async ({ page }) => {
@@ -85,7 +95,8 @@ for (const state of states) {
       : state === 'loading' ? page.getByRole('status', { name: 'Loading…' })
       : state === 'empty' ? page.getByRole('heading', { name: 'No examples match.' })
       : page.getByRole('alert')).toBeVisible()
-    await checkPage(page, 'kit', state)
+    await checkPage(page)
+    await screenshots[state](page)
   })
 
   test(`status ${state}`, async ({ page }) => {
@@ -97,7 +108,8 @@ for (const state of states) {
         : state === 'loading' ? page.getByRole('status', { name: 'Loading project status…' })
         : state === 'empty' ? page.getByRole('heading', { name: 'Add your first entity' }).last()
         : page.getByRole('alert')).toBeVisible()
-      await checkPage(page, 'status', state)
+      // V-shell owns the screenshot matrix for this same Home route.
+      await checkPage(page)
       if (state === 'error') {
         await page.getByRole('button', { name: 'Try again' }).click()
         await expect(page.getByText('Ready to generate.', { exact: true })).toBeVisible()

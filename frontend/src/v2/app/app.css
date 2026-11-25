@@ -21,6 +21,7 @@
 @container viewport (width >= 43.75em) {
   .v2-shell-body[data-rail] { grid-template-columns: var(--rail-width) minmax(0, 1fr); }
   .v2-rail { display: block; }
+  .v2-home-rail { position: sticky; inset-block-start: 0; max-block-size: 85dvb; overflow: auto; align-self: start; }
   .v2-rail-toggle { display: none; }
 }
 @container viewport (width > 62.5em) {
@@ -44,4 +45,13 @@
 .v2-entry-rail { background: var(--canvas); border-block-end: var(--border) solid var(--line); padding: var(--s3); }
 @container viewport (width >= 43.75em) {
   .v2-entry-rail { border-block-end: 0; border-inline-end: var(--border) solid var(--line); }
+}
+
+.v2-top-actions { justify-content: flex-start; }
+.v2-share-content { overflow-wrap: anywhere; }
+.v2-status-disclosure { min-block-size: var(--touch); align-content: center; cursor: pointer; }
+.v2-status-counts { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--metric-card-width)), 1fr)); }
+.v2-status-counts .v2-button { inline-size: 100%; block-size: 100%; justify-content: flex-start; text-align: start; }
+@container viewport (width <= 62.5em) {
+  .v2-presence-roster { display: none; }
 }
