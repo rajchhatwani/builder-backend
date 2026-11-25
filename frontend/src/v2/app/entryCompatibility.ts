@@ -1,3 +1,4 @@
+import { isOrgTab } from '../features/entry/orgSearch'
 import { restoreSsoInvitation, setEntryInvitation, setEntryVerification } from '../features/entry/entryLinks'
 import { inviteTokenFrom } from '../validators'
 
@@ -6,6 +7,14 @@ export function normalizeEntryAddress() {
   const { pathname, hash, search } = window.location
   const fragment = hash.slice(1)
   let target: string | undefined
+  const orgLink = (fragment || pathname).match(/^\/(org\/[a-z][a-z0-9-]{0,99})(?:\/([a-z]+))?(?:\?(.*))?$/)
+
+  if (orgLink && (fragment || orgLink[2])) {
+    const [, path, tab, query] = orgLink
+    const params = new URLSearchParams(query ?? search)
+    if (isOrgTab(tab)) params.set('tab', tab)
+    target = '/' + path + (params.size ? '?' + params.toString() : '')
+  }
 
   if (fragment.startsWith('/invite/') || pathname.startsWith('/invite/')) {
     const token = inviteTokenFrom(fragment.startsWith('/invite/') ? hash : pathname)

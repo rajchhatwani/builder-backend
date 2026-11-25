@@ -135,3 +135,22 @@ export const checkProjectSlug = format(value => /^[a-z][a-z0-9-]*$/.test(value),
 export const checkPasswordConfirmation = (repeat: string, next: string) => repeat === next ? undefined : issue('passwordMismatch')
 export const tokenLimits = { name: 100, description: 255, minDays: 1, maxDays: 365, active: 25 } as const
 export const checkTokenDays = validators.number({ min: tokenLimits.minDays, max: tokenLimits.maxDays, integer: true })
+
+export const orgLimits = {
+  sessionHours: 720, approvalHours: 168, ssoUrl: 500, entityId: 500, cert: 20_000,
+  clientId: 255, clientSecret: 2000, domain: 260, groups: 100, groupName: 255, aiKey: 300,
+} as const
+
+export const orgSessionHours = validators.number({ min: 1, max: orgLimits.sessionHours, integer: true })
+export const orgApprovalHours = validators.number({ min: 1, max: orgLimits.approvalHours, integer: true })
+export const orgUsageLimit = validators.number({ min: 0, max: Number.MAX_SAFE_INTEGER, digits: 16, integer: true })
+export const orgAiKey = format(value => value.length >= 20 && /^sk[-_][\w-]{17,}$/.test(value), 'providerKey')
+export const orgAiBudget = format(value => /^(?:\d{1,9}(?:\.\d{1,6})?|\.\d{1,6})$/.test(value), 'budget')
+export const orgSsoUrl = format(value => /^https:\/\//i.test(value) && !validators.url(value), 'https')
+export const orgSsoDomain = format(value => value.includes('.') && !validators.host(value), 'domain')
+
+export function orgGroupName(name: string, names: string[]): ValidationIssue | undefined {
+  if (!name.trim()) return issue('required')
+  return names.filter(other => other.trim().toLowerCase() === name.trim().toLowerCase()).length > 1
+    ? issue('duplicateGroup') : undefined
+}

@@ -1,6 +1,7 @@
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { PreviewCredentials } from '../features/guided/components/PreviewCredentials'
+import { orgSearch } from '../features/entry/orgSearch'
 import { sessionOptions, organizationsOptions } from '../features/entry/api/entry'
 import { accountSearch, projectSearch } from '../features/entry/entrySearch'
 import { safeEntryNext } from '../features/entry/entryLinks'
@@ -116,7 +117,7 @@ const invitations = createRoute({ getParentRoute: () => root, path: routePaths.i
   component: () => <EntryGate kind="invitations"><screens.invitations.Component /></EntryGate>,
 })
 const organization = createRoute({ getParentRoute: () => root, path: routePaths.organization,
-  validateSearch: (search): { tab?: 'plan' } => ({ tab: search.tab === 'plan' ? 'plan' : undefined }),
+  validateSearch: orgSearch,
   component: () => <EntryGate kind="protected"><screens.organization.Component /></EntryGate>,
 })
 const kit = createRoute({

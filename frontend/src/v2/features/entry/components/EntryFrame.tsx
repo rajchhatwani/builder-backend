@@ -26,10 +26,12 @@ export function BackToSignIn({ label, next }: { label?: string; next?: string })
   return <Button asChild><Link to="/sign-in" search={{ next }}>{label ?? t('entry.backSignIn')}</Link></Button>
 }
 
-export function EntryProblem({ error, message, retry }: { error: unknown; message: string; retry?: () => void }) {
+export function EntryProblem({ error, message, retry, retryLabel }: {
+  error: unknown; message: string; retry?: () => void; retryLabel?: string
+}) {
   const t = useT()
   const { status } = entryError(error)
-  const action = retry && <Button onClick={retry}>{t('common.retry')}</Button>
+  const action = retry && <Button onClick={retry}>{retryLabel ?? t('common.retry')}</Button>
   if (status === 409) return <ConflictBanner action={action}>{message}</ConflictBanner>
   if (status === 403) return <Stack><ReadOnlyNote>{message}</ReadOnlyNote>{action}</Stack>
   return <Alert tone="danger" action={action}>{message}</Alert>
