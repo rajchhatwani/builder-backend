@@ -127,3 +127,21 @@ textarea.v2-control { resize: vertical; }
   padding-block: var(--s2);
   cursor: pointer;
 }
+
+.v2-range-track {
+  position: relative;
+  inline-size: 100%;
+  block-size: var(--s2);
+  background: var(--inset);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.v2-range-track span {
+  position: absolute;
+  inset-block: 0;
+  min-inline-size: var(--s1);
+  background: var(--accent);
+  opacity: .6;
+}
+.v2-range-track span[data-variant="active"] { opacity: 1; }
+.v2-range-track span[data-variant="warning"] { background: repeating-linear-gradient(45deg, var(--danger) 0 var(--s1), var(--danger-bg) var(--s1) var(--s2)); opacity: 1; }

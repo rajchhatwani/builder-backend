@@ -29,6 +29,10 @@ const connectSections = ['payments', 'storage', 'integrations', 'forms', 'notifi
 export const isConnectSection = (section: string): section is typeof connectSections[number] =>
   connectSections.some(name => name === section)
 
+export const operateSections = ['observability', 'jobs', 'workers', 'workflows', 'traces', 'metrics', 'search'] as const
+export const isOperateSection = (section: string): section is typeof operateSections[number] =>
+  operateSections.some(name => name === section)
+
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]
@@ -71,6 +75,10 @@ export type SectionSearch = {
   base?: number
   role?: string
   run?: string
+  rule?: string
+  span?: string
+  report?: string
+  edit?: string
   phase?: number
   workspace?: string
   page?: number

@@ -15,3 +15,10 @@ export function Progress({ label, value, max }: { label: string; value: number; 
 export function Disclosure({ label, children, ...props }: ComponentPropsWithRef<'details'> & { label: ReactNode }) {
   return <details {...props} className="v2-disclosure"><summary>{label}</summary>{children}</details>
 }
+
+export function RangeTrack({ offset, width, variant = 'default' }: { offset: number; width: number; variant?: 'default' | 'active' | 'warning' }) {
+  const percent = (value: number) => (Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0) + '%'
+  return <div className="v2-range-track" aria-hidden>
+    <span data-variant={variant} style={{ insetInlineStart: percent(offset), inlineSize: percent(Math.min(width, 100 - offset)) }} />
+  </div>
+}

@@ -11,7 +11,7 @@ import { useT } from '../i18n'
 import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
 import { PreviewIdentity } from '../features/guided/components/PreviewIdentity'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { defaultSectionSearch, isBehaviorSection, isConnectSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isConnectSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -167,6 +167,10 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   tokensPage: typeof search.tokensPage === 'number' && Number.isSafeInteger(search.tokensPage) && search.tokensPage > 1 ? search.tokensPage : undefined,
   approval: typeof search.approval === 'string' ? search.approval : undefined,
   page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
+  rule: typeof search.rule === 'string' ? search.rule : undefined,
+  span: typeof search.span === 'string' ? search.span : undefined,
+  report: typeof search.report === 'string' ? search.report : undefined,
+  edit: typeof search.edit === 'string' ? search.edit : undefined,
   run: typeof search.run === 'string' ? search.run : undefined,
   phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
   bookingKind: typeof search.bookingKind === 'number' && Number.isInteger(search.bookingKind) && search.bookingKind >= 0 ? search.bookingKind : undefined,
@@ -208,6 +212,12 @@ const section = createRoute({
         if (params.section !== 'auth') void context.queryClient.prefetchQuery(keycloakOptions(id))
         else if (deps.tab === 'fields') void context.queryClient.prefetchQuery(fieldsOptions(id, deps.page ?? 1))
       }, () => undefined)
+    }
+    if (isOperateSection(params.section)) {
+      const { projectId, section } = params
+      void screens[section].preload()
+      void import('../features/operate/api/operate').then(({ prefetchOperate }) =>
+        prefetchOperate(context.queryClient, projectId, section), () => undefined)
     }
     if (isConnectSection(params.section)) {
       void screens[params.section].preload()
@@ -314,7 +324,7 @@ function ProjectSection() {
       roleError={workspace.roleError} retryRole={workspace.retryRole} credentials={credentials} renderIdentity={renderPreviewIdentity(workspace.role === 'owner' || workspace.role === 'editor')}
       organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
   }
-  if (isBehaviorSection(name) || isSecureSection(name)) {
+  if (isBehaviorSection(name) || isSecureSection(name) || isOperateSection(name)) {
     const Screen = screens[name].Component
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
       roleError={workspace.roleError} retryRole={workspace.retryRole} />

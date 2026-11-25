@@ -1,0 +1,13 @@
+.v2-trace-rows { display: grid; gap: var(--s1); list-style: none; padding: 0; }
+.v2-trace-span { inline-size: 100%; text-align: start; }
+.v2-trace-span > .v2-stack { inline-size: 100%; }
+.v2-trace-span[aria-pressed="true"] { border-color: var(--accent); }
+.v2-trace-span[data-depth="1"] { padding-inline-start: var(--s4); }
+.v2-trace-span[data-depth="2"] { padding-inline-start: var(--s5); }
+.v2-trace-span[data-depth="3"] { padding-inline-start: var(--s6); }
+.v2-trace-span[data-depth="4"] { padding-inline-start: var(--s8); }
+.v2-trace-span[data-depth="5"] { padding-inline-start: var(--s10); }
+.v2-operate-kv { display: grid; gap: var(--s2); }
+.v2-operate-kv dt { color: var(--muted); }
+.v2-operate-kv dd { overflow-wrap: anywhere; }
+.v2-operate-results { display: grid; gap: var(--s3); list-style: none; padding: 0; }
