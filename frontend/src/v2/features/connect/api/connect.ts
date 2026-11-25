@@ -18,6 +18,7 @@ export type ConnectSpec = {
   tenancy?: { mode?: string } | null
   state_machines?: { entity: string }[]
   relations?: { kind: string; to_entity: string; to_name: string }[]
+  authorization?: { model: string } | null
   auth: (NonNullable<SpecForPolicies['auth']> & { enabled: boolean }) | null
   entities: { name: string; fields: {
     name: string; type: string; required: boolean; min_value?: number | null; max_length?: number | null; enum_values?: string[] | null

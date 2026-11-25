@@ -6,7 +6,7 @@ import type { Tone } from '../ui'
 export * from './Form'
 export * from './DataTable'
 
-export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, open: controlledOpen, onOpenChange, returnFocus }: {
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, closeLabel, open: controlledOpen, onOpenChange, returnFocus }: {
   trigger?: ReactElement
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -14,6 +14,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   title: string
   description: string
   action: string
+  closeLabel?: string
   onConfirm: () => void | Promise<void>
   pending?: boolean
   error?: string
@@ -28,7 +29,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   const t = useT()
   const busy = Boolean(pending || working)
   return (
-    <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen} returnFocus={returnFocus}
+    <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen} returnFocus={returnFocus} closeLabel={closeLabel}
       actions={<Button variant="danger" disabled={busy || disabled} onClick={async () => {
         setWorking(true)
         setFailed(false)

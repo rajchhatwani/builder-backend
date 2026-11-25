@@ -1,3 +1,4 @@
+import type { ConnectProps } from '../features/connect/api/connect'
 import { lazyScreen } from './lazy'
 
 export const screens = {
@@ -13,6 +14,13 @@ export const screens = {
   import: lazyScreen(() => import('../features/connect/ImportScreen')),
   apikeys: lazyScreen(() => import('../features/connect/ApiKeysScreen')),
   apps: lazyScreen(() => import('../features/connect/AppsScreen')),
+  ledgersettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.LedgerSettings }))),
+  currencysettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.CurrencySettings }))),
+  reconsettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.ReconSettings }))),
+  invoicingsettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.InvoicingSettings }))),
+  bookingsettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.BookingSettings }))),
+  geosettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.GeoSettings }))),
+  locationsettings: lazyScreen<ConnectProps>(() => import('../features/connect/PackSettingsScreen').then(module => ({ default: module.LocationSettings }))),
   auth: lazyScreen(() => import('../features/secure/AuthScreen')),
   keycloak: lazyScreen(() => import('../features/secure/KeycloakScreen')),
   access: lazyScreen(() => import('../features/secure/AccessScreen')),

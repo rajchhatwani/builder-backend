@@ -25,6 +25,9 @@ type SchemaProps = {
   fieldOverride?: (props: SchemaFieldOverride) => ReactNode
   selectedRow?: (path: Path) => { index?: number; select: (index?: number) => void } | undefined
   confirmRemove?: boolean
+  groupHeadings?: boolean
+  rowDetail?: (path: Path, value: unknown) => ReactNode
+  optionalLabel?: (label: string) => string
 }
 
 type NodeProps = SchemaProps & { node: JsonSchema; path: Path; name: string; required?: boolean; base: string }
@@ -44,7 +47,7 @@ function SchemaNode(props: NodeProps) {
   const title = node.title
   const label = t('schema.label', { label: hint.label ?? (title && title !== automaticTitle ? title : humanize(name)) })
   const messages = errors?.[key] ?? []
-  const rowErrors = hint.widget === 'csv' ? Object.entries(errors ?? {}).filter(([path]) => path.startsWith(key + '.'))
+  const rowErrors = hint.widget === 'csv' || shape.type === 'object' && !shape.properties ? Object.entries(errors ?? {}).filter(([path]) => path.startsWith(key + '.'))
     .flatMap(([, issues]) => issues) : []
   const error = [...messages, ...rowErrors].join(' ')
   const id = base + '-' + key
@@ -60,13 +63,14 @@ function SchemaNode(props: NodeProps) {
       .map(field => {
         const child = resolve(schema, fields[field])
         const wide = child.type === 'array' && uiOf(child).widget !== 'csv' || child.type === 'object' || uiOf(child).widget === 'textarea'
-        return <div key={field} className={wide ? 'v2-schema-wide' : undefined}><SchemaNode {...props} node={fields[field]} path={[...path, field]}
+        return <div key={field} data-field-path={props.groupHeadings ? pathKey([...path, field]) : undefined} className={wide ? 'v2-schema-wide' : undefined}><SchemaNode {...props} node={fields[field]} path={[...path, field]}
           name={field} value={current?.[field]} required={shape.required?.includes(field)} /></div>
       })}</Grid>
     if (!path.length) return children
+    const Heading = props.groupHeadings && path.length === 1 ? 'h2' : 'h3'
     return <Card role="group" aria-label={label}><Stack>
-      <h3>{label}</h3>
-      {shape.nullable && hint.optional && <Checkbox label={t('schema.include', { label })} checked={current != null} disabled={readOnly}
+      <Heading>{label}</Heading>
+      {shape.nullable && hint.optional && <Checkbox label={props.optionalLabel?.(label) ?? t('schema.include', { label })} checked={current != null} disabled={readOnly}
         onChange={event => write(event.target.checked ? defaultFor(schema, Object.assign({}, shape, { nullable: false, default: undefined })) : null)} />}
       {(!hint.optional || current != null) && children}
       {error && <Alert tone="danger">{t('schema.message', { message: error })}</Alert>}
@@ -170,8 +174,10 @@ function SchemaRows({ shape, label, ...props }: NodeProps & { shape: Resolved; l
     ;[next[index], next[index + step]] = [next[index + step], next[index]]
     change(next, index + step, step < 0 ? 'up' : 'down')
   }
+  const Heading = props.groupHeadings && path.length === 1 ? 'h2' : 'h3'
+  const RowHeading = props.groupHeadings && path.length === 1 ? 'h3' : 'h4'
   return <Card role="group" aria-label={label} ref={area}><Stack>
-    <h3>{label}</h3>
+    <Heading>{label}</Heading>
     {error && <Alert tone="danger">{t('schema.message', { message: error })}</Alert>}
     {selection && !items.length && <p>{t('schema.emptyRows', { label })}</p>}
     {items.map((value, index) => {
@@ -182,11 +188,12 @@ function SchemaRows({ shape, label, ...props }: NodeProps & { shape: Resolved; l
       const rowLabel = t('schema.row', { item: singular, index: index + 1 })
       return <Card key={index} role="group" aria-label={rowLabel} data-schema-row={index}><Stack>
         <Row>
-          <h4>{rowName || rowLabel}</h4>
+          <RowHeading>{rowName || rowLabel}</RowHeading>
           {selection && <Button aria-expanded={expanded} onClick={() => selection.select(expanded ? undefined : index)}>
             {t(expanded ? 'schema.collapse' : 'schema.expand')}
           </Button>}
         </Row>
+        {props.rowDetail?.(path, value)}
         {expanded && <SchemaNode {...props} key={revision} node={item} path={[...path, index]} name={singular} value={value} required />}
         {!readOnly && <Row>
           <Button data-row-action="up" aria-label={t('schema.moveUp', { label: rowLabel })} disabled={!index} onClick={() => move(index, -1)}>{t('schema.up')}</Button>

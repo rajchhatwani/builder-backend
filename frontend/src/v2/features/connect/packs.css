@@ -1,0 +1,5 @@
+.v2-pack-reference { align-items: start; grid-template-columns: minmax(0, 1fr); }
+@container viewport (width > 62.5em) {
+  .v2-pack-reference { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); }
+}
+.v2-pack-fieldset { min-inline-size: 0; padding: var(--s2); border: var(--border) solid var(--line); }

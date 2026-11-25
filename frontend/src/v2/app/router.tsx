@@ -11,7 +11,7 @@ import { useT } from '../i18n'
 import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
 import { PreviewIdentity } from '../features/guided/components/PreviewIdentity'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { defaultSectionSearch, isBehaviorSection, isConnectSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isConnectSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -169,6 +169,7 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
   run: typeof search.run === 'string' ? search.run : undefined,
   phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
+  bookingKind: typeof search.bookingKind === 'number' && Number.isInteger(search.bookingKind) && search.bookingKind >= 0 ? search.bookingKind : undefined,
   notificationRow: typeof search.notificationRow === 'number' && Number.isInteger(search.notificationRow) && search.notificationRow >= 0 ? search.notificationRow : undefined,
   notificationType: typeof search.notificationType === 'string' ? search.notificationType : undefined,
   channel: typeof search.channel === 'string' ? search.channel : undefined,
@@ -210,6 +211,11 @@ const section = createRoute({
     }
     if (isConnectSection(params.section)) {
       void screens[params.section].preload()
+      if (isPackSection(params.section)) {
+        void import('../features/connect/api/packs').then(({ packsOptions }) =>
+          context.queryClient.prefetchQuery(packsOptions(params.projectId)), () => undefined)
+        return
+      }
       if (params.section === 'forms' || params.section === 'apps') return
       if (params.section === 'import') {
         void import('../features/connect/api/connect').then(({ specOptions }) =>

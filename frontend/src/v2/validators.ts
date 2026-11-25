@@ -554,3 +554,161 @@ export function platformKeyIssue(value: string, max: number): ValidationIssue | 
     return { key: 'connectB.validation.keyLifetime', values: { max } }
   }
 }
+
+const paymentZeroDecimal = 'CLP JPY KRW PYG RWF VND XAF XOF XPF'.split(' ')
+const moneyCurrenciesByExponent = [
+  [...paymentZeroDecimal, 'ISK', 'UGX'],
+  [],
+  'AED AUD BGN BRL CAD CHF CNY CZK DKK EUR GBP HKD HUF IDR ILS INR MXN MYR NOK NZD PHP PLN RON SAR SEK SGD THB TRY TWD USD ZAR'.split(' '),
+  'BHD JOD KWD OMR TND'.split(' '),
+]
+export const packCurrencyExponents: Record<string, number> = Object.fromEntries(moneyCurrenciesByExponent
+  .flatMap((codes, exponent) => codes.map(code => [code, exponent])))
+
+export function reconciliationCeiling(currencies: unknown) {
+  // The reconciliation validator uses the narrower payments currency table.
+  return Array.isArray(currencies) && currencies.some(code => paymentZeroDecimal.includes(code)) ? 100 : 10_000
+}
+
+export const packRanges = {
+  ledger: { max_amount_minor: [1, Number.MAX_SAFE_INTEGER], max_entries: [2, 1000] },
+  reconciliation: { tolerance_minor: [0, 10_000], max_lines: [1, 10_000] },
+  invoicing: { payment_terms_days: [0, 365], commission_bp: [0, 10_000] },
+  booking: { hold_ttl_seconds: [1, 86_400], max_horizon_days: [1, 730], free_until_hours: [0, 8760],
+    fee_minor: [0, Number.MAX_SAFE_INTEGER], slot_minutes: [5, 1440], capacity: [1, 100_000],
+    min_minutes: [1, 525_600], max_minutes: [1, 525_600] },
+  geo: { grid_cell_micro: [1000, 1_000_000], max_places: [1, 10_000_000], max_geofences: [1, 100_000],
+    max_polygon_vertices: [3, 1000], max_radius_m: [1, 20_037_509] },
+  location: { history_cap: [1, 10_000], max_subjects: [1, 10_000_000] },
+} as const
+
+export const bookingWeekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] as const
+type PackObject = Record<string, unknown>
+type PackTranslate = (key: string, values?: Record<string, string | number>) => string
+type BookingWindow = { start: string; end: string }
+export type BookingSchedule = Record<string, BookingWindow[]>
+
+function packObject(value: unknown): PackObject {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as PackObject : {}
+}
+
+export function isBookingSchedule(value: unknown): value is BookingSchedule {
+  return value != null && typeof value === 'object' && !Array.isArray(value) &&
+    Object.values(value).every(windows => Array.isArray(windows) && windows.every(window =>
+      window && typeof window.start === 'string' && typeof window.end === 'string' &&
+      Object.keys(window).every(key => key === 'start' || key === 'end')))
+}
+
+function wallMinutes(value: string) {
+  if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value)) return NaN
+  const [hours, minutes] = value.split(':').map(Number)
+  return hours * 60 + minutes
+}
+
+export function packDraftIssues(kind: string, draft: PackObject, ceiling: number, t: PackTranslate) {
+  const issues: Record<string, string[]> = {}
+  const add = (path: string, key: string, values?: Record<string, string | number>) => {
+    const message = t('connectC.validation.' + key, values)
+    issues[path] = [...(issues[path] ?? []), message]
+  }
+  const range = (path: string, value: unknown, [min, max]: readonly [number, number]) => {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < min || value > max) {
+      add(path, 'range', { field: t('connectC.field.' + path.split('.').at(-1)), min, max })
+    }
+  }
+  switch (kind) {
+    case 'ledger':
+    case 'geo':
+    case 'location':
+      for (const [field, bounds] of Object.entries(packRanges[kind])) range(field, draft[field], bounds)
+      break
+    case 'reconciliation':
+      range('tolerance_minor', draft.tolerance_minor, [0, ceiling])
+      range('max_lines', draft.max_lines, packRanges.reconciliation.max_lines)
+      break
+    case 'currency': {
+      const currencies = Array.isArray(draft.currencies) ? draft.currencies : []
+      if (currencies.length < 1 || currencies.length > 50) add('currencies', 'currencyCount')
+      if (new Set(currencies).size !== currencies.length) add('currencies', 'duplicateCurrency')
+      for (const code of currencies) if (!Object.hasOwn(packCurrencyExponents, code)) add('currencies', 'unsupportedCurrency', { code: String(code) })
+      if (draft.rounding !== 'half_even') add('rounding', 'rounding')
+      if (draft.tax) {
+        const rates = Object.entries(packObject(packObject(draft.tax).rates_bp))
+        if (rates.length > 50) add('tax.rates_bp', 'taxCount')
+        for (const [name, rate] of rates) {
+          if (!/^[a-z][a-z0-9_]{0,31}$/.test(name)) add('tax.rates_bp', 'taxName', { name })
+          if (typeof rate !== 'number' || !Number.isSafeInteger(rate) || rate < 0 || rate > 10_000) add('tax.rates_bp', 'taxRate', { name })
+        }
+      }
+      break
+    }
+    case 'invoicing': {
+      const bounds = packRanges.invoicing
+      range('payment_terms_days', draft.payment_terms_days, bounds.payment_terms_days)
+      if (typeof draft.number_prefix !== 'string' || !/^[A-Za-z0-9_/-]{0,12}$/.test(draft.number_prefix)) add('number_prefix', 'invoicePrefix')
+      const accounts = Object.entries(draft).filter(([field]) => field.endsWith('_account'))
+      if (draft.payouts) {
+        const payout = packObject(draft.payouts)
+        accounts.push(['payouts.seller_payable_account', payout.seller_payable_account], ['payouts.commission_account', payout.commission_account])
+        range('payouts.commission_bp', payout.commission_bp, bounds.commission_bp)
+      }
+      for (const [field, code] of accounts) {
+        if (typeof code !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._:-]{0,39}$/.test(code)) add(field, 'accountCode')
+        else if (accounts.some(([other, value]) => field !== other && code === value)) add(field, 'distinctAccounts')
+      }
+      const days = draft.aging_buckets_days
+      if (!Array.isArray(days) || days.length < 1 || days.length > 8 ||
+        days.some((day, index) => !Number.isInteger(day) || day < 1 || day > 3650 || index > 0 && day <= days[index - 1])) {
+        add('aging_buckets_days', 'agingDays')
+      }
+      break
+    }
+    case 'booking': {
+      const bounds = packRanges.booking
+      const cancellation = packObject(draft.cancellation)
+      range('hold_ttl_seconds', draft.hold_ttl_seconds, bounds.hold_ttl_seconds)
+      range('max_horizon_days', draft.max_horizon_days, bounds.max_horizon_days)
+      range('cancellation.free_until_hours', cancellation.free_until_hours, bounds.free_until_hours)
+      range('cancellation.fee_minor', cancellation.fee_minor, bounds.fee_minor)
+      if (typeof cancellation.currency !== 'string' || !/^[A-Z]{3}$/.test(cancellation.currency)) add('cancellation.currency', 'bookingCurrency')
+      const kinds = Array.isArray(draft.kinds) ? draft.kinds.map(packObject) : []
+      if (!kinds.length || kinds.length > 20) add('kinds', 'kindCount')
+      kinds.forEach((kind, index) => {
+        const path = 'kinds.' + index + '.'
+        if (typeof kind.name !== 'string' || !/^[a-z][a-z0-9_]{0,39}$/.test(kind.name)) add(path + 'name', 'kindName')
+        else if (kinds.some((other, otherIndex) => index !== otherIndex && other.name === kind.name)) add(path + 'name', 'duplicateKind')
+        try {
+          if (typeof kind.timezone !== 'string' || !kind.timezone || /^[+-]/.test(kind.timezone)) throw new RangeError()
+          new Intl.DateTimeFormat('en', { timeZone: kind.timezone })
+        } catch { add(path + 'timezone', 'timezone') }
+        if (kind.mode === 'slot') {
+          range(path + 'slot_minutes', kind.slot_minutes, bounds.slot_minutes)
+          const schedule = kind.schedule
+          const field = path + 'schedule'
+          if (!isBookingSchedule(schedule)) add(field, 'scheduleShape')
+          else {
+            if (!Object.values(schedule).some(windows => windows.length)) add(field, 'openingWindow')
+            for (const [day, windows] of Object.entries(schedule)) {
+              if (!bookingWeekdays.some(weekday => weekday === day)) { add(field, 'weekday', { day }); continue }
+              const spans = windows.map(({ start, end }, index) => {
+                const from = wallMinutes(start)
+                const to = wallMinutes(end)
+                if (!(from < to)) add(field, 'windowTime', { day, index: index + 1 })
+                else if (to - from < Number(kind.slot_minutes)) add(field, 'windowLength', { day, index: index + 1 })
+                return [from, to]
+              }).filter(([from, to]) => from < to).sort(([first], [second]) => first - second)
+              if (spans.some(([from], index) => index > 0 && from < spans[index - 1][1])) add(field, 'windowOverlap', { day })
+            }
+          }
+        } else {
+          range(path + 'min_minutes', kind.min_minutes, bounds.min_minutes)
+          range(path + 'max_minutes', kind.max_minutes, bounds.max_minutes)
+          if (Number(kind.max_minutes) < Number(kind.min_minutes)) add(path + 'max_minutes', 'durationOrder')
+          if (kind.mode === 'pool') range(path + 'capacity', kind.capacity, bounds.capacity)
+        }
+      })
+      break
+    }
+  }
+  return issues
+}

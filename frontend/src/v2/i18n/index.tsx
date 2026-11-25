@@ -40,11 +40,13 @@ function lookup(catalog: Catalog, key: string): string | undefined {
   return typeof value === 'string' ? value : undefined
 }
 
-function translator(language: Language): Translate {
+function translator(language: Language, routeEnglish?: Catalog): Translate {
   return (key, variables = {}) => {
     const count = variables.count
     const plural = typeof count === 'number' ? `${key}_${new Intl.PluralRules(language).select(count)}` : key
-    const text = lookup(catalogs[language], plural) ?? lookup(catalogs[language], key) ?? lookup(en, plural) ?? lookup(en, key) ?? key
+    const text = lookup(catalogs[language], plural) ?? lookup(catalogs[language], key) ??
+      lookup(en, plural) ?? lookup(en, key) ??
+      (routeEnglish && (lookup(routeEnglish, plural) ?? lookup(routeEnglish, key))) ?? key
     return text.replace(/{{\s*(\w+)\s*}}/g, (_, name: string) => {
       const value = variables[name]
       return typeof value === 'number' ? new Intl.NumberFormat(language).format(value) : value ?? ''
@@ -87,3 +89,10 @@ export function I18nProvider({ children }: { children: ReactNode }) {
 
 export function useLanguage() { return useContext(LanguageContext) }
 export function useT() { return useLanguage().t }
+
+export function RouteTranslations({ english, children }: { english: Catalog; children: ReactNode }) {
+  const value = useLanguage()
+  return <LanguageContext.Provider value={{ ...value, t: translator(value.language, english) }}>
+    {children}
+  </LanguageContext.Provider>
+}

@@ -21,7 +21,10 @@ const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', '
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
 
-const connectSections = ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps'] as const
+export const packSections = ['ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings', 'geosettings', 'locationsettings'] as const
+export const isPackSection = (section: string): section is typeof packSections[number] => packSections.some(name => name === section)
+
+const connectSections = ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps', ...packSections] as const
 export const isConnectSection = (section: string): section is typeof connectSections[number] =>
   connectSections.some(name => name === section)
 
@@ -73,6 +76,7 @@ export type SectionSearch = {
   approval?: string
   tokensPage?: number
   notificationType?: string
+  bookingKind?: number
   notificationRow?: number
   channel?: string
   subscription?: string
