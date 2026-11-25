@@ -6,7 +6,7 @@ import { getBlock, removeBlock, setBlock } from '../../../../shell/packs/packsLo
 import { connectKeys } from './connect'
 
 export type PackBlock = Record<string, unknown>
-export type PackAddress = readonly [pack: 'money' | 'operations' | 'booking', block?: string]
+export type PackAddress = readonly [pack: 'money' | 'operations' | 'booking' | 'ai', block?: string]
 type Packs = { money?: PackBlock | null; operations?: PackBlock | null; booking?: PackBlock | null; ai?: PackBlock | null }
 type PacksRead = { packs: Packs | null; version: number; row_version: number; updated_at: string | null }
 

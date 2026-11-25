@@ -16,11 +16,17 @@ export type ConnectSpec = {
   jobs?: { enabled: boolean; jobs?: { name: string }[] } | null
   providers?: { enabled: boolean } | null
   tenancy?: { mode?: string } | null
-  state_machines?: { entity: string }[]
+  state_machines?: { entity: string; field?: string }[]
+  sequences?: { entity?: string | null; field?: string | null }[]
   relations?: { kind: string; to_entity: string; to_name: string }[]
-  authorization?: { model: string } | null
-  auth: (NonNullable<SpecForPolicies['auth']> & { enabled: boolean }) | null
-  entities: { name: string; fields: {
+  authorization?: { model: string; field_access?: { entity: string; field: string; write_roles: string[] | null }[] } | null
+  auth: (Omit<NonNullable<SpecForPolicies['auth']>, 'roles'> & {
+    enabled: boolean
+    provider?: string
+    roles: { name: string; label: string; inherits_from?: string | null }[]
+    permissions?: { entity: string; operation: string; roles: string[] }[]
+  }) | null
+  entities: { name: string; table_name?: string; fields: {
     name: string; type: string; required: boolean; min_value?: number | null; max_length?: number | null; enum_values?: string[] | null
   }[] }[]
 }

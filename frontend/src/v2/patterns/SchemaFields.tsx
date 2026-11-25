@@ -25,6 +25,8 @@ type SchemaProps = {
   fieldOverride?: (props: SchemaFieldOverride) => ReactNode
   selectedRow?: (path: Path) => { index?: number; select: (index?: number) => void } | undefined
   confirmRemove?: boolean
+  showEmptyRows?: boolean
+  removeImpact?: (path: Path, value: unknown) => string | undefined
   groupHeadings?: boolean
   rowDetail?: (path: Path, value: unknown) => ReactNode
   optionalLabel?: (label: string) => string
@@ -179,7 +181,7 @@ function SchemaRows({ shape, label, ...props }: NodeProps & { shape: Resolved; l
   return <Card role="group" aria-label={label} ref={area}><Stack>
     <Heading>{label}</Heading>
     {error && <Alert tone="danger">{t('schema.message', { message: error })}</Alert>}
-    {selection && !items.length && <p>{t('schema.emptyRows', { label })}</p>}
+    {(selection || props.showEmptyRows) && !items.length && <p>{t('schema.emptyRows', { label })}</p>}
     {items.map((value, index) => {
       const expanded = !selection || selection.index === index
       const remove = () => change(items.filter((_, position) => position !== index), Math.min(index, items.length - 2), 'remove')
@@ -201,7 +203,9 @@ function SchemaRows({ shape, label, ...props }: NodeProps & { shape: Resolved; l
           {props.confirmRemove ? <ConfirmDestructive
             trigger={<Button variant="danger" data-row-action="remove" aria-label={t('schema.removeRow', { label: rowLabel })}>{t('schema.remove')}</Button>}
             title={t('schema.removeTitle', { label: rowLabel })} description={t('schema.removeHelp')}
-            action={t('schema.remove')} onConfirm={remove} /> :
+            action={t('schema.remove')} onConfirm={remove}>
+            {props.removeImpact?.(path, value)}
+          </ConfirmDestructive> :
             <Button data-row-action="remove" aria-label={t('schema.removeRow', { label: rowLabel })} onClick={remove}>{t('schema.remove')}</Button>}
         </Row>}
       </Stack></Card>

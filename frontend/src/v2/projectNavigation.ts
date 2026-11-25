@@ -21,7 +21,8 @@ const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', '
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
 
-export const packSections = ['ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings', 'geosettings', 'locationsettings'] as const
+export const packSections = ['ledgersettings', 'currencysettings', 'reconsettings', 'invoicingsettings', 'bookingsettings', 'geosettings', 'locationsettings',
+  'matchingsettings', 'predictionsettings', 'aigatewaysettings', 'aidocssettings', 'knowledgesettings', 'agentssettings', 'evalssettings'] as const
 export const isPackSection = (section: string): section is typeof packSections[number] => packSections.some(name => name === section)
 
 const connectSections = ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks', 'providers', 'apiedge', 'import', 'apikeys', 'apps', ...packSections] as const

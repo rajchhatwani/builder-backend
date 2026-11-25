@@ -1,0 +1,8 @@
+.v2-advanced-pack [data-schema-row] > .v2-stack > .v2-card[role="group"] {
+  border: 0;
+  padding: 0;
+}
+@container viewport (width < 43.75em) {
+  .v2-advanced-pack [data-field-path] .v2-card { padding: var(--s2); }
+  .v2-advanced-pack [data-schema-row] > .v2-stack > .v2-card[role="group"] { padding: 0; }
+}
