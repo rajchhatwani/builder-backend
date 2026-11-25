@@ -9,14 +9,13 @@ import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
 import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
-import { PreviewIdentity } from '../features/guided/components/PreviewIdentity'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { defaultSectionSearch, isBehaviorSection, isConnectSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isConnectSection, isLiveOperateSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
 import { Shell } from './Shell'
-import { LazyError, ScreenSkeleton } from './lazy'
+import { LazyError, ScreenSkeleton, lazyScreen } from './lazy'
 import { screens, sectionScreen } from './routeScreens'
 
 export { openInEditor } from '../features/editor/routes'
@@ -139,6 +138,24 @@ const project = createRoute({
   beforeLoad: ({ params }) => { throw redirect({ to: routePaths.status, params }) },
 })
 const projectSectionSearch = (search: Record<string, unknown>): SectionSearch => ({
+  status: typeof search.status === 'string' ? search.status : undefined,
+  currency: typeof search.currency === 'string' ? search.currency : undefined,
+  account: typeof search.account === 'string' ? search.account : undefined,
+  asOf: typeof search.asOf === 'string' ? search.asOf : undefined,
+  aging: typeof search.aging === 'string' ? search.aging : undefined,
+  subject: typeof search.subject === 'string' ? search.subject : undefined,
+  resource: typeof search.resource === 'string' ? search.resource : undefined,
+  week: typeof search.week === 'string' ? search.week : undefined,
+  matchPage: typeof search.matchPage === 'number' && Number.isSafeInteger(search.matchPage) && search.matchPage > 0 ? search.matchPage : undefined,
+  historyPage: typeof search.historyPage === 'number' && Number.isSafeInteger(search.historyPage) && search.historyPage > 0 ? search.historyPage : undefined,
+  box: typeof search.box === 'string' ? search.box : undefined,
+  viewport: typeof search.viewport === 'string' ? search.viewport : undefined,
+  slot: typeof search.slot === 'string' ? search.slot : undefined,
+  seller: typeof search.seller === 'string' ? search.seller : undefined,
+  invoice: typeof search.invoice === 'string' ? search.invoice : undefined,
+  from: typeof search.from === 'string' ? search.from : undefined,
+  until: typeof search.until === 'string' ? search.until : undefined,
+
   tab: typeof search.tab === 'string' ? search.tab : undefined,
   kind: typeof search.kind === 'string' ? search.kind : undefined,
   risk: typeof search.risk === 'string' ? search.risk : undefined,
@@ -211,6 +228,13 @@ const section = createRoute({
         void context.queryClient.prefetchQuery(authOptions(id))
         if (params.section !== 'auth') void context.queryClient.prefetchQuery(keycloakOptions(id))
         else if (deps.tab === 'fields') void context.queryClient.prefetchQuery(fieldsOptions(id, deps.page ?? 1))
+      }, () => undefined)
+    }
+    if (isLiveOperateSection(params.section)) {
+      void screens[params.section].preload()
+      void import('../features/operate/api/live').then(({ previewOptions, bookingRulesOptions }) => {
+        void context.queryClient.prefetchQuery(previewOptions(params.projectId))
+        if (params.section === 'bookingadmin') void context.queryClient.prefetchQuery(bookingRulesOptions(params.projectId))
       }, () => undefined)
     }
     if (isOperateSection(params.section)) {
@@ -305,6 +329,9 @@ const section = createRoute({
     })
   },
 })
+type IdentityProps = Parameters<typeof import('../features/guided/components/PreviewIdentity').PreviewIdentity>[0]
+const { Component: PreviewIdentity } = lazyScreen<IdentityProps>(() => import('../features/guided/components/PreviewIdentity')
+  .then(module => ({ default: module.PreviewIdentity })))
 const renderPreviewIdentity: (allowRegister: boolean) => NonNullable<PlatformPreviewProps['renderIdentity']> =
   allowRegister => (preview, credential) =>
     <PreviewIdentity preview={{ ...preview, error: preview.error ?? null, is_preview: true }} credential={credential} allowRegister={allowRegister} />
@@ -323,6 +350,12 @@ function ProjectSection() {
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
       roleError={workspace.roleError} retryRole={workspace.retryRole} credentials={credentials} renderIdentity={renderPreviewIdentity(workspace.role === 'owner' || workspace.role === 'editor')}
       organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
+  }
+  if (isLiveOperateSection(name)) {
+    const Screen = screens[name].Component
+    return <Screen key={projectId + ':' + name} projectId={projectId} role={workspace.role}
+      rolePending={workspace.rolePending} roleError={workspace.roleError} retryRole={workspace.retryRole}
+      credentials={credentials} renderIdentity={renderPreviewIdentity(workspace.role === 'owner' || workspace.role === 'editor')} />
   }
   if (isBehaviorSection(name) || isSecureSection(name) || isOperateSection(name)) {
     const Screen = screens[name].Component

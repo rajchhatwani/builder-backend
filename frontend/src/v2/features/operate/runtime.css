@@ -1,0 +1,45 @@
+.v2-runtime-map {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 5 / 3;
+  background: var(--inset);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+}
+.v2-runtime-map-shapes {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  fill: var(--accent-bg);
+  stroke: var(--accent);
+}
+.v2-runtime-map .v2-runtime-marker {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: var(--pill);
+}
+.v2-runtime-marker[data-freshness="fresh"] { border-color: var(--success); }
+.v2-runtime-marker[data-freshness="aging"] { border-color: var(--warning); }
+.v2-runtime-marker[data-freshness="stale"] { border-color: var(--danger); }
+.v2-runtime-calendar { container-type: inline-size; }
+.v2-runtime-week {
+  inline-size: 100%;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+.v2-runtime-week th,
+.v2-runtime-week td {
+  border: var(--border) solid var(--line);
+  padding: var(--s1);
+  overflow-wrap: anywhere;
+}
+.v2-runtime-week td .v2-button {
+  inline-size: 100%;
+  min-block-size: var(--touch);
+  padding-inline: var(--s1);
+}
+.v2-runtime-days { display: none; }
+@container (width < 43.75em) {
+  .v2-runtime-week { display: none; }
+  .v2-runtime-days { display: block; }
+}

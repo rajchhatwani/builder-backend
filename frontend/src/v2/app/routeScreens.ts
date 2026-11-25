@@ -2,6 +2,14 @@ import type { ConnectProps } from '../features/connect/api/connect'
 import { lazyScreen } from './lazy'
 
 export const screens = {
+  ledger: lazyScreen(() => import('../features/operate/LedgerScreen')),
+  invoices: lazyScreen(() => import('../features/operate/InvoicesScreen')),
+  payouts: lazyScreen(() => import('../features/operate/PayoutsScreen')),
+  reconciliation: lazyScreen(() => import('../features/operate/ReconciliationScreen')),
+  map: lazyScreen(() => import('../features/operate/MapScreen')),
+  bookings: lazyScreen(() => import('../features/operate/BookingsScreen')),
+  bookingadmin: lazyScreen(() => import('../features/operate/BookingAdminScreen')),
+
   observability: lazyScreen(() => import('../features/operate/ObservabilityScreen')),
   jobs: lazyScreen(() => import('../features/operate/JobsScreen')),
   workers: lazyScreen(() => import('../features/operate/WorkersScreen')),

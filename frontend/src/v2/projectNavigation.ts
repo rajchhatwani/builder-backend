@@ -33,6 +33,10 @@ export const operateSections = ['observability', 'jobs', 'workers', 'workflows',
 export const isOperateSection = (section: string): section is typeof operateSections[number] =>
   operateSections.some(name => name === section)
 
+export const liveOperateSections = ['ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin'] as const
+export const isLiveOperateSection = (section: string): section is typeof liveOperateSections[number] =>
+  liveOperateSections.some(name => name === section)
+
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]
@@ -52,6 +56,24 @@ export function projectPath(projectId: string, section: ProjectSection = 'overvi
 }
 
 export type SectionSearch = {
+  status?: string
+  currency?: string
+  account?: string
+  asOf?: string
+  aging?: string
+  subject?: string
+  resource?: string
+  week?: string
+  matchPage?: number
+  historyPage?: number
+  box?: string
+  viewport?: string
+  slot?: string
+  seller?: string
+  invoice?: string
+  from?: string
+  until?: string
+
   tab?: string
   kind?: string
   risk?: string
