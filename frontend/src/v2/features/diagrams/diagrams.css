@@ -1,0 +1,111 @@
+.v2-diagrams {
+  container-type: inline-size;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.v2-diagrams .v2-diagrams-filters {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.v2-diagrams .v2-diagrams-choices {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--rail-width)), 1fr));
+}
+
+.v2-diagrams .v2-diagrams-choice {
+  justify-content: start;
+  min-block-size: calc(var(--touch) + var(--s3));
+  min-inline-size: 0;
+  text-align: start;
+  white-space: normal;
+}
+
+.v2-diagrams-choice-label { display: grid; }
+
+.v2-diagrams-choice[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.v2-diagrams .v2-select,
+.v2-diagrams .v2-button {
+  white-space: normal;
+}
+
+.v2-diagrams-section {
+  border-block-start: var(--border) solid var(--line);
+  padding-block-start: var(--s3);
+}
+
+.v2-diagrams-viewport {
+  background: var(--canvas);
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  max-block-size: var(--diagram-viewport-size);
+  min-block-size: var(--diagram-skeleton-size);
+  max-inline-size: 100%;
+  overflow: auto;
+}
+
+.v2-diagrams-loading {
+  min-block-size: var(--diagram-loading-size);
+}
+
+.v2-diagrams-canvas {
+  display: block;
+  max-inline-size: none;
+}
+
+.v2-diagrams-node {
+  background: var(--surface);
+  border: var(--border) solid var(--control-line);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  block-size: 100%;
+  padding: var(--s2);
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  font-size: var(--text-sm);
+}
+
+.v2-diagrams-node span,
+.v2-diagrams-choice small {
+  color: var(--muted);
+}
+
+.v2-diagrams-edge {
+  fill: none;
+  stroke: var(--muted);
+}
+
+.v2-diagrams-arrow,
+.v2-diagrams-trace-range {
+  fill: var(--muted);
+}
+
+.v2-diagrams-trace-track { fill: var(--inset); }
+.v2-diagrams-trace-critical { fill: var(--accent); }
+
+.v2-diagrams-trace {
+  display: block;
+  min-inline-size: var(--s12);
+  inline-size: 100%;
+  block-size: var(--s3);
+}
+
+.v2-diagrams-matrix-cell {
+  display: block;
+  border-radius: var(--radius);
+  padding: var(--s1);
+}
+
+.v2-diagrams-matrix-cell[data-result="yes"] { background: var(--success-bg); }
+.v2-diagrams-matrix-cell[data-result="conditional"] { background: var(--warning-bg); }
+.v2-diagrams-matrix-cell[data-result="public"] { background: var(--inset); }
+.v2-diagrams-matrix-cell[data-result="no"] { background: var(--danger-bg); }
+
+@container (min-width: 43.75rem) {
+  .v2-diagrams .v2-diagrams-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+}

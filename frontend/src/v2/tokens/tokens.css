@@ -61,6 +61,9 @@
   --metric-card-width: 8rem;
   --dialog-width: 34rem;
   --screen-placeholder: 27rem;
+  --diagram-viewport-size: 31.875rem;
+  --diagram-skeleton-size: 5.5rem;
+  --diagram-loading-size: 14rem;
   --z-overlay: 20;
   --z-dialog: 21;
   --z-popup: 30;

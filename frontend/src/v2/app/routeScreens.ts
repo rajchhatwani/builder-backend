@@ -1,6 +1,7 @@
 import { lazyScreen } from './lazy'
 
 export const screens = {
+  diagrams: lazyScreen(() => import('../features/diagrams/DiagramsScreen')),
   code: lazyScreen(() => import('../features/editor/EditorScreen')),
   intake: lazyScreen(() => import('../features/guided/IntakeScreen')),
   plan: lazyScreen(() => import('../features/guided/PlanScreen')),

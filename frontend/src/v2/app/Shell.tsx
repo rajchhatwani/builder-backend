@@ -38,12 +38,12 @@ function ProjectNavigation({ projectId, guided, data, keycloak, onNavigate }: {
   function item(id: string) {
     const marker = markers.get(id as ReturnType<typeof statusSection>)
     const status = id === 'overview'
+    const preload = status ? screens.status.preload : id === 'diagrams' ? screens.diagrams.preload : sectionScreen(id).preload
     return (
       <Link key={id} to={status ? '/projects/$projectId/overview' : '/projects/$projectId/$section'}
         params={{ projectId, section: id }} search={{ ...defaultSectionSearch(id), preview }} preload="intent" activeOptions={{ exact: true }}
         onClick={onNavigate}
-        onMouseEnter={status ? screens.status.preload : sectionScreen(id).preload}
-        onFocus={status ? screens.status.preload : sectionScreen(id).preload}>
+        onMouseEnter={preload} onFocus={preload}>
         {t(`nav.${id}`)}
         {!!marker?.issue_count && <Badge tone="danger">{t('status.problems', { count: marker.issue_count })}</Badge>}
         {!marker?.issue_count && (id === 'keycloak' ? keycloak : marker?.configured && (id === 'payments' || id === 'storage')) && (
@@ -140,7 +140,7 @@ function WorkspaceShell() {
   const organizations = useQuery({ ...organizationsOptions(user?.id ?? ''), enabled: Boolean(project.data?.organization_id) })
   const organization = organizations.data?.items?.find(item => item.id === project.data?.organization_id)
   const orgName = organization?.kind === 'personal' ? t('shell.personal') : organization?.name
-  const { role, members } = useWorkspaceRole((home || (section && isBehaviorSection(section)) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
+  const { role, members } = useWorkspaceRole((home || section === 'diagrams' || (section && isBehaviorSection(section)) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
   const keycloak = useQuery(keycloakOptions(activeProject ?? '', Boolean(status.data?.sections?.find(item => item.id === 'auth')?.configured))).data?.active
   const { data } = status
   const guardedError = [401, 403, 404, 423].includes(statusCode(status.error) ?? 0) ? status.error : undefined

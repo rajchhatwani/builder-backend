@@ -152,6 +152,13 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   tool: typeof search.tool === 'string' ? search.tool : undefined,
   workbench: search.workbench === 'console' || search.workbench === 'reference' ? search.workbench : undefined,
   view: typeof search.view === 'string' ? search.view : undefined,
+  audience: typeof search.audience === 'string' ? search.audience : undefined,
+  diagramPick: typeof search.diagramPick === 'string' ? search.diagramPick : undefined,
+  diagramPages: search.diagramPages && typeof search.diagramPages === 'object' && !Array.isArray(search.diagramPages)
+    ? Object.fromEntries(Object.entries(search.diagramPages).filter(([key, value]) =>
+      /^(nodes|edges|files|[0-9]{1,2})$/.test(key) && typeof value === 'number' && Number.isSafeInteger(value) && value > 1))
+    : undefined,
+  base: typeof search.base === 'number' && Number.isSafeInteger(search.base) && search.base >= 0 ? search.base : undefined,
   role: typeof search.role === 'string' ? search.role : undefined,
   history: typeof search.history === 'number' && Number.isSafeInteger(search.history) && search.history > 1 ? search.history : undefined,
   approval: typeof search.approval === 'string' ? search.approval : undefined,
@@ -173,6 +180,11 @@ const section = createRoute({
   loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
+    if (params.section === 'diagrams') {
+      void screens.diagrams.preload()
+      void import('../features/diagrams/api/diagrams').then(({ specOptions }) =>
+        context.queryClient.prefetchQuery(specOptions(params.projectId)), () => undefined)
+    }
     if (isBehaviorSection(params.section)) {
       void screens[params.section].preload()
       void import('../features/build-behavior/api/behavior').then(({ prefetchBehavior }) => {
@@ -221,6 +233,10 @@ const section = createRoute({
 function ProjectSection() {
   const { projectId, section: name } = section.useParams()
   const workspace = useContext(WorkspaceContext)
+  if (name === 'diagrams') {
+    const Screen = screens.diagrams.Component
+    return <Screen key={projectId} projectId={projectId} viewer={workspace.role === 'viewer'} />
+  }
   if (isBehaviorSection(name)) {
     const Screen = screens[name].Component
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}

@@ -53,6 +53,10 @@ export type SectionSearch = {
   tool?: string
   workbench?: 'console' | 'reference'
   view?: string
+  audience?: string
+  diagramPick?: string
+  diagramPages?: Record<string, number>
+  base?: number
   role?: string
   run?: string
   phase?: number
