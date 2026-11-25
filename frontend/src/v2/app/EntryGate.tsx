@@ -2,12 +2,13 @@ import { useLocation, useRouter, useSearch } from '@tanstack/react-router'
 import { useLayoutEffect } from 'react'
 import type { ReactNode } from 'react'
 import { useCustomerSession } from '../features/entry/api/entry'
+import { safeEntryNext } from '../features/entry/entryLinks'
 import { EntryCard, EntryFrame, EntryLoading, EntryProblem } from '../features/entry/components/EntryFrame'
 import { useT } from '../i18n'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { screens } from './routeScreens'
 
-export function EntryGate({ children, kind }: { children: ReactNode; kind: 'login' | 'signup' | 'sso' | 'protected' | 'invitations' }) {
+export function EntryGate({ children, kind, titleKey }: { children: ReactNode; titleKey?: string; kind: 'login' | 'signup' | 'sso' | 'protected' | 'invitations' }) {
   const t = useT()
   const session = useCustomerSession()
   const { next } = useSearch({ strict: false })
@@ -22,8 +23,8 @@ export function EntryGate({ children, kind }: { children: ReactNode; kind: 'logi
   }
 
   const publicEntry = kind === 'login' || kind === 'signup'
-  const title = t(kind === 'signup' ? 'entry.createAccountTitle' : kind === 'invitations' ? 'entry.invitations'
-    : kind === 'protected' ? 'shell.projects' : 'shell.signIn')
+  const title = t(titleKey ?? (kind === 'signup' ? 'entry.createAccountTitle' : kind === 'invitations' ? 'entry.invitations'
+    : kind === 'protected' ? 'shell.projects' : 'shell.signIn'))
   if (session.isPending) return <EntryFrame title={title}><EntryLoading label={t('entry.pleaseWait')} /></EntryFrame>
   if (session.isError && !user) return <EntryFrame title={title}><EntryCard>
     <EntryProblem error={session.error} message={t('entry.network')} retry={() => void session.refetch()} />
@@ -33,8 +34,12 @@ export function EntryGate({ children, kind }: { children: ReactNode; kind: 'logi
     if (user) return <EntryRedirect path={next === 'invitations' ? '/invitations' : next ?? '/projects'} />
     return <>{children}<div className="v2-entry-language"><LanguageSwitcher /></div></>
   }
-  if (!user) return <SignInRequired next={kind === 'invitations' ? 'invitations' : pathname.startsWith('/org/') ? pathname + searchStr : undefined} />
-  return children
+  if (user) return children
+  if (kind === 'invitations') return <SignInRequired next="invitations" />
+  const destination = safeEntryNext(pathname + searchStr)
+  return pathname === '/projects' || pathname === '/projects/' || destination
+    ? <SignInRequired next={destination} />
+    : null
 }
 
 export function SignInRequired({ next }: { next?: string }) {

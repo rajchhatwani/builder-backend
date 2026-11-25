@@ -123,3 +123,15 @@ export const checkInviteLink: Validator = value => {
 }
 
 export const checkTotp: Validator = value => /^\d{6}$/.test(value.trim()) ? undefined : issue('totp')
+
+export const checkTotpOrRecovery: Validator = value => {
+  const recovery = value.trim().replace(/[- ]/g, '')
+  return !checkTotp(value) || (value.length <= entryLimits.code && /^[a-z0-9]{10}$/i.test(recovery))
+    ? undefined : issue('totpOrRecovery')
+}
+
+export const projectLimits = { name: 100, slug: 100, description: 2000 } as const
+export const checkProjectSlug = format(value => /^[a-z][a-z0-9-]*$/.test(value), 'projectSlug')
+export const checkPasswordConfirmation = (repeat: string, next: string) => repeat === next ? undefined : issue('passwordMismatch')
+export const tokenLimits = { name: 100, description: 255, minDays: 1, maxDays: 365, active: 25 } as const
+export const checkTokenDays = validators.number({ min: tokenLimits.minDays, max: tokenLimits.maxDays, integer: true })

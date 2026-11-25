@@ -12,7 +12,7 @@ import { authProblem } from './messages'
 const QrImage = lazy(() => import('./QrImage'))
 const invalidCode = { key: 'entry.invalidCode' }
 
-function useCopy() {
+export function useCopy() {
   const t = useT()
   const toast = useToast()
   return async (value: string, key: string) => {
@@ -25,7 +25,7 @@ function useCopy() {
   }
 }
 
-function Authenticator({ setup }: { setup: TotpSetup }) {
+export function Authenticator({ setup }: { setup: TotpSetup }) {
   const t = useT()
   const copy = useCopy()
   const help = <Alert>{t('entry.qrFallback')}</Alert>

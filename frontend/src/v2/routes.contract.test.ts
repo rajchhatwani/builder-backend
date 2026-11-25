@@ -7,7 +7,7 @@ import { createAppRouter, routePaths } from './app/router'
 import { projectKeys } from './features/projects/api/status'
 import { detectLanguage } from './i18n'
 import { desktopSections, guidedSections, isProjectSection, projectPath, statusSection } from './projectNavigation'
-import { defaultLimits, entryLimits, guidedLimits, validators } from './validators'
+import { defaultLimits, entryLimits, guidedLimits, projectLimits, tokenLimits, validators } from './validators'
 
 const openapi = JSON.parse(readFileSync(resolve(__dirname, '../../e2e/openapi.json'), 'utf8'))
 const client = new QueryClient()
@@ -29,7 +29,7 @@ describe('v2 route contract', () => {
   })
 
   it('matches the kit, sign-in, Guided steps and desktop-only routes', async () => {
-    for (const path of [routePaths.kit, routePaths.signIn, ...[...guidedSections, ...desktopSections].map(section => projectPath('project-one', section))]) {
+    for (const path of [routePaths.kit, routePaths.signIn, routePaths.newProject, routePaths.account, ...[...guidedSections, ...desktopSections].map(section => projectPath('project-one', section))]) {
       const router = routerAt(path)
       await router.load()
       expect(router.state.location.pathname).toBe(path)
@@ -75,8 +75,8 @@ describe('language and validation contracts', () => {
 
   it('allows tighter field limits from OpenAPI than the generic defaults', () => {
     const schema = openapi.components.schemas.ProjectCreate.properties
-    const nameLimit = Math.min(defaultLimits.shortText, 100)
-    const descriptionLimit = Math.min(defaultLimits.longText, 2000)
+    const nameLimit = Math.min(defaultLimits.shortText, projectLimits.name)
+    const descriptionLimit = Math.min(defaultLimits.longText, projectLimits.description)
     const serverDescriptionLimit = schema.description.anyOf.find((variant: { type: string }) => variant.type === 'string').maxLength
     expect(nameLimit).toBeLessThanOrEqual(schema.name.maxLength)
     expect(descriptionLimit).toBeLessThanOrEqual(serverDescriptionLimit)
@@ -108,4 +108,15 @@ it('keeps entry field limits within the published request schemas', () => {
   expect(entryLimits.verifyMax).toBe(schema.VerifyEmailRequest.properties.token.maxLength)
   expect(entryLimits.inviteMin).toBe(schema.InvitationAccept.properties.token.minLength)
   expect(entryLimits.inviteMax).toBe(schema.InvitationAccept.properties.token.maxLength)
+})
+
+it('keeps project creation and token limits within the published schemas', () => {
+  const schemas = openapi.components.schemas
+  const project = schemas.ProjectCreate.properties
+  const token = schemas.ApiTokenCreate.properties
+  expect(projectLimits.slug).toBe(project.slug.anyOf[0].maxLength)
+  expect(tokenLimits.name).toBe(token.name.maxLength)
+  expect(tokenLimits.description).toBe(token.description.anyOf[0].maxLength)
+  expect(tokenLimits.minDays).toBe(token.expires_in_days.minimum)
+  expect(tokenLimits.maxDays).toBe(token.expires_in_days.maximum)
 })

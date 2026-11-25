@@ -71,10 +71,10 @@ export function Shell() {
   const { language, choose: chooseLanguage } = useLanguage()
   const navigate = useNavigate()
   const { pathname, searchStr } = useRouterState({ select: state => state.location })
-  const customerArea = pathname === '/projects' || pathname === '/invitations' || pathname.startsWith('/org/')
+  const customerArea = pathname === '/projects' || pathname === '/account' || pathname === '/invitations' || pathname.startsWith('/org/')
   const client = useQueryClient()
   const { projectId, section } = useParams({ strict: false })
-  const session = useCustomerSession(customerArea || Boolean(projectId))
+  const session = useCustomerSession(customerArea || pathname === '/projects/new' || Boolean(projectId))
   const user = session.data
   const logout = useEntryAction()
   const guided = Boolean(section && isGuidedSection(section))
@@ -135,6 +135,7 @@ export function Shell() {
           <Menu trigger={<Button>{t('shell.accountMenu')}</Button>} items={[
             { id: 'theme', label: t(theme === 'dark' ? 'shell.light' : 'shell.dark'), onSelect: () => choose(theme === 'dark' ? 'light' : 'dark') },
             { id: 'language', label: t('language.menu', { language: t(`language.${language}`) }), onSelect: () => chooseLanguage(language) },
+            ...(user && !user.must_change_password ? [{ id: 'account', label: t('account.title'), onSelect: () => void navigate({ to: '/account', search: {} }) }] : []),
             ...(user ? [{ id: 'logout', label: t('entry.signOut'), onSelect: signOut }] : []),
           ]} />
         </Row>

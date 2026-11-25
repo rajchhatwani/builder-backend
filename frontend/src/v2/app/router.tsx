@@ -1,6 +1,8 @@
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { PreviewCredentials } from '../features/guided/components/PreviewCredentials'
+import { sessionOptions, organizationsOptions } from '../features/entry/api/entry'
+import { accountSearch, projectSearch } from '../features/entry/entrySearch'
 import { safeEntryNext } from '../features/entry/entryLinks'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
@@ -25,6 +27,8 @@ type KitSearch = {
 export const routePaths = {
   index: '/',
   projects: '/projects',
+  newProject: '/projects/new',
+  account: '/account',
   signIn: '/sign-in',
   login: '/login',
   signin: '/signin',
@@ -48,8 +52,39 @@ const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Shell, notFoundComponent: NotFound, errorComponent: LazyError,
 })
 const index = createRoute({ getParentRoute: () => root, path: routePaths.index, beforeLoad: () => { throw redirect({ to: routePaths.projects }) } })
-const projects = createRoute({ getParentRoute: () => root, path: routePaths.projects,
+const projects = createRoute({
+  getParentRoute: () => root, path: routePaths.projects, validateSearch: projectSearch,
   component: () => <EntryGate kind="protected"><screens.projects.Component /></EntryGate>,
+  loader: ({ context, preload }) => {
+    if (preload && context.queryClient.getQueryData(sessionOptions.queryKey)) {
+      void screens.projects.preload()
+      void import('../features/entry/api/projects').then(({ allProjectsOptions }) =>
+        context.queryClient.prefetchQuery(allProjectsOptions), () => undefined)
+    }
+  },
+})
+const newProject = createRoute({
+  getParentRoute: () => root, path: routePaths.newProject,
+  component: () => <EntryGate kind="protected" titleKey="projectCreate.title"><screens.newProject.Component /></EntryGate>,
+  loader: ({ context, preload }) => {
+    const user = context.queryClient.getQueryData(sessionOptions.queryKey)
+    if (preload && user) {
+      void screens.newProject.preload()
+      void context.queryClient.prefetchQuery(organizationsOptions(user.id))
+    }
+  },
+})
+const account = createRoute({
+  getParentRoute: () => root, path: routePaths.account, validateSearch: accountSearch,
+  component: () => <EntryGate kind="protected" titleKey="account.title"><screens.account.Component /></EntryGate>,
+  loader: ({ context, preload }) => {
+    if (preload && context.queryClient.getQueryData(sessionOptions.queryKey)) {
+      void import('../features/entry/api/account').then(({ mfaOptions, tokenOptions }) => {
+        void context.queryClient.prefetchQuery(mfaOptions)
+        void context.queryClient.prefetchQuery(tokenOptions)
+      }, () => undefined)
+    }
+  },
 })
 
 type EntrySearch = { next?: string; sso_error?: string }
@@ -81,6 +116,7 @@ const invitations = createRoute({ getParentRoute: () => root, path: routePaths.i
   component: () => <EntryGate kind="invitations"><screens.invitations.Component /></EntryGate>,
 })
 const organization = createRoute({ getParentRoute: () => root, path: routePaths.organization,
+  validateSearch: (search): { tab?: 'plan' } => ({ tab: search.tab === 'plan' ? 'plan' : undefined }),
   component: () => <EntryGate kind="protected"><screens.organization.Component /></EntryGate>,
 })
 const kit = createRoute({
@@ -170,7 +206,7 @@ function ProjectSection() {
   return <PreviewCredentials key={projectId}><Screen /></PreviewCredentials>
 }
 
-export const routeTree = root.addChildren([index, projects, signIn, login, signin, signup, verifyEmail, ssoComplete, ssoAlias, invitations, organization, kit, project, status, section])
+export const routeTree = root.addChildren([index, projects, newProject, account, signIn, login, signin, signup, verifyEmail, ssoComplete, ssoAlias, invitations, organization, kit, project, status, section])
 
 export function createAppRouter(queryClient: QueryClient, history?: ReturnType<typeof createRouter>['history']) {
   if (!history && typeof window !== 'undefined') normalizeEntryAddress()

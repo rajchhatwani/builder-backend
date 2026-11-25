@@ -7,10 +7,10 @@ let verification: string | undefined
 
 export function safeEntryNext(next: unknown) {
   if (next === 'invitations') return next
-  if (typeof next === 'string' && /^\/(?:projects|org)\/[^/\\?#]+(?:[/?#]|$)/.test(next)) {
+  if (typeof next === 'string' && /^\/(?:account(?:[?#]|$)|(?:projects|org)\/[^/\\?#]+(?:[/?#]|$))/.test(next)) {
     const base = new URL('https://builder.invalid')
     const target = new URL(next, base)
-    if (target.origin === base.origin && /^\/(?:projects|org)\//.test(target.pathname)) return target.pathname + target.search
+    if (target.origin === base.origin && (target.pathname === '/account' || /^\/(?:projects|org)\//.test(target.pathname))) return target.pathname + target.search
   }
 }
 

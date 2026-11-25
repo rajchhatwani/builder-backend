@@ -10,16 +10,20 @@ export type FormField = {
   label: string
   hint?: string
   validate?: Validator[]
+  validateWith?: (value: string, data: FormData) => ValidationIssue | undefined
   control: (attributes: FieldAttributes & { name: string; disabled?: boolean }) => ReactNode
 }
 type Errors = Record<string, ValidationIssue>
 
 function firstIssue(field: FormField, data: FormData) {
-  return field.validate?.map(validate => validate(String(data.get(field.name) ?? ''))).find(Boolean)
+  const value = String(data.get(field.name) ?? '')
+  return field.validate?.map(validate => validate(value)).find(Boolean) ?? field.validateWith?.(value, data)
 }
 
-export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps }: {
+export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps, actions, children }: {
   fields: FormField[]
+  actions?: ReactNode
+  children?: ReactNode
   onSubmit: (values: FormData) => void
   submitLabel: string
   pending?: boolean
@@ -77,8 +81,9 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
             </div>
           )
         })}
+        {children}
         {formError && <Alert tone="danger">{formError}</Alert>}
-        {!submitProps?.hidden && <Row><Button {...submitProps} type="submit" variant="primary" disabled={readOnly || pending || submitProps?.disabled}>{pending && <Spinner />}{submitLabel}</Button></Row>}
+        {!submitProps?.hidden && <Row><Button {...submitProps} type="submit" variant={submitProps?.variant ?? "primary"} disabled={readOnly || pending || submitProps?.disabled}>{pending && <Spinner />}{submitLabel}</Button>{actions}</Row>}
       </Stack>
     </form>
   )

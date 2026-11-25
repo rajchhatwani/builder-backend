@@ -32,7 +32,8 @@ async function mock(page: Page, screen: Screen, state: State, options: { withLin
   let release = () => {}
   const delay = new Promise<void>(resolve => { release = resolve })
   const bodies: Record<string, unknown[]> = {}
-  let signedIn = screen === 'invitations' && !options.withLink || screen === 'sso-complete' && state === 'normal'
+  const ssoSucceeded = screen === 'sso-complete' && state === 'normal'
+  let signedIn = screen === 'invitations' && !options.withLink || ssoSucceeded
   let joined = false
   const account = options.unverified ? { ...user, email_verified_at: null } : user
   await page.route(url => url.port === '8000', async route => {
@@ -49,6 +50,9 @@ async function mock(page: Page, screen: Screen, state: State, options: { withLin
       return signedIn ? send({ access_token: 'fixture-session' }) : fail('invalid_refresh_token', 401)
     }
     if (path === '/account/me') return send(joined ? user : account)
+    if (path === '/projects' && ssoSucceeded) {
+      return send({ items: [], total: 0, offset: 0, limit: 200 })
+    }
     if (path === '/account/login/discover') {
       if (state === 'loading') await delay
       if (state === 'error') return fail('fixture_unavailable', 503)
@@ -88,7 +92,10 @@ async function mock(page: Page, screen: Screen, state: State, options: { withLin
       const items = screen === 'invitations' && state === 'normal' && !joined ? [invitation] : []
       return send({ items, total: items.length, limit: items.length, offset: 0 })
     }
-    if (path === '/orgs') return send({ items: joined ? [organization] : [], total: Number(joined) })
+    if (path === '/orgs') {
+      const items = joined || ssoSucceeded ? [organization] : []
+      return send({ items, total: items.length })
+    }
     if (path === '/orgs/city-library') return send(organization)
     if (path === '/orgs/invitations/accept' || path === '/orgs/invitations/invite-id/accept') {
       joined = true
@@ -137,7 +144,12 @@ for (const screen of cases) {
           await expect(page).toHaveURL(/\/verify-email$/)
         } else if (screen === 'sso-complete') {
           await page.goto('/#/sso/complete')
-          if (state === 'normal') await expect(page.getByRole('heading', { name: 'Projects', level: 1 })).toBeVisible()
+          if (state === 'normal') {
+            await expect(page).toHaveURL('/projects')
+            await expect(page.getByRole('heading', { name: 'Projects', level: 1 })).toBeVisible()
+            await expect(page.getByRole('link', { name: 'Create a project' })).toBeVisible()
+            await expect(page.getByRole('link', { name: organization.name, exact: true })).toBeVisible()
+          }
           if (state === 'loading') await expect(page.getByRole('status', { name: 'Signing you in…' })).toBeVisible()
           if (state === 'empty') await expect(page.getByText("The SSO sign-in didn't finish. Try again.")).toBeVisible()
           if (state === 'error') await expect(page.getByRole('button', { name: 'Try again' })).toBeVisible()

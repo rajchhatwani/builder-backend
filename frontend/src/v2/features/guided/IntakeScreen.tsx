@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useBlocker, useNavigate, useParams, useSearch } from '@tanstack/react-router'
+import { useBlocker, useLocation, useNavigate, useParams, useSearch } from '@tanstack/react-router'
 import { useReducer, useRef, useState } from 'react'
 import { useT } from '../../i18n'
 import { ConfirmDestructive, ConflictBanner, PageHeader, ReadOnlyNote, SettingsSection } from '../../patterns'
@@ -25,7 +25,8 @@ export default function IntakeScreen() {
   const startRun = useStartRun(projectId)
   const toast = useToast()
   const describeError = useGuidedError()
-  const [draft, dispatch] = useReducer(intakeReducer, emptyDraft)
+  const idea = useLocation({ select: location => location.state.projectIdea ?? '' })
+  const [draft, dispatch] = useReducer(intakeReducer, idea, prompt => ({ ...emptyDraft, prompt }))
   const [promptTouched, setPromptTouched] = useState(false)
   const [confirm, setConfirm] = useState(false)
   const prompt = useRef<HTMLTextAreaElement>(null)

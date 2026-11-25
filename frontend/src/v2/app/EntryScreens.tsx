@@ -5,16 +5,6 @@ import { PageHeader } from '../patterns'
 import { isDesktopSection } from '../projectNavigation'
 import { Button, DesktopOnlyCard, EmptyState, Stack } from '../ui'
 
-export function ProjectsScreen() {
-  const t = useT()
-  return (
-    <Stack gap={5}>
-      <PageHeader title={t('shell.projects')} />
-      <EmptyState title={t('shell.projectLink')} action={<Button asChild><Link to="/invitations">{t('entry.invitations')}</Link></Button>} />
-    </Stack>
-  )
-}
-
 export function Unavailable() {
   const t = useT()
   const { section, projectId } = useParams({ strict: false })

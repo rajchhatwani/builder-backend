@@ -1,0 +1,27 @@
+.v2-creation { max-inline-size: var(--entry-form-width); }
+.v2-creation fieldset, .v2-token-scopes {
+  min-inline-size: 0;
+  border: var(--border) solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--s3);
+}
+.v2-creation .v2-choice { align-items: flex-start; }
+.v2-project-filters { align-items: end; }
+.v2-project-filters > :first-child { flex: 1 1 var(--card-width); }
+.v2-account-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--card-width)), 1fr));
+  gap: var(--s3);
+}
+.v2-account-facts dd { font-weight: var(--medium); }
+.v2-token-value { overflow-wrap: anywhere; }
+
+.v2-project-organizations summary { min-block-size: var(--touch); padding-block: var(--s3); cursor: pointer; }
+
+@container viewport (width >= 43.75em) {
+  .v2-creation form > .v2-stack {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  }
+  .v2-creation form > .v2-stack > :nth-child(n+3) { grid-column: 1 / -1; }
+}
