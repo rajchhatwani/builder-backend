@@ -257,3 +257,64 @@ export const signInObject = format(value => {
     return typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
   } catch { return false }
 }, 'signInObject')
+
+export const dependencyChecks = {
+  package: format(value => /^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/.test(value), 'dependencyPackage'),
+  version: format(value => /^(?:0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,3}(?:(?:a|b|rc)\d{1,4})?(?:\.post\d{1,4})?(?:\.dev\d{1,4})?$/.test(value), 'dependencyVersion'),
+  reason: (value: string) => value.trim().length < 3 ? issue('dependencyReason') : undefined,
+  hashes: format(value => {
+    const lines = value.split(/\s+/)
+    return lines.length <= 20 && lines.every(line => /^sha256:[a-f0-9]{64}$/.test(line))
+  }, 'dependencyHashes'),
+}
+
+export const complianceChecks = {
+  purposes: (value: string) => {
+    const purposes = value.split(',').map(item => item.trim()).filter(Boolean)
+    if (purposes.length > 32 || purposes.some(item => !/^[a-z][a-z0-9_-]{0,39}$/.test(item))) return issue('compliancePurposes')
+    if (new Set(purposes).size !== purposes.length) return issue('complianceDuplicatePurpose')
+  },
+  exportTreatment: (name: string, fieldType: string | undefined, treatment: string, protectedField: boolean): Validator => () => {
+    if (protectedField) return ['keep', 'generalise'].includes(treatment) ? issue('complianceProtectedExport') : undefined
+    const fragments = /email|phone|name|ssn|passport|address|dob|birth|postal|postcode|latitude|longitude|licence|license|insurance/
+    const words = name.match(/[A-Z]?[a-z]+|[A-Z]+(?![a-z])|\d+/g) ?? []
+    const shortNames = ['ip', 'zip', 'mrn', 'lat', 'lng', 'lon', 'geo', 'nhs', 'tin', 'nin', 'dob', 'ssn']
+    if (treatment === 'keep' && (['email', 'phone', 'text'].includes(fieldType ?? '') ||
+      fragments.test(name.toLowerCase()) || words.some(word => shortNames.includes(word.toLowerCase())))) {
+      return issue('complianceIdentifier')
+    }
+  },
+  selection: (values: readonly string[], selected: string[]): Validator => () =>
+    selected.some(value => !values.includes(value)) ? issue('complianceUnavailable') : undefined,
+}
+
+export const accessChecks = {
+  name: format(value => /^[a-z][a-z0-9_]*$/.test(value), 'accessName'),
+  policyName: format(value => /^[a-z][a-z0-9_]{0,39}$/.test(value), 'accessPolicyName'),
+  jsonObject: format(value => {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+    } catch { return false }
+  }, 'accessJsonObject'),
+  literal: format(value => {
+    try {
+      const parsed: unknown = JSON.parse(value)
+      return !Array.isArray(parsed) || parsed.length <= 100
+    } catch { return false }
+  }, 'accessLiteral'),
+}
+
+export function checkPolicyCondition(node: {
+  kind: 'all' | 'any' | 'comparison'
+  children?: readonly unknown[]
+  left?: { kind: string; value: string }
+  right?: { kind: string; value: string }
+  op?: string
+}, depth: number, size: number): ValidationIssue | undefined {
+  if (depth > 4 || size > 24) return issue('accessConditionLimit')
+  if (node.kind !== 'comparison') return !node.children?.length ? issue('accessConditionChildren') : undefined
+  const operand = (value?: { kind: string; value: string }) => !value?.value.trim() ? issue('accessOperandRequired') :
+    value.kind === 'literal' ? accessChecks.literal(value.value) : undefined
+  return operand(node.left) ?? (node.op === 'is_null' || node.op === 'not_null' ? undefined : operand(node.right))
+}

@@ -17,7 +17,7 @@ export const behaviorSections = ['hooks', 'hookeffects', 'events', 'settings', '
 export const isBehaviorSection = (section: string): section is typeof behaviorSections[number] =>
   behaviorSections.some(name => name === section)
 
-const secureSections = ['auth', 'keycloak', 'suite'] as const
+const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', 'compliance'] as const
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
 

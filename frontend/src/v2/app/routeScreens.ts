@@ -3,6 +3,9 @@ import { lazyScreen } from './lazy'
 export const screens = {
   auth: lazyScreen(() => import('../features/secure/AuthScreen')),
   keycloak: lazyScreen(() => import('../features/secure/KeycloakScreen')),
+  access: lazyScreen(() => import('../features/secure/AccessScreen')),
+  dependencies: lazyScreen(() => import('../features/secure/DependenciesScreen')),
+  compliance: lazyScreen(() => import('../features/secure/ComplianceScreen')),
   suite: lazyScreen(() => import('../features/secure/SuiteScreen')),
   diagrams: lazyScreen(() => import('../features/diagrams/DiagramsScreen')),
   code: lazyScreen(() => import('../features/editor/EditorScreen')),

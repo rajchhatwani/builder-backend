@@ -18,7 +18,9 @@ const route = '/projects/$projectId/$section'
 export function useSecureSearch() {
   const search = useSearch({ from: route })
   const navigate = useNavigate({ from: route })
-  return { search, tab: (tab: string) => void navigate({ search: old => ({ ...old, tab, page: undefined }) }),
+  return { search, tab: (tab: string) => void navigate({ search: old => ({ ...old, tab, page: undefined, view: undefined, kind: undefined }) }),
+    filter: (filter: { kind?: string; view?: string; entity?: string; q?: string }, resetPage = true) =>
+      void navigate({ search: old => ({ ...old, ...filter, page: resetPage ? undefined : old.page }) }),
     page: (page: number) => void navigate({ search: old => ({ ...old, page: page > 1 ? page : undefined }) }) }
 }
 export function SecureLink({ id, section, label }: { id: string; section: string; label: string }) {
@@ -82,7 +84,7 @@ export function SecureRole({ role, roleError, retryRole }: SecureProps) {
   return role === 'viewer' ? <ReadOnlyNote /> : null
 }
 export function SecureLoading({ label }: { label: string }) {
-  return <Stack gap={4}>{[0, 1, 2].map(index => <Card key={index}>
+  return <Stack gap={4}>{[0, 1, 2].map(index => <Card key={index} aria-hidden={index > 0 || undefined}>
     <Skeleton label={index === 0 ? label : undefined} lines={4} />
   </Card>)}</Stack>
 }

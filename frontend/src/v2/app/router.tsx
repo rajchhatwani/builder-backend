@@ -182,6 +182,12 @@ const section = createRoute({
     if (!preload) return
     if (isSecureSection(params.section)) {
       void screens[params.section].preload()
+      if (params.section === 'access' || params.section === 'dependencies' || params.section === 'compliance') {
+        const { projectId, section } = params
+        void import('../features/secure/api/controls').then(({ prefetchSecureControls }) =>
+          prefetchSecureControls(context.queryClient, projectId, section), () => undefined)
+        return
+      }
       void import('../features/secure/api/security').then(({ authOptions, keycloakOptions, fieldsOptions }) => {
         const id = params.projectId
         void context.queryClient.prefetchQuery(authOptions(id))
