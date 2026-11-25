@@ -140,7 +140,7 @@ function WorkspaceShell() {
   const organizations = useQuery({ ...organizationsOptions(user?.id ?? ''), enabled: Boolean(project.data?.organization_id) })
   const organization = organizations.data?.items?.find(item => item.id === project.data?.organization_id)
   const orgName = organization?.kind === 'personal' ? t('shell.personal') : organization?.name
-  const { role, members } = useWorkspaceRole((home || section === 'diagrams' || (section && (isBehaviorSection(section) || isSecureSection(section) || isConnectSection(section))) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
+  const { role, members } = useWorkspaceRole((home || section === 'diagrams' || (section && (isBehaviorSection(section) || isSecureSection(section) || (isConnectSection(section) && section !== 'forms'))) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
   const keycloak = useQuery(keycloakOptions(activeProject ?? '', Boolean(status.data?.sections?.find(item => item.id === 'auth')?.configured))).data?.active
   const { data } = status
   const guardedError = [401, 403, 404, 423].includes(statusCode(status.error) ?? 0) ? status.error : undefined

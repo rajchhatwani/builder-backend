@@ -342,3 +342,85 @@ export const connectCurrency = format(value => /^[A-Z]{3}$/.test(value), 'connec
 export const connectRefund = (max: number) => validators.number({ min: 1, max, integer: true })
 export const connectDistinct = (values: string[]): ValidationIssue | undefined =>
   values.filter(Boolean).length !== new Set(values.filter(Boolean)).size ? issue('connectDistinct') : undefined
+
+export function parseSchemaObject(text: string): { error?: string; value?: Record<string, unknown> } {
+  try {
+    const value: unknown = JSON.parse(text || '{}')
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? { value: value as Record<string, unknown> } : { error: 'schema.objectRequired' }
+  } catch {
+    return { error: 'schema.jsonInvalid' }
+  }
+}
+
+export const notificationBodyMax = (channel: string) => channel === 'email' ? 20000 : 1000
+
+export function notificationTemplateIssue(value: string, field: 'subject' | 'body', channel: string, variables: string[]): ValidationIssue | undefined {
+  if (field === 'subject' && channel === 'sms') return value ? { key: 'connectA2.smsSubject' } : undefined
+  if (!value.trim()) return issue('required')
+  if (value.length > (field === 'subject' ? 200 : notificationBodyMax(channel))) {
+    return validators.length(field === 'subject' ? 200 : notificationBodyMax(channel))(value)
+  }
+  if (value.includes('\0') || field === 'subject' && /[\r\n]/.test(value)) {
+    return { key: field === 'subject' ? 'connectA2.oneLine' : 'connectA2.nullCharacter' }
+  }
+  const placeholder = /\{\{\s*([a-z][a-z0-9_]{0,39})\s*\}\}/g
+  const unknown = [...new Set([...value.matchAll(placeholder)].map(match => match[1]).filter(name => !variables.includes(name)))].sort()
+  if (unknown.length) return { key: 'connectA2.unknownVariables', values: { names: unknown.join(', ') } }
+  if (/\{\{|\}\}|\{%|%\}|\{#|#\}/.test(value.replace(placeholder, ''))) return { key: 'connectA2.placeholders' }
+}
+
+type NotificationChecks = {
+  types?: {
+    name: string; channels: string[]; variables: string[];
+    templates: { channel: string; subject: string; body: string; html: boolean }[];
+  }[]
+}
+type WebhookChecks = { events?: string[]; inbound?: { name: string }[] }
+
+export function blockDraftIssues(
+  block: 'notifications' | 'webhooks', value: NotificationChecks | WebhookChecks,
+  t: (key: string, values?: Record<string, string | number>) => string,
+) {
+  const errors: Record<string, string[]> = {}
+  const add = (path: string, key: string) => { (errors[path] ??= []).push(t(key)) }
+  function unique(values: string[], path: (index: number) => string) {
+    const seen = new Set<string>()
+    values.forEach((name, index) => {
+      if (name && seen.has(name)) add(path(index), 'connectA2.duplicate')
+      seen.add(name)
+    })
+  }
+  if (block === 'webhooks') {
+    const webhooks = value as WebhookChecks
+    unique(webhooks.events ?? [], index => 'events.' + index)
+    unique(webhooks.inbound?.map(row => row.name) ?? [], index => 'inbound.' + index + '.name')
+    return errors
+  }
+  const types = (value as NotificationChecks).types ?? []
+  unique(types.map(row => row.name), index => 'types.' + index + '.name')
+  types.forEach((row, index) => {
+    const path = 'types.' + index
+    unique(row.channels, i => path + '.channels.' + i)
+    unique(row.templates.map(template => template.channel), i => path + '.templates.' + i + '.channel')
+    if (row.variables.some(variable => !/^[a-z][a-z0-9_]{0,39}$/.test(variable))) add(path + '.variables', 'connectA2.variableFormat')
+    if (new Set(row.variables).size !== row.variables.length) add(path + '.variables', 'connectA2.duplicate')
+    row.templates.forEach((template, i) => {
+      const base = path + '.templates.' + i
+      if (!row.channels.includes(template.channel)) add(base + '.channel', 'connectA2.templateChannel')
+      if (template.html && template.channel !== 'email') add(base + '.html', 'connectA2.htmlChannel')
+      for (const field of ['subject', 'body'] as const) {
+        const problem = notificationTemplateIssue(template[field], field, template.channel, row.variables)
+        if (problem) errors[base + '.' + field] = [t(problem.key, { ...problem.values, field: t('connectA2.template.' + field) })]
+      }
+    })
+  })
+  return errors
+}
+
+export const webhookLiveLimits = { url: 2048, description: 200, minSecret: 16, maxSecret: 512, minOverlap: 1, maxOverlap: 720 }
+export const webhookSecret: Validator = value => {
+  const count = [...value].length
+  return count < webhookLiveLimits.minSecret
+    ? { key: 'connectA2.live.secretLength' } : validators.length(webhookLiveLimits.maxSecret)(value)
+}

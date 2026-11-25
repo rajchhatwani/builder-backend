@@ -8,6 +8,7 @@ import { safeEntryNext } from '../features/entry/entryLinks'
 import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
+import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
 import { defaultSectionSearch, isBehaviorSection, isConnectSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
@@ -166,6 +167,12 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
   run: typeof search.run === 'string' ? search.run : undefined,
   phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
+  notificationRow: typeof search.notificationRow === 'number' && Number.isInteger(search.notificationRow) && search.notificationRow >= 0 ? search.notificationRow : undefined,
+  notificationType: typeof search.notificationType === 'string' ? search.notificationType : undefined,
+  channel: typeof search.channel === 'string' ? search.channel : undefined,
+  subscription: typeof search.subscription === 'string' ? search.subscription : undefined,
+  delivery: typeof search.delivery === 'string' ? search.delivery : undefined,
+  limit: typeof search.limit === 'string' ? search.limit : undefined,
   workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
 })
 
@@ -198,6 +205,13 @@ const section = createRoute({
     }
     if (isConnectSection(params.section)) {
       void screens[params.section].preload()
+      if (params.section === 'forms') return
+      if (params.section === 'notifications' || params.section === 'notiftypes' || params.section === 'webhooks') {
+        const { projectId, section } = params
+        void import('../features/connect/api/blocks').then(({ blockOptions }) =>
+          context.queryClient.prefetchQuery(blockOptions(projectId, section === 'webhooks' ? 'webhooks' : 'notifications')), () => undefined)
+        return
+      }
       void import('../features/connect/api/connect').then(({ membersOptions, paymentsOptions, storageOptions, specOptions }) => {
         const id = params.projectId
         if (params.section === 'integrations') void context.queryClient.prefetchQuery(membersOptions(id))
@@ -261,14 +275,16 @@ const section = createRoute({
 function ProjectSection() {
   const { projectId, section: name } = section.useParams()
   const workspace = useContext(WorkspaceContext)
+  const { credentials } = usePreviewCredentials()
   if (name === 'diagrams') {
     const Screen = screens.diagrams.Component
     return <Screen key={projectId} projectId={projectId} viewer={workspace.role === 'viewer'} />
   }
   if (isConnectSection(name)) {
+    if (name === 'forms') return <screens.forms.Component />
     const Screen = screens[name].Component
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
-      roleError={workspace.roleError} retryRole={workspace.retryRole} organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
+      roleError={workspace.roleError} retryRole={workspace.retryRole} credentials={credentials} organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
   }
   if (isBehaviorSection(name) || isSecureSection(name)) {
     const Screen = screens[name].Component

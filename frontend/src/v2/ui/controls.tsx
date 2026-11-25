@@ -28,7 +28,7 @@ export function Textarea({ className = '', ...props }: ComponentPropsWithRef<'te
   return <textarea className={`v2-control ${className}`} rows={3} {...props} />
 }
 
-type SelectOption = { value: string; label: string; disabled?: boolean; group?: string }
+export type SelectOption = { value: string; label: string; disabled?: boolean; group?: string }
 
 type SelectProps = ComponentPropsWithRef<typeof SelectBase.Root> & {
   triggerProps?: ComponentPropsWithRef<typeof SelectBase.Trigger>

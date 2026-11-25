@@ -21,7 +21,7 @@ const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', '
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
 
-const connectSections = ['payments', 'storage', 'integrations'] as const
+const connectSections = ['payments', 'storage', 'integrations', 'forms', 'notifications', 'notiftypes', 'webhooks'] as const
 export const isConnectSection = (section: string): section is typeof connectSections[number] =>
   connectSections.some(name => name === section)
 
@@ -72,6 +72,12 @@ export type SectionSearch = {
   page?: number
   approval?: string
   tokensPage?: number
+  notificationType?: string
+  notificationRow?: number
+  channel?: string
+  subscription?: string
+  delivery?: string
+  limit?: string
 }
 
 export function defaultSectionSearch(section: string): SectionSearch {
