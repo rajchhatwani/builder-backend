@@ -12,7 +12,7 @@ import { useProjectLive } from '../features/projects/api/live'
 import { statusCode, useProjectStatus } from '../features/projects/api/status'
 import { keycloakOptions, projectOptions, useWorkspaceRole, workspaceError } from '../features/projects/api/workspace'
 import { useLanguage, useT } from '../i18n'
-import { advancedGroups, defaultSectionSearch, guidedSections, isBehaviorSection, isSecureSection, isGuidedSection, statusSection } from '../projectNavigation'
+import { advancedGroups, defaultSectionSearch, guidedSections, isBehaviorSection, isConnectSection, isSecureSection, isGuidedSection, statusSection } from '../projectNavigation'
 import { CommandPalette } from '../patterns/CommandPalette'
 import { Alert, Badge, Breadcrumb, Button, EmptyState, Menu, Row, Sheet, Stack } from '../ui'
 import { lazyScreen } from './lazy'
@@ -38,7 +38,7 @@ function ProjectNavigation({ projectId, guided, data, keycloak, onNavigate }: {
   function item(id: string) {
     const marker = markers.get(id as ReturnType<typeof statusSection>)
     const status = id === 'overview'
-    const preload = status ? screens.status.preload : id === 'diagrams' ? screens.diagrams.preload : sectionScreen(id).preload
+    const preload = status ? screens.status.preload : id === 'diagrams' || isConnectSection(id) ? screens[id].preload : sectionScreen(id).preload
     return (
       <Link key={id} to={status ? '/projects/$projectId/overview' : '/projects/$projectId/$section'}
         params={{ projectId, section: id }} search={{ ...defaultSectionSearch(id), preview }} preload="intent" activeOptions={{ exact: true }}
@@ -140,7 +140,7 @@ function WorkspaceShell() {
   const organizations = useQuery({ ...organizationsOptions(user?.id ?? ''), enabled: Boolean(project.data?.organization_id) })
   const organization = organizations.data?.items?.find(item => item.id === project.data?.organization_id)
   const orgName = organization?.kind === 'personal' ? t('shell.personal') : organization?.name
-  const { role, members } = useWorkspaceRole((home || section === 'diagrams' || (section && (isBehaviorSection(section) || isSecureSection(section))) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
+  const { role, members } = useWorkspaceRole((home || section === 'diagrams' || (section && (isBehaviorSection(section) || isSecureSection(section) || isConnectSection(section))) || panel === 'workbench' || panel === 'share') ? activeProject ?? '' : '', user?.id ?? '')
   const keycloak = useQuery(keycloakOptions(activeProject ?? '', Boolean(status.data?.sections?.find(item => item.id === 'auth')?.configured))).data?.active
   const { data } = status
   const guardedError = [401, 403, 404, 423].includes(statusCode(status.error) ?? 0) ? status.error : undefined
@@ -272,7 +272,7 @@ function WorkspaceShell() {
             {guided && activeProject && <ProjectNavigation projectId={activeProject} guided data={data} />}
             {projectGate ?? <WorkspaceContext.Provider value={{
               role, rolePending: members.isPending, roleError: members.isError,
-              retryRole: () => void members.refetch(), project: project.data?.name, organization: orgName, version: project.data?.version,
+              retryRole: () => void members.refetch(), project: project.data?.name, organization: orgName, organizationSlug: organization?.slug, openShare: () => setPanel('share'), version: project.data?.version,
             }}><Outlet /></WorkspaceContext.Provider>}
           </Stack>
         </main>

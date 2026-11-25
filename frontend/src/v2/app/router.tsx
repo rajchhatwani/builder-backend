@@ -8,7 +8,7 @@ import { safeEntryNext } from '../features/entry/entryLinks'
 import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
-import { defaultSectionSearch, isBehaviorSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isConnectSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -161,6 +161,7 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   base: typeof search.base === 'number' && Number.isSafeInteger(search.base) && search.base >= 0 ? search.base : undefined,
   role: typeof search.role === 'string' ? search.role : undefined,
   history: typeof search.history === 'number' && Number.isSafeInteger(search.history) && search.history > 1 ? search.history : undefined,
+  tokensPage: typeof search.tokensPage === 'number' && Number.isSafeInteger(search.tokensPage) && search.tokensPage > 1 ? search.tokensPage : undefined,
   approval: typeof search.approval === 'string' ? search.approval : undefined,
   page: typeof search.page === 'number' && Number.isSafeInteger(search.page) && search.page > 1 ? search.page : undefined,
   run: typeof search.run === 'string' ? search.run : undefined,
@@ -193,6 +194,18 @@ const section = createRoute({
         void context.queryClient.prefetchQuery(authOptions(id))
         if (params.section !== 'auth') void context.queryClient.prefetchQuery(keycloakOptions(id))
         else if (deps.tab === 'fields') void context.queryClient.prefetchQuery(fieldsOptions(id, deps.page ?? 1))
+      }, () => undefined)
+    }
+    if (isConnectSection(params.section)) {
+      void screens[params.section].preload()
+      void import('../features/connect/api/connect').then(({ membersOptions, paymentsOptions, storageOptions, specOptions }) => {
+        const id = params.projectId
+        if (params.section === 'integrations') void context.queryClient.prefetchQuery(membersOptions(id))
+        else {
+          if (params.section === 'payments') void context.queryClient.prefetchQuery(paymentsOptions(id))
+          else void context.queryClient.prefetchQuery(storageOptions(id))
+          void context.queryClient.prefetchQuery(specOptions(id))
+        }
       }, () => undefined)
     }
     if (params.section === 'diagrams') {
@@ -251,6 +264,11 @@ function ProjectSection() {
   if (name === 'diagrams') {
     const Screen = screens.diagrams.Component
     return <Screen key={projectId} projectId={projectId} viewer={workspace.role === 'viewer'} />
+  }
+  if (isConnectSection(name)) {
+    const Screen = screens[name].Component
+    return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
+      roleError={workspace.roleError} retryRole={workspace.retryRole} organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
   }
   if (isBehaviorSection(name) || isSecureSection(name)) {
     const Screen = screens[name].Component

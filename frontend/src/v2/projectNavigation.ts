@@ -21,6 +21,10 @@ const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', '
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
 
+const connectSections = ['payments', 'storage', 'integrations'] as const
+export const isConnectSection = (section: string): section is typeof connectSections[number] =>
+  connectSections.some(name => name === section)
+
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]
@@ -67,6 +71,7 @@ export type SectionSearch = {
   workspace?: string
   page?: number
   approval?: string
+  tokensPage?: number
 }
 
 export function defaultSectionSearch(section: string): SectionSearch {

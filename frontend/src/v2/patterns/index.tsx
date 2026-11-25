@@ -1,15 +1,16 @@
 import { useState } from 'react'
-import type { ReactElement, ReactNode } from 'react'
+import type { ReactElement, ReactNode, RefObject } from 'react'
 import { useT } from '../i18n'
 import { Alert, Badge, Button, Card, Dialog, Row, Spinner, Stack } from '../ui'
 import type { Tone } from '../ui'
 export * from './Form'
 export * from './DataTable'
 
-export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, open: controlledOpen, onOpenChange }: {
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, open: controlledOpen, onOpenChange, returnFocus }: {
   trigger?: ReactElement
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  returnFocus?: RefObject<HTMLElement | null>
   title: string
   description: string
   action: string
@@ -27,7 +28,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   const t = useT()
   const busy = Boolean(pending || working)
   return (
-    <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen}
+    <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen} returnFocus={returnFocus}
       actions={<Button variant="danger" disabled={busy || disabled} onClick={async () => {
         setWorking(true)
         setFailed(false)

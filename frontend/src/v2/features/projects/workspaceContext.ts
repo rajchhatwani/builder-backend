@@ -8,5 +8,7 @@ export const WorkspaceContext = createContext<{
   retryRole?: () => void
   project?: string
   organization?: string
+  organizationSlug?: string
+  openShare?: () => void
   version?: number
 }>({})

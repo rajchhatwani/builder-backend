@@ -51,7 +51,10 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
     setErrors(next)
     const first = Object.keys(next)[0]
     if (first) {
-      document.getElementById(`${id}-${first}`)?.focus()
+      const control = document.getElementById(`${id}-${first}`)
+      const disclosure = control?.closest('details')
+      if (disclosure) disclosure.open = true
+      control?.focus()
       return
     }
     setEdited({})

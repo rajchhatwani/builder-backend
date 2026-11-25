@@ -1,6 +1,9 @@
 import { lazyScreen } from './lazy'
 
 export const screens = {
+  payments: lazyScreen(() => import('../features/connect/PaymentsScreen')),
+  storage: lazyScreen(() => import('../features/connect/StorageScreen')),
+  integrations: lazyScreen(() => import('../features/connect/IntegrationsScreen')),
   auth: lazyScreen(() => import('../features/secure/AuthScreen')),
   keycloak: lazyScreen(() => import('../features/secure/KeycloakScreen')),
   access: lazyScreen(() => import('../features/secure/AccessScreen')),

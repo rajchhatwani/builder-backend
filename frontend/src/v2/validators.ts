@@ -318,3 +318,27 @@ export function checkPolicyCondition(node: {
     value.kind === 'literal' ? accessChecks.literal(value.value) : undefined
   return operand(node.left) ?? (node.op === 'is_null' || node.op === 'not_null' ? undefined : operand(node.right))
 }
+
+export const connectLimits = {
+  amount: 99_999_999, urls: 20, currencies: 30, roles: 50, payableName: 100,
+  bucket: 63, region: 32, prefix: 100, mime: 50,
+}
+
+export function connectList(max: number, check?: (entry: string) => boolean): (values: string[]) => ValidationIssue | undefined {
+  return values => {
+    if (values.length > max) return issue('connectListMax', { max })
+    if (new Set(values).size !== values.length) return issue('connectUnique')
+    if (check && values.some(value => !check(value))) return issue('connectListValue', { value: values.find(value => !check(value)) ?? '' })
+  }
+}
+
+export const connectBucket = format(value => /^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$/.test(value) && !/^\d+$/.test(value), 'connectBucket')
+export const connectRegion = format(value => /^[a-z]{2}(?:-[a-z]+)+-[0-9]{1,2}$/.test(value), 'connectRegion')
+export const connectPrefix = format(value => /^[a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*$/.test(value), 'connectPrefix')
+export const connectMime = connectList(connectLimits.mime, value =>
+  /^[a-z0-9][a-z0-9!#$&^_.+-]{0,62}\/(?:[a-z0-9][a-z0-9!#$&^_.+-]{0,62}|\*)$/.test(value))
+export const connectUrls = connectList(connectLimits.urls, value => !!secureAddress(value, true))
+export const connectCurrency = format(value => /^[A-Z]{3}$/.test(value), 'connectCurrency')
+export const connectRefund = (max: number) => validators.number({ min: 1, max, integer: true })
+export const connectDistinct = (values: string[]): ValidationIssue | undefined =>
+  values.filter(Boolean).length !== new Set(values.filter(Boolean)).size ? issue('connectDistinct') : undefined

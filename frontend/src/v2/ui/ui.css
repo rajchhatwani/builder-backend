@@ -121,3 +121,9 @@ textarea.v2-control { resize: vertical; }
 }
 
 .v2-progress { inline-size: 100%; accent-color: var(--accent); }
+
+.v2-disclosure > summary {
+  min-block-size: var(--touch);
+  padding-block: var(--s2);
+  cursor: pointer;
+}
