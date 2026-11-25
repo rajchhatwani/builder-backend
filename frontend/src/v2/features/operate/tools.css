@@ -1,0 +1,23 @@
+.v2-tool-source {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  max-block-size: calc(var(--s8) * 12);
+  overflow: auto;
+}
+.v2-tool-source mark {
+  color: var(--ink);
+  background: var(--warning-bg);
+}
+
+.v2-tool-pdf {
+  display: block;
+  inline-size: 100%;
+  block-size: calc(var(--s8) * 14);
+  border: var(--border) solid var(--line);
+}
+
+.v2-tool-map-point { fill: var(--accent); }
+.v2-tool-route-line {
+  stroke-width: 4;
+  stroke-dasharray: 12 8;
+}

@@ -16,7 +16,7 @@ export type Session = { projectId: string; target: PreviewInstance; token: strin
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number }
 type Params = Record<string, string | number | boolean | undefined>
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-type Endpoint = `/${'ledger/' | 'invoices' | 'payouts' | 'reconciliation/' | 'booking/' | 'location/' | 'geo/' | 'matching/'}${string}`
+type Endpoint = `/${'ledger/' | 'invoices' | 'payouts' | 'reconciliation/' | 'booking/' | 'location/' | 'geo/' | 'matching/' | 'prediction/' | 'ai/documents' | 'ai/agents' | 'documents'}${string}`
 
 const previewMount = (id: string) => '/previews/' + encodeURIComponent(id)
 export function usablePreview(projectId: string, preview: PreviewInstance) {
@@ -55,18 +55,20 @@ export function parseRuntimeJson(source: string): unknown {
     integer !== undefined && (key.endsWith('_minor"') || key === '"seq"')
       ? key + ':' + JSON.stringify(integer) : chunk))
 }
-export async function runtimeRequest<T>(session: Session, path: Endpoint, method: Method, body?: unknown, params?: Params, signal?: AbortSignal) {
+async function runtimeFetch(session: Session, path: Endpoint, method: Method, body?: unknown, params?: Params, signal?: AbortSignal, accept = 'application/json') {
   if (!usablePreview(session.projectId, session.target)) throw badResponse()
   const mount = new URL(previewBase(BASE_URL, session.target.url_path) + '/', window.location.origin)
   const url = new URL(mount.href + path.slice(1))
   if (url.origin !== mount.origin || !url.pathname.startsWith(mount.pathname) || /\\|%2f|%5c/i.test(url.pathname)) throw badResponse()
   for (const [key, value] of Object.entries(params ?? {})) if (value !== undefined && value !== '') url.searchParams.set(key, String(value))
-  const response = await fetch(url.href, {
+  return fetch(url.href, {
     method, signal, credentials: 'omit', redirect: 'error', cache: 'no-store', referrerPolicy: 'no-referrer',
-    headers: { Accept: 'application/json', 'X-Preview-Token': session.token, Authorization: 'Bearer ' + session.bearer,
+    headers: { Accept: accept, 'X-Preview-Token': session.token, Authorization: 'Bearer ' + session.bearer,
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }) },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
+}
+async function readRuntimeResponse(response: Response) {
   const raw = await response.text()
   let value: unknown
   try { value = raw ? parseRuntimeJson(raw) : null } catch { value = null }
@@ -78,6 +80,11 @@ export async function runtimeRequest<T>(session: Session, path: Endpoint, method
     })
   }
   if (value == null && response.status !== 204) throw badResponse()
+  return value
+}
+export async function runtimeRequest<T>(session: Session, path: Endpoint, method: Method, body?: unknown, params?: Params, signal?: AbortSignal) {
+  const response = await runtimeFetch(session, path, method, body, params, signal)
+  const value = await readRuntimeResponse(response)
   return { data: value as T, replayed: response.headers.get('Idempotent-Replayed') === 'true' ||
     (method === 'POST' && response.status === 200 && ([
       '/ledger/transactions', '/payouts/run', '/booking/bookings', '/reconciliation/runs',
@@ -85,14 +92,19 @@ export async function runtimeRequest<T>(session: Session, path: Endpoint, method
 }
 function validRuntimeRead(path: Endpoint, value: unknown): boolean {
   if (value == null || typeof value !== 'object') return false
-  if (path === '/payouts/totals') return Array.isArray(value)
+  if (path === '/payouts/totals' || path === '/documents') return Array.isArray(value)
+  if (path === '/ai/agents' || path === '/ai/agents/stats') {
+    const registry = value as { agents?: unknown; actions?: unknown }
+    return Array.isArray(registry.agents) && (path.endsWith('/stats') || Array.isArray(registry.actions))
+  }
   const arrays = path === '/ledger/balances' ? ['items', 'totals'] :
     path === '/invoices/aging' ? ['currencies'] :
     path.endsWith('/results') ? ['matched', 'unmatched_lines', 'unmatched_entries'] :
     path.endsWith('/availability') ? ['slots'] :
     path.endsWith('/history') || path.endsWith('/entries') ||
       ['/ledger/accounts', '/ledger/transactions', '/invoices', '/payouts', '/reconciliation/runs', '/booking/resources',
-        '/booking/bookings', '/geo/places', '/geo/geofences', '/location/positions', '/geo/events', '/matching/assignments'].includes(path) ? ['items'] : []
+        '/booking/bookings', '/geo/places', '/geo/geofences', '/location/positions', '/geo/events', '/geo/places/nearest', '/geo/places/within', '/matching/assignments', '/prediction/records',
+        '/ai/documents', '/ai/agents/proposals', '/ai/agents/runs'].includes(path) ? ['items'] : []
   const record = value as Record<string, unknown>
   return !Array.isArray(value) && arrays.every(field => Array.isArray(record[field]))
 }
@@ -107,13 +119,14 @@ export function liveRead<T>(session: Session, path: Endpoint, params: Params = {
     },
   })
 }
-export function useRuntimeWrite<B, T>(session: Session, path: Endpoint, method: Exclude<Method, 'GET'> = 'POST') {
+export function useRuntimeWrite<B, T>(session: Session, path: Endpoint, method: Exclude<Method, 'GET'> = 'POST', refresh = true) {
   const cache = useQueryClient()
   return useMutation({
     mutationFn: (body: B) => runtimeRequest<T>(session, path, method, body),
-    onSuccess: () => cache.invalidateQueries({ queryKey: liveKey(session) }),
+    onSuccess: () => refresh ? cache.invalidateQueries({ queryKey: liveKey(session) }) : undefined,
   })
 }
+export const runtimeError = (error: unknown) => error instanceof ApiError ? { code: error.code, message: error.message, details: error.details } : undefined
 export const runtimeStatus = (error: unknown) => error instanceof ApiError ? error.status : undefined
 export const runtimeMessage = (error: unknown) => error instanceof ApiError && error.status < 500 ? error.message : ''
 
@@ -131,3 +144,15 @@ export const allLedgerAccounts = <T>(session: Session, enabled: boolean) => quer
     return { items, truncated: true }
   },
 })
+
+export function useRuntimePdf(session: Session, template: string, bound: boolean) {
+  return useMutation({
+    mutationFn: async ({ record, data }: { record?: string; data?: Record<string, unknown> }) => {
+      const path = bound ? `/documents/${segment(template)}/records/${segment(record ?? '')}` as const : `/documents/${segment(template)}/render` as const
+      const response = await runtimeFetch(session, path, 'POST', bound ? undefined : { data }, undefined, undefined, 'application/pdf')
+      if (!response.ok) await readRuntimeResponse(response)
+      if (!response.headers.get('content-type')?.startsWith('application/pdf')) throw badResponse()
+      return response.blob()
+    },
+  })
+}

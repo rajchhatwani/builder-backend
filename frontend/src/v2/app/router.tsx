@@ -138,6 +138,11 @@ const project = createRoute({
   beforeLoad: ({ params }) => { throw redirect({ to: routePaths.status, params }) },
 })
 const projectSectionSearch = (search: Record<string, unknown>): SectionSearch => ({
+  agent: typeof search.agent === 'string' ? search.agent : undefined,
+  candidate: typeof search.candidate === 'string' ? search.candidate : undefined,
+  model: typeof search.model === 'string' ? search.model : undefined,
+  fence: typeof search.fence === 'string' ? search.fence : undefined,
+  request: typeof search.request === 'string' ? search.request : undefined,
   status: typeof search.status === 'string' ? search.status : undefined,
   currency: typeof search.currency === 'string' ? search.currency : undefined,
   account: typeof search.account === 'string' ? search.account : undefined,
@@ -232,8 +237,10 @@ const section = createRoute({
     }
     if (isLiveOperateSection(params.section)) {
       void screens[params.section].preload()
+      if (params.section === 'documents' && deps.tab === 'pdf') void import('../features/operate/api/documents').then(({ documentsOptions }) =>
+        void context.queryClient.prefetchQuery(documentsOptions(params.projectId)), () => undefined)
       void import('../features/operate/api/live').then(({ previewOptions, bookingRulesOptions }) => {
-        void context.queryClient.prefetchQuery(previewOptions(params.projectId))
+        if (params.section !== 'documents' || deps.tab !== 'pdf') void context.queryClient.prefetchQuery(previewOptions(params.projectId))
         if (params.section === 'bookingadmin') void context.queryClient.prefetchQuery(bookingRulesOptions(params.projectId))
       }, () => undefined)
     }

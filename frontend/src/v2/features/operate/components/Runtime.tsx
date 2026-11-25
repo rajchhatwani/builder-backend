@@ -14,11 +14,14 @@ import english from '../liveCopy.json'
 
 type Translate = ReturnType<typeof useT>
 export const key = (id: string) => 'runtime.' + id
-export function RuntimeScreen({ id, title, children, builder }: { id: LiveProps; title: string; children: (session: Session) => ReactNode; builder?: ReactNode }) {
-  return <RouteTranslations english={english}><RuntimeContents id={id} title={title} builder={builder}>{children}</RuntimeContents></RouteTranslations>
+type RuntimeProps = { id: LiveProps; title?: string; children: (session: Session) => ReactNode; builder?: ReactNode }
+export function RuntimeScreen(props: RuntimeProps) {
+  return <RouteTranslations english={english}><RuntimeContents {...props} /></RouteTranslations>
 }
 
-function RuntimeContents({ id, title, children, builder }: { id: LiveProps; title: string; children: (session: Session) => ReactNode; builder?: ReactNode }) {
+export const runtimeEnglish = english
+
+export function RuntimeContents({ id, title, children, builder }: RuntimeProps) {
   const { t, language } = useLanguage()
   const scope = useId()
   const { search, change } = useOperateSearch()
@@ -28,7 +31,7 @@ function RuntimeContents({ id, title, children, builder }: { id: LiveProps; titl
   const credential = target && id.credentials?.[target.id]
   const open = <SectionLink id={id.projectId} section="see" label={t(key(target ? 'connect' : 'startPreview'))} search={{ preview: target?.id }} />
   return <Stack gap={5}>
-    <PageHeader title={t(key(title))} description={t(key(title + 'Lead'))} />
+    {title && <PageHeader title={t(key(title))} description={t(key(title + 'Lead'))} />}
     {builder}
     {previews.isPending || previews.isError ? <RuntimeState error={previews.error} retry={previews.refetch} /> :
       !available.length ? <EmptyState title={t(key('noPreview'))} description={t(key('noPreviewHelp'))} action={open} /> :
