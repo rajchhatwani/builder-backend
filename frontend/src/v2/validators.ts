@@ -154,3 +154,62 @@ export function orgGroupName(name: string, names: string[]): ValidationIssue | u
   return names.filter(other => other.trim().toLowerCase() === name.trim().toLowerCase()).length > 1
     ? issue('duplicateGroup') : undefined
 }
+
+export const behaviorIdentifier = (max: number): Validator =>
+  format(value => value.length <= max && /^[a-z][a-z0-9_]*$/.test(value), 'behaviorName')
+export const hookModelName = format(value => /^[A-Z][A-Za-z0-9]{0,39}$/.test(value) && value !== 'BaseModel', 'hookModel')
+export const effectHost = format(value => /^[a-z0-9]([a-z0-9.-]{0,251}[a-z0-9])?$/.test(value) && !/^\d+(?:[.\d]*)$/.test(value), 'effectHost')
+export const settingColor = format(value => /^#[a-f\d]{6}$/i.test(value), 'settingColor')
+export const seedDate = format(value => /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+  !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value &&
+  Number(value.slice(0, 4)) >= 1990 && Number(value.slice(0, 4)) <= 2100, 'seedDate')
+
+export function safeJsonArray(max: number): Validator {
+  return value => {
+    if (!value.trim()) return undefined
+    try {
+      const parsed: unknown = JSON.parse(value)
+      if (Array.isArray(parsed) && parsed.length <= max) return undefined
+    } catch { /* Report a field-specific validation issue. */ }
+    return issue('jsonArray', { max })
+  }
+}
+
+export const booleanValue = format(value => /^(true|false)$/i.test(value), 'booleanValue')
+
+export const hookFieldName = format(value => /^[a-z][a-z0-9_]{0,39}$/.test(value) && !value.startsWith('model_'), 'behaviorName')
+export const hookDate = format(value => /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(value)) &&
+  new Date(value).toISOString().slice(0, 10) === value, 'dateValue')
+export const hookDateTime = format(value => /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value) &&
+  !Number.isNaN(Date.parse(value)), 'dateTimeValue')
+export const hookUuid = format(isUuid, 'uuidValue')
+
+export const customFieldOptions = format(value => {
+  const values = value.split('\n').map(item => item.trim()).filter(Boolean)
+  return values.length <= 100 && new Set(values).size === values.length &&
+    values.every(item => /^[A-Za-z0-9_.-]{1,64}$/.test(item))
+}, 'customFieldOptions')
+
+export const seedPrefix = format(value => /^[A-Za-z0-9_.-]{1,40}$/.test(value), 'seedPrefix')
+export const seedEmailPrefix = format(value => /^[a-z][a-z0-9]{0,19}$/.test(value), 'seedEmailPrefix')
+
+export function lineValues(checks: Validator[], max: number): Validator {
+  return value => {
+    const values = value.split('\n').map(line => line.trim()).filter(Boolean)
+    if (!values.length || values.length > max) return issue('lineValues', { max })
+    return values.flatMap((line, index) => checks.map(check => {
+      const child = check(line)
+      return child ? issue('lineValue', { count: index + 1 }) : undefined
+    })).find(Boolean)
+  }
+}
+
+export function looksSecretName(name: string) {
+  return /secret|password|passwd|passphrase|token|credential|private_key|api_key|cardnumber|card_number/i.test(name) ||
+    name.replace(/([a-z0-9])(?=[A-Z])/g, '$1_').toLowerCase().split(/[^a-z0-9]+/)
+      .some(part => ['pwd', 'pin', 'otp', 'cvv', 'cvc', 'ssn', 'iban', 'credentials'].includes(part))
+}
+
+export const publicBehaviorName = format(value => !looksSecretName(value), 'publicBehaviorName')
+export const sequencePrefix = format(value => /^[A-Za-z0-9_/\-]{1,20}$/.test(value), 'sequencePrefix')
+export const settingDecimal = format(value => /^-?[0-9]{1,18}(\.[0-9]{1,8})?$/.test(value), 'settingDecimal')

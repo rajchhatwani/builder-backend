@@ -13,6 +13,10 @@ export const advancedGroups = [
   { id: 'diagrams', sections: ['diagrams'] },
 ] as const
 
+export const behaviorSections = ['hooks', 'hookeffects', 'events', 'settings', 'seed', 'customfields'] as const
+export const isBehaviorSection = (section: string): section is typeof behaviorSections[number] =>
+  behaviorSections.some(name => name === section)
+
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
 export type ProjectSection = typeof guidedSections[number] | typeof advancedGroups[number]['sections'][number] | typeof desktopSections[number]
@@ -39,6 +43,7 @@ export type SectionSearch = {
   owner?: string
   history?: number
   preview?: string
+  hook?: string
   entity?: string
   file?: string
   openFiles?: string[]

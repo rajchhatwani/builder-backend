@@ -1,12 +1,14 @@
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router'
+import { useContext } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { orgSearch } from '../features/entry/orgSearch'
 import { sessionOptions, organizationsOptions } from '../features/entry/api/entry'
 import { accountSearch, projectSearch } from '../features/entry/entrySearch'
 import { safeEntryNext } from '../features/entry/entryLinks'
+import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
-import { defaultSectionSearch, isProjectSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isProjectSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -140,6 +142,7 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   decision: typeof search.decision === 'string' ? search.decision : undefined,
   owner: typeof search.owner === 'string' ? search.owner : undefined,
   preview: typeof search.preview === 'string' ? search.preview : undefined,
+  hook: typeof search.hook === 'string' ? search.hook : undefined,
   entity: typeof search.entity === 'string' ? search.entity : undefined,
   file: typeof search.file === 'string' ? search.file : undefined,
   openFiles: Array.isArray(search.openFiles) ? [...new Set(search.openFiles.filter((file): file is string => typeof file === 'string'))] : undefined,
@@ -170,6 +173,12 @@ const section = createRoute({
   loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
+    if (isBehaviorSection(params.section)) {
+      void screens[params.section].preload()
+      void import('../features/build-behavior/api/behavior').then(({ prefetchBehavior }) => {
+        prefetchBehavior(context.queryClient, params.projectId, params.section)
+      }, () => undefined)
+    }
     if (params.section === 'code' && (typeof document === 'undefined' || document.body.clientWidth >= 700)) {
       void import('../features/editor/api/editor').then(({ filesOptions, manifestOptions, kitOptions }) => {
         const id = params.projectId
@@ -210,7 +219,13 @@ const section = createRoute({
   },
 })
 function ProjectSection() {
-  const { section: name } = section.useParams()
+  const { projectId, section: name } = section.useParams()
+  const workspace = useContext(WorkspaceContext)
+  if (isBehaviorSection(name)) {
+    const Screen = screens[name].Component
+    return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
+      roleError={workspace.roleError} retryRole={workspace.retryRole} />
+  }
   const Screen = sectionScreen(name).Component
   return <Screen />
 }

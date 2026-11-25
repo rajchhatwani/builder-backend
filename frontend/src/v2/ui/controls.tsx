@@ -28,14 +28,28 @@ export function Textarea({ className = '', ...props }: ComponentPropsWithRef<'te
   return <textarea className={`v2-control ${className}`} rows={3} {...props} />
 }
 
+type SelectOption = { value: string; label: string; disabled?: boolean; group?: string }
+
 type SelectProps = ComponentPropsWithRef<typeof SelectBase.Root> & {
   triggerProps?: ComponentPropsWithRef<typeof SelectBase.Trigger>
   placeholder?: string
-  options: { value: string; label: string; disabled?: boolean }[]
+  options: SelectOption[]
 }
 
 export function Select({ triggerProps, placeholder, options, ...props }: SelectProps) {
   const { dir } = useLanguage()
+  const groups = new Map<string | undefined, SelectOption[]>()
+  for (const option of options) {
+    const group = groups.get(option.group) ?? []
+    group.push(option)
+    groups.set(option.group, group)
+  }
+  const item = ({ value, label, disabled }: SelectOption) => (
+    <SelectBase.Item key={value} value={value} disabled={disabled} className="v2-option">
+      <SelectBase.ItemText>{label}</SelectBase.ItemText>
+      <SelectBase.ItemIndicator aria-hidden>{'✓'}</SelectBase.ItemIndicator>
+    </SelectBase.Item>
+  )
   return (
     <SelectBase.Root dir={dir} {...props}>
       <SelectBase.Trigger {...triggerProps} className="v2-control v2-select">
@@ -45,12 +59,12 @@ export function Select({ triggerProps, placeholder, options, ...props }: SelectP
       <SelectBase.Portal>
         <SelectBase.Content position="popper" className="v2-popup">
           <SelectBase.Viewport>
-            {options.map(({ value, label, disabled }) => (
-              <SelectBase.Item key={value} value={value} disabled={disabled} className="v2-option">
-                <SelectBase.ItemText>{label}</SelectBase.ItemText>
-                <SelectBase.ItemIndicator aria-hidden>{'✓'}</SelectBase.ItemIndicator>
-              </SelectBase.Item>
-            ))}
+            {[...groups].map(([group, entries]) => group
+              ? <SelectBase.Group key={group}>
+                <SelectBase.Label className="v2-select-group">{group}</SelectBase.Label>
+                {entries.map(item)}
+              </SelectBase.Group>
+              : entries.map(item))}
           </SelectBase.Viewport>
         </SelectBase.Content>
       </SelectBase.Portal>

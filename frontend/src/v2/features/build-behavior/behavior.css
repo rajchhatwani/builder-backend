@@ -1,0 +1,7 @@
+.behavior-summary { display: grid; gap: var(--s2); margin: 0; }
+.behavior-summary > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: var(--s2); }
+.behavior-summary dt { color: var(--muted); }
+.behavior-summary dd { margin: 0; overflow-wrap: anywhere; }
+.behavior-grid > * { min-inline-size: 0; }
+.behavior-list { padding-inline-start: var(--s5); overflow-wrap: anywhere; }
+.behavior-card { min-inline-size: 0; overflow-wrap: anywhere; }

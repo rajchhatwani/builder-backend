@@ -7,8 +7,8 @@ import { openInEditor } from '../patterns/editorLink'
 import { App } from './App'
 import { createAppRouter } from './router'
 
-vi.mock('../features/editor/components/MonacoSurface', () => ({
-  default: ({ value, path, readOnly, onChange }: { value: string; path: string; readOnly: boolean; onChange: (value: string) => void }) =>
+vi.mock('../features/editor/components/MonacoAdapter', () => ({
+  MonacoAdapter: ({ value, path, readOnly, onChange }: { value: string; path: string; readOnly: boolean; onChange: (value: string) => void }) =>
     <textarea aria-label={path} value={value} readOnly={readOnly} onChange={event => onChange(event.target.value)} />,
 }))
 

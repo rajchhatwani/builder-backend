@@ -4,8 +4,8 @@ import { Button } from './controls'
 import { Row } from './layout'
 import { useLanguage, useT } from '../i18n'
 
-export function Tabs({ label, value, onChange, items }: {
-  label: string; value: string; onChange: (value: string) => void
+export function Tabs({ label, value, onChange, items, keepMounted }: {
+  label: string; value: string; onChange: (value: string) => void; keepMounted?: boolean
   items: { id: string; label: string; content: ReactNode; disabled?: boolean }[]
 }) {
   const { dir } = useLanguage()
@@ -14,7 +14,8 @@ export function Tabs({ label, value, onChange, items }: {
       <TabsBase.List className="v2-tabs" aria-label={label}>
         {items.map(item => <TabsBase.Trigger key={item.id} value={item.id} disabled={item.disabled} className="v2-tab">{item.label}</TabsBase.Trigger>)}
       </TabsBase.List>
-      {items.map(item => <TabsBase.Content key={item.id} className="v2-tab-panel" value={item.id}>{item.content}</TabsBase.Content>)}
+      {items.map(item => <TabsBase.Content key={item.id} className="v2-tab-panel" value={item.id}
+        forceMount={keepMounted ? true : undefined} {...(keepMounted ? { hidden: item.id !== value } : {})}>{item.content}</TabsBase.Content>)}
     </TabsBase.Root>
   )
 }

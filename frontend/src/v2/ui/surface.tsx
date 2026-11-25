@@ -1,6 +1,6 @@
-import type { ComponentPropsWithoutRef } from 'react'
+import type { ComponentPropsWithRef } from 'react'
 
-export function Card({ className = '', ...props }: ComponentPropsWithoutRef<'section'>) {
+export function Card({ className = '', ...props }: ComponentPropsWithRef<'section'>) {
   return <section className={`v2-card ${className}`} {...props} />
 }
 

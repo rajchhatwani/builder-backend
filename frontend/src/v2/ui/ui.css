@@ -86,6 +86,7 @@ textarea.v2-control { resize: vertical; }
 }
 .v2-popover, .v2-tooltip { padding: var(--s2) var(--s3); }
 .v2-menu-label { padding: var(--s2); color: var(--muted); font-size: var(--text-sm); }
+.v2-select-group { padding: var(--s2) var(--s3); color: var(--muted); font-weight: var(--semibold); }
 .v2-option { min-block-size: var(--touch); display: flex; align-items: center; justify-content: space-between; gap: var(--s2); padding: var(--s2); outline: none; cursor: pointer; }
 .v2-option[data-highlighted] { background: var(--accent-bg); color: var(--accent); }
 .v2-option[data-disabled] { color: var(--muted); cursor: not-allowed; }
