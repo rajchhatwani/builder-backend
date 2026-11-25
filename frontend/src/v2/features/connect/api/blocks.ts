@@ -21,7 +21,27 @@ export type Webhooks = {
   allowed_ports: number[]; secret_overlap_hours: number;
 }
 
-export type Blocks = { notifications: Notifications; webhooks: Webhooks }
+export type ProviderAdapter = { kind: string; name: string; settings: Record<string, string | number | boolean> }
+export type Providers = {
+  enabled: boolean; admin_role: string; adapters: ProviderAdapter[]; timeout_seconds: number
+  max_attempts: number; breaker_failures: number; breaker_reset_seconds: number
+}
+export type RateBucket = { capacity: number; refill_per_second: number }
+export type RateGroup = { name: string; path_prefix: string; methods: string[]; user: RateBucket | null; tenant: RateBucket | null; cost: number }
+export type ApiEdge = {
+  enabled: boolean
+  idempotency: { methods: string[]; ttl_hours: number; max_response_bytes: number } | null
+  rate_limits: { user: RateBucket; tenant: RateBucket | null; anonymous: RateBucket; groups: RateGroup[]; read_fail_open: boolean } | null
+  quotas: { meter: string; period: string; limit: number; path_prefix: string; methods: string[]; cost: number }[]
+  versioning: { default: string; versions: { date: string; note: string }[] } | null
+}
+export type ApiPlatform = {
+  enabled: boolean; roles: string[]; entities: { entity: string; fields: string[]; sandbox: boolean }[]
+  rate_limit: string; sandbox_rate_limit: string; key_ttl_days: number
+  apps: { name: string; title: string; scopes: string[]; events: string[] }[]
+}
+export type Blocks = { notifications: Notifications; webhooks: Webhooks; providers: Providers; api_edge: ApiEdge; api_platform: ApiPlatform }
+const routeName = (key: BlockName) => key.replaceAll('_', '-')
 export type BlockName = keyof Blocks
 type BlockRead<T> = { version: number; row_version: number; updated_at: string | null; block: T | null }
 type BlockReply<K extends BlockName> = Omit<BlockRead<Blocks[K]>, 'block'> & Record<K, Blocks[K] | null>
@@ -32,7 +52,7 @@ const decode = <K extends BlockName>(key: K, data: Record<string, unknown>): Blo
 }
 const options = { retry: false, retryOnMount: false, staleTime: 15_000 }
 export const blockOptions = <K extends BlockName>(id: string, key: K) => queryOptions({
-  ...options, queryKey: connectKeys.block(id, key), queryFn: async () => decode(key, await api.getBlock(id, key)),
+  ...options, queryKey: connectKeys.block(id, key), queryFn: async () => decode(key, await api.getBlock(id, routeName(key))),
 })
 export const connectIssuesOptions = (id: string) => queryOptions({
   ...options, queryKey: connectKeys.issues(id), queryFn: () => api.getBehaviorIssues(id),
@@ -47,7 +67,7 @@ export function useBlockWrite<K extends BlockName>(id: string, key: K) {
   return useMutation({
     scope: { id: 'connect-block:' + id + ':' + key },
     mutationFn: async ({ block, version }: { block: Blocks[K] | null; version: number }) =>
-      decode(key, await api.putBlock(id, key, { [key]: block, expected_version: version })),
+      decode(key, await api.putBlock(id, routeName(key), { [key]: block, expected_version: version })),
     onSuccess: async data => {
       await queryClient.cancelQueries({ queryKey, exact: true })
       queryClient.setQueryData(queryKey, data)
@@ -61,6 +81,7 @@ export function blockFieldErrors(error: unknown, key: BlockName): PathErrors {
   const fields: PathErrors = Object.create(null)
   if (!(error instanceof ApiError) || error.status !== 422) return fields
   for (const [path, messages] of Object.entries(issuesFromDetail(error.details))) {
+    if (path === key) fields[''] = messages
     if (path.startsWith(key + '.')) fields[path.slice(key.length + 1)] = messages
   }
   for (const item of error.details as unknown[]) {

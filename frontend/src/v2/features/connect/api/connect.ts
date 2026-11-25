@@ -10,7 +10,7 @@ export type Impact = PaymentsImpact
 export type SwitchAction = 'enable' | 'disable'
 export type SettingsKind = 'payments' | 'storage'
 export type ConnectRole = { role?: MemberRole; rolePending?: boolean; roleError?: boolean; retryRole?: () => void }
-export type ConnectProps = ConnectRole & { projectId: string }
+export type ConnectProps = ConnectRole & { projectId: string; organizationSlug?: string }
 export type ConnectSpec = {
   events?: { enabled: boolean } | null
   jobs?: { enabled: boolean; jobs?: { name: string }[] } | null
@@ -31,6 +31,7 @@ export const connectKeys = {
   block: (id: string, key: string) => [...project(id), 'connect', 'block', key] as const,
   issues: (id: string) => [...project(id), 'connect', 'issues'] as const,
   roles: (id: string) => [...project(id), 'connect', 'roles'] as const,
+  imports: (id: string, ...parts: (string | number)[]) => [...project(id), 'connect', 'imports', ...parts] as const,
   previews: (id: string) => [...project(id), 'connect', 'previews'] as const,
   live: (id: string, preview: string, session: string, ...key: string[]) => [...project(id), 'connect', 'live', preview, session, ...key] as const,
   spec: (id: string) => [...project(id), 'connect', 'spec'] as const,

@@ -8,6 +8,8 @@ import { safeEntryNext } from '../features/entry/entryLinks'
 import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
+import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
+import { PreviewIdentity } from '../features/guided/components/PreviewIdentity'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
 import { defaultSectionSearch, isBehaviorSection, isConnectSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
@@ -172,6 +174,9 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   channel: typeof search.channel === 'string' ? search.channel : undefined,
   subscription: typeof search.subscription === 'string' ? search.subscription : undefined,
   delivery: typeof search.delivery === 'string' ? search.delivery : undefined,
+  batch: typeof search.batch === 'string' && /^[0-9a-f-]{36}$/i.test(search.batch) ? search.batch : undefined,
+  recordPage: typeof search.recordPage === 'number' && Number.isSafeInteger(search.recordPage) && search.recordPage > 0 ? search.recordPage : undefined,
+  auditPage: typeof search.auditPage === 'number' && Number.isInteger(search.auditPage) && search.auditPage >= 1 && search.auditPage <= 20001 ? search.auditPage : undefined,
   limit: typeof search.limit === 'string' ? search.limit : undefined,
   workspace: typeof search.workspace === 'string' ? search.workspace : undefined,
 })
@@ -205,7 +210,19 @@ const section = createRoute({
     }
     if (isConnectSection(params.section)) {
       void screens[params.section].preload()
-      if (params.section === 'forms') return
+      if (params.section === 'forms' || params.section === 'apps') return
+      if (params.section === 'import') {
+        void import('../features/connect/api/connect').then(({ specOptions }) =>
+          context.queryClient.prefetchQuery(specOptions(params.projectId)), () => undefined)
+        return
+      }
+      if (params.section === 'providers' || params.section === 'apiedge' || params.section === 'apikeys') {
+        const { projectId, section } = params
+        const block = section === 'providers' ? 'providers' : section === 'apiedge' ? 'api_edge' : 'api_platform'
+        void import('../features/connect/api/blocks').then(({ blockOptions }) =>
+          context.queryClient.prefetchQuery(blockOptions(projectId, block)), () => undefined)
+        return
+      }
       if (params.section === 'notifications' || params.section === 'notiftypes' || params.section === 'webhooks') {
         const { projectId, section } = params
         void import('../features/connect/api/blocks').then(({ blockOptions }) =>
@@ -272,6 +289,10 @@ const section = createRoute({
     })
   },
 })
+const renderPreviewIdentity: (allowRegister: boolean) => NonNullable<PlatformPreviewProps['renderIdentity']> =
+  allowRegister => (preview, credential) =>
+    <PreviewIdentity preview={{ ...preview, error: preview.error ?? null, is_preview: true }} credential={credential} allowRegister={allowRegister} />
+
 function ProjectSection() {
   const { projectId, section: name } = section.useParams()
   const workspace = useContext(WorkspaceContext)
@@ -284,7 +305,8 @@ function ProjectSection() {
     if (name === 'forms') return <screens.forms.Component />
     const Screen = screens[name].Component
     return <Screen key={projectId} projectId={projectId} role={workspace.role} rolePending={workspace.rolePending}
-      roleError={workspace.roleError} retryRole={workspace.retryRole} credentials={credentials} organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
+      roleError={workspace.roleError} retryRole={workspace.retryRole} credentials={credentials} renderIdentity={renderPreviewIdentity(workspace.role === 'owner' || workspace.role === 'editor')}
+      organizationSlug={workspace.organizationSlug} openShare={workspace.openShare} />
   }
   if (isBehaviorSection(name) || isSecureSection(name)) {
     const Screen = screens[name].Component

@@ -5,7 +5,7 @@ export default defineConfig({
   testMatch: /.*\.spec\.ts/,
   timeout: 60_000,
   expect: { timeout: 10_000, toHaveScreenshot: { maxDiffPixelRatio: 0.005, animations: 'disabled' } },
-  fullyParallel: false, workers: 1, retries: 0, reporter: [['list']],
+  fullyParallel: false, workers: 4, retries: 0, reporter: [['list']],
   use: { baseURL: 'http://localhost:5299' },
   webServer: { command: 'npx vite --port 5299 --strictPort', url: 'http://localhost:5299', reuseExistingServer: true, timeout: 120_000 },
   projects: [

@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { validateValue } from '../../../../forms/schemaLogic'
 import type { Path } from '../../../../forms/schemaLogic'
 import type { JsonSchema } from '../../../../forms/types'
-import { useT } from '../../../i18n'
+import { useLanguage } from '../../../i18n'
 import { ConfirmDestructive, ConflictBanner } from '../../../patterns'
 import type { SchemaFieldOverride } from '../../../patterns/SchemaFields'
 import { SchemaFields } from '../../../patterns/SchemaFields'
@@ -19,25 +19,30 @@ import { BlockLoad, Issues } from './BlockStatus'
 
 type Props<K extends BlockName> = {
   projectId: string; name: K; schema: JsonSchema; defaults: Blocks[K]; readOnly: boolean; title: string; errorKey: string
+  remove?: boolean; prepare?: (value: Blocks[K]) => Blocks[K]
+  validate?: (value: Blocks[K]) => Record<string, string[]>
   empty?: ReactNode; children?: (current: Blocks[K]) => ReactNode
   options?: (path: Path, current: Blocks[K]) => SelectOption[] | undefined
   fieldOverride?: (props: SchemaFieldOverride, current: Blocks[K]) => ReactNode
   selectedRow?: (path: Path) => { index?: number; select: (index?: number) => void } | undefined
 }
 
-export function BlockSettings<K extends BlockName>({ projectId, name, schema, defaults, readOnly, title, errorKey, empty, children, options, selectedRow, fieldOverride }: Props<K>) {
-  const t = useT()
+export function BlockSettings<K extends BlockName>({ projectId, name, schema, defaults, readOnly, title, errorKey, empty, children, options, selectedRow, fieldOverride, remove, prepare, validate }: Props<K>) {
+  const { t, language } = useLanguage()
   const query = useQuery(blockOptions(projectId, name))
   const mutation = useBlockWrite(projectId, name)
   const [state, dispatch] = useReducer(schemaDraftReducer, initialSchemaDraft)
   const read = query.data
   if (!read) return <BlockLoad error={query.error} retry={() => void query.refetch()} errorKey={errorKey} />
-  const base = read.block ?? defaults
+  const base = read.block && prepare ? prepare(read.block) : read.block ?? defaults
   const current = (state.draft?.value ?? base) as Blocks[K]
   const disabled = readOnly || mutation.isPending
   const version = state.draft?.version ?? read.version
   const conflict = statusOf(mutation.error) === 409
-  const issues = { ...validateValue(schema, schema, current), ...blockDraftIssues(name, current, t) }
+  const issues = {
+    ...validateValue(schema, schema, current),
+    ...(name === 'notifications' || name === 'webhooks' ? blockDraftIssues(name, current as Blocks['notifications' | 'webhooks'], t) : validate?.(current)),
+  }
   async function save(block: Blocks[K] | null) {
     try {
       await mutation.mutateAsync({ block, version })
@@ -70,7 +75,8 @@ export function BlockSettings<K extends BlockName>({ projectId, name, schema, de
   return <Stack>
     {conflict && <ConflictBanner onReload={() => void reload()} />}
     {query.isRefetchError && <BlockLoad error={query.error} retry={() => void reload()} errorKey={errorKey} />}
-    {mutation.isError && !conflict && <Alert tone="danger">{t('connectA2.writeError', {
+    {statusOf(mutation.error) === 403 && <Alert tone="warning">{t('behavior.forbidden')}</Alert>}
+    {mutation.isError && !conflict && statusOf(mutation.error) !== 403 && <Alert tone="danger">{t('connectA2.writeError', {
       message: errorText(mutation.error) ?? t('common.actionFailed'),
     })}</Alert>}
     {mutation.isSuccess && <Alert tone="success">{t('connectA2.saved', { version: read.version })}</Alert>}
@@ -95,13 +101,13 @@ export function BlockSettings<K extends BlockName>({ projectId, name, schema, de
         </Stack>
       </form>
       <p className="v2-muted">{t('connectA2.version', { version: read.version, row: read.row_version ?? 0 })}</p>
-      {read.updated_at && <p className="v2-muted">{t('connectA2.updated', { date: new Intl.DateTimeFormat('en', {
+      {read.updated_at && <p className="v2-muted">{t('connectA2.updated', { date: new Intl.DateTimeFormat(language, {
         dateStyle: 'medium', timeStyle: 'short',
       }).format(new Date(read.updated_at)) })}</p>}
     </Stack></Card>
-    {name === 'notifications' && read.block && !readOnly && <Row><ConfirmDestructive
-      trigger={<Button variant="danger" disabled={disabled || conflict}>{t('connectA2.types.remove')}</Button>}
-      title={t('connectA2.types.removeTitle')} description={t('connectA2.types.removeHelp')}
-      action={t('connectA2.types.removeAction')} onConfirm={() => save(null)} /></Row>}
+    {(name === 'notifications' || remove) && read.block && !readOnly && <Row><ConfirmDestructive
+      trigger={<Button variant="danger" disabled={disabled || conflict}>{t(remove ? 'connectB.remove' : 'connectA2.types.remove')}</Button>}
+      title={t(remove ? 'connectB.remove' : 'connectA2.types.removeTitle')} description={t(remove ? 'connectB.removeHelp' : 'connectA2.types.removeHelp')}
+      disabled={disabled || conflict} action={t(remove ? 'connectB.remove' : 'connectA2.types.removeAction')} onConfirm={() => save(null)} /></Row>}
   </Stack>
 }

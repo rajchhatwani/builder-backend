@@ -424,3 +424,133 @@ export const webhookSecret: Validator = value => {
   return count < webhookLiveLimits.minSecret
     ? { key: 'connectA2.live.secretLength' } : validators.length(webhookLiveLimits.maxSecret)(value)
 }
+
+type TranslateIssue = (key: string, values?: Record<string, string | number>) => string
+export const providerSecretKey = (name: string) => looksSecretName(name) || /pass|secret|token|authorization|signature|key|cookie|credential|bearer/i.test(name)
+export function credentialLikeValue(value: unknown): boolean {
+  return typeof value === 'string' && /\b(?:(?:sk|rk|pk|rzp)_(?:live|test)_[A-Za-z0-9]{6,}|whsec_[A-Za-z0-9+/=_-]{8,}|bearer\s+[A-Za-z0-9._~+/=-]{8,}|eyJ[\w-]{8,}\.[\w-]{8,}\.[\w-]*|(?:AKIA|ASIA)[A-Z0-9]{16}|SG\.[\w-]{16,}|xox[abprs]-[A-Za-z0-9-]{10,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_\w{20,}|glpat-[\w-]{16,}|AIza[\w-]{30,}|npm_[A-Za-z0-9]{30,}|[a-f0-9]{40,})\b|-----BEGIN [A-Z ]*PRIVATE KEY-----|:\/\/[^/\s:@]+:[^/\s@]+@/i.test(value)
+}
+
+function issueCollector(t: TranslateIssue) {
+  const errors: Record<string, string[]> = {}
+  return { errors, add: (path: string, key: string) => { (errors[path] ??= []).push(t('connectB.validation.' + key)) } }
+}
+
+export function providerDraftIssues(value: { adapters: { kind: string; name: string; settings: Record<string, unknown> }[] }, t: TranslateIssue) {
+  const { errors, add } = issueCollector(t)
+  const seen = new Set<string>()
+  value.adapters.forEach(({ kind, name, settings }, index) => {
+    const path = 'adapters.' + index
+    const id = kind + '/' + name
+    if (name === 'emulator') add(path + '.name', 'emulator')
+    if (credentialLikeValue(name) || looksSecretName(name)) add(path + '.name', 'secret')
+    if (name && seen.has(id)) add(path + '.name', 'duplicate')
+    seen.add(id)
+    const entries = Object.entries(settings ?? {})
+    if (entries.length > 20) add(path + '.settings', 'settingsCount')
+    for (const [key, setting] of entries) {
+      if (providerSecretKey(key) || credentialLikeValue(setting)) { add(path + '.settings', 'secret'); break }
+      if (!/^[a-z][a-z0-9_]{0,39}$/.test(key) || !(typeof setting === 'string' || typeof setting === 'boolean' || Number.isInteger(setting))) {
+        add(path + '.settings', 'settingsShape'); break
+      }
+      if (typeof setting === 'string' && [...setting].length > 500) { add(path + '.settings', 'settingsLength'); break }
+    }
+  })
+  return errors
+}
+
+type RouteRule = { methods: string[]; cost: number }
+type EdgeChecks = {
+  enabled: boolean
+  idempotency: { methods: string[] } | null
+  rate_limits: { user: { capacity: number }; tenant: { capacity: number } | null; anonymous: { capacity: number };
+    groups: (RouteRule & { name: string; user: { capacity: number } | null; tenant: { capacity: number } | null })[] } | null
+  quotas: (RouteRule & { meter: string; limit: number })[]
+  versioning: { default: string; versions: { date: string; note: string }[] } | null
+}
+const realDay = (text: string) => {
+  const time = Date.parse(text + 'T00:00:00Z')
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) && !text.startsWith('0000') && Number.isFinite(time) &&
+    new Date(time).toISOString().slice(0, 10) === text
+}
+export function edgeDraftIssues(value: EdgeChecks, t: TranslateIssue) {
+  const { errors, add } = issueCollector(t)
+  const { idempotency, rate_limits: limits, quotas, versioning } = value
+  function unique(values: string[], field: (index: number) => string) {
+    const seen = new Set<string>()
+    values.forEach((entry, index) => {
+      if (seen.has(entry)) add(field(index), 'duplicate')
+      seen.add(entry)
+    })
+  }
+  if (value.enabled && !idempotency && !limits && !quotas.length && !versioning) add('enabled', 'edgePart')
+  if (idempotency) unique(idempotency.methods, index => 'idempotency.methods.' + index)
+  if (limits) {
+    unique(limits.groups.map(row => row.name), index => 'rate_limits.groups.' + index + '.name')
+    limits.groups.forEach((group, index) => {
+      const path = 'rate_limits.groups.' + index
+      if (group.name === 'default') add(path + '.name', 'reservedGroup')
+      unique(group.methods, index => path + '.methods.' + index)
+      const capacity = Math.min((group.user ?? limits.user).capacity, (group.tenant ?? limits.tenant)?.capacity ?? Infinity)
+      if (group.cost > capacity) add(path + '.cost', 'groupCost')
+    })
+  }
+  unique(quotas.map(row => row.meter), index => 'quotas.' + index + '.meter')
+  quotas.forEach((quota, index) => {
+    const path = 'quotas.' + index
+    unique(quota.methods, index => path + '.methods.' + index)
+    if (quota.cost > quota.limit) add(path + '.cost', 'quotaCost')
+  })
+  if (versioning) {
+    const dates = versioning.versions.map(row => row.date)
+    if (!dates.includes(versioning.default)) add('versioning.default', 'defaultDate')
+    unique(dates, index => 'versioning.versions.' + index + '.date')
+    versioning.versions.forEach((row, index) => {
+      if (!realDay(row.date)) add('versioning.versions.' + index + '.date', 'realDate')
+      if (credentialLikeValue(row.note)) add('versioning.versions.' + index + '.note', 'secret')
+    })
+  }
+  return errors
+}
+
+type PlatformChecks = {
+  enabled: boolean; roles: string[]; entities: { entity: string; fields: string[] }[]
+  apps: { name: string; scopes: string[] }[]
+}
+
+export function platformDraftIssues(value: PlatformChecks, t: TranslateIssue) {
+  const { errors, add } = issueCollector(t)
+  const entities = new Set<string>()
+  const apps = new Set<string>()
+  if (value.enabled && !value.roles.length) add('roles', 'roles')
+  if (value.enabled && !value.entities.length) add('entities', 'entities')
+  value.entities.forEach((row, index) => {
+    const path = 'entities.' + index
+    if (entities.has(row.entity)) add(path + '.entity', 'duplicate')
+    entities.add(row.entity)
+    if (!row.fields.length) add(path + '.fields', 'fields')
+    if (new Set(row.fields).size !== row.fields.length) add(path + '.fields', 'duplicate')
+    row.fields.forEach((field, fieldIndex) => {
+      if (/password|secret|token|hash|api_key|apikey|private_key/i.test(field)) add(path + '.fields.' + fieldIndex, 'publicField')
+    })
+  })
+  value.apps.forEach((row, index) => {
+    const path = 'apps.' + index
+    if (apps.has(row.name)) add(path + '.name', 'duplicate')
+    apps.add(row.name)
+    if (!row.scopes.length) add(path + '.scopes', 'scopes')
+    row.scopes.forEach((scope, index) => {
+      if (!entities.has(scope)) add(path + '.scopes.' + index, 'publicScope')
+    })
+  })
+  return errors
+}
+
+export const importFileIssue = (file: File | undefined) => !file?.size ? 'connectB.import.fileRequired' :
+  file.size > 5 * 1024 * 1024 ? 'connectB.import.fileSize' : undefined
+
+export function platformKeyIssue(value: string, max: number): ValidationIssue | undefined {
+  if (value && (!/^\d+$/.test(value) || Number(value) < 1 || Number(value) > max)) {
+    return { key: 'connectB.validation.keyLifetime', values: { max } }
+  }
+}
