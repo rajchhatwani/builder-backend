@@ -1,0 +1,18 @@
+.v2-entry-frame {
+  inline-size: 100%;
+  max-inline-size: var(--entry-card-width);
+  align-self: center;
+}
+.v2-entry-frame > h1 { text-align: center; }
+.v2-entry-qr {
+  display: block;
+  inline-size: var(--entry-qr-size);
+  aspect-ratio: 1;
+  max-inline-size: 100%;
+}
+.v2-entry-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--entry-code-width)), 1fr));
+  gap: var(--s2) var(--s4);
+  padding-inline-start: var(--s4);
+}

@@ -9,9 +9,15 @@ export const screens = {
   see: lazyScreen(() => import('../features/guided/SeeScreen')),
   kit: lazyScreen(() => import('./KitScreen')),
   status: lazyScreen(() => import('../features/projects/StatusScreen')),
-  projects: lazyScreen(() => import('./EntryScreens').then(module => ({ default: module.ProjectsScreen }))),
-  signIn: lazyScreen(() => import('./EntryScreens').then(module => ({ default: module.SignInScreen }))),
-  unavailable: lazyScreen(() => import('./EntryScreens').then(module => ({ default: module.Unavailable }))),
+  projects: lazyScreen<Record<string, never>>(() => import('./EntryScreens').then(module => ({ default: module.ProjectsScreen }))),
+  signIn: lazyScreen(() => import('../features/entry/SignInScreen')),
+  signup: lazyScreen(() => import('../features/entry/SignupScreen')),
+  verifyEmail: lazyScreen(() => import('../features/entry/VerifyEmailScreen')),
+  ssoComplete: lazyScreen(() => import('../features/entry/SsoCompleteScreen')),
+  invitations: lazyScreen(() => import('../features/entry/InvitationsScreen')),
+  organization: lazyScreen(() => import('../features/entry/OrganizationLandingScreen')),
+  choosePassword: lazyScreen(() => import('../features/entry/ChoosePasswordScreen')),
+  unavailable: lazyScreen<Record<string, never>>(() => import('./EntryScreens').then(module => ({ default: module.Unavailable }))),
 }
 
 export function sectionScreen(section: string) {

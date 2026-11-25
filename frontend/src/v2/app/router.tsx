@@ -1,10 +1,13 @@
 import { createRootRouteWithContext, createRoute, createRouter, redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
 import { PreviewCredentials } from '../features/guided/components/PreviewCredentials'
+import { safeEntryNext } from '../features/entry/entryLinks'
 import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
 import { isProjectSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
+import { EntryGate } from './EntryGate'
+import { normalizeEntryAddress } from './entryCompatibility'
 import { Shell } from './Shell'
 import { LazyError, ScreenSkeleton } from './lazy'
 import { screens, sectionScreen } from './routeScreens'
@@ -23,6 +26,13 @@ export const routePaths = {
   index: '/',
   projects: '/projects',
   signIn: '/sign-in',
+  login: '/login',
+  signin: '/signin',
+  signup: '/signup',
+  verifyEmail: '/verify-email',
+  ssoComplete: '/sso/complete',
+  invitations: '/invitations',
+  organization: '/org/$slug',
   kit: '/v2-kit',
   project: '/projects/$projectId',
   status: '/projects/$projectId/overview',
@@ -38,8 +48,41 @@ const root = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: Shell, notFoundComponent: NotFound, errorComponent: LazyError,
 })
 const index = createRoute({ getParentRoute: () => root, path: routePaths.index, beforeLoad: () => { throw redirect({ to: routePaths.projects }) } })
-const projects = createRoute({ getParentRoute: () => root, path: routePaths.projects, component: screens.projects.Component })
-const signIn = createRoute({ getParentRoute: () => root, path: routePaths.signIn, component: screens.signIn.Component })
+const projects = createRoute({ getParentRoute: () => root, path: routePaths.projects,
+  component: () => <EntryGate kind="protected"><screens.projects.Component /></EntryGate>,
+})
+
+type EntrySearch = { next?: string; sso_error?: string }
+function entrySearch(search: Record<string, unknown>): EntrySearch {
+  return {
+    next: safeEntryNext(search.next),
+    sso_error: typeof search.sso_error === 'string' ? search.sso_error : undefined,
+  }
+}
+function SignInPage() {
+  return <EntryGate kind="login"><screens.signIn.Component /></EntryGate>
+}
+const signIn = createRoute({ getParentRoute: () => root, path: routePaths.signIn, component: SignInPage, validateSearch: entrySearch })
+const login = createRoute({ getParentRoute: () => root, path: routePaths.login, component: SignInPage, validateSearch: entrySearch })
+const signin = createRoute({ getParentRoute: () => root, path: routePaths.signin, component: SignInPage, validateSearch: entrySearch })
+const signup = createRoute({ getParentRoute: () => root, path: routePaths.signup, validateSearch: entrySearch,
+  component: () => <EntryGate kind="signup"><screens.signup.Component /></EntryGate>,
+})
+const verifyEmail = createRoute({ getParentRoute: () => root, path: routePaths.verifyEmail, component: screens.verifyEmail.Component,
+  validateSearch: search => ({ token: typeof search.token === 'string' ? search.token : undefined }),
+})
+const ssoComplete = createRoute({ getParentRoute: () => root, path: routePaths.ssoComplete, validateSearch: entrySearch,
+  component: () => <EntryGate kind="sso"><screens.ssoComplete.Component /></EntryGate>,
+})
+const ssoAlias = createRoute({ getParentRoute: () => root, path: '/sso-complete', validateSearch: entrySearch,
+  beforeLoad: ({ search }) => { throw redirect({ to: routePaths.ssoComplete, search, replace: true }) },
+})
+const invitations = createRoute({ getParentRoute: () => root, path: routePaths.invitations,
+  component: () => <EntryGate kind="invitations"><screens.invitations.Component /></EntryGate>,
+})
+const organization = createRoute({ getParentRoute: () => root, path: routePaths.organization,
+  component: () => <EntryGate kind="protected"><screens.organization.Component /></EntryGate>,
+})
 const kit = createRoute({
   getParentRoute: () => root, path: routePaths.kit, component: screens.kit.Component,
   validateSearch: (search): KitSearch => ({
@@ -127,9 +170,10 @@ function ProjectSection() {
   return <PreviewCredentials key={projectId}><Screen /></PreviewCredentials>
 }
 
-export const routeTree = root.addChildren([index, projects, signIn, kit, project, status, section])
+export const routeTree = root.addChildren([index, projects, signIn, login, signin, signup, verifyEmail, ssoComplete, ssoAlias, invitations, organization, kit, project, status, section])
 
 export function createAppRouter(queryClient: QueryClient, history?: ReturnType<typeof createRouter>['history']) {
+  if (!history && typeof window !== 'undefined') normalizeEntryAddress()
   return createRouter({ routeTree, context: { queryClient }, history, defaultPreload: 'intent', defaultPendingComponent: ScreenSkeleton })
 }
 

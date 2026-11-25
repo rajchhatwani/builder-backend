@@ -41,6 +41,7 @@ async function mock(page: Page, state: State, role = 'owner') {
     const send = (json: unknown, status = 200) => route.fulfill({ status, headers, json })
     requests.push(path)
     if (path === root + '/status') return send({ sections: [] })
+    if (path === '/account/refresh') return send({ access_token: 'fixture' })
     if (path === '/account/me') return send({ id: 'viewer', platform_role: 'customer' })
     if (path === root + '/members') return send([{ user_id: 'viewer', role }])
     if (path === root + '/workspaces') return send([{ id: workspace, name: 'Leave requests', state: 'active' }])

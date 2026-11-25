@@ -37,6 +37,16 @@ async function mockStatus(page: Page, state: State, writeError?: number) {
     next_step: state === 'empty' ? emptyStep : dismissed ? generate : signInStep,
     dismissed_steps: dismissed ? [{ ...signInStep, dismissed: true }] : [],
   })
+  await page.route(url => url.port === '8000' && ['/account/refresh', '/account/me'].includes(url.pathname), async route => {
+    const headers = {
+      'access-control-allow-origin': 'http://localhost:5299',
+      'access-control-allow-credentials': 'true',
+      'access-control-allow-methods': 'GET, POST, OPTIONS',
+      'access-control-allow-headers': 'content-type, authorization, x-requested-with',
+    }
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers })
+    return route.fulfill({ status: 200, headers, json: { access_token: 'fixture', id: 'fixture-user' } })
+  })
   await page.route(url => url.pathname.startsWith(statusPath), async route => {
     const headers = { 'access-control-allow-origin': 'http://localhost:5299', 'access-control-allow-credentials': 'true', 'access-control-allow-methods': 'GET, POST, DELETE, OPTIONS', 'access-control-allow-headers': 'content-type, authorization' }
     const method = route.request().method()

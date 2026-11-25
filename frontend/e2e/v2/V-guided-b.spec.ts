@@ -71,6 +71,7 @@ async function mock(page: Page, screen: Screen, state: State, role = 'owner') {
     const method = call.method()
     if (method === 'OPTIONS') return route.fulfill({ status: 204, headers })
     const send = (json: unknown, status = 200) => route.fulfill({ status, headers, json })
+    if (path === '/account/refresh') return send({ access_token: 'fixture' })
     if (method !== 'GET') writes.push({ path, body: call.postData() ? call.postDataJSON() : null, access: call.headers()['x-preview-token'] })
     if (first && path === resources[screen] && method === 'GET') {
       first = false

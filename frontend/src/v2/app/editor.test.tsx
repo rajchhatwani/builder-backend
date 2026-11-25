@@ -28,6 +28,7 @@ function setup(path: string, handler: (url: URL, init?: RequestInit) => Response
       ready: true, sections: [], counts: {}, issues: [],
       next_step: { id: 'generate', section: 'generate', title: 'Generate your backend', reason: 'The model is valid.' },
     })
+    if (url.pathname === '/account/refresh') return Response.json({ access_token: 'fixture' })
     if (url.pathname === '/account/me') return Response.json({ id: 'me' })
     if (url.pathname.endsWith('/members')) return Response.json([{ user_id: 'me', role }])
     if (url.pathname.endsWith('/workspaces')) return Response.json([{ id: 'draft', name: 'Draft', state: 'active' }])

@@ -83,3 +83,43 @@ export function validateWorkspaceContent(content: string) {
   if (content.includes('\0')) return 'editor.fileNul'
   if (new TextEncoder().encode(content).byteLength > workspaceFileBytes) return 'editor.fileLimit'
 }
+
+export const entryLimits = {
+  email: 254, name: 100, loginPassword: 256, passwordMin: 12, passwordMax: 128,
+  code: 32, verifyMin: 10, verifyMax: 200, inviteMin: 16, inviteMax: 128,
+}
+
+export const entryEmailChecks = [
+  validators.required,
+  (value: string) => validators.length(entryLimits.email)(value.trim()),
+  validators.email,
+]
+
+export const checkPresentPassword: Validator = value => value.length ? undefined : issue('required')
+
+export function newPasswordChecks(email: string): Validator[] {
+  const emailName = email.trim().toLowerCase().split('@')[0]
+  return [
+    checkPresentPassword,
+    value => [...value].length < entryLimits.passwordMin ? issue('passwordMinimum', { min: entryLimits.passwordMin }) : undefined,
+    validators.length(entryLimits.passwordMax),
+    value => emailName.length >= 4 && value.toLowerCase().includes(emailName) ? issue('passwordGuessable') : undefined,
+    value => new Set(value).size < 5 ? issue('passwordVariety') : undefined,
+  ]
+}
+
+export function inviteTokenFrom(value: string) {
+  const trimmed = value.trim()
+  const link = trimmed.match(/(?:#\/invite\/|^\/invite\/)([^/?#\s]+)(?:[/?#]|$)/)
+  if (link) {
+    try { return decodeURIComponent(link[1]) } catch { return '' }
+  }
+  return /^[-_a-z0-9%]+$/i.test(trimmed) ? trimmed : ''
+}
+
+export const checkInviteLink: Validator = value => {
+  const token = inviteTokenFrom(value)
+  return token.length < entryLimits.inviteMin || token.length > entryLimits.inviteMax ? issue('inviteLink') : undefined
+}
+
+export const checkTotp: Validator = value => /^\d{6}$/.test(value.trim()) ? undefined : issue('totp')

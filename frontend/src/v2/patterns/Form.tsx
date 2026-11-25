@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { FormEvent, ReactNode } from 'react'
+import type { ComponentProps, FormEvent, ReactNode } from 'react'
 import { useT } from '../i18n'
 import { Alert, Button, Field, Row, Spinner, Stack } from '../ui'
 import type { FieldAttributes } from '../ui'
@@ -18,7 +18,7 @@ function firstIssue(field: FormField, data: FormData) {
   return field.validate?.map(validate => validate(String(data.get(field.name) ?? ''))).find(Boolean)
 }
 
-export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError }: {
+export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps }: {
   fields: FormField[]
   onSubmit: (values: FormData) => void
   submitLabel: string
@@ -26,6 +26,7 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
   readOnly?: boolean
   serverErrors?: Errors
   formError?: string
+  submitProps?: ComponentProps<typeof Button> & { 'data-testid'?: string }
 }) {
   const t = useT()
   const id = useId()
@@ -34,7 +35,7 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (pending || readOnly) return
+    if (pending || readOnly || submitProps?.disabled) return
     const data = new FormData(event.currentTarget)
     const next: Errors = {}
     for (const field of fields) {
@@ -77,7 +78,7 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
           )
         })}
         {formError && <Alert tone="danger">{formError}</Alert>}
-        <Row><Button type="submit" variant="primary" disabled={readOnly || pending}>{pending && <Spinner />}{submitLabel}</Button></Row>
+        {!submitProps?.hidden && <Row><Button {...submitProps} type="submit" variant="primary" disabled={readOnly || pending || submitProps?.disabled}>{pending && <Spinner />}{submitLabel}</Button></Row>}
       </Stack>
     </form>
   )

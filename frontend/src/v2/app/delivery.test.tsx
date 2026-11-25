@@ -19,7 +19,8 @@ const preview = { id: 'preview', project_id: id, state: 'running', workspace_id:
 function open(path: string, handler: (path: string, method?: string) => unknown) {
   const fetch = vi.fn(async (url: string, init?: RequestInit) => {
     const pathname = new URL(url).pathname.replace('/projects/' + id, '')
-    const json = pathname === '/account/me' ? { id: 'user', email_verified_at: '2026-01-01', platform_role: 'customer' }
+    const json = pathname === '/account/refresh' ? { access_token: 'fixture' }
+      : pathname === '/account/me' ? { id: 'user', email_verified_at: '2026-01-01', platform_role: 'customer' }
       : pathname === '/members' ? [{ user_id: 'user', role: 'owner' }]
       : pathname === '/status' ? { sections: [] }
       : pathname === '/workspaces' ? []

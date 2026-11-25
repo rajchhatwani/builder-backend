@@ -7,7 +7,7 @@ import { createAppRouter, routePaths } from './app/router'
 import { projectKeys } from './features/projects/api/status'
 import { detectLanguage } from './i18n'
 import { desktopSections, guidedSections, isProjectSection, projectPath, statusSection } from './projectNavigation'
-import { defaultLimits, guidedLimits, validators } from './validators'
+import { defaultLimits, entryLimits, guidedLimits, validators } from './validators'
 
 const openapi = JSON.parse(readFileSync(resolve(__dirname, '../../e2e/openapi.json'), 'utf8'))
 const client = new QueryClient()
@@ -95,4 +95,17 @@ it('keeps the guided field limits within the published schemas', () => {
   const scope = schemas.ApprovalDecision.properties.plan.anyOf[0].additionalProperties
   expect(guidedLimits.scopeName).toBeLessThanOrEqual(scope.items.maxLength)
   expect(guidedLimits.scopeItems).toBeLessThanOrEqual(scope.maxItems)
+})
+
+it('keeps entry field limits within the published request schemas', () => {
+  const schema = openapi.components.schemas
+  expect(entryLimits.email).toBe(schema.LoginDiscoverRequest.properties.email.maxLength)
+  expect(entryLimits.name).toBe(schema.RegisterRequest.properties.name.maxLength)
+  expect(entryLimits.loginPassword).toBe(schema.LoginRequest.properties.password.maxLength)
+  expect(entryLimits.passwordMax).toBeLessThanOrEqual(schema.RegisterRequest.properties.password.maxLength)
+  expect(entryLimits.code).toBe(schema.MfaLoginRequest.properties.code.maxLength)
+  expect(entryLimits.verifyMin).toBe(schema.VerifyEmailRequest.properties.token.minLength)
+  expect(entryLimits.verifyMax).toBe(schema.VerifyEmailRequest.properties.token.maxLength)
+  expect(entryLimits.inviteMin).toBe(schema.InvitationAccept.properties.token.minLength)
+  expect(entryLimits.inviteMax).toBe(schema.InvitationAccept.properties.token.maxLength)
 })

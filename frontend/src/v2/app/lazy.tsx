@@ -12,12 +12,12 @@ export function LazyError() {
   return <Alert tone="danger" action={<Button onClick={() => location.reload()}>{t('common.reload')}</Button>}>{t('common.crash')}</Alert>
 }
 
-export function lazyScreen(load: () => Promise<{ default: ComponentType }>) {
+export function lazyScreen<Props extends object = Record<string, never>>(load: () => Promise<{ default: ComponentType<Props> }>) {
   const Screen = lazy(load)
   return {
     preload: () => load().catch(() => undefined),
-    Component: function LazyScreen() {
-      return <ErrorBoundary fallback={() => <LazyError />}><Suspense fallback={<ScreenSkeleton />}><Screen /></Suspense></ErrorBoundary>
+    Component: function LazyScreen(props: Props) {
+      return <ErrorBoundary fallback={() => <LazyError />}><Suspense fallback={<ScreenSkeleton />}><Screen {...props} /></Suspense></ErrorBoundary>
     },
   }
 }

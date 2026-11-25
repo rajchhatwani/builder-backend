@@ -4,21 +4,15 @@ import { openInEditor } from '../patterns/editorLink'
 import { PageHeader } from '../patterns'
 import { isDesktopSection } from '../projectNavigation'
 import { Button, DesktopOnlyCard, EmptyState, Stack } from '../ui'
-import { LanguageSwitcher } from './LanguageSwitcher'
 
 export function ProjectsScreen() {
   const t = useT()
   return (
     <Stack gap={5}>
       <PageHeader title={t('shell.projects')} />
-      <EmptyState title={t('shell.projectLink')} action={<Button asChild><Link to="/sign-in">{t('shell.signIn')}</Link></Button>} />
+      <EmptyState title={t('shell.projectLink')} action={<Button asChild><Link to="/invitations">{t('entry.invitations')}</Link></Button>} />
     </Stack>
   )
-}
-
-export function SignInScreen() {
-  const t = useT()
-  return <Stack gap={5}><PageHeader title={t('shell.signIn')} /><LanguageSwitcher /><Unavailable /></Stack>
 }
 
 export function Unavailable() {

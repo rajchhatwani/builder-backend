@@ -26,7 +26,8 @@ function open(section: string, handler: (path: string, init?: RequestInit) => un
   const fetch = vi.fn((url: string, init?: RequestInit) => {
     const { pathname } = new URL(url)
     const path = pathname.replace(`/projects/${project}`, '')
-    const result = path === '/account/me' ? { id: 'user', email_verified_at: '2026-01-01', platform_role: 'customer' }
+    const result = path === '/account/refresh' ? { access_token: 'fixture' }
+      : path === '/account/me' ? { id: 'user', email_verified_at: '2026-01-01', platform_role: 'customer' }
       : path === '/members' ? [{ user_id: 'user', role }] : path === '/workspaces' ? []
       : path === '/status' ? { sections: [] } : handler(path, init)
     return Promise.resolve(result instanceof Response ? result : Response.json(result ?? {}, { status: result == null ? 500 : 200 }))
