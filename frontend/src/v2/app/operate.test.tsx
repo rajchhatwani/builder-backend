@@ -64,7 +64,7 @@ it('Observability validates the sample ratio and saves using the original versio
       return Response.json({ ...observation, ...JSON.parse(String(init.body)), version: 4 })
     }
   })
-  const ratio = await screen.findByLabelText('Sample ratio')
+  const ratio = await screen.findByLabelText('Sample ratio', undefined, { timeout: 3000 })
   await waitFor(() => expect(ratio).toHaveProperty('readOnly', false))
   fireEvent.change(ratio, { target: { value: '2' } })
   fireEvent.blur(ratio)

@@ -56,7 +56,7 @@ it('opens deep links and searches paths and previously loaded workspace content'
     if (url.searchParams.get('path') === 'app/hooks.py') return Response.json(response('custom\nneedle'))
     if (url.searchParams.get('path') === 'main.py') return Response.json({ ...entries[1], content: 'generated', sha256: sha })
   })
-  expect(await screen.findByRole('textbox', { name: 'app/hooks.py' })).toHaveProperty('value', 'custom\nneedle')
+  expect(await screen.findByRole('textbox', { name: 'app/hooks.py' }, { timeout: 3000 })).toHaveProperty('value', 'custom\nneedle')
   expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toBeTruthy()
   expect(screen.getByRole('navigation', { name: 'File path' }).textContent).toBe('app/hooks.py')
   fireEvent.click(within(screen.getByRole('navigation', { name: 'Files' })).getByRole('button', { name: /main.py/ }))

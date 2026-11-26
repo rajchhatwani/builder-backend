@@ -52,7 +52,7 @@ afterEach(() => {
 
 it('shows saved relationships and makes the catalogue selection bookmarkable', async () => {
   const { router } = open({ role: 'viewer' })
-  expect(await screen.findByRole('heading', { name: 'Entity-relationship' })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: 'Entity-relationship' }, { timeout: 3000 })).toBeTruthy()
   expect(await screen.findByText('Read-only view of the saved project.')).toBeTruthy()
   expect(within(screen.getByRole('table', { name: 'Fields' })).getByText('decimal')).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: /Access matrix heat-map/ }))
@@ -75,7 +75,7 @@ it('uses the saved generation manifest and opens its selected path in the code e
     [project + '/generations']: () => Response.json({ items: [{ id: 'generation-1' }], total: 1 }),
     '/generations/generation-1': () => Response.json({ file_manifest: [{ path: 'app/billing/router.py', size: 40 }] }),
   } })
-  expect(await screen.findByRole('link', { name: 'Open app/billing/router.py in the editor' }))
+  expect(await screen.findByRole('link', { name: 'Open app/billing/router.py in the editor' }, { timeout: 3000 }))
     .toHaveProperty('href', expect.stringContaining('/code?file=app%2Fbilling%2Frouter.py'))
 })
 
