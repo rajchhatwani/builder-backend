@@ -1,0 +1,19 @@
+.v2-build-diagram { block-size: var(--editor-surface-height); overflow: hidden; }
+.v2-build-diagram .react-flow {
+  --xy-node-background-color: var(--surface);
+  --xy-node-border: var(--border) solid var(--control-line);
+  --xy-node-color: var(--ink);
+  --xy-edge-stroke: var(--control-line);
+  --xy-edge-stroke-selected: var(--accent);
+  --xy-edge-label-color: var(--ink);
+  --xy-edge-label-background-color: var(--surface);
+  --xy-controls-button-background-color: var(--surface);
+  --xy-controls-button-background-color-hover: var(--inset);
+  --xy-controls-button-color: var(--ink);
+  --xy-controls-button-border-color: var(--line);
+  --xy-background-pattern-dots-color: var(--line);
+}
+.v2-build-diagram .react-flow__node { overflow-wrap: anywhere; font-size: var(--text-sm); }
+.v2-build-diagram .react-flow__node.v2-build-initial { background: var(--accent-bg); border-color: var(--accent); }
+.v2-build-diagram .react-flow__controls-button { inline-size: var(--touch); block-size: var(--touch); }
+.v2-build-edge { cursor: pointer; }

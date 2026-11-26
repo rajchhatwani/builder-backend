@@ -18,6 +18,10 @@ export const behaviorSections = ['hooks', 'hookeffects', 'events', 'settings', '
 export const isBehaviorSection = (section: string): section is typeof behaviorSections[number] =>
   behaviorSections.some(name => name === section)
 
+const buildSpecSections = ['model', 'machines', 'permissions', 'specdiff', 'timeline', 'history'] as const
+export const isBuildSpecSection = (section: string): section is typeof buildSpecSections[number] =>
+  buildSpecSections.some(name => name === section)
+
 const secureSections = ['auth', 'keycloak', 'suite', 'access', 'dependencies', 'compliance'] as const
 export const isSecureSection = (section: string): section is typeof secureSections[number] =>
   secureSections.some(name => name === section)
@@ -108,6 +112,11 @@ export type SectionSearch = {
   diagramPick?: string
   diagramPages?: Record<string, number>
   base?: number
+  compare?: number
+  version?: number
+  target?: string
+  sort?: string
+  technical?: boolean
   role?: string
   run?: string
   rule?: string

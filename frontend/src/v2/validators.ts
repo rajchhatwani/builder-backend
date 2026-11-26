@@ -712,3 +712,57 @@ export function packDraftIssues(kind: string, draft: PackObject, ceiling: number
   }
   return issues
 }
+
+export const buildLimits = { identifier: 63, transition: 40, guard: 1000, retention: 3650, enumSize: 100, enumValue: 64 }
+
+export const pascalName = format(value => /^[A-Z][A-Za-z0-9]*$/.test(value), 'pascalName')
+export const snakeName = format(value => /^[a-z][a-z0-9_]*$/.test(value), 'snakeName')
+export const historyRetention = validators.number({ min: 1, max: buildLimits.retention, integer: true })
+export const jsonObject: Validator = value => {
+  const required = validators.required(value)
+  if (required) return required
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? undefined : issue('specObject')
+  } catch { return issue('specJson') }
+}
+
+export function secretHistoryField(name: string) {
+  const words = /secret|password|passwd|passphrase|token|credential|private_key|api_key|cardnumber|card_number/i
+  const parts = /^(pwd|pin|otp|cvv|cvc|ssn|iban|credentials)$/i
+  return words.test(name) || name.split(/[^A-Za-z0-9]+|(?<=[a-z0-9])(?=[A-Z])/).some(part => parts.test(part))
+}
+
+export const csvNames = (value: string) => value.split(',').map(item => item.trim()).filter(Boolean)
+export const enumChoices: Validator = value => {
+  const items = csvNames(value)
+  if (items.length < 1 || items.length > buildLimits.enumSize || new Set(items).size !== items.length) return issue('enumChoices')
+  if (items.some(item => !/^[A-Za-z0-9_.-]{1,64}$/.test(item))) return issue('enumToken')
+}
+
+export function fieldDefault(type: string, value: string): unknown {
+  if (type === 'json') return JSON.parse(value)
+  if (type === 'boolean') return value === 'true'
+  if (['integer', 'bigint', 'float', 'decimal'].includes(type)) return Number(value)
+  return value
+}
+
+export const validateFieldDefault = (type: string): Validator => value => {
+  if (!value) return
+  if (type === 'json') {
+    try {
+      JSON.parse(value, (_, item: unknown) => {
+        if (typeof item === 'number' && !Number.isFinite(item)) throw new RangeError()
+        return item
+      })
+    } catch { return issue('finiteJson') }
+  }
+  if (type === 'boolean' && !['true', 'false'].includes(value)) return issue('booleanDefault')
+  if (type === 'uuid' && !isUuid(value)) return issue('uuidDefault')
+  if (type === 'date' && (!/^\d{4}-\d{2}-\d{2}$/.test(value) || !Number.isFinite(Date.parse(value)) || new Date(value).toISOString().slice(0, 10) !== value)) return issue('dateDefault')
+  if (type === 'datetime' && (!/^\d{4}-\d{2}-\d{2}T/.test(value) || !Number.isFinite(Date.parse(value)))) return issue('datetimeDefault')
+  if (type === 'integer') return validators.number({ min: -2147483648, max: 2147483647, integer: true, digits: 10 })(value)
+  if (type === 'bigint') return validators.number({ min: -Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER, integer: true, digits: 16 })(value)
+  if (type === 'decimal') return validators.number({ min: -1e12, max: 1e12, digits: 18 })(value)
+  if (type === 'float') return validators.number({ digits: 18 })(value)
+}

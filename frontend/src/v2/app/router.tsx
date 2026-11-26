@@ -10,7 +10,7 @@ import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
 import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { defaultSectionSearch, isBehaviorSection, isConnectSection, isLiveOperateSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, isShipSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isBuildSpecSection, isConnectSection, isDesktopSection, isLiveOperateSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, isShipSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -188,6 +188,11 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
       /^(nodes|edges|files|[0-9]{1,2})$/.test(key) && typeof value === 'number' && Number.isSafeInteger(value) && value > 1))
     : undefined,
   base: typeof search.base === 'number' && Number.isSafeInteger(search.base) && search.base >= 0 ? search.base : undefined,
+  compare: typeof search.compare === 'number' && Number.isSafeInteger(search.compare) && search.compare >= 0 ? search.compare : undefined,
+  version: typeof search.version === 'number' && Number.isSafeInteger(search.version) && search.version >= 0 ? search.version : undefined,
+  target: typeof search.target === 'string' ? search.target : undefined,
+  sort: typeof search.sort === 'string' ? search.sort : undefined,
+  technical: search.technical === true ? true : undefined,
   role: typeof search.role === 'string' ? search.role : undefined,
   history: typeof search.history === 'number' && Number.isSafeInteger(search.history) && search.history > 1 ? search.history : undefined,
   tokensPage: typeof search.tokensPage === 'number' && Number.isSafeInteger(search.tokensPage) && search.tokensPage > 1 ? search.tokensPage : undefined,
@@ -303,6 +308,17 @@ const section = createRoute({
       void import('../features/diagrams/api/diagrams').then(({ specOptions }) =>
         context.queryClient.prefetchQuery(specOptions(params.projectId)), () => undefined)
     }
+    if (isBuildSpecSection(params.section)) {
+      const { projectId, section } = params
+      void screens[section].preload()
+      if (!isDesktopSection(section) || typeof document === 'undefined' || document.body.clientWidth >= 700) {
+        void import('../features/build-spec/api/build').then(({ prefetchBuild }) => {
+          for (const options of prefetchBuild(section, projectId, deps.page)) {
+            void context.queryClient.prefetchQuery<unknown>(options)
+          }
+        }, () => undefined)
+      }
+    }
     if (isBehaviorSection(params.section)) {
       void screens[params.section].preload()
       void import('../features/build-behavior/api/behavior').then(({ prefetchBehavior }) => {
@@ -341,6 +357,9 @@ const section = createRoute({
   beforeLoad: ({ params, search }) => {
     if (!isProjectSection(params.section)) throw redirect({
       to: routePaths.status, params: { projectId: params.projectId }, search: { preview: search.preview }, replace: true,
+    })
+    if (params.section === 'rules') throw redirect({
+      to: routePaths.section, params: { ...params, section: 'machines' }, search: { ...search, tab: 'guard' }, replace: true,
     })
     const defaults = defaultSectionSearch(params.section)
     if (!search.tab && defaults.tab) throw redirect({
@@ -381,6 +400,13 @@ function ProjectSection() {
     return <Screen key={projectId + ':' + name} projectId={projectId} role={workspace.role}
       rolePending={workspace.rolePending} roleError={workspace.roleError} retryRole={workspace.retryRole}
       slug={workspace.slug} revision={workspace.specRevision} version={workspace.version} />
+  }
+  if (isBuildSpecSection(name)) {
+    const Screen = screens[name].Component
+    return <Screen key={projectId + ':' + name} access={{
+      writable: workspace.role === 'owner' || workspace.role === 'editor',
+      pending: Boolean(workspace.rolePending), failed: Boolean(workspace.roleError), retry: workspace.retryRole,
+    }} />
   }
   if (isBehaviorSection(name) || isSecureSection(name) || isOperateSection(name)) {
     const Screen = screens[name].Component
