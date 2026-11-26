@@ -1,6 +1,5 @@
 import { Link, useParams } from '@tanstack/react-router'
 import { useT } from '../i18n'
-import { openInEditor } from '../patterns/editorLink'
 import { PageHeader } from '../patterns'
 import { isDesktopSection } from '../projectNavigation'
 import { Button, DesktopOnlyCard, EmptyState, Stack } from '../ui'
@@ -8,10 +7,6 @@ import { Button, DesktopOnlyCard, EmptyState, Stack } from '../ui'
 export function Unavailable() {
   const t = useT()
   const { section, projectId } = useParams({ strict: false })
-  if (section === 'generate' && projectId) return <Stack gap={5}>
-    <PageHeader title={t('nav.generate')} />
-    <Button asChild><Link {...openInEditor({ projectId, source: 'manifest' })}>{t('editor.previewFiles')}</Link></Button>
-  </Stack>
   return (
     <Stack gap={5}>
       {section && <PageHeader title={t(`nav.${section}`)} />}

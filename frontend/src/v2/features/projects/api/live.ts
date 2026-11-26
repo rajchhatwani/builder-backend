@@ -8,6 +8,7 @@ import { projectKeys } from './status'
 export function useProjectLive(id: string, section: string) {
   const client = useQueryClient()
   const [status, setStatus] = useState<StreamStatus>('connecting')
+  const [specRevision, setSpecRevision] = useState(0)
   const key = [...projectKeys.project(id), 'presence'] as const
   const presence = useQuery({
     queryKey: key, queryFn: () => api.listPresence(id), enabled: Boolean(id) && status === 'live',
@@ -23,6 +24,7 @@ export function useProjectLive(id: string, section: string) {
       onPresence: users => { if (!closed) client.setQueryData<PresenceUser[]>([...projectKeys.project(id), 'presence'], users) },
       onEvent: event => {
         if (!closed && ['spec.changed', 'import.committed', 'resync'].includes(event.type)) {
+          setSpecRevision(value => value + 1)
           void client.invalidateQueries({ queryKey: projectKeys.project(id),
             predicate: query => query.queryKey.at(-1) !== 'presence' })
         }
@@ -39,5 +41,5 @@ export function useProjectLive(id: string, section: string) {
     return () => clearInterval(interval)
   }, [id, section, status])
 
-  return { status, users: Array.isArray(presence.data) ? presence.data : [] }
+  return { status, specRevision, users: Array.isArray(presence.data) ? presence.data : [] }
 }

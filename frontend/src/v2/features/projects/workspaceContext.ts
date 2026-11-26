@@ -11,4 +11,6 @@ export const WorkspaceContext = createContext<{
   organizationSlug?: string
   openShare?: () => void
   version?: number
+  slug?: string
+  specRevision?: number
 }>({})

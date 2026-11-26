@@ -10,7 +10,7 @@ import { statusOptions } from '../features/projects/api/status'
 import { useT } from '../i18n'
 import type { PlatformPreviewProps } from '../features/connect/components/PlatformPreview'
 import { usePreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { defaultSectionSearch, isBehaviorSection, isConnectSection, isLiveOperateSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, type SectionSearch } from '../projectNavigation'
+import { defaultSectionSearch, isBehaviorSection, isConnectSection, isLiveOperateSection, isOperateSection, isPackSection, isProjectSection, isSecureSection, isShipSection, type SectionSearch } from '../projectNavigation'
 import { Button, EmptyState } from '../ui'
 import { EntryGate } from './EntryGate'
 import { normalizeEntryAddress } from './entryCompatibility'
@@ -199,6 +199,8 @@ const projectSectionSearch = (search: Record<string, unknown>): SectionSearch =>
   edit: typeof search.edit === 'string' ? search.edit : undefined,
   run: typeof search.run === 'string' ? search.run : undefined,
   phase: typeof search.phase === 'number' && Number.isInteger(search.phase) && search.phase >= 1 && search.phase <= 10 ? search.phase : undefined,
+  generation: typeof search.generation === 'string' && /^[0-9a-f-]{36}$/i.test(search.generation) ? search.generation : undefined,
+  proposal: typeof search.proposal === 'string' && /^[0-9a-f-]{36}$/i.test(search.proposal) ? search.proposal : undefined,
   bookingKind: typeof search.bookingKind === 'number' && Number.isInteger(search.bookingKind) && search.bookingKind >= 0 ? search.bookingKind : undefined,
   notificationRow: typeof search.notificationRow === 'number' && Number.isInteger(search.notificationRow) && search.notificationRow >= 0 ? search.notificationRow : undefined,
   notificationType: typeof search.notificationType === 'string' ? search.notificationType : undefined,
@@ -224,6 +226,12 @@ const section = createRoute({
   loaderDeps: ({ search }) => ({ run: search.run, page: search.page, approval: search.approval, history: search.history, source: search.source, workspace: search.workspace, tab: search.tab }),
   loader: ({ context, params, deps, preload }) => {
     if (!preload) return
+    if (isShipSection(params.section)) {
+      const { projectId, section } = params
+      void screens[section].preload()
+      void import('../features/ship/api/ship').then(({ prefetchShip }) =>
+        prefetchShip(context.queryClient, projectId, section, deps.page), () => undefined)
+    }
     if (isSecureSection(params.section)) {
       void screens[params.section].preload()
       if (params.section === 'access' || params.section === 'dependencies' || params.section === 'compliance') {
@@ -367,6 +375,12 @@ function ProjectSection() {
     return <Screen key={projectId + ':' + name} projectId={projectId} role={workspace.role}
       rolePending={workspace.rolePending} roleError={workspace.roleError} retryRole={workspace.retryRole}
       credentials={credentials} renderIdentity={renderPreviewIdentity(workspace.role === 'owner' || workspace.role === 'editor')} />
+  }
+  if (isShipSection(name)) {
+    const Screen = screens[name].Component
+    return <Screen key={projectId + ':' + name} projectId={projectId} role={workspace.role}
+      rolePending={workspace.rolePending} roleError={workspace.roleError} retryRole={workspace.retryRole}
+      slug={workspace.slug} revision={workspace.specRevision} version={workspace.version} />
   }
   if (isBehaviorSection(name) || isSecureSection(name) || isOperateSection(name)) {
     const Screen = screens[name].Component

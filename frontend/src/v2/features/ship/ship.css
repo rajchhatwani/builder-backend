@@ -1,0 +1,8 @@
+.v2-ship code, .v2-ship dd, .v2-ship p { overflow-wrap: anywhere; }
+.v2-ship-data { max-block-size: calc(var(--s12) * 7); overflow: auto; }
+.v2-ship-data .v2-code { white-space: pre; }
+.v2-ship-check { border-block-start: var(--border) solid var(--line); padding-block-start: var(--s3); }
+.v2-ship-group { min-inline-size: 0; padding: var(--s3); border: var(--border) solid var(--line); border-radius: var(--radius); }
+.v2-ship ol.v2-stack, .v2-ship ul.v2-stack { padding-inline-start: var(--s5); }
+.v2-ship-flow { list-style: none; padding: 0; }
+.v2-ship-flow li { border: var(--border) solid var(--line); border-radius: var(--radius); padding: var(--s2) var(--s3); }

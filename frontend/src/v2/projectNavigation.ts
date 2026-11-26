@@ -1,4 +1,5 @@
 /** URL contract shared by the application router and project screens. */
+const shipSections = ['deployment', 'generate', 'upgrades'] as const
 export const guidedSections = ['intake', 'plan', 'build', 'approvals', 'see'] as const
 export const advancedGroups = [
   { id: 'home', sections: ['overview', 'code'] },
@@ -9,7 +10,7 @@ export const advancedGroups = [
     'matchingsettings', 'predictionsettings', 'aigatewaysettings', 'aidocssettings', 'knowledgesettings', 'agentssettings', 'evalssettings'] },
   { id: 'operate', sections: ['observability', 'jobs', 'workers', 'workflows', 'traces', 'logs', 'metrics', 'search', 'ledger', 'invoices', 'payouts', 'reconciliation', 'map',
     'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing', 'aiusage', 'knowledge', 'evals', 'agentruns'] },
-  { id: 'ship', sections: ['deployment', 'generate', 'upgrades'] },
+  { id: 'ship', sections: shipSections },
   { id: 'diagrams', sections: ['diagrams'] },
 ] as const
 
@@ -36,6 +37,9 @@ export const isOperateSection = (section: string): section is typeof operateSect
 export const liveOperateSections = ['ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing', 'aiusage', 'knowledge', 'evals', 'agentruns'] as const
 export const isLiveOperateSection = (section: string): section is typeof liveOperateSections[number] =>
   liveOperateSections.some(name => name === section)
+
+export const isShipSection = (section: string): section is typeof shipSections[number] =>
+  shipSections.some(name => name === section)
 
 export const desktopSections = ['code', 'model', 'machines', 'permissions', 'access', 'specdiff', 'hooks', 'hookeffects', 'diagram-editor', 'api-client', 'import-mapping', 'template-editor'] as const
 
@@ -116,6 +120,8 @@ export type SectionSearch = {
   approval?: string
   tokensPage?: number
   notificationType?: string
+  generation?: string
+  proposal?: string
   bookingKind?: number
   notificationRow?: number
   channel?: string

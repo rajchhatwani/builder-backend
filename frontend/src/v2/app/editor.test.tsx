@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { QueryClient } from '@tanstack/react-query'
 import { createMemoryHistory } from '@tanstack/react-router'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { openInEditor } from '../patterns/editorLink'
 import { App } from './App'
@@ -106,8 +106,11 @@ it('moves Generate preview into the file manifest without downloading a zip', as
       return Response.json({ files: [{ path: 'main.py', size: 10 }], spec_hash: 'spec', total_files: 1, total_size: 10 })
     }
   })
-  fireEvent.click(await screen.findByRole('link', { name: 'Preview files' }))
-  expect(await screen.findByText('10 bytes')).toBeTruthy()
+  const preview = await screen.findByRole('button', { name: 'Preview files' })
+  await waitFor(() => expect(preview.hasAttribute('disabled')).toBe(false))
+  fireEvent.click(preview)
+  fireEvent.click(await screen.findByRole('link', { name: 'Open main.py in the editor' }))
+  expect(await screen.findByText('10 bytes', { exact: true })).toBeTruthy()
   expect(request.mock.calls.some(([url]) => url.includes('/generate/download'))).toBe(false)
 })
 

@@ -2,6 +2,10 @@ import type { ConnectProps } from '../features/connect/api/connect'
 import { lazyScreen } from './lazy'
 
 export const screens = {
+  deployment: lazyScreen(() => import('../features/ship/DeploymentScreen')),
+  generate: lazyScreen(() => import('../features/ship/GenerateScreen')),
+  upgrades: lazyScreen(() => import('../features/ship/UpgradesScreen')),
+
   aiusage: lazyScreen(() => import('../features/operate/AiUsageScreen')),
   knowledge: lazyScreen(() => import('../features/operate/KnowledgeScreen')),
   evals: lazyScreen(() => import('../features/operate/EvalsScreen')),

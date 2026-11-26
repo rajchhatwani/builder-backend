@@ -6,7 +6,7 @@ import type { Tone } from '../ui'
 export * from './Form'
 export * from './DataTable'
 
-export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, closeLabel, open: controlledOpen, onOpenChange, returnFocus }: {
+export function ConfirmDestructive({ trigger, title, description, action, onConfirm, pending, error, children, disabled, closeLabel, confirmTestId, open: controlledOpen, onOpenChange, returnFocus }: {
   trigger?: ReactElement
   open?: boolean
   onOpenChange?: (open: boolean) => void
@@ -15,6 +15,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   description: string
   action: string
   closeLabel?: string
+  confirmTestId?: string
   onConfirm: () => void | Promise<void>
   pending?: boolean
   error?: string
@@ -30,7 +31,7 @@ export function ConfirmDestructive({ trigger, title, description, action, onConf
   const busy = Boolean(pending || working)
   return (
     <Dialog title={title} description={description} trigger={trigger} open={open} onOpenChange={setOpen} returnFocus={returnFocus} closeLabel={closeLabel}
-      actions={<Button variant="danger" disabled={busy || disabled} onClick={async () => {
+      actions={<Button variant="danger" data-testid={confirmTestId} disabled={busy || disabled} onClick={async () => {
         setWorking(true)
         setFailed(false)
         try {
@@ -92,8 +93,8 @@ export function StatusPill({ tone, children }: { tone: Tone; children: ReactNode
   return <Badge tone={tone}>{children}</Badge>
 }
 
-export function SaveBar({ dirty, pending, saved, readOnly, onSave, onDiscard }: {
-  dirty: boolean; pending?: boolean; saved?: boolean; readOnly?: boolean; onSave: () => void; onDiscard: () => void
+export function SaveBar({ dirty, pending, saved, readOnly, onSave, onDiscard, preserveFocusOnSave }: {
+  dirty: boolean; pending?: boolean; saved?: boolean; readOnly?: boolean; onSave: () => void; onDiscard: () => void; preserveFocusOnSave?: boolean
 }) {
   const t = useT()
   return (
@@ -101,7 +102,7 @@ export function SaveBar({ dirty, pending, saved, readOnly, onSave, onDiscard }: 
       <span role="status">{pending ? t('common.saving') : dirty ? t('common.unsaved') : saved ? t('common.saved') : ''}</span>
       <Row>
         <Button disabled={!dirty || pending} onClick={onDiscard}>{t('common.discard')}</Button>
-        <Button variant="primary" disabled={!dirty || pending || readOnly} onClick={onSave}>{t('common.save')}</Button>
+        <Button variant="primary" disabled={!dirty || pending || readOnly} onMouseDown={preserveFocusOnSave ? event => event.preventDefault() : undefined} onClick={onSave}>{t('common.save')}</Button>
       </Row>
     </Row>
   )
