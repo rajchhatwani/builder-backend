@@ -48,7 +48,9 @@
 }
 
 .v2-top-actions { justify-content: flex-start; }
-.v2-share-content { overflow-wrap: anywhere; }
+.v2-share-content { overflow-wrap: anywhere; min-block-size: var(--screen-placeholder); }
+.v2-share-branches { padding-inline-start: var(--s4); list-style: none; }
+.v2-share-branches li { border-inline-start: var(--border) solid var(--line); padding: var(--s1) var(--s3); }
 .v2-status-disclosure { min-block-size: var(--touch); align-content: center; cursor: pointer; }
 .v2-status-counts { grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--metric-card-width)), 1fr)); }
 .v2-status-counts .v2-button { inline-size: 100%; block-size: 100%; justify-content: flex-start; text-align: start; }

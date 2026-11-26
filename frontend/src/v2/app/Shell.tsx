@@ -6,7 +6,6 @@ import { EntryNavigation } from '../features/entry/EntryNavigation'
 import { EntryFrame, EntryLoading, EntryProblem } from '../features/entry/components/EntryFrame'
 import { clearEntryInvitation } from '../features/entry/entryLinks'
 import { PreviewCredentials } from '../features/guided/components/PreviewCredentials'
-import { ShareProject } from '../features/projects/ShareProject'
 import { WorkspaceContext } from '../features/projects/workspaceContext'
 import { useProjectLive } from '../features/projects/api/live'
 import { statusCode, useProjectStatus } from '../features/projects/api/status'
@@ -14,7 +13,7 @@ import { keycloakOptions, projectOptions, useWorkspaceRole, workspaceError } fro
 import { useLanguage, useT } from '../i18n'
 import { advancedGroups, defaultSectionSearch, guidedSections, isBehaviorSection, isConnectSection, isLiveOperateSection, isOperateSection, isSecureSection, isShipSection, isGuidedSection, statusSection } from '../projectNavigation'
 import { CommandPalette } from '../patterns/CommandPalette'
-import { Alert, Badge, Breadcrumb, Button, EmptyState, Menu, Row, Sheet, Stack } from '../ui'
+import { Alert, Badge, Breadcrumb, Button, Dialog, EmptyState, Menu, Row, Sheet, Stack } from '../ui'
 import { lazyScreen } from './lazy'
 import { Presence } from './shell/Presence'
 import { WorkspaceNotices } from './shell/WorkspaceNotices'
@@ -24,6 +23,7 @@ import { screens, sectionScreen } from './routeScreens'
 import { useTheme } from './theme'
 
 const workbench = lazyScreen(() => import('../features/guided/Workbench'))
+const share = lazyScreen(() => import('../features/projects/ShareProject'))
 
 type StatusData = ReturnType<typeof useProjectStatus>['data']
 type Panel = 'palette' | 'workbench' | 'share' | 'presence'
@@ -218,8 +218,15 @@ function WorkspaceShell() {
         returnFocus={returnFocus} trigger={home ? <Button data-testid="workbench-toggle">{t('shell.workbench')}</Button> : undefined}>
         {panel === 'workbench' && <workbench.Component project={activeProject} write={projectWritable} verified={projectVerified} />}
       </Sheet>
-      <ShareProject id={activeProject} role={role} members={members} open={panel === 'share'}
-        onOpenChange={panelChange('share')} returnFocus={returnFocus} />
+      <Dialog title={t('share.people', { project: projectName ?? activeProject })} description={t('share.accountRequired')}
+        closeLabel={t('share.done')} wide focusTitle open={panel === 'share'} onOpenChange={panelChange('share')} returnFocus={returnFocus}
+        trigger={home ? <Button onMouseEnter={share.preload} onFocus={share.preload}>{t('share.open')}</Button> : undefined}>
+        {panel === 'share' && <share.Component id={activeProject} name={projectName ?? activeProject} userId={user?.id ?? ''}
+          role={role} members={members} onIntegrations={() => {
+            setPanel(undefined)
+            void navigate({ to: '/projects/$projectId/$section', params: { projectId: activeProject, section: 'integrations' }, search: { preview } })
+          }} />}
+      </Dialog>
       <Presence {...presence} user={user?.id ?? ''} open={panel === 'presence'}
         onOpenChange={panelChange('presence')} returnFocus={returnFocus} />
     </>}

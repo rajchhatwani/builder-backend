@@ -117,17 +117,18 @@ for (const state of states) {
       await expect(page.getByRole('link', { name: 'Inventory Co' })).toBeVisible()
       await expect(page.getByRole('button', { name: 'Updates paused, presence' })).toBeVisible()
       await page.getByRole('button', { name: 'Share', exact: true }).click()
-      const dialog = page.getByRole('dialog', { name: 'Who can access this project' })
+      const dialog = page.getByRole('dialog', { name: 'People with access to Inventory' })
       await expect(dialog).toBeVisible()
-      await expect(state === 'normal' ? dialog.getByText('Ari Kim')
+      const rosterMember = dialog.getByRole('table', { name: 'Who can access this project' })
+        .getByText('Ari Kim', { exact: true })
+      await expect(state === 'normal' ? rosterMember
         : state === 'loading' ? dialog.getByRole('status', { name: 'Loading project members…' })
-        : state === 'empty' ? dialog.getByText('No project members found.')
-        : dialog.getByText('Could not load project members.')).toBeVisible()
-      await capture(page, 'shellglobal', state)
+        : state === 'empty' ? dialog.getByText('No members to show')
+        : dialog.getByText("Can't load the members.")).toBeVisible()
       if (state === 'error') {
         recover()
-        await dialog.getByRole('button', { name: 'Try again' }).click()
-        await expect(dialog.getByText('Ari Kim')).toBeVisible()
+        await dialog.getByRole('button', { name: 'Retry' }).click()
+        await expect(rosterMember).toBeVisible()
       }
     } finally { release() }
   })

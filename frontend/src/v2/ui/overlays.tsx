@@ -2,6 +2,7 @@ import * as DialogBase from '@radix-ui/react-dialog'
 import * as MenuBase from '@radix-ui/react-dropdown-menu'
 import * as PopoverBase from '@radix-ui/react-popover'
 import * as TooltipBase from '@radix-ui/react-tooltip'
+import { useRef } from 'react'
 import type { ReactElement, ReactNode, RefObject } from 'react'
 import { useLanguage, useT } from '../i18n'
 import { Button } from './controls'
@@ -16,24 +17,32 @@ type DialogProps = {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   sheet?: boolean
+  wide?: boolean
+  focusTitle?: boolean
   closeLabel?: string
   returnFocus?: RefObject<HTMLElement | null>
 }
 
-export function Dialog({ title, description, trigger, children, actions, open, onOpenChange, sheet, closeLabel, returnFocus }: DialogProps) {
+export function Dialog({ title, description, trigger, children, actions, open, onOpenChange, sheet, wide, focusTitle, closeLabel, returnFocus }: DialogProps) {
   const t = useT()
+  const heading = useRef<HTMLHeadingElement>(null)
   return (
     <DialogBase.Root open={open} onOpenChange={onOpenChange}>
       {trigger && <DialogBase.Trigger asChild>{trigger}</DialogBase.Trigger>}
       <DialogBase.Portal>
         <DialogBase.Overlay className="v2-overlay" />
-        <DialogBase.Content className="v2-dialog" data-sheet={sheet || undefined} onCloseAutoFocus={returnFocus && (event => {
-          event.preventDefault()
-          returnFocus.current?.focus()
-        })}>
+        <DialogBase.Content className="v2-dialog" data-sheet={sheet || undefined} data-wide={wide || undefined}
+          onOpenAutoFocus={focusTitle ? event => {
+            event.preventDefault()
+            heading.current?.focus()
+          } : undefined}
+          onCloseAutoFocus={returnFocus && (event => {
+            event.preventDefault()
+            returnFocus.current?.focus()
+          })}>
           <Stack gap={4}>
             <Stack gap={1}>
-              <DialogBase.Title>{title}</DialogBase.Title>
+              <DialogBase.Title ref={heading} tabIndex={focusTitle ? -1 : undefined}>{title}</DialogBase.Title>
               <DialogBase.Description className={description ? 'v2-muted' : 'v2-visually-hidden'}>{description ?? title}</DialogBase.Description>
             </Stack>
             {children}

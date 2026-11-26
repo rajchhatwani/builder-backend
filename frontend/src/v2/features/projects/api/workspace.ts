@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError, onOrgLocked, onOrgMfaRequired, onQuotaExceeded } from '../../../../api/client'
 import type { MemberRole, OrgLockedDetail, OrgMfaDetail, QuotaDetail } from '../../../../api/types'
+import type { ValidationIssue } from '../../../validators'
 import { projectKeys } from './status'
 
 export type { MemberRole }
@@ -34,6 +35,21 @@ export function workspaceError(error: unknown) {
   return error instanceof ApiError ? error.code : undefined
 }
 
+export function shareFieldErrors(error: unknown): Record<string, ValidationIssue> {
+  if (!(error instanceof ApiError)) return {}
+  if (error.code === 'user_unavailable') return { email: unavailableEmail }
+  if (error.status !== 422) return {}
+  return Object.fromEntries(error.details.flatMap(detail => {
+    if (!detail || typeof detail !== 'object' || !('loc' in detail) || !Array.isArray(detail.loc)
+      || !('msg' in detail) || typeof detail.msg !== 'string') return []
+    const [scope, field] = detail.loc
+    return scope === 'body' && (field === 'email' || field === 'role')
+      ? [[field, { key: 'common.serverText', values: { text: detail.msg } }]] : []
+  }))
+}
+
+const unavailableEmail = { key: 'share.unknownEmail' }
+
 async function optionalConfig<T>(load: () => Promise<T>) {
   try { return await load() } catch (error) {
     if (error instanceof ApiError && error.status === 404) return null
@@ -60,21 +76,23 @@ export const checklistOptions = (id: string, enabled: boolean) => queryOptions({
 type ShareAction =
   | { kind: 'add'; email: string; role: MemberRole }
   | { kind: 'role'; user: string; role: MemberRole }
-  | { kind: 'mcp'; user: string; enabled: boolean }
   | { kind: 'remove'; user: string }
 
 export function useShareMutation(id: string) {
   const client = useQueryClient()
+  const refresh = () => { void client.invalidateQueries({ queryKey: membersOptions(id).queryKey }) }
   return useMutation({
     scope: { id: 'project-members:' + id },
     mutationFn: async (action: ShareAction) => {
       switch (action.kind) {
         case 'add': await api.addMember(id, action.email, action.role); break
         case 'role': await api.setMemberRole(id, action.user, action.role); break
-        case 'mcp': await api.setMemberMcp(id, action.user, action.enabled); break
         case 'remove': await api.removeMember(id, action.user); break
       }
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: membersOptions(id).queryKey }),
+    onSuccess: refresh,
+    onError: (error, action) => {
+      if (action.kind !== 'add' && workspaceError(error) === 'not_found') refresh()
+    },
   })
 }
