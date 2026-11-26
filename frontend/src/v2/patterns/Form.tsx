@@ -10,6 +10,7 @@ export type FormField = {
   label: string
   hint?: string
   ownLabel?: boolean
+  errorTestId?: string
   validate?: Validator[]
   validateWith?: (value: string, data: FormData) => ValidationIssue | undefined
   control: (attributes: FieldAttributes & { name: string; disabled?: boolean }) => ReactNode
@@ -21,7 +22,7 @@ function firstIssue(field: FormField, data: FormData) {
   return field.validate?.map(validate => validate(value)).find(Boolean) ?? field.validateWith?.(value, data)
 }
 
-export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps, actions, children, layout }: {
+export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverErrors, formError, submitProps, preserveFocusOnSubmit, actions, children, layout }: {
   fields: FormField[]
   actions?: ReactNode
   children?: ReactNode
@@ -33,6 +34,7 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
   serverErrors?: Errors
   formError?: string
   submitProps?: ComponentProps<typeof Button> & { 'data-testid'?: string }
+  preserveFocusOnSubmit?: boolean
 }) {
   const t = useT()
   const id = useId()
@@ -64,11 +66,13 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
   const controls = fields.map(field => {
     const fieldId = `${id}-${field.name}`
     const error = errors[field.name] ?? (Object.hasOwn(edited, field.name) && edited[field.name] === serverErrors?.[field.name] ? undefined : serverErrors?.[field.name])
+    const message = error && t(error.key, { ...error.values, field: field.label })
     return [field.name, (
       <div key={field.name} onChange={() => setEdited(current => ({ ...current, [field.name]: serverErrors?.[field.name] }))}
         onBlur={event => {
           const form = event.currentTarget.closest('form')
-          if (!form || event.currentTarget.contains(event.relatedTarget)) return
+          // Disabling a focused control can blur it after FormData has stopped including its value.
+          if (pending || readOnly || !form || event.currentTarget.contains(event.relatedTarget)) return
           const issue = firstIssue(field, new FormData(form))
           setErrors(previous => {
             const next = { ...previous }
@@ -77,7 +81,7 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
             return next
           })
         }}>
-        <Field id={fieldId} label={field.ownLabel ? undefined : field.label} hint={field.hint} error={error && t(error.key, { ...error.values, field: field.label })}>
+        <Field id={fieldId} label={field.ownLabel ? undefined : field.label} hint={field.hint} error={message && (field.errorTestId ? <span data-testid={field.errorTestId}>{message}</span> : message)}>
           {attributes => field.control({ ...attributes, name: field.name, disabled: readOnly || pending })}
         </Field>
       </div>
@@ -90,7 +94,18 @@ export function Form({ fields, onSubmit, submitLabel, pending, readOnly, serverE
         {layout ? layout(Object.fromEntries(controls)) : controls.map(([, control]) => control)}
         {children}
         {formError && <Alert tone="danger">{formError}</Alert>}
-        {!submitProps?.hidden && <Row><Button {...submitProps} type="submit" variant={submitProps?.variant ?? "primary"} disabled={readOnly || pending || submitProps?.disabled}>{pending && <Spinner />}{submitLabel}</Button>{actions}</Row>}
+        {!submitProps?.hidden && <Row>
+          <Button {...submitProps} type="submit" variant={submitProps?.variant ?? 'primary'}
+            disabled={readOnly || pending || submitProps?.disabled}
+            onMouseDown={preserveFocusOnSubmit ? event => {
+              submitProps?.onMouseDown?.(event)
+              // Submit validates the whole form. Keep a focused field from moving the button on blur before the click.
+              if (event.button === 0 && event.currentTarget.form?.contains(document.activeElement)) event.preventDefault()
+            } : submitProps?.onMouseDown}>
+            {pending && <Spinner />}{submitLabel}
+          </Button>
+          {actions}
+        </Row>}
       </Stack>
     </form>
   )

@@ -1,0 +1,14 @@
+.v2-ai-list {
+  --gap: var(--s3);
+}
+
+.v2-ai-reader {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+@container viewport (width < 43.75em) {
+  .v2-ai-start, .v2-dialog-actions:has(.v2-ai-confirm) > * {
+    inline-size: 100%;
+  }
+}

@@ -31,7 +31,7 @@ export function Textarea({ className = '', ...props }: ComponentPropsWithRef<'te
 export type SelectOption = { value: string; label: string; disabled?: boolean; group?: string }
 
 type SelectProps = ComponentPropsWithRef<typeof SelectBase.Root> & {
-  triggerProps?: ComponentPropsWithRef<typeof SelectBase.Trigger>
+  triggerProps?: ComponentPropsWithRef<typeof SelectBase.Trigger> & { 'data-testid'?: string }
   placeholder?: string
   options: SelectOption[]
 }

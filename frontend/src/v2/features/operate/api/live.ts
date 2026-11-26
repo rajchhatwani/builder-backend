@@ -16,7 +16,7 @@ export type Session = { projectId: string; target: PreviewInstance; token: strin
 export type Page<T> = { items: T[]; total: number; limit: number; offset: number }
 type Params = Record<string, string | number | boolean | undefined>
 type Method = 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE'
-type Endpoint = `/${'ledger/' | 'invoices' | 'payouts' | 'reconciliation/' | 'booking/' | 'location/' | 'geo/' | 'matching/' | 'prediction/' | 'ai/documents' | 'ai/agents' | 'documents'}${string}`
+type Endpoint = `/${'ledger/' | 'invoices' | 'payouts' | 'reconciliation/' | 'booking/' | 'location/' | 'geo/' | 'matching/' | 'prediction/' | 'ai/documents' | 'ai/agents' | 'ai/usage' | 'ai/calls' | 'ai/knowledge/' | 'ai/evals/' | 'auth/me' | 'documents'}${string}`
 
 const previewMount = (id: string) => '/previews/' + encodeURIComponent(id)
 export function usablePreview(projectId: string, preview: PreviewInstance) {
@@ -52,7 +52,7 @@ const badResponse = () => new ApiError(200, { code: 'bad_response', message: '',
 // Tokenize strings as well as integers so keys inside quoted user content are never rewritten.
 export function parseRuntimeJson(source: string): unknown {
   return JSON.parse(source.replace(/("(?:[^"\\]|\\.)*")(?:\s*:\s*(-?\d+)(?=\s*[,}]))?/g, (chunk, key: string, integer?: string) =>
-    integer !== undefined && (key.endsWith('_minor"') || key === '"seq"')
+    integer !== undefined && ((key.endsWith('_minor"') || key.endsWith('_micro_usd"')) || key === '"seq"')
       ? key + ':' + JSON.stringify(integer) : chunk))
 }
 async function runtimeFetch(session: Session, path: Endpoint, method: Method, body?: unknown, params?: Params, signal?: AbortSignal, accept = 'application/json') {
@@ -92,11 +92,21 @@ export async function runtimeRequest<T>(session: Session, path: Endpoint, method
 }
 function validRuntimeRead(path: Endpoint, value: unknown): boolean {
   if (value == null || typeof value !== 'object') return false
-  if (path === '/payouts/totals' || path === '/documents') return Array.isArray(value)
+  if (path === '/payouts/totals' || path === '/documents' || path === '/ai/evals/suites') return Array.isArray(value)
   if (path === '/ai/agents' || path === '/ai/agents/stats') {
     const registry = value as { agents?: unknown; actions?: unknown }
     return Array.isArray(registry.agents) && (path.endsWith('/stats') || Array.isArray(registry.actions))
   }
+  if (path === '/auth/me') {
+    const identity = value as { id?: unknown; roles?: unknown }
+    return typeof identity.id === 'string' && Array.isArray(identity.roles) && identity.roles.every(role => typeof role === 'string')
+  }
+  if (path === '/ai/usage') {
+    const usage = value as { period?: unknown; period_start?: unknown }
+    return typeof usage.period === 'string' && typeof usage.period_start === 'string'
+  }
+  if (path.startsWith('/ai/evals/runs/')) return Array.isArray((value as { results?: unknown }).results)
+  if (path.startsWith('/ai/agents/runs/')) return Array.isArray((value as { proposals?: unknown }).proposals)
   const arrays = path === '/ledger/balances' ? ['items', 'totals'] :
     path === '/invoices/aging' ? ['currencies'] :
     path.endsWith('/results') ? ['matched', 'unmatched_lines', 'unmatched_entries'] :
@@ -104,11 +114,11 @@ function validRuntimeRead(path: Endpoint, value: unknown): boolean {
     path.endsWith('/history') || path.endsWith('/entries') ||
       ['/ledger/accounts', '/ledger/transactions', '/invoices', '/payouts', '/reconciliation/runs', '/booking/resources',
         '/booking/bookings', '/geo/places', '/geo/geofences', '/location/positions', '/geo/events', '/geo/places/nearest', '/geo/places/within', '/matching/assignments', '/prediction/records',
-        '/ai/documents', '/ai/agents/proposals', '/ai/agents/runs'].includes(path) ? ['items'] : []
+        '/ai/documents', '/ai/agents/proposals', '/ai/agents/runs', '/ai/calls', '/ai/knowledge/sources', '/ai/evals/runs'].includes(path) ? ['items'] : []
   const record = value as Record<string, unknown>
   return !Array.isArray(value) && arrays.every(field => Array.isArray(record[field]))
 }
-const liveKey = (session: Session) => operateKeys.item(session.projectId, 'live', session.target.id, session.scope)
+export const liveKey = (session: Session) => operateKeys.item(session.projectId, 'live', session.target.id, session.scope)
 export function liveRead<T>(session: Session, path: Endpoint, params: Params = {}, enabled = true, poll?: number) {
   return queryOptions({
     queryKey: [...liveKey(session), path, params], retry: false, retryOnMount: false, gcTime: 0, enabled, refetchInterval: poll,

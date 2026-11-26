@@ -2,6 +2,10 @@ import type { ConnectProps } from '../features/connect/api/connect'
 import { lazyScreen } from './lazy'
 
 export const screens = {
+  aiusage: lazyScreen(() => import('../features/operate/AiUsageScreen')),
+  knowledge: lazyScreen(() => import('../features/operate/KnowledgeScreen')),
+  evals: lazyScreen(() => import('../features/operate/EvalsScreen')),
+  agentruns: lazyScreen(() => import('../features/operate/AgentRunsScreen')),
   documents: lazyScreen(() => import('../features/operate/DocumentsScreen')),
   agentactions: lazyScreen(() => import('../features/operate/AgentActionsScreen')),
   places: lazyScreen(() => import('../features/operate/PlacesScreen')),

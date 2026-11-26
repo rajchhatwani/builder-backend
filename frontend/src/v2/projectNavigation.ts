@@ -33,7 +33,7 @@ export const operateSections = ['observability', 'jobs', 'workers', 'workflows',
 export const isOperateSection = (section: string): section is typeof operateSections[number] =>
   operateSections.some(name => name === section)
 
-export const liveOperateSections = ['ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing'] as const
+export const liveOperateSections = ['ledger', 'invoices', 'payouts', 'reconciliation', 'map', 'bookings', 'bookingadmin', 'documents', 'agentactions', 'places', 'matching', 'prediction', 'routing', 'aiusage', 'knowledge', 'evals', 'agentruns'] as const
 export const isLiveOperateSection = (section: string): section is typeof liveOperateSections[number] =>
   liveOperateSections.some(name => name === section)
 
@@ -56,6 +56,10 @@ export function projectPath(projectId: string, section: ProjectSection = 'overvi
 }
 
 export type SectionSearch = {
+  stage?: string
+  caller?: string
+  suite?: string
+  statsAgent?: string
   agent?: string
   candidate?: string
   model?: string
