@@ -20,9 +20,21 @@
 		root * /srv
 		file_server
 	}
-	handle {
-		reverse_proxy {$API_UPSTREAM:api:8000}
+	# Browser navigation to dashboard routes shares paths such as /projects with the API.
+	@dashboard path_regexp ^/(account|sign-in|login|signin|signup|verify-email|sso/complete|sso-complete|invitations|org/[^/]+|v2-kit|projects(/[^/]+(/[^/]+)?)?)/?$
+	@navigation {
+		method GET HEAD
+		header Accept *text/html*
 	}
+	route @dashboard {
+		header +Vary Accept
+		handle @navigation {
+			root * /srv
+			rewrite * /index.html
+			file_server
+		}
+	}
+	reverse_proxy {$API_UPSTREAM:api:8000}
 }
 
 # Keycloak (identity provider you host). Remove this block if you do not run it.

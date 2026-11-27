@@ -13,4 +13,6 @@ RUN npx vite build --outDir /dist --emptyOutDir
 FROM caddy:2-alpine
 COPY docker/prod/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /dist /srv
-RUN mkdir -p /etc/caddy/sites
+RUN mkdir -p /etc/caddy/sites \
+ && BB_DOMAIN=dashboard.example.invalid KC_DOMAIN=keycloak.example.invalid ACME_EMAIL=ci@example.invalid \
+    caddy adapt --config /etc/caddy/Caddyfile --adapter caddyfile > /dev/null
