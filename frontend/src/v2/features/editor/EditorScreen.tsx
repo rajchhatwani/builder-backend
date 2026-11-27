@@ -205,10 +205,12 @@ function EditorWorkspace() {
         </Stack>}
         {workspaces.isError && <Alert tone="warning" action={<Button onClick={() => void workspaces.refetch()}>{t('common.retry')}</Button>}>{t('editor.loadWorkspacesFailed')}</Alert>}
       </Stack>
-      {activity === 'search' ? <div className="v2-editor-inset"><FileSearch files={files}
-        contents={source === 'kit' ? kit.data ?? contents : contents} value={search.q ?? ''}
-        onChange={q => void navigate({ search: previous => ({ ...previous, q: q || undefined }), replace: true })} onPick={pick} /></div>
-        : <ExplorerTree files={files} active={active} onPick={pick} />}
+      <div className={activity === 'search' ? 'v2-editor-explorer-content v2-editor-inset' : 'v2-editor-explorer-content'}>
+        {activity === 'search' ? <FileSearch files={files}
+          contents={source === 'kit' ? kit.data ?? contents : contents} value={search.q ?? ''}
+          onChange={q => void navigate({ search: previous => ({ ...previous, q: q || undefined }), replace: true })} onPick={pick} />
+          : <ExplorerTree files={files} active={active} onPick={pick} />}
+      </div>
     </Stack>
     <div className="v2-editor-main">
       <Row gap={0} className="v2-editor-tabs" role="group" aria-label={t('editor.openFiles')}>

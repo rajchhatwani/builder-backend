@@ -267,7 +267,7 @@ function WorkspaceShell() {
       </header>
       {!home && projectActions}
       <div className="v2-shell-body" data-rail={Boolean((advancedProject && !editor) || (customerArea && user && !user.must_change_password)) || undefined} data-editor={editor || undefined}>
-        {advancedProject && !editor && <aside className={home ? 'v2-rail v2-home-rail' : 'v2-rail'}><ProjectNavigation projectId={advancedProject} guided={false} data={data} keycloak={keycloak} /></aside>}
+        {advancedProject && !editor && <aside className="v2-rail"><ProjectNavigation projectId={advancedProject} guided={false} data={data} keycloak={keycloak} /></aside>}
         {customerArea && user && !user.must_change_password && <aside className="v2-entry-rail"><EntryNavigation /></aside>}
         <main id="v2-main" tabIndex={-1} className="v2-main">
           <Stack gap={editor ? 0 : 5}>

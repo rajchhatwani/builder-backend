@@ -10,6 +10,7 @@
 .v2-nav a { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); min-block-size: var(--touch); padding-inline: var(--s2); border-radius: var(--radius); color: var(--ink); text-decoration: none; }
 .v2-nav a:hover { background: var(--inset); }
 .v2-nav a[aria-current="page"] { color: var(--accent); background: var(--accent-bg); font-weight: var(--semibold); }
+:is(.v2-rail, .v2-entry-rail, .v2-dialog[data-sheet]) .v2-nav a:focus-visible { outline-offset: calc(-1 * var(--focus)); }
 .v2-nav-heading { color: var(--muted); font-size: var(--text-sm); padding: var(--s2); }
 .v2-on-dot { inline-size: var(--s2); block-size: var(--s2); background: var(--success); border-radius: var(--pill); }
 .v2-skip { position: fixed; z-index: var(--z-toast); inset: var(--s2) auto auto var(--s2); padding: var(--s3); background: var(--surface); }
@@ -20,8 +21,11 @@
 .v2-phone-only { display: none; }
 @container viewport (width >= 43.75em) {
   .v2-shell-body[data-rail] { grid-template-columns: var(--rail-width) minmax(0, 1fr); }
-  .v2-rail { display: block; }
-  .v2-home-rail { position: sticky; inset-block-start: 0; max-block-size: 85dvb; overflow: auto; align-self: start; }
+  .v2-rail, .v2-entry-rail {
+    display: flex; flex-direction: column; align-self: start;
+    position: sticky; inset-block-start: 0; max-block-size: 100dvb;
+  }
+  :is(.v2-rail, .v2-entry-rail) > .v2-nav { min-block-size: 0; overflow-y: auto; overscroll-behavior-y: contain; }
   .v2-rail-toggle { display: none; }
 }
 @container viewport (width > 62.5em) {
@@ -30,6 +34,11 @@
 @container viewport (width < 43.75em) {
   .v2-phone-only { display: block; }
   .v2-phone-hidden { display: none; }
+  .v2-dialog[data-sheet] > .v2-stack:has(> .v2-nav) {
+    display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+    max-block-size: calc(90dvb - 2 * (var(--s5) + var(--border)));
+  }
+  .v2-dialog[data-sheet] > .v2-stack > .v2-nav { overflow-y: auto; overscroll-behavior-y: contain; }
 }
 
 .v2-shell:has([data-editor]) { display: flex; flex-direction: column; }
